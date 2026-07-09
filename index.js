@@ -247,8 +247,7 @@ function sortearProcessos() {
     }
   });
 
-  exportWord(rows);
-  exportExcelPorCreg(rows, participantes);
+  exportZip(rows, participantes);
 
   const msg = document.createElement('div');
   msg.textContent = `⚠️ Colocar as planilhas de backup dos ${modoSorteio}s sorteados na pasta de backup! ⚠️`;
@@ -270,14 +269,19 @@ function sortearProcessos() {
   setTimeout(() => { msg.remove(); }, 60000);
 }
 
-function exportWord(rows) {
+async function exportZip(rows, participantes) {
   const hoje = new Date();
   const dia = hoje.getDate().toString().padStart(2, '0');
-  const mes = hoje.toLocaleString('pt-BR', { month: 'long' });
+  const mes = (hoje.getMonth() + 1).toString().padStart(2, '0');
+  const mesExtenso = hoje.toLocaleString('pt-BR', { month: 'long' });
   const ano = hoje.getFullYear();
-  const cabecalho = `Aos ${dia} dias do mês de ${mes} de ${ano} na sede da Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos, realizou-se a distribuição de processos por sorteio eletrônico.`;
 
+  const zip = new JSZip();
+
+  // ── Word (.doc) ──────────────────────────────────────────────────────────────
+  const cabecalho = `Aos ${dia} dias do mês de ${mesExtenso} de ${ano} na sede da Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos, realizou-se a distribuição de processos por sorteio eletrônico.`;
   const colunaNome = modoSorteio === 'CREG' ? 'Unidade Conselho Regulador' : 'Unidade Câmara de Julgamento';
+
   let tableHtml = `<table border="1" style="border-collapse:collapse;width:100%"><tr><th>Ordem</th><th>Nº Processo</th><th>Interessado</th><th>${colunaNome}</th></tr>`;
 
   const dados = rows.map(r => {
@@ -289,62 +293,42 @@ function exportWord(rows) {
       unidade: cells[6].textContent.trim()
     };
   });
-
   dados.sort((a, b) => a.unidade.localeCompare(b.unidade, 'pt-BR', { numeric: true }));
-
   dados.forEach(d => {
     tableHtml += `<tr><td>${d.ordem}</td><td>${d.numProc}</td><td>${d.interessado}</td><td>${d.unidade}</td></tr>`;
   });
-
   tableHtml += '</table>';
 
-  const conteudo = '\uFEFF' + `<meta charset="UTF-8"><p>${cabecalho}</p>${tableHtml}`;
-  const blob = new Blob([conteudo], { type: 'application/msword;charset=utf-8' });
+  const wordConteudo = '\uFEFF' + `<meta charset="UTF-8"><p>${cabecalho}</p>${tableHtml}`;
+  zip.file(`Sorteio_${modoSorteio}.doc`, wordConteudo);
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `Sorteio_${modoSorteio}.doc`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-function exportExcelPorCreg(rows, participantes) {
-  const hoje = new Date();
-  const dia = hoje.getDate().toString().padStart(2, '0');
-  const mes = (hoje.getMonth() + 1).toString().padStart(2, '0');
-  const ano = hoje.getFullYear();
+  // ── Planilhas CSV (uma por unidade) ──────────────────────────────────────────
+  const cabecalhoColuna = modoSorteio === 'CREG' ? 'Unidade Conselho Regulador' : 'Unidade Câmara de Julgamento';
 
   participantes.forEach(unit => {
-    const linhasCREG = rows.filter(r => r.querySelector('.unidade').textContent === unit);
-    if (linhasCREG.length === 0) return;
+    const linhasUnit = rows.filter(r => r.querySelector('.unidade').textContent === unit);
+    if (linhasUnit.length === 0) return;
 
     let csv = '\uFEFF';
-    const cabecalhoColuna = modoSorteio === 'CREG' ? 'Unidade Conselho Regulador' : 'Unidade Câmara de Julgamento';
     csv += `${cabecalhoColuna};Nº Processo;Interessado;Assunto;Data de Distribuição;Recurso\n`;
 
-    linhasCREG.forEach(r => {
+    linhasUnit.forEach(r => {
       const cells = Array.from(r.children);
-      const unidade = cells[6].textContent.trim();
-      const numProc = cells[1].querySelector('input').value.trim();
+      const unidade    = cells[6].textContent.trim();
+      const numProc    = cells[1].querySelector('input').value.trim();
       const interessado = cells[2].querySelector('input').value.trim();
-      const assunto = cells[3].querySelector('select').value.trim();
+      const assunto    = cells[3].querySelector('select').value.trim();
       const dataDistrib = cells[4].querySelector('input').value.trim();
-      const recurso = cells[5].querySelector('select').value.trim();
-
+      const recurso    = cells[5].querySelector('select').value.trim();
       csv += [unidade, numProc, interessado, assunto, dataDistrib, recurso].join(';') + '\n';
     });
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${unit} ${dia}.${mes}.${ano}.csv`;
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
+    zip.file(`${unit} ${dia}.${mes}.${ano}.csv`, csv);
   });
+
+  // ── Gerar e baixar o ZIP ─────────────────────────────────────────────────────
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  saveAs(zipBlob, `Sorteio_${modoSorteio}_${dia}.${mes}.${ano}.zip`);
 }
 
 createBtn.addEventListener('click', () => {
