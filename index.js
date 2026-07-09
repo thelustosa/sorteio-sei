@@ -1,26 +1,85 @@
-// Validação da assinatura do desenvolvedor (Trava de Segurança)
 const devNode = document.querySelector('footer div strong');
 if (!devNode || devNode.textContent.trim() !== 'Lucas Lustosa Coelho') {
   throw new Error('Erro Crítico: Procure o desenvolvedor ou o responsável pela manutenção do código.');
 }
 
-const assuntos = ['Auto de Infração', 'Chamamento Público', 'Gratuidade', 'Manifestação', 'Minuta', 'Nota Técnica', 'Ouvidoria', 'Requerimento', 'Plano de Racionamento', 'Reajuste', 'Outros'];
+const assuntosCreg = ['Auto de Infração', 'Chamamento Público', 'Gratuidade', 'Manifestação', 'Minuta', 'Nota Técnica', 'Ouvidoria', 'Requerimento', 'Plano de Racionamento', 'Reajuste', 'Outros'];
+const assuntosCj = ['Auto de Infração', 'Outros'];
 const recursos = ['Com recurso', 'Sem recurso', 'Não se aplica', 'Pedido de revisão'];
-const cregs = ['CREG1', 'CREG2', 'CREG3', 'CREG4'];
+
+let modoSorteio = '';
+let unidadesList = [];
+let assuntosAtivos = [];
 
 const tbody = document.querySelector('#processTable tbody');
 const numRowsInput = document.getElementById('numRows');
 const createBtn = document.getElementById('createRows');
 const sortearBtn = document.getElementById('sortear');
 const addRowBtn = document.getElementById('addRowBtn');
-const cregPills = document.querySelectorAll('#cregSelector .pill');
 
-// Alterna a seleção dos pills (exclusão)
-cregPills.forEach(pill => {
-  pill.addEventListener('click', () => {
-    pill.classList.toggle('excluded');
-  });
+const btnCreg = document.getElementById('btnCreg');
+const btnCj = document.getElementById('btnCj');
+const btnVoltar = document.getElementById('btnVoltar');
+const modeSelector = document.getElementById('modeSelector');
+const sorteadorContent = document.getElementById('sorteadorContent');
+const thUnidade = document.getElementById('thUnidade');
+const pillsContainer = document.getElementById('pillsContainer');
+const txtModo = document.getElementById('txtModo');
+
+btnCreg.addEventListener('click', () => {
+  iniciarSorteador('CREG', ['CREG1', 'CREG2', 'CREG3', 'CREG4']);
 });
+
+btnCj.addEventListener('click', () => {
+  iniciarSorteador('CJ', ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5']);
+});
+
+btnVoltar.addEventListener('click', () => {
+  sorteadorContent.style.display = 'none';
+  modeSelector.style.display = 'flex';
+  btnVoltar.style.display = 'none';
+
+  numRowsInput.style.display = 'inline-block';
+  createBtn.style.display = 'inline-block';
+  const label = document.querySelector('label[for="numRows"]');
+  if (label) label.style.display = 'inline-block';
+  const spacer = document.getElementById('spacer');
+  if (spacer) spacer.style.display = 'flex';
+
+  sortearBtn.style.display = 'none';
+  addRowBtn.style.display = 'none';
+  txtModo.textContent = '';
+  clearRows();
+});
+
+function iniciarSorteador(modo, unidades) {
+  modoSorteio = modo;
+  unidadesList = unidades;
+  assuntosAtivos = modo === 'CREG' ? assuntosCreg : assuntosCj;
+
+  btnVoltar.style.display = 'inline-block';
+  txtModo.textContent = modo === 'CREG' ? 'Conselho Regulador' : 'Câmara de Julgamento';
+
+  thUnidade.textContent = modo === 'CREG' ? 'Unidade Conselho Regulador (CREG)' : 'Unidade Câmara de Julgamento (CJ)';
+  sortearBtn.textContent = `Sortear ${modo} e Exportar`;
+
+  pillsContainer.innerHTML = '';
+  unidadesList.forEach(unit => {
+    const label = document.createElement('label');
+    label.className = 'pill';
+    label.dataset.creg = unit;
+    label.textContent = unit;
+    label.addEventListener('click', () => {
+      label.classList.toggle('excluded');
+    });
+    pillsContainer.appendChild(label);
+  });
+
+  modeSelector.style.display = 'none';
+  sorteadorContent.style.display = 'block';
+
+  createRows(parseInt(numRowsInput.value) || 3);
+}
 
 function clearRows() { tbody.innerHTML = ''; }
 
@@ -33,27 +92,21 @@ function recalculaOrdem() {
 
 function createRowElement(index) {
   const tr = document.createElement('tr');
-  // Ordem
   const tdOrdem = document.createElement('td'); tdOrdem.className = 'num'; tdOrdem.textContent = index;
-  // Nº Processo
   const tdProc = document.createElement('td');
   const inpProc = document.createElement('input'); inpProc.type = 'text'; inpProc.placeholder = 'Digite o nº do processo';
   tdProc.appendChild(inpProc);
-  // Interessado
   const tdInt = document.createElement('td');
   const inpInt = document.createElement('input'); inpInt.type = 'text'; inpInt.placeholder = 'Interessado';
   tdInt.appendChild(inpInt);
-  // Assunto
   const tdAss = document.createElement('td');
   const selAss = document.createElement('select');
   const optDefaultAss = document.createElement('option'); optDefaultAss.value = ''; optDefaultAss.textContent = 'Selecione o Assunto'; optDefaultAss.disabled = true; optDefaultAss.selected = true;
   selAss.appendChild(optDefaultAss);
-  assuntos.forEach(a => { const o = document.createElement('option'); o.value = a; o.textContent = a; selAss.appendChild(o) });
+  assuntosAtivos.forEach(a => { const o = document.createElement('option'); o.value = a; o.textContent = a; selAss.appendChild(o) });
   tdAss.appendChild(selAss);
-  // Data de Distribuição (hidden)
   const tdData = document.createElement('td'); tdData.className = 'hidden';
   const inpData = document.createElement('input'); inpData.type = 'text'; inpData.placeholder = 'Data (oculta)'; tdData.appendChild(inpData);
-  // Recurso
   const tdRec = document.createElement('td');
   const selRec = document.createElement('select');
   const optDefaultRec = document.createElement('option'); optDefaultRec.value = ''; optDefaultRec.textContent = 'Selecione o tipo de recurso'; optDefaultRec.disabled = true; optDefaultRec.selected = true;
@@ -61,24 +114,20 @@ function createRowElement(index) {
   recursos.forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; selRec.appendChild(o) });
   tdRec.appendChild(selRec);
 
-  // Lógica de travamento do Recurso com base no Assunto
   selAss.addEventListener('change', () => {
     if (selAss.value !== 'Auto de Infração') {
       selRec.value = 'Não se aplica';
       selRec.disabled = true;
     } else {
       selRec.disabled = false;
-      // Se estava desabilitado, limpa para o usuário escolher
       if (selRec.value === 'Não se aplica' && optDefaultRec.selected) {
         selRec.value = '';
       }
     }
   });
 
-  // Unidade
   const tdUn = document.createElement('td'); tdUn.className = 'unidade small'; tdUn.textContent = '';
 
-  // Botão de excluir (X)
   const tdDel = document.createElement('td');
   tdDel.style.textAlign = 'center';
   const btnDel = document.createElement('button');
@@ -110,16 +159,15 @@ function createRows(n) {
   }
 }
 
-function getCREGsParticipantes() {
-  const excluidos = Array.from(document.querySelectorAll('#cregSelector .excluded')).map(p => p.dataset.creg);
-  return cregs.filter(c => !excluidos.includes(c));
+function getParticipantes() {
+  const excluidos = Array.from(document.querySelectorAll('#pillsContainer .excluded')).map(p => p.dataset.creg);
+  return unidadesList.filter(c => !excluidos.includes(c));
 }
 
-function sortearCREG() {
+function sortearProcessos() {
   const rows = Array.from(tbody.querySelectorAll('tr'));
   if (rows.length === 0) { alert('Crie as linhas primeiro.'); return; }
 
-  // Validação de campos preenchidos
   for (let idx = 0; idx < rows.length; idx++) {
     const r = rows[idx];
     const cells = Array.from(r.children);
@@ -134,10 +182,9 @@ function sortearCREG() {
     }
   }
 
-  const participantes = getCREGsParticipantes();
-  if (participantes.length === 0) { alert('Todos os CREGs estão excluídos. Selecione pelo menos um para participar.'); return; }
+  const participantes = getParticipantes();
+  if (participantes.length === 0) { alert(`Todos os ${modoSorteio}s estão excluídos. Selecione pelo menos um para participar.`); return; }
 
-  // ======= DISTRIBUIÇÃO IGUAL POR ASSUNTO E TOTAL =======
   const atribuicoesPorCreg = {};
   participantes.forEach(c => {
     atribuicoesPorCreg[c] = {
@@ -146,7 +193,6 @@ function sortearCREG() {
     };
   });
 
-  // Agrupa as linhas por assunto
   const linhasPorAssunto = {};
   rows.forEach(r => {
     const assunto = r.children[3].querySelector('select').value;
@@ -156,40 +202,33 @@ function sortearCREG() {
     linhasPorAssunto[assunto].push(r);
   });
 
-  // Ordena os assuntos por quantidade de linhas descrescente
   const assuntosOrdenados = Object.keys(linhasPorAssunto).sort((a, b) => {
     return linhasPorAssunto[b].length - linhasPorAssunto[a].length;
   });
 
   const hoje = new Date();
-  const dataHoje = hoje.toLocaleDateString('pt-BR'); // formato DD/MM/AAAA
+  const dataHoje = hoje.toLocaleDateString('pt-BR');
 
-  // Para cada assunto, faz a distribuição balanceada
   assuntosOrdenados.forEach(assunto => {
     const linhas = [...linhasPorAssunto[assunto]];
-    // Embaralha as linhas desse assunto para garantir aleatoriedade
     linhas.sort(() => Math.random() - 0.5);
 
     const totalLinhasAssunto = linhas.length;
     const base = Math.floor(totalLinhasAssunto / participantes.length);
     const resto = totalLinhasAssunto % participantes.length;
 
-    // 1. Distribui a parte inteira (base) para todos os participantes
     participantes.forEach(creg => {
       for (let i = 0; i < base; i++) {
         const row = linhas.pop();
         row.querySelector('.unidade').textContent = creg;
         const inputData = row.children[4].querySelector('input');
-        if (inputData) inputData.value = dataHoje; // grava a data de distribuição
+        if (inputData) inputData.value = dataHoje;
         atribuicoesPorCreg[creg].total++;
         atribuicoesPorCreg[creg].assuntos[assunto] = (atribuicoesPorCreg[creg].assuntos[assunto] || 0) + 1;
       }
     });
 
-    // 2. Distribui o resto para quem tem menos processos no TOTAL geral acumulado
     if (resto > 0) {
-      // Ordena os participantes pelos que têm menos total geral acumulado. 
-      // Em caso de empate, embaralha de forma randômica
       const candidatos = [...participantes].sort((a, b) => {
         const diff = atribuicoesPorCreg[a].total - atribuicoesPorCreg[b].total;
         if (diff === 0) return Math.random() - 0.5;
@@ -201,7 +240,7 @@ function sortearCREG() {
         const row = linhas.pop();
         row.querySelector('.unidade').textContent = creg;
         const inputData = row.children[4].querySelector('input');
-        if (inputData) inputData.value = dataHoje; // grava a data de distribuição
+        if (inputData) inputData.value = dataHoje;
         atribuicoesPorCreg[creg].total++;
         atribuicoesPorCreg[creg].assuntos[assunto] = (atribuicoesPorCreg[creg].assuntos[assunto] || 0) + 1;
       }
@@ -209,11 +248,10 @@ function sortearCREG() {
   });
 
   exportWord(rows);
-  exportExcelPorCREG(rows, participantes);
+  exportExcelPorCreg(rows, participantes);
 
-  // ======= MENSAGEM CHAMATIVA =======
   const msg = document.createElement('div');
-  msg.textContent = '⚠️ Colocar as planilhas de backup dos CREGs sorteados na pasta de backup! ⚠️';
+  msg.textContent = `⚠️ Colocar as planilhas de backup dos ${modoSorteio}s sorteados na pasta de backup! ⚠️`;
   msg.style.position = 'fixed';
   msg.style.top = '20px';
   msg.style.left = '50%';
@@ -239,7 +277,8 @@ function exportWord(rows) {
   const ano = hoje.getFullYear();
   const cabecalho = `Aos ${dia} dias do mês de ${mes} de ${ano} na sede da Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos, realizou-se a distribuição de processos por sorteio eletrônico.`;
 
-  let tableHtml = '<table border="1" style="border-collapse:collapse;width:100%"><tr><th>Ordem</th><th>Nº Processo</th><th>Interessado</th><th>Unidade Conselho Regulador</th></tr>';
+  const colunaNome = modoSorteio === 'CREG' ? 'Unidade Conselho Regulador' : 'Unidade Câmara de Julgamento';
+  let tableHtml = `<table border="1" style="border-collapse:collapse;width:100%"><tr><th>Ordem</th><th>Nº Processo</th><th>Interessado</th><th>${colunaNome}</th></tr>`;
 
   const dados = rows.map(r => {
     const cells = Array.from(r.children);
@@ -259,32 +298,32 @@ function exportWord(rows) {
 
   tableHtml += '</table>';
 
-  // 🔥 CORREÇÃO AQUI → adiciona BOM + charset UTF-8
   const conteudo = '\uFEFF' + `<meta charset="UTF-8"><p>${cabecalho}</p>${tableHtml}`;
   const blob = new Blob([conteudo], { type: 'application/msword;charset=utf-8' });
 
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'Sorteio_CREG.doc';
+  a.download = `Sorteio_${modoSorteio}.doc`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
 }
 
-function exportExcelPorCREG(rows, participantes) {
+function exportExcelPorCreg(rows, participantes) {
   const hoje = new Date();
   const dia = hoje.getDate().toString().padStart(2, '0');
   const mes = (hoje.getMonth() + 1).toString().padStart(2, '0');
   const ano = hoje.getFullYear();
 
-  participantes.forEach(creg => {
-    const linhasCREG = rows.filter(r => r.querySelector('.unidade').textContent === creg);
+  participantes.forEach(unit => {
+    const linhasCREG = rows.filter(r => r.querySelector('.unidade').textContent === unit);
     if (linhasCREG.length === 0) return;
 
     let csv = '\uFEFF';
-    csv += 'Unidade Conselho Regulador;Nº Processo;Interessado;Assunto;Data de Distribuição;Recurso\n';
+    const cabecalhoColuna = modoSorteio === 'CREG' ? 'Unidade Conselho Regulador' : 'Unidade Câmara de Julgamento';
+    csv += `${cabecalhoColuna};Nº Processo;Interessado;Assunto;Data de Distribuição;Recurso\n`;
 
     linhasCREG.forEach(r => {
       const cells = Array.from(r.children);
@@ -298,12 +337,11 @@ function exportExcelPorCREG(rows, participantes) {
       csv += [unidade, numProc, interessado, assunto, dataDistrib, recurso].join(';') + '\n';
     });
 
-    // 🔥 CORREÇÃO → charset definido corretamente
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${creg} ${dia}.${mes}.${ano}.csv`;
+    a.download = `${unit} ${dia}.${mes}.${ano}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   });
@@ -329,6 +367,4 @@ addRowBtn.addEventListener('click', () => {
   tbody.appendChild(tr);
 });
 
-sortearBtn.addEventListener('click', sortearCREG);
-
-createRows(parseInt(numRowsInput.value) || 5);
+sortearBtn.addEventListener('click', sortearProcessos);

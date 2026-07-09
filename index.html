@@ -9,7 +9,7 @@
 </head>
 
 <body>
-  <div class="container" style="padding-top: 36px;">
+  <div class="container pt-36">
     <header>
       <div class="logo">
         <img src="assets/logo_header.png" alt="Logo Goiás" />
@@ -22,48 +22,58 @@
     </header>
   </div>
 
-  <div class="green-bar"></div>
+  <div class="green-bar">
+    <div class="container">
+      <span id="txtModo"></span>
+      <button id="btnVoltar">← Voltar</button>
+    </div>
+  </div>
 
-  <div class="container" style="padding-bottom: 36px;">
+  <div class="container pb-36">
     <div class="card">
-      <div class="controls">
-        <label for="numRows">Quantidade de Processos:</label>
-        <input id="numRows" type="number" min="1" value="3">
-        <button id="createRows">Gerar</button>
-        <div id="spacer" style="flex:1"></div>
-        <button id="sortear" class="secondary" style="display: none;">Sortear CREG e Exportar</button>
+      <div id="modeSelector">
+        <h3>Selecione a unidade de sorteio para começar:</h3>
+        <div class="buttons-wrapper">
+          <button id="btnCreg">Conselho Regulador (CREG)</button>
+          <button id="btnCj">Câmara de Julgamento (CJ)</button>
+        </div>
       </div>
 
-      <!-- Seleção de CREGs (Exclusão) -->
-      <div id="cregSelector" style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
-        <span>Selecione as Unidades que <span style="color: #ef4444; font-weight: bold;">NÃO</span> vão
-          participar:</span>
-        <label class="pill" data-creg="CREG1">CREG1</label>
-        <label class="pill" data-creg="CREG2">CREG2</label>
-        <label class="pill" data-creg="CREG3">CREG3</label>
-        <label class="pill" data-creg="CREG4">CREG4</label>
+      <div id="sorteadorContent">
+        <div class="controls">
+          <label for="numRows">Quantidade de Processos:</label>
+          <input id="numRows" type="number" min="1" value="3">
+          <button id="createRows">Gerar</button>
+          <div id="spacer"></div>
+          <button id="sortear" class="secondary">Sortear CREG e Exportar</button>
+        </div>
+
+        <div id="cregSelector">
+          <span>Selecione as Unidades que <span style="color: #ef4444; font-weight: bold;">NÃO</span> vão participar:</span>
+          <div id="pillsContainer"></div>
+        </div>
+
+        <table id="processTable">
+          <thead>
+            <tr>
+              <th class="num">Ordem</th>
+              <th>Nº Processo</th>
+              <th>Interessado</th>
+              <th>Assunto</th>
+              <th class="hidden">Data de Distribuição</th>
+              <th>Recurso</th>
+              <th id="thUnidade">Unidade Conselho Regulador</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+
+        <footer>
+          <div>Desenvolvido por <strong>Lucas Lustosa Coelho</strong>.</div>
+          <button id="addRowBtn">+ Adicionar Linha</button>
+        </footer>
       </div>
-
-      <table id="processTable">
-        <thead>
-          <tr>
-            <th class="num">Ordem</th>
-            <th>Nº Processo</th>
-            <th>Interessado</th>
-            <th>Assunto</th>
-            <th class="hidden">Data de Distribuição</th>
-            <th>Recurso</th>
-            <th>Unidade Conselho Regulador</th>
-            <th style="width: 40px; text-align: center;"></th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-
-      <footer>
-        <div>Desenvolvido por <strong>Lucas Lustosa Coelho</strong>.</div>
-        <button id="addRowBtn" style="display: none;">+ Adicionar Linha</button>
-      </footer>
     </div>
   </div>
 

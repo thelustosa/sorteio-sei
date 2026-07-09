@@ -4,13 +4,13 @@
 ![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=flat-square&logo=css3&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
 
-Aplicação web estática desenvolvida para auxiliar o **Secretário Executivo do Conselho Regulador da AGR** na distribuição eletrônica e igualitária de processos do SEI entre as unidades do Conselho Regulador (CREGs).
+Aplicação web estática desenvolvida para auxiliar o **Secretário Executivo do Conselho Regulador** (modo CREG) e a **Secretária Executiva da Câmara de Julgamento** (modo CJ) da AGR na distribuição eletrônica e igualitária de processos do SEI entre suas respectivas unidades.
 
 Acesse a aplicação online em: [https://thelustosa.github.io/sorteio-sei/](https://thelustosa.github.io/sorteio-sei/)
 
-| Interface do Sorteador |
-| :---: |
-| ![Interface do Sorteador](assets/screenshot.png) |
+| Tela de Início | Interface do Sorteador |
+| :---: | :---: |
+| ![Tela de Início](assets/screenshot_start.png) | ![Interface do Sorteador](assets/screenshot.png) |
 
 ---
 
@@ -26,15 +26,15 @@ Este repositório está público e totalmente aberto para auditoria dos sorteios
 - **Inserção e Exclusão Flexíveis**: 
   - Adicione novas linhas a qualquer momento utilizando o botão **+ Adicionar Linha** sem perder os dados já preenchidos.
   - Exclua linhas geradas incorretamente de forma individual clicando no botão **×** no final da linha.
-- **Distribuição Igualitária por CREG**:
-  - Garante que cada unidade receba a mesma quantidade total de processos.
-  - Realiza o balanceamento proporcional e cruzado de cada **Assunto** individualmente, evitando que uma unidade receba apenas um tipo de processo.
-- **Exclusão de Unidades**: Seleção simples das CREGs que NÃO vão participar da rodada de distribuição através de filtros de exclusão visual (pills).
+- **Distribuição Igualitária**:
+  - Garante que cada unidade (CREG ou CJ) receba a mesma quantidade total de processos.
+  - Realiza o balanceamento proporcional e cruzado de cada **Assunto** individualmente, evitando que uma unidade receba apenas um tipo de assunto de processo.
+- **Exclusão de Unidades**: Seleção simples das unidades que NÃO vão participar da rodada de distribuição através de filtros de exclusão visual (pills).
 - **Validação Completa**: Impede a realização do sorteio caso existam campos em branco na tabela.
 - **Travamento de Recurso Inteligente**: Define automaticamente o campo de recurso como "Não se aplica" e o desabilita caso o assunto selecionado não seja "Auto de Infração".
 - **Exportação Multi-Formato**:
-  - Geração automática da ata de distribuição em formato Word (`.doc`).
-  - Download automático de planilhas de backup individuais para cada CREG participante em formato Excel/CSV.
+  - Geração automática da ata de distribuição em formato Word (`.doc`) nomeada dinamicamente (`Sorteio_CREG.doc` ou `Sorteio_CJ.doc`).
+  - Download automático de planilhas de backup individuais por unidade participante em formato Excel/CSV.
 
 ---
 
