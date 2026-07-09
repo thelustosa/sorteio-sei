@@ -69,6 +69,27 @@
           <tbody></tbody>
         </table>
 
+        <!-- Seção de Resultados Pós-Sorteio -->
+        <div id="resultadoSorteio" style="display: none; margin-top: 24px; border-top: 2px dashed rgba(0, 83, 75, 0.15); padding-top: 20px;">
+          <h3 style="color: var(--accent); margin-bottom: 12px; font-family: 'Gotham', sans-serif;">Resultado do Sorteio</h3>
+          
+          <div id="resumoContagem" style="margin-bottom: 18px;">
+            <!-- Exemplo: CREG1: 2 processos | CREG2: 3 processos -->
+          </div>
+
+          <table id="resultTable">
+            <thead>
+              <tr style="background: rgba(0, 83, 75, 0.08);">
+                <th style="padding: 12px 10px; font-size: 13px; color: var(--muted); border-bottom: 1px solid rgba(0, 83, 75, 0.1);">Nº Processo</th>
+                <th style="padding: 12px 10px; font-size: 13px; color: var(--muted); border-bottom: 1px solid rgba(0, 83, 75, 0.1);">Interessado</th>
+                <th style="padding: 12px 10px; font-size: 13px; color: var(--muted); border-bottom: 1px solid rgba(0, 83, 75, 0.1);">Assunto</th>
+                <th style="padding: 12px 10px; font-size: 13px; color: var(--muted); border-bottom: 1px solid rgba(0, 83, 75, 0.1); font-weight: bold; color: var(--accent);" id="thUnidadeResult">Sorteado Para</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
         <footer>
           <div>Desenvolvido por <strong>Lucas Lustosa Coelho</strong>.</div>
           <button id="addRowBtn">+ Adicionar Linha</button>

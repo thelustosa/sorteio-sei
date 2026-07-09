@@ -50,6 +50,14 @@ btnVoltar.addEventListener('click', () => {
   addRowBtn.style.display = 'none';
   txtModo.textContent = '';
   clearRows();
+  
+  // Resetar visualização de resultados
+  const resultadoSorteio = document.getElementById('resultadoSorteio');
+  if (resultadoSorteio) resultadoSorteio.style.display = 'none';
+  const tbodyResult = document.querySelector('#resultTable tbody');
+  if (tbodyResult) tbodyResult.innerHTML = '';
+  const resumoContagem = document.getElementById('resumoContagem');
+  if (resumoContagem) resumoContagem.innerHTML = '';
 });
 
 function iniciarSorteador(modo, unidades) {
@@ -246,6 +254,90 @@ function sortearProcessos() {
       }
     }
   });
+
+  // ── Renderizar Resultados na Interface ──────────────────────────────────────
+  const divResultado = document.getElementById('resultadoSorteio');
+  const divResumo = document.getElementById('resumoContagem');
+  const tbodyResult = document.querySelector('#resultTable tbody');
+  const thUnidadeResult = document.getElementById('thUnidadeResult');
+  
+  if (divResultado && divResumo && tbodyResult) {
+    // 1. Atualizar cabeçalho da coluna de resultado
+    if (thUnidadeResult) {
+      thUnidadeResult.textContent = modoSorteio === 'CREG' 
+        ? 'Sorteado Para (Conselho Regulador)' 
+        : 'Sorteado Para (Câmara de Julgamento)';
+    }
+
+    // 2. Limpar conteúdo anterior
+    tbodyResult.innerHTML = '';
+    divResumo.innerHTML = '';
+    
+    // 3. Montar a contagem de cada processo para cada unidade
+    const countWrapper = document.createElement('div');
+    countWrapper.style.display = 'flex';
+    countWrapper.style.gap = '10px';
+    countWrapper.style.flexWrap = 'wrap';
+    countWrapper.style.marginTop = '10px';
+
+    participantes.forEach(p => {
+      const totalProcessosUnidade = atribuicoesPorCreg[p].total;
+      
+      const badge = document.createElement('div');
+      badge.style.background = 'var(--accent)';
+      badge.style.color = '#fff';
+      badge.style.padding = '8px 14px';
+      badge.style.borderRadius = '8px';
+      badge.style.fontSize = '14px';
+      badge.style.fontWeight = 'bold';
+      badge.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+      badge.innerHTML = `${p}: <span style="font-size: 16px; margin-left: 5px;">${totalProcessosUnidade}</span> ${totalProcessosUnidade === 1 ? 'processo' : 'processos'}`;
+      
+      countWrapper.appendChild(badge);
+    });
+    divResumo.appendChild(countWrapper);
+
+    // 4. Preencher a tabela de resultados
+    rows.forEach(r => {
+      const cells = Array.from(r.children);
+      const numProc = cells[1].querySelector('input').value.trim();
+      const interessado = cells[2].querySelector('input').value.trim();
+      const assunto = cells[3].querySelector('select').value;
+      const unidadeSorteada = cells[6].textContent.trim();
+
+      const tr = document.createElement('tr');
+      
+      const tdProc = document.createElement('td');
+      tdProc.textContent = numProc;
+      tdProc.style.padding = '10px';
+      tdProc.style.borderBottom = '1px solid rgba(0, 83, 75, 0.08)';
+
+      const tdInt = document.createElement('td');
+      tdInt.textContent = interessado;
+      tdInt.style.padding = '10px';
+      tdInt.style.borderBottom = '1px solid rgba(0, 83, 75, 0.08)';
+
+      const tdAss = document.createElement('td');
+      tdAss.textContent = assunto;
+      tdAss.style.padding = '10px';
+      tdAss.style.borderBottom = '1px solid rgba(0, 83, 75, 0.08)';
+
+      const tdUn = document.createElement('td');
+      tdUn.textContent = unidadeSorteada;
+      tdUn.style.padding = '10px';
+      tdUn.style.fontWeight = 'bold';
+      tdUn.style.color = 'var(--accent)';
+      tdUn.style.borderBottom = '1px solid rgba(0, 83, 75, 0.08)';
+
+      tr.append(tdProc, tdInt, tdAss, tdUn);
+      tbodyResult.appendChild(tr);
+    });
+
+    // Exibir a seção de resultados
+    divResultado.style.display = 'block';
+    // Fazer scroll suave para o resultado
+    divResultado.scrollIntoView({ behavior: 'smooth' });
+  }
 
   exportZip(rows, participantes);
 
