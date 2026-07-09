@@ -1,6 +1,22 @@
-# Sorteador de Processos CREG — AGR
+# Sorteador de Processos SEI
 
-Aplicação web estática desenvolvida para auxiliar a **Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos (AGR)** na distribuição eletrônica e igualitária de processos do SEI entre as unidades do Conselho Regulador (CREGs).
+![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=flat-square&logo=html5&logoColor=white)
+![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=flat-square&logo=css3&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
+
+Aplicação web estática desenvolvida para auxiliar o **Secretário Executivo do Conselho Regulador da AGR** na distribuição eletrônica e igualitária de processos do SEI entre as unidades do Conselho Regulador (CREGs).
+
+Acesse a aplicação online em: [https://thelustosa.github.io/sorteio-sei/](https://thelustosa.github.io/sorteio-sei/)
+
+| Interface do Sorteador |
+| :---: |
+| ![Interface do Sorteador](assets/screenshot.png) |
+
+---
+
+## Auditoria e Transparência
+
+Este repositório está público e totalmente aberto para auditoria dos sorteios. Caso surjam quaisquer dúvidas em relação à integridade da divisão dos processos, qualquer interessado pode inspecionar o código-fonte da lógica de distribuição para verificar a conformidade, impessoalidade e igualdade matemática das regras aplicadas.
 
 ---
 
@@ -32,7 +48,8 @@ O visual foi adaptado com base na identidade visual institucional do portal do *
 
 ## Estrutura de Arquivos
 
-- `index.html`: Arquivo de estrutura contendo o código HTML e toda a lógica de funcionamento e sorteio em JavaScript.
+- `index.html`: Arquivo de estrutura contendo os elementos HTML e marcação da página.
+- `index.js`: Arquivo contendo toda a lógica do sorteador e integração de exportação de dados.
 - `index.css`: Arquivo de estilização CSS contendo o design visual do sistema.
 
 ---
