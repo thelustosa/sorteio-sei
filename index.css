@@ -407,3 +407,58 @@ footer {
 #btnVoltar:active {
   transform: translateX(-3px);
 }
+
+/* Seção de Resultados Pós-Sorteio */
+#resultadoSorteio {
+  display: none;
+  margin-top: 24px;
+  border-top: 2px dashed rgba(0, 83, 75, 0.15);
+  padding-top: 20px;
+}
+
+#resultadoSorteio h3 {
+  color: var(--accent);
+  margin-bottom: 12px;
+  font-family: 'Gotham', sans-serif;
+}
+
+#resumoContagem {
+  margin-bottom: 18px;
+}
+
+.unidade-badge {
+  background: var(--accent);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.unidade-badge span {
+  font-size: 16px;
+  margin-left: 5px;
+}
+
+#resultTable thead tr {
+  background: rgba(0, 83, 75, 0.08);
+}
+
+#resultTable th {
+  padding: 12px 10px;
+  font-size: 13px;
+  color: var(--muted);
+  border-bottom: 1px solid rgba(0, 83, 75, 0.1);
+}
+
+#resultTable td {
+  padding: 10px;
+  border-bottom: 1px solid rgba(0, 83, 75, 0.08);
+}
+
+#resultTable td.sorteado-unidade {
+  font-weight: bold;
+  color: var(--accent);
+}
+
