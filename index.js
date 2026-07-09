@@ -83,6 +83,18 @@ function iniciarSorteador(modo, unidades) {
     pillsContainer.appendChild(label);
   });
 
+  // Restaurar elementos que podem ter sido ocultados pós-sorteio
+  const processTable = document.getElementById('processTable');
+  if (processTable) processTable.style.display = 'table';
+  const controls = document.querySelector('.controls');
+  if (controls) controls.style.display = 'flex';
+  const cregSelector = document.getElementById('cregSelector');
+  if (cregSelector) cregSelector.style.display = 'flex';
+  
+  // Garantir que a área de resultados anterior seja limpa e escondida
+  const resultadoSorteio = document.getElementById('resultadoSorteio');
+  if (resultadoSorteio) resultadoSorteio.style.display = 'none';
+
   modeSelector.style.display = 'none';
   sorteadorContent.style.display = 'block';
 
@@ -275,6 +287,7 @@ function sortearProcessos() {
     
     // 3. Montar a contagem de cada processo para cada unidade
     const countWrapper = document.createElement('div');
+    countWrapper.className = 'resumo-wrapper'; // Usará flex do CSS se configurado ou pode estilizar countWrapper diretamente
     countWrapper.style.display = 'flex';
     countWrapper.style.gap = '10px';
     countWrapper.style.flexWrap = 'wrap';
@@ -284,14 +297,8 @@ function sortearProcessos() {
       const totalProcessosUnidade = atribuicoesPorCreg[p].total;
       
       const badge = document.createElement('div');
-      badge.style.background = 'var(--accent)';
-      badge.style.color = '#fff';
-      badge.style.padding = '8px 14px';
-      badge.style.borderRadius = '8px';
-      badge.style.fontSize = '14px';
-      badge.style.fontWeight = 'bold';
-      badge.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-      badge.innerHTML = `${p}: <span style="font-size: 16px; margin-left: 5px;">${totalProcessosUnidade}</span> ${totalProcessosUnidade === 1 ? 'processo' : 'processos'}`;
+      badge.className = 'unidade-badge';
+      badge.innerHTML = `${p}: <span>${totalProcessosUnidade}</span> ${totalProcessosUnidade === 1 ? 'processo' : 'processos'}`;
       
       countWrapper.appendChild(badge);
     });
@@ -309,32 +316,34 @@ function sortearProcessos() {
       
       const tdProc = document.createElement('td');
       tdProc.textContent = numProc;
-      tdProc.style.padding = '10px';
-      tdProc.style.borderBottom = '1px solid rgba(0, 83, 75, 0.08)';
 
       const tdInt = document.createElement('td');
       tdInt.textContent = interessado;
-      tdInt.style.padding = '10px';
-      tdInt.style.borderBottom = '1px solid rgba(0, 83, 75, 0.08)';
 
       const tdAss = document.createElement('td');
       tdAss.textContent = assunto;
-      tdAss.style.padding = '10px';
-      tdAss.style.borderBottom = '1px solid rgba(0, 83, 75, 0.08)';
 
       const tdUn = document.createElement('td');
       tdUn.textContent = unidadeSorteada;
-      tdUn.style.padding = '10px';
-      tdUn.style.fontWeight = 'bold';
-      tdUn.style.color = 'var(--accent)';
-      tdUn.style.borderBottom = '1px solid rgba(0, 83, 75, 0.08)';
+      tdUn.className = 'sorteado-unidade';
 
       tr.append(tdProc, tdInt, tdAss, tdUn);
       tbodyResult.appendChild(tr);
     });
 
-    // Exibir a seção de resultados
+    // Exibir a seção de resultados e ocultar a tabela de inputs / controles
     divResultado.style.display = 'block';
+    
+    // Ocultar a tabela de inputs original, controles e seletor de unidades
+    const processTable = document.getElementById('processTable');
+    if (processTable) processTable.style.display = 'none';
+    const controls = document.querySelector('.controls');
+    if (controls) controls.style.display = 'none';
+    const cregSelector = document.getElementById('cregSelector');
+    if (cregSelector) cregSelector.style.display = 'none';
+    const addRowBtn = document.getElementById('addRowBtn');
+    if (addRowBtn) addRowBtn.style.display = 'none';
+
     // Fazer scroll suave para o resultado
     divResultado.scrollIntoView({ behavior: 'smooth' });
   }
