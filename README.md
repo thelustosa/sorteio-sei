@@ -18,6 +18,8 @@ Acesse a aplicação online em: [https://thelustosa.github.io/sorteio-sei/](http
 
 Este repositório está público e totalmente aberto para auditoria dos sorteios. Caso surjam quaisquer dúvidas em relação à integridade da divisão dos processos, qualquer interessado pode inspecionar o código-fonte da lógica de distribuição para verificar a conformidade, impessoalidade e igualdade matemática das regras aplicadas.
 
+O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR) está disponível para consulta em: [SEI_93024891_Termo_de_Entrega_1.pdf](documentos/SEI_93024891_Termo_de_Entrega_1.pdf).
+
 ---
 
 ## Funcionalidades
@@ -48,6 +50,7 @@ O visual foi adaptado com base na identidade visual institucional do portal do *
 
 ## Estrutura de Arquivos
 
+- `documentos/`: Pasta contendo o Termo de Entrega oficial do projeto.
 - `index.html`: Arquivo de estrutura contendo os elementos HTML e marcação da página.
 - `index.js`: Arquivo contendo toda a lógica do sorteador e integração de exportação de dados.
 - `index.css`: Arquivo de estilização CSS contendo o design visual do sistema.
