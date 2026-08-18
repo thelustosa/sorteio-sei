@@ -26,11 +26,23 @@
     <div class="container">
       <span id="txtModo"></span>
       <button id="btnVoltar" style="display:none">← Voltar</button>
+      <button id="btnSair" style="display:none">Sair</button>
     </div>
   </div>
 
   <div class="container pb-36">
     <div class="card">
+      <div id="loginScreen">
+        <h3>Acesso restrito</h3>
+        <p>Identifique-se para realizar o sorteio de processos.</p>
+        <form id="loginForm">
+          <input id="loginEmail" type="email" placeholder="E-mail" autocomplete="username" required>
+          <input id="loginSenha" type="password" placeholder="Senha" autocomplete="current-password" required>
+          <button id="btnEntrar" type="submit">Entrar</button>
+          <div id="loginErro" role="alert"></div>
+        </form>
+      </div>
+
       <div id="modeSelector">
         <h3>Selecione a unidade de sorteio para começar:</h3>
         <div class="buttons-wrapper">
@@ -109,7 +121,6 @@
   </footer>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="index.js"></script>
 </body>
 
