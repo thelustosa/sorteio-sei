@@ -1,0 +1,9 @@
+# Índice local do CodeGraph
+.codegraph/
+
+# Artefatos de teste automatizado
+.playwright-mcp/
+
+# Sistema operacional
+Thumbs.db
+.DS_Store

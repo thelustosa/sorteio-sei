@@ -4,7 +4,7 @@ if (!devNode || devNode.textContent.trim() !== 'Lucas Lustosa Coelho') {
 }
 
 const assuntosCreg = ['Auto de Infração', 'Chamamento Público', 'Gratuidade', 'Manifestação', 'Minuta', 'Nota Técnica', 'Ouvidoria', 'Requerimento', 'Plano de Racionamento', 'Reajuste', 'Outros'];
-const assuntosCj = ['Auto de Infração', 'Outros'];
+const assuntosCj = ['Auto de Infração'];
 const recursos = ['Com recurso', 'Sem recurso', 'Não se aplica', 'Pedido de revisão'];
 
 let modoSorteio = '';
@@ -25,6 +25,65 @@ const sorteadorContent = document.getElementById('sorteadorContent');
 const thUnidade = document.getElementById('thUnidade');
 const pillsContainer = document.getElementById('pillsContainer');
 const txtModo = document.getElementById('txtModo');
+
+// ── Autenticação ─────────────────────────────────────────────────────────────
+// O token vive apenas em memória: fechar a aba encerra a sessão.
+let accessToken = '';
+
+const loginScreen = document.getElementById('loginScreen');
+const loginForm = document.getElementById('loginForm');
+const loginEmail = document.getElementById('loginEmail');
+const loginSenha = document.getElementById('loginSenha');
+const loginErro = document.getElementById('loginErro');
+const btnEntrar = document.getElementById('btnEntrar');
+const btnSair = document.getElementById('btnSair');
+
+loginForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  loginErro.textContent = '';
+  btnEntrar.disabled = true;
+  btnEntrar.textContent = 'Entrando…';
+
+  try {
+    accessToken = await autenticar(loginEmail.value.trim(), loginSenha.value);
+    loginForm.reset();
+    loginScreen.style.display = 'none';
+    modeSelector.style.display = 'flex';
+    btnSair.style.display = 'inline-block';
+  } catch (err) {
+    loginErro.textContent = err.message === 'Failed to fetch'
+      ? 'Não foi possível conectar ao servidor. Verifique sua conexão com a internet.'
+      : err.message;
+  } finally {
+    btnEntrar.disabled = false;
+    btnEntrar.textContent = 'Entrar';
+  }
+});
+
+// Sair recarrega a página: descarta o token e limpa qualquer sorteio em andamento.
+btnSair.addEventListener('click', () => location.reload());
+
+async function autenticar(email, senha) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error('Banco de dados não configurado. Procure o responsável pela manutenção.');
+  }
+
+  const resp = await fetch(`${baseUrl()}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY },
+    body: JSON.stringify({ email, password: senha })
+  });
+
+  const dados = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const detalhe = dados.error_description || dados.msg || dados.message || '';
+    if (/invalid login|invalid_grant/i.test(detalhe)) throw new Error('E-mail ou senha inválidos.');
+    if (/disabled/i.test(detalhe)) throw new Error('O acesso por e-mail está desativado no servidor. Procure o responsável pela manutenção.');
+    if (/not confirmed/i.test(detalhe)) throw new Error('Usuário ainda não confirmado. Procure o responsável pela manutenção.');
+    throw new Error(detalhe || 'Não foi possível entrar. Tente novamente.');
+  }
+  return dados.access_token;
+}
 
 btnCreg.addEventListener('click', () => {
   iniciarSorteador('CREG', ['CREG1', 'CREG2', 'CREG3', 'CREG4']);
@@ -124,6 +183,11 @@ function createRowElement(index) {
   const optDefaultAss = document.createElement('option'); optDefaultAss.value = ''; optDefaultAss.textContent = 'Selecione o Assunto'; optDefaultAss.disabled = true; optDefaultAss.selected = true;
   selAss.appendChild(optDefaultAss);
   assuntosAtivos.forEach(a => { const o = document.createElement('option'); o.value = a; o.textContent = a; selAss.appendChild(o) });
+  // Na Câmara de Julgamento o assunto é sempre Auto de Infração: já vem definido e travado.
+  if (modoSorteio === 'CJ') {
+    selAss.value = 'Auto de Infração';
+    selAss.disabled = true;
+  }
   tdAss.appendChild(selAss);
   const tdData = document.createElement('td'); tdData.className = 'hidden';
   const inpData = document.createElement('input'); inpData.type = 'text'; inpData.placeholder = 'Data (oculta)'; tdData.appendChild(inpData);
@@ -149,17 +213,10 @@ function createRowElement(index) {
   const tdUn = document.createElement('td'); tdUn.className = 'unidade small'; tdUn.textContent = '';
 
   const tdDel = document.createElement('td');
-  tdDel.style.textAlign = 'center';
+  tdDel.className = 'acoes';
   const btnDel = document.createElement('button');
+  btnDel.className = 'btn-excluir';
   btnDel.textContent = '×';
-  btnDel.style.background = 'transparent';
-  btnDel.style.border = 'none';
-  btnDel.style.color = '#ef4444';
-  btnDel.style.fontSize = '22px';
-  btnDel.style.cursor = 'pointer';
-  btnDel.style.fontWeight = 'bold';
-  btnDel.style.padding = '0';
-  btnDel.style.lineHeight = '1';
   btnDel.title = 'Excluir esta linha';
   btnDel.addEventListener('click', () => {
     tr.remove();
@@ -188,6 +245,7 @@ function sortearProcessos() {
   const rows = Array.from(tbody.querySelectorAll('tr'));
   if (rows.length === 0) { alert('Crie as linhas primeiro.'); return; }
 
+  const numerosVistos = new Map();
   for (let idx = 0; idx < rows.length; idx++) {
     const r = rows[idx];
     const cells = Array.from(r.children);
@@ -200,6 +258,13 @@ function sortearProcessos() {
       alert(`Por favor, preencha todos os campos da linha ${idx + 1} antes de sortear.`);
       return;
     }
+
+    const anterior = numerosVistos.get(numProc);
+    if (anterior) {
+      alert(`O processo ${numProc} está repetido nas linhas ${anterior} e ${idx + 1}. Corrija antes de sortear.`);
+      return;
+    }
+    numerosVistos.set(numProc, idx + 1);
   }
 
   const participantes = getParticipantes();
@@ -287,11 +352,7 @@ function sortearProcessos() {
     
     // 3. Montar a contagem de cada processo para cada unidade
     const countWrapper = document.createElement('div');
-    countWrapper.className = 'resumo-wrapper'; // Usará flex do CSS se configurado ou pode estilizar countWrapper diretamente
-    countWrapper.style.display = 'flex';
-    countWrapper.style.gap = '10px';
-    countWrapper.style.flexWrap = 'wrap';
-    countWrapper.style.marginTop = '10px';
+    countWrapper.className = 'resumo-wrapper';
 
     participantes.forEach(p => {
       const totalProcessosUnidade = atribuicoesPorCreg[p].total;
@@ -348,88 +409,139 @@ function sortearProcessos() {
     divResultado.scrollIntoView({ behavior: 'smooth' });
   }
 
-  exportZip(rows, participantes);
+  const sorteio = {
+    modo: modoSorteio,
+    dataHora: new Date().toISOString(),
+    unidades: participantes,
+    processos: coletarDados(rows)
+  };
 
-  const msg = document.createElement('div');
-  msg.textContent = `⚠️ Colocar as planilhas de backup dos ${modoSorteio}s sorteados na pasta de backup! ⚠️`;
-  msg.style.position = 'fixed';
-  msg.style.top = '20px';
-  msg.style.left = '50%';
-  msg.style.transform = 'translateX(-50%)';
-  msg.style.background = '#ef4444';
-  msg.style.color = 'white';
-  msg.style.fontSize = '28px';
-  msg.style.fontWeight = 'bold';
-  msg.style.padding = '20px 40px';
-  msg.style.borderRadius = '12px';
-  msg.style.boxShadow = '0 4px 12px rgba(0,0,0,0.5)';
-  msg.style.zIndex = 9999;
-  msg.style.textAlign = 'center';
-  document.body.appendChild(msg);
+  exportarWord(sorteio);
 
-  setTimeout(() => { msg.remove(); }, 60000);
+  salvar(sorteio)
+    .then(destino => destino === 'banco'
+      ? aviso('✅ Sorteio gravado no banco de dados.')
+      : aviso('⚠️ Banco não configurado — guarde o arquivo .json de backup gerado.', true))
+    .catch(err => aviso(`❌ Falha ao gravar no banco (${err.message}). O backup .json foi baixado — reenvie depois.`, true));
 }
 
-async function exportZip(rows, participantes) {
-  const hoje = new Date();
-  const dia = hoje.getDate().toString().padStart(2, '0');
-  const mes = (hoje.getMonth() + 1).toString().padStart(2, '0');
-  const mesExtenso = hoje.toLocaleString('pt-BR', { month: 'long' });
-  const ano = hoje.getFullYear();
+// ── Persistência (Supabase / PostgREST) ──────────────────────────────────────
+// Preencha com os dados do projeto Supabase. Vazio = baixa um .json de backup no lugar.
+// SUPABASE_KEY aceita tanto a chave "publishable" (sb_publishable_...) quanto a
+// "anon" legada. Ambas são públicas por natureza; quem protege a tabela é a RLS
+// (ver schema.sql). A chave "service_role"/"secret" NUNCA deve ser usada aqui.
+const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
+const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
+const TABELA = 'processos_sorteados';
 
-  const zip = new JSZip();
+// Aceita a URL com ou sem o sufixo /rest/v1 e com ou sem barra final.
+function baseUrl() {
+  return SUPABASE_URL.replace(/\/+$/, '').replace(/\/rest\/v1$/, '');
+}
 
-  // ── Word (.doc) ──────────────────────────────────────────────────────────────
-  const cabecalho = `Aos ${dia} dias do mês de ${mesExtenso} de ${ano} na sede da Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos, realizou-se a distribuição de processos por sorteio eletrônico.`;
-  const colunaNome = modoSorteio === 'CREG' ? 'Unidade Conselho Regulador' : 'Unidade Câmara de Julgamento';
-
-  let tableHtml = `<table border="1" style="border-collapse:collapse;width:100%"><tr><th>Ordem</th><th>Nº Processo</th><th>Interessado</th><th>${colunaNome}</th></tr>`;
-
-  const dados = rows.map(r => {
+function coletarDados(rows) {
+  return rows.map(r => {
     const cells = Array.from(r.children);
     return {
-      ordem: cells[0].textContent.trim(),
-      numProc: cells[1].querySelector('input').value.trim(),
+      ordem: Number(cells[0].textContent.trim()),
+      numProcesso: cells[1].querySelector('input').value.trim(),
       interessado: cells[2].querySelector('input').value.trim(),
+      assunto: cells[3].querySelector('select').value.trim(),
+      dataDistribuicao: cells[4].querySelector('input').value.trim(),
+      recurso: cells[5].querySelector('select').value.trim(),
       unidade: cells[6].textContent.trim()
     };
   });
-  dados.sort((a, b) => a.unidade.localeCompare(b.unidade, 'pt-BR', { numeric: true }));
+}
+
+// Usa a data local, não a do ISO (que é UTC): um sorteio às 22h de Brasília
+// cairia no dia seguinte em UTC e o nome do arquivo divergiria da ata.
+function nomeArquivo(sorteio, ext) {
+  const d = new Date(sorteio.dataHora);
+  const dia = d.getDate().toString().padStart(2, '0');
+  const mes = (d.getMonth() + 1).toString().padStart(2, '0');
+  return `Sorteio_${sorteio.modo}_${dia}.${mes}.${d.getFullYear()}.${ext}`;
+}
+
+// ── Word (.doc) ──────────────────────────────────────────────────────────────
+function exportarWord(sorteio) {
+  const hoje = new Date(sorteio.dataHora);
+  const dia = hoje.getDate().toString().padStart(2, '0');
+  const mesExtenso = hoje.toLocaleString('pt-BR', { month: 'long' });
+  const ano = hoje.getFullYear();
+
+  const cabecalho = `Aos ${dia} dias do mês de ${mesExtenso} de ${ano} na sede da Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos, realizou-se a distribuição de processos por sorteio eletrônico.`;
+  const colunaNome = sorteio.modo === 'CREG' ? 'Unidade Conselho Regulador' : 'Unidade Câmara de Julgamento';
+
+  const dados = [...sorteio.processos].sort((a, b) => a.unidade.localeCompare(b.unidade, 'pt-BR', { numeric: true }));
+
+  let tableHtml = `<table border="1" style="border-collapse:collapse;width:100%"><tr><th>Ordem</th><th>Nº Processo</th><th>Interessado</th><th>${colunaNome}</th></tr>`;
   dados.forEach(d => {
-    tableHtml += `<tr><td>${d.ordem}</td><td>${d.numProc}</td><td>${d.interessado}</td><td>${d.unidade}</td></tr>`;
+    tableHtml += `<tr><td>${d.ordem}</td><td>${d.numProcesso}</td><td>${d.interessado}</td><td>${d.unidade}</td></tr>`;
   });
   tableHtml += '</table>';
 
-  const wordConteudo = '\uFEFF' + `<meta charset="UTF-8"><p>${cabecalho}</p>${tableHtml}`;
-  zip.file(`Sorteio_${modoSorteio}.doc`, wordConteudo);
+  const wordConteudo = '﻿' + `<meta charset="UTF-8"><p>${cabecalho}</p>${tableHtml}`;
+  saveAs(new Blob([wordConteudo], { type: 'application/msword' }), nomeArquivo(sorteio, 'doc'));
+}
 
-  // ── Planilhas CSV (uma por unidade) ──────────────────────────────────────────
-  const cabecalhoColuna = modoSorteio === 'CREG' ? 'Unidade Conselho Regulador' : 'Unidade Câmara de Julgamento';
+// dd/mm/aaaa → aaaa-mm-dd (formato date do Postgres)
+function dataISO(dataBR) {
+  const [dia, mes, ano] = dataBR.split('/');
+  return `${ano}-${mes}-${dia}`;
+}
 
-  participantes.forEach(unit => {
-    const linhasUnit = rows.filter(r => r.querySelector('.unidade').textContent === unit);
-    if (linhasUnit.length === 0) return;
+// Grava uma linha por processo na tabela. Sem Supabase configurado (ou em caso de
+// falha), baixa o JSON de backup para reenvio posterior — nenhum sorteio se perde.
+async function salvar(sorteio) {
+  if (!SUPABASE_URL || !SUPABASE_KEY || !accessToken) {
+    baixarBackup(sorteio);
+    return 'arquivo';
+  }
 
-    let csv = '\uFEFF';
-    csv += `${cabecalhoColuna};Nº Processo;Interessado;Assunto;Data de Distribuição;Recurso\n`;
+  const linhas = sorteio.processos.map(p => ({
+    modo: sorteio.modo,
+    data_hora: sorteio.dataHora,
+    ordem: p.ordem,
+    num_processo: p.numProcesso,
+    interessado: p.interessado,
+    assunto: p.assunto,
+    data_distribuicao: dataISO(p.dataDistribuicao),
+    recurso: p.recurso,
+    unidade: p.unidade
+  }));
 
-    linhasUnit.forEach(r => {
-      const cells = Array.from(r.children);
-      const unidade    = cells[6].textContent.trim();
-      const numProc    = cells[1].querySelector('input').value.trim();
-      const interessado = cells[2].querySelector('input').value.trim();
-      const assunto    = cells[3].querySelector('select').value.trim();
-      const dataDistrib = cells[4].querySelector('input').value.trim();
-      const recurso    = cells[5].querySelector('select').value.trim();
-      csv += [unidade, numProc, interessado, assunto, dataDistrib, recurso].join(';') + '\n';
+  try {
+    const resp = await fetch(`${baseUrl()}/rest/v1/${TABELA}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${accessToken}`,
+        Prefer: 'return=minimal'
+      },
+      body: JSON.stringify(linhas)
     });
+    if (resp.status === 401) throw new Error('sessão expirada — recarregue a página e entre novamente');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} — ${await resp.text()}`);
+    return 'banco';
+  } catch (err) {
+    baixarBackup(sorteio);
+    throw err;
+  }
+}
 
-    zip.file(`${unit} ${dia}.${mes}.${ano}.csv`, csv);
-  });
+function baixarBackup(sorteio) {
+  const json = JSON.stringify(sorteio, null, 2);
+  saveAs(new Blob([json], { type: 'application/json' }), nomeArquivo(sorteio, 'json'));
+}
 
-  // ── Gerar e baixar o ZIP ─────────────────────────────────────────────────────
-  const zipBlob = await zip.generateAsync({ type: 'blob' });
-  saveAs(zipBlob, `Sorteio_${modoSorteio}_${dia}.${mes}.${ano}.zip`);
+function aviso(texto, alerta = false) {
+  const msg = document.createElement('div');
+  msg.className = alerta ? 'toast alerta' : 'toast';
+  msg.textContent = texto;
+  document.body.appendChild(msg);
+  setTimeout(() => msg.remove(), alerta ? 60000 : 8000);
 }
 
 createBtn.addEventListener('click', () => {

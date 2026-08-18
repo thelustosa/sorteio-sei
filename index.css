@@ -264,7 +264,7 @@ footer {
 }
 
 #modeSelector {
-  display: flex;
+  display: none;
   flex-direction: column;
   align-items: center;
   gap: 20px;
@@ -462,3 +462,141 @@ footer {
   color: var(--accent);
 }
 
+
+
+/* Aviso flutuante pós-sorteio */
+.toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: #fff;
+  font-size: 22px;
+  font-weight: bold;
+  padding: 18px 36px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  z-index: 9999;
+  max-width: 90vw;
+}
+
+.toast.alerta {
+  background: #ef4444;
+}
+
+
+/* Botão de excluir linha da tabela de processos */
+#processTable td.acoes {
+  text-align: center;
+}
+
+.btn-excluir {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  font-size: 22px;
+  font-weight: bold;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Resumo de processos por unidade */
+.resumo-wrapper {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+
+/* ── Tela de login ────────────────────────────────────────────────────────── */
+#loginScreen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 20px;
+}
+
+#loginScreen h3 {
+  margin: 0;
+  color: var(--accent);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+#loginScreen p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+#loginForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 320px;
+}
+
+#loginForm input {
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #fff;
+  color: #111827;
+  font-size: 15px;
+}
+
+#loginForm input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+#btnEntrar {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+#btnEntrar:hover:not(:disabled) {
+  background: #00403a;
+}
+
+#btnEntrar:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+#loginErro {
+  color: #ef4444;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  min-height: 20px;
+}
+
+#btnSair {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+#btnSair:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
