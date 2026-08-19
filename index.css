@@ -600,3 +600,93 @@ footer {
 #btnSair:hover {
   background: rgba(255, 255, 255, 0.15);
 }
+
+/* ── Registro de julgamentos (julgados.html) ─────────────────────────────── */
+
+#listaPautas,
+#detalhePauta {
+  display: none;
+}
+
+#pautasContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 18px 0 8px;
+}
+
+.pauta-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 190px;
+  padding: 14px 18px;
+  border: 2px solid #00534b;
+  border-radius: 8px;
+  background: #fff;
+  color: #00534b;
+  font-family: inherit;
+  font-size: 1rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s, color .15s, transform .1s;
+}
+
+.pauta-card:hover {
+  background: #00534b;
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.pauta-card strong {
+  font-size: 1.15rem;
+}
+
+.pauta-data {
+  font-size: .9rem;
+  opacity: .85;
+}
+
+.pauta-quantidade {
+  font-size: .85rem;
+  font-weight: 600;
+}
+
+#julgadosTable select {
+  min-width: 150px;
+}
+
+#contadorPendentes {
+  font-size: .9rem;
+  color: #444;
+}
+
+#btnSalvar {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  background: #00534b;
+  color: #fff;
+  font-family: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+#btnSalvar:hover:not(:disabled) {
+  background: #00403a;
+}
+
+#btnSalvar:disabled {
+  opacity: .6;
+  cursor: default;
+}
+
+.atalho {
+  margin-top: 24px;
+  font-size: .95rem;
+}
+
+.atalho a {
+  color: #00534b;
+  font-weight: 600;
+}
