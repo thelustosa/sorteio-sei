@@ -7,8 +7,37 @@
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
 
-// O token vive apenas em memória: fechar a aba encerra a sessão.
+// O token fica somente na aba atual: navegar entre as páginas preserva a sessão,
+// mas fechar a aba a encerra. Senhas nunca são armazenadas.
+const SESSION_TOKEN_KEY = 'sorteio-sei.access-token';
 let accessToken = '';
+
+function salvarSessao(token) {
+  accessToken = token;
+  try {
+    sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+  } catch (_) {
+    // Sem armazenamento disponível, a sessão continua válida até a próxima navegação.
+  }
+}
+
+function restaurarSessao() {
+  try {
+    accessToken = sessionStorage.getItem(SESSION_TOKEN_KEY) || '';
+  } catch (_) {
+    accessToken = '';
+  }
+  return Boolean(accessToken);
+}
+
+function encerrarSessao() {
+  accessToken = '';
+  try {
+    sessionStorage.removeItem(SESSION_TOKEN_KEY);
+  } catch (_) {
+    // A sessão em memória já foi descartada.
+  }
+}
 
 // Aceita a URL com ou sem o sufixo /rest/v1 e com ou sem barra final.
 function baseUrl() {
@@ -49,7 +78,10 @@ async function api(caminho, opcoes = {}) {
     }
   });
 
-  if (resp.status === 401) throw new Error('sessão expirada — recarregue a página e entre novamente');
+  if (resp.status === 401) {
+    encerrarSessao();
+    throw new Error('sessão expirada — clique em Sair e entre novamente');
+  }
   if (!resp.ok) throw new Error(`HTTP ${resp.status} — ${await resp.text()}`);
   return resp.status === 204 ? null : resp.json().catch(() => null);
 }
@@ -72,10 +104,10 @@ function ligarLogin(aoEntrar) {
     btnEntrar.textContent = 'Entrando…';
 
     try {
-      accessToken = await autenticar(loginEmail.value.trim(), loginSenha.value);
+      salvarSessao(await autenticar(loginEmail.value.trim(), loginSenha.value));
       loginForm.reset();
       loginScreen.style.display = 'none';
-      btnSair.style.display = 'inline-block';
+      btnSair.hidden = false;
       await aoEntrar();
     } catch (err) {
       loginErro.textContent = err.message === 'Failed to fetch'
@@ -87,13 +119,30 @@ function ligarLogin(aoEntrar) {
     }
   });
 
-  // Sair recarrega a página: descarta o token e limpa o que estava em andamento.
-  btnSair.addEventListener('click', () => location.reload());
+  // Sair descarta o token e limpa o que estava em andamento.
+  btnSair.addEventListener('click', () => {
+    encerrarSessao();
+    location.reload();
+  });
+
+  if (restaurarSessao()) {
+    loginScreen.style.display = 'none';
+    btnSair.hidden = false;
+    Promise.resolve(aoEntrar()).catch(err => {
+      encerrarSessao();
+      loginScreen.style.display = 'flex';
+      btnSair.hidden = true;
+      loginErro.textContent = 'Não foi possível restaurar a sessão. Entre novamente.';
+      console.error(err);
+    });
+  }
 }
 
 function aviso(texto, alerta = false) {
   const msg = document.createElement('div');
   msg.className = alerta ? 'toast alerta' : 'toast';
+  msg.setAttribute('role', alerta ? 'alert' : 'status');
+  msg.setAttribute('aria-live', alerta ? 'assertive' : 'polite');
   msg.textContent = texto;
   document.body.appendChild(msg);
   setTimeout(() => msg.remove(), alerta ? 60000 : 8000);

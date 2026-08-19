@@ -68,12 +68,12 @@ async function carregarPautas() {
 
 function mostrarPautas() {
   detalhePauta.style.display = 'none';
-  btnVoltar.style.display = 'none';
+  btnVoltar.hidden = true;
   txtModo.textContent = '';
   listaPautas.style.display = 'block';
 
   pautasContainer.innerHTML = '';
-  semPendencia.style.display = pendentesPorPauta.size ? 'none' : 'block';
+  semPendencia.hidden = pendentesPorPauta.size > 0;
 
   for (const [chave, processos] of pendentesPorPauta) {
     const [numero, data] = chave.split('|');
@@ -102,6 +102,7 @@ function mostrarPautas() {
 
 function seletor(opcoes, valor, rotulo) {
   const sel = document.createElement('select');
+  sel.setAttribute('aria-label', rotulo);
   const vazio = document.createElement('option');
   vazio.value = '';
   vazio.textContent = rotulo;
@@ -124,7 +125,7 @@ function abrirPauta(chave) {
 
   listaPautas.style.display = 'none';
   detalhePauta.style.display = 'block';
-  btnVoltar.style.display = 'inline-block';
+  btnVoltar.hidden = false;
   txtModo.textContent = numero === 'null'
     ? `Sessão de ${dataBR(data)}`
     : `${numero}ª reunião — ${dataBR(data)}`;

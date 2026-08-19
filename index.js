@@ -1,8 +1,3 @@
-const devNode = document.querySelector('footer div strong');
-if (!devNode || devNode.textContent.trim() !== 'Lucas Lustosa Coelho') {
-  throw new Error('Erro Crítico: Procure o desenvolvedor ou o responsável pela manutenção do código.');
-}
-
 const assuntosCreg = ['Auto de Infração', 'Chamamento Público', 'Gratuidade', 'Manifestação', 'Minuta', 'Nota Técnica', 'Ouvidoria', 'Requerimento', 'Plano de Racionamento', 'Reajuste', 'Outros'];
 const assuntosCj = ['Auto de Infração'];
 const recursos = ['Com recurso', 'Sem recurso', 'Não se aplica', 'Pedido de revisão'];
@@ -46,7 +41,7 @@ btnCj.addEventListener('click', () => {
 btnVoltar.addEventListener('click', () => {
   sorteadorContent.style.display = 'none';
   modeSelector.style.display = 'flex';
-  btnVoltar.style.display = 'none';
+  btnVoltar.hidden = true;
 
   numRowsInput.style.display = 'inline-block';
   createBtn.style.display = 'inline-block';
@@ -74,7 +69,7 @@ function iniciarSorteador(modo, unidades) {
   unidadesList = unidades;
   assuntosAtivos = modo === 'CREG' ? assuntosCreg : assuntosCj;
 
-  btnVoltar.style.display = 'inline-block';
+  btnVoltar.hidden = false;
   txtModo.textContent = modo === 'CREG' ? 'Conselho Regulador' : 'Câmara de Julgamento';
 
   thUnidade.textContent = modo === 'CREG' ? 'Unidade Conselho Regulador (CREG)' : 'Unidade Câmara de Julgamento (CJ)';
@@ -83,14 +78,17 @@ function iniciarSorteador(modo, unidades) {
 
   pillsContainer.innerHTML = '';
   unidadesList.forEach(unit => {
-    const label = document.createElement('label');
-    label.className = 'pill';
-    label.dataset.creg = unit;
-    label.textContent = unit;
-    label.addEventListener('click', () => {
-      label.classList.toggle('excluded');
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.className = 'pill';
+    pill.dataset.creg = unit;
+    pill.setAttribute('aria-pressed', 'false');
+    pill.textContent = unit;
+    pill.addEventListener('click', () => {
+      const excluded = pill.classList.toggle('excluded');
+      pill.setAttribute('aria-pressed', String(excluded));
     });
-    pillsContainer.appendChild(label);
+    pillsContainer.appendChild(pill);
   });
 
   // Restaurar elementos que podem ter sido ocultados pós-sorteio
@@ -124,13 +122,13 @@ function createRowElement(index) {
   const tr = document.createElement('tr');
   const tdOrdem = document.createElement('td'); tdOrdem.className = 'num'; tdOrdem.textContent = index;
   const tdProc = document.createElement('td');
-  const inpProc = document.createElement('input'); inpProc.type = 'text'; inpProc.placeholder = 'Digite o nº do processo';
+  const inpProc = document.createElement('input'); inpProc.type = 'text'; inpProc.placeholder = 'Digite o nº do processo'; inpProc.setAttribute('aria-label', `Número do processo, linha ${index}`);
   tdProc.appendChild(inpProc);
   const tdInt = document.createElement('td');
-  const inpInt = document.createElement('input'); inpInt.type = 'text'; inpInt.placeholder = 'Interessado';
+  const inpInt = document.createElement('input'); inpInt.type = 'text'; inpInt.placeholder = 'Interessado'; inpInt.setAttribute('aria-label', `Interessado, linha ${index}`);
   tdInt.appendChild(inpInt);
   const tdAss = document.createElement('td');
-  const selAss = document.createElement('select');
+  const selAss = document.createElement('select'); selAss.setAttribute('aria-label', `Assunto, linha ${index}`);
   const optDefaultAss = document.createElement('option'); optDefaultAss.value = ''; optDefaultAss.textContent = 'Selecione o Assunto'; optDefaultAss.disabled = true; optDefaultAss.selected = true;
   selAss.appendChild(optDefaultAss);
   assuntosAtivos.forEach(a => { const o = document.createElement('option'); o.value = a; o.textContent = a; selAss.appendChild(o) });
@@ -143,7 +141,7 @@ function createRowElement(index) {
   const tdData = document.createElement('td'); tdData.className = 'hidden';
   const inpData = document.createElement('input'); inpData.type = 'text'; inpData.placeholder = 'Data (oculta)'; tdData.appendChild(inpData);
   const tdRec = document.createElement('td');
-  const selRec = document.createElement('select');
+  const selRec = document.createElement('select'); selRec.setAttribute('aria-label', `${modoSorteio === 'CJ' ? 'Defesa' : 'Recurso'}, linha ${index}`);
   const optDefaultRec = document.createElement('option'); optDefaultRec.value = ''; optDefaultRec.textContent = modoSorteio === 'CJ' ? 'Houve defesa?' : 'Selecione o tipo de recurso'; optDefaultRec.disabled = true; optDefaultRec.selected = true;
   selRec.appendChild(optDefaultRec);
   (modoSorteio === 'CJ' ? defesas : recursos).forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; selRec.appendChild(o) });
@@ -170,8 +168,10 @@ function createRowElement(index) {
   const tdDel = document.createElement('td');
   tdDel.className = 'acoes';
   const btnDel = document.createElement('button');
+  btnDel.type = 'button';
   btnDel.className = 'btn-excluir';
-  btnDel.textContent = '×';
+  btnDel.textContent = 'Excluir';
+  btnDel.setAttribute('aria-label', `Excluir linha ${index}`);
   btnDel.title = 'Excluir esta linha';
   btnDel.addEventListener('click', () => {
     tr.remove();
@@ -314,7 +314,7 @@ function sortearProcessos() {
       
       const badge = document.createElement('div');
       badge.className = 'unidade-badge';
-      badge.innerHTML = `${p}: <span>${totalProcessosUnidade}</span> ${totalProcessosUnidade === 1 ? 'processo' : 'processos'}`;
+      badge.textContent = `${p}: ${totalProcessosUnidade} ${totalProcessosUnidade === 1 ? 'processo' : 'processos'}`;
       
       countWrapper.appendChild(badge);
     });
@@ -430,14 +430,32 @@ function exportarWord(sorteio) {
 
   const dados = [...sorteio.processos].sort((a, b) => a.unidade.localeCompare(b.unidade, 'pt-BR', { numeric: true }));
 
-  let tableHtml = `<table border="1" style="border-collapse:collapse;width:100%"><tr><th>Ordem</th><th>Nº Processo</th><th>Interessado</th><th>${colunaNome}</th></tr>`;
+  let tableHtml = `<table border="1" style="border-collapse:collapse;width:100%"><tr><th>Ordem</th><th>Nº Processo</th><th>Interessado</th><th>${escaparHtml(colunaNome)}</th></tr>`;
   dados.forEach(d => {
-    tableHtml += `<tr><td>${d.ordem}</td><td>${d.numProcesso}</td><td>${d.interessado}</td><td>${d.unidade}</td></tr>`;
+    tableHtml += `<tr><td>${escaparHtml(d.ordem)}</td><td>${escaparHtml(d.numProcesso)}</td><td>${escaparHtml(d.interessado)}</td><td>${escaparHtml(d.unidade)}</td></tr>`;
   });
   tableHtml += '</table>';
 
-  const wordConteudo = '﻿' + `<meta charset="UTF-8"><p>${cabecalho}</p>${tableHtml}`;
-  saveAs(new Blob([wordConteudo], { type: 'application/msword' }), nomeArquivo(sorteio, 'doc'));
+  const wordConteudo = '﻿' + `<meta charset="UTF-8"><p>${escaparHtml(cabecalho)}</p>${tableHtml}`;
+  baixarArquivo(new Blob([wordConteudo], { type: 'application/msword' }), nomeArquivo(sorteio, 'doc'));
+}
+
+function escaparHtml(valor) {
+  return String(valor).replace(/[&<>"']/g, caractere => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[caractere]);
+}
+
+function baixarArquivo(blob, nome) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nome;
+  link.hidden = true;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 // dd/mm/aaaa → aaaa-mm-dd (formato date do Postgres)
@@ -510,7 +528,7 @@ async function salvar(sorteio) {
 
 function baixarBackup(sorteio) {
   const json = JSON.stringify(sorteio, null, 2);
-  saveAs(new Blob([json], { type: 'application/json' }), nomeArquivo(sorteio, 'json'));
+  baixarArquivo(new Blob([json], { type: 'application/json' }), nomeArquivo(sorteio, 'json'));
 }
 
 createBtn.addEventListener('click', () => {
