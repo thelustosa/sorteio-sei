@@ -505,23 +505,20 @@ async function salvar(sorteio) {
 
   const linhas = linhasParaBanco(sorteio);
 
+  // Passa por api() para que sessão expirada devolva a tela de login aqui
+  // também, e não só na página de julgados.
   try {
-    const resp = await fetch(`${baseUrl()}/rest/v1/${tabela}`, {
+    await api(tabela, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${accessToken}`,
-        Prefer: 'return=minimal'
-      },
+      headers: { Prefer: 'return=minimal' },
       body: JSON.stringify(linhas)
     });
-    if (resp.status === 401) throw new Error('sessão expirada — recarregue a página e entre novamente');
-    if (resp.status === 409) throw new Error('este sorteio já está gravado: mesmo processo, mesma data e mesma unidade');
-    if (!resp.ok) throw new Error(`HTTP ${resp.status} — ${await resp.text()}`);
     return 'banco';
   } catch (err) {
     baixarBackup(sorteio);
+    if (err.status === 409) {
+      throw new Error('este sorteio já está gravado: mesmo processo, mesma data e mesma unidade');
+    }
     throw err;
   }
 }

@@ -53,9 +53,12 @@ O visual foi adaptado com base na identidade visual institucional do portal do *
 
 ## Estrutura de Arquivos
 
+- [`FLUXO-CJ.md`](FLUXO-CJ.md): **Fluxo completo da Câmara de Julgamento** — do sorteio ao julgamento registrado, com as regras, as tabelas, a API e o tratamento de falhas.
 - `documentos/`: Pasta contendo o Termo de Entrega oficial do projeto.
 - `schema.sql`: Script de criação das tabelas e das políticas de segurança (RLS) do banco.
 - `migracao_cj.sql`: Migração dos processos da Câmara de Julgamento para o novo acervo.
+- [`verificacao_cj.sql`](verificacao_cj.sql): Conferência de consistência dos dados da CJ — só lê, roda a qualquer momento.
+- [`correcoes_cj.sql`](correcoes_cj.sql): Correções pontuais do histórico importado da planilha.
 - `dados/importar_planilha.py`: Converte a planilha histórica da CJ em SQL de importação.
 - `sincronizacao/`: Serviço que alimenta os julgados a partir das pautas publicadas pela AGR.
 - `tests/`: Testes da Câmara de Julgamento e da sincronização, contra um Postgres real.
@@ -76,6 +79,8 @@ A chave publicável é pública por natureza e pode ficar no código: ela identi
 ---
 
 ## Câmara de Julgamento: acervo e julgados
+
+> O passo a passo completo, com diagramas, está em **[FLUXO-CJ.md](FLUXO-CJ.md)**.
 
 A CJ deixou de compartilhar a tabela `processos_sorteados` com o Conselho Regulador e passou a ter as duas tabelas que a secretaria já usava na planilha:
 
