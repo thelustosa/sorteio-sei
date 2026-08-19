@@ -4,15 +4,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Tabela: Sorteio de Processos SEI</title>
+  <title>Sorteio de Processos SEI</title>
+  <link rel="preload" href="assets/fonts/Gotham-Bold.otf" as="font" type="font/otf" crossorigin />
   <link rel="stylesheet" href="index.css" />
 </head>
 
 <body>
+  <a class="skip-link" href="#conteudo-principal">Pular para o conteúdo principal</a>
   <div class="container pt-36">
     <header>
       <div class="logo">
-        <img src="assets/logo_header.png" alt="Logo Goiás" />
+        <img src="assets/logo_header.png" alt="Logo Goiás" width="138" height="66" />
       </div>
       <div>
         <h1>Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</h1>
@@ -22,24 +24,26 @@
     </header>
   </div>
 
-  <div class="green-bar">
+  <nav class="green-bar" aria-label="Navegação do sistema">
     <div class="container">
       <span id="txtModo"></span>
-      <button id="btnVoltar" style="display:none">← Voltar</button>
-      <button id="btnSair" style="display:none">Sair</button>
+      <button id="btnVoltar" type="button" hidden>← Voltar</button>
+      <button id="btnSair" type="button" hidden>Sair</button>
     </div>
-  </div>
+  </nav>
 
-  <div class="container pb-36">
+  <main id="conteudo-principal" class="container pb-36" tabindex="-1">
     <div class="card">
       <div id="loginScreen">
         <h3>Acesso restrito</h3>
         <p>Identifique-se para realizar o sorteio de processos.</p>
         <form id="loginForm">
+          <label class="sr-only" for="loginEmail">E-mail</label>
           <input id="loginEmail" type="email" placeholder="E-mail" autocomplete="username" required>
+          <label class="sr-only" for="loginSenha">Senha</label>
           <input id="loginSenha" type="password" placeholder="Senha" autocomplete="current-password" required>
           <button id="btnEntrar" type="submit">Entrar</button>
-          <div id="loginErro" role="alert"></div>
+          <div id="loginErro" role="alert" aria-live="assertive"></div>
         </form>
       </div>
 
@@ -50,24 +54,25 @@
           <button id="btnCj">Câmara de Julgamento (CJ)</button>
         </div>
         <p class="atalho">
-          <a href="julgados.html">Registrar voto e status das sessões da Câmara de Julgamento →</a>
+          <a href="./julgados.html">Registrar voto e status das sessões da Câmara de Julgamento →</a>
         </p>
       </div>
 
       <div id="sorteadorContent">
         <div class="controls">
-          <label for="numRows">Quantidade de Processos:</label>
+          <label for="numRows">Quantidade de processos:</label>
           <input id="numRows" type="number" min="1" value="3">
-          <button id="createRows">Gerar</button>
+          <button id="createRows" type="button">Gerar</button>
           <div id="spacer"></div>
-          <button id="sortear" class="secondary">Sortear CREG e Exportar</button>
+          <button id="sortear" class="secondary" type="button">Sortear CREG e Exportar</button>
         </div>
 
         <div id="cregSelector">
-          <span>Selecione as Unidades que <span style="color: #ef4444; font-weight: bold;">NÃO</span> vão participar:</span>
+          <span>Selecione as unidades que <strong class="text-danger">não</strong> vão participar:</span>
           <div id="pillsContainer"></div>
         </div>
 
+        <div class="table-scroll" role="region" aria-label="Processos para sorteio" tabindex="0">
         <table id="processTable">
           <thead>
             <tr>
@@ -83,6 +88,7 @@
           </thead>
           <tbody></tbody>
         </table>
+        </div>
 
         <!-- Seção de Resultados Pós-Sorteio -->
         <div id="resultadoSorteio">
@@ -92,6 +98,7 @@
             <!-- Exemplo: CREG1: 2 processos | CREG2: 3 processos -->
           </div>
 
+          <div class="table-scroll" role="region" aria-label="Resultado do sorteio" tabindex="0">
           <table id="resultTable">
             <thead>
               <tr>
@@ -103,19 +110,20 @@
             </thead>
             <tbody></tbody>
           </table>
+          </div>
         </div>
 
         <footer>
           <div>Desenvolvido por <strong>Lucas Lustosa Coelho</strong>.</div>
-          <button id="addRowBtn">+ Adicionar Linha</button>
+          <button id="addRowBtn" type="button">Adicionar linha</button>
         </footer>
       </div>
     </div>
-  </div>
+  </main>
 
   <footer class="page-footer">
     <div class="footer-container">
-      <img src="assets/logo_footer.png" alt="Estado de Goiás" class="footer-logo" />
+      <img src="assets/logo_footer.png" alt="Estado de Goiás" class="footer-logo" width="139" height="65" />
       <div class="footer-info">
         Este sorteio segue regras de distribuição igualitária e proporcional por assunto e carga total de processos.<br>
         Todos os sorteios são auditáveis para garantir transparência.
@@ -123,7 +131,6 @@
     </div>
   </footer>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <script src="supabase.js"></script>
   <script src="index.js"></script>
 </body>
