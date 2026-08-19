@@ -49,6 +49,9 @@
           <button id="btnCreg">Conselho Regulador (CREG)</button>
           <button id="btnCj">Câmara de Julgamento (CJ)</button>
         </div>
+        <p class="atalho">
+          <a href="julgados.html">Registrar voto e status das sessões da Câmara de Julgamento →</a>
+        </p>
       </div>
 
       <div id="sorteadorContent">
@@ -73,7 +76,7 @@
               <th>Interessado</th>
               <th>Assunto</th>
               <th class="hidden">Data de Distribuição</th>
-              <th>Recurso</th>
+              <th id="thRecurso">Recurso</th>
               <th id="thUnidade">Unidade Conselho Regulador</th>
               <th></th>
             </tr>
@@ -121,6 +124,7 @@
   </footer>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <script src="supabase.js"></script>
   <script src="index.js"></script>
 </body>
 

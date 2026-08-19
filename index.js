@@ -6,6 +6,9 @@ if (!devNode || devNode.textContent.trim() !== 'Lucas Lustosa Coelho') {
 const assuntosCreg = ['Auto de Infração', 'Chamamento Público', 'Gratuidade', 'Manifestação', 'Minuta', 'Nota Técnica', 'Ouvidoria', 'Requerimento', 'Plano de Racionamento', 'Reajuste', 'Outros'];
 const assuntosCj = ['Auto de Infração'];
 const recursos = ['Com recurso', 'Sem recurso', 'Não se aplica', 'Pedido de revisão'];
+// Na Câmara de Julgamento a mesma coluna registra outra coisa: se o autuado
+// apresentou defesa. É o campo que os julgados herdam do acervo.
+const defesas = ['Sim', 'Não'];
 
 let modoSorteio = '';
 let unidadesList = [];
@@ -23,67 +26,14 @@ const btnVoltar = document.getElementById('btnVoltar');
 const modeSelector = document.getElementById('modeSelector');
 const sorteadorContent = document.getElementById('sorteadorContent');
 const thUnidade = document.getElementById('thUnidade');
+const thRecurso = document.getElementById('thRecurso');
 const pillsContainer = document.getElementById('pillsContainer');
 const txtModo = document.getElementById('txtModo');
 
 // ── Autenticação ─────────────────────────────────────────────────────────────
-// O token vive apenas em memória: fechar a aba encerra a sessão.
-let accessToken = '';
-
-const loginScreen = document.getElementById('loginScreen');
-const loginForm = document.getElementById('loginForm');
-const loginEmail = document.getElementById('loginEmail');
-const loginSenha = document.getElementById('loginSenha');
-const loginErro = document.getElementById('loginErro');
-const btnEntrar = document.getElementById('btnEntrar');
-const btnSair = document.getElementById('btnSair');
-
-loginForm.addEventListener('submit', async e => {
-  e.preventDefault();
-  loginErro.textContent = '';
-  btnEntrar.disabled = true;
-  btnEntrar.textContent = 'Entrando…';
-
-  try {
-    accessToken = await autenticar(loginEmail.value.trim(), loginSenha.value);
-    loginForm.reset();
-    loginScreen.style.display = 'none';
-    modeSelector.style.display = 'flex';
-    btnSair.style.display = 'inline-block';
-  } catch (err) {
-    loginErro.textContent = err.message === 'Failed to fetch'
-      ? 'Não foi possível conectar ao servidor. Verifique sua conexão com a internet.'
-      : err.message;
-  } finally {
-    btnEntrar.disabled = false;
-    btnEntrar.textContent = 'Entrar';
-  }
-});
-
-// Sair recarrega a página: descarta o token e limpa qualquer sorteio em andamento.
-btnSair.addEventListener('click', () => location.reload());
-
-async function autenticar(email, senha) {
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    throw new Error('Banco de dados não configurado. Procure o responsável pela manutenção.');
-  }
-
-  const resp = await fetch(`${baseUrl()}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY },
-    body: JSON.stringify({ email, password: senha })
-  });
-
-  const dados = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    const detalhe = dados.error_description || dados.msg || dados.message || '';
-    if (/invalid login|invalid_grant/i.test(detalhe)) throw new Error('E-mail ou senha inválidos.');
-    if (/disabled/i.test(detalhe)) throw new Error('O acesso por e-mail está desativado no servidor. Procure o responsável pela manutenção.');
-    if (/not confirmed/i.test(detalhe)) throw new Error('Usuário ainda não confirmado. Procure o responsável pela manutenção.');
-    throw new Error(detalhe || 'Não foi possível entrar. Tente novamente.');
-  }
-  return dados.access_token;
-}
+// Login, token e chamadas ao Supabase ficam em supabase.js, compartilhados com
+// a página de registro de voto e status.
+ligarLogin(() => { modeSelector.style.display = 'flex'; });
 
 btnCreg.addEventListener('click', () => {
   iniciarSorteador('CREG', ['CREG1', 'CREG2', 'CREG3', 'CREG4']);
@@ -128,6 +78,7 @@ function iniciarSorteador(modo, unidades) {
   txtModo.textContent = modo === 'CREG' ? 'Conselho Regulador' : 'Câmara de Julgamento';
 
   thUnidade.textContent = modo === 'CREG' ? 'Unidade Conselho Regulador (CREG)' : 'Unidade Câmara de Julgamento (CJ)';
+  thRecurso.textContent = modo === 'CREG' ? 'Recurso' : 'Defesa';
   sortearBtn.textContent = `Sortear ${modo} e Exportar`;
 
   pillsContainer.innerHTML = '';
@@ -193,22 +144,26 @@ function createRowElement(index) {
   const inpData = document.createElement('input'); inpData.type = 'text'; inpData.placeholder = 'Data (oculta)'; tdData.appendChild(inpData);
   const tdRec = document.createElement('td');
   const selRec = document.createElement('select');
-  const optDefaultRec = document.createElement('option'); optDefaultRec.value = ''; optDefaultRec.textContent = 'Selecione o tipo de recurso'; optDefaultRec.disabled = true; optDefaultRec.selected = true;
+  const optDefaultRec = document.createElement('option'); optDefaultRec.value = ''; optDefaultRec.textContent = modoSorteio === 'CJ' ? 'Houve defesa?' : 'Selecione o tipo de recurso'; optDefaultRec.disabled = true; optDefaultRec.selected = true;
   selRec.appendChild(optDefaultRec);
-  recursos.forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; selRec.appendChild(o) });
+  (modoSorteio === 'CJ' ? defesas : recursos).forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; selRec.appendChild(o) });
   tdRec.appendChild(selRec);
 
-  selAss.addEventListener('change', () => {
-    if (selAss.value !== 'Auto de Infração') {
-      selRec.value = 'Não se aplica';
-      selRec.disabled = true;
-    } else {
-      selRec.disabled = false;
-      if (selRec.value === 'Não se aplica' && optDefaultRec.selected) {
-        selRec.value = '';
+  // Só no CREG: fora de Auto de Infração não existe recurso. Na CJ o assunto é
+  // travado em Auto de Infração e a coluna é Defesa, que sempre se aplica.
+  if (modoSorteio !== 'CJ') {
+    selAss.addEventListener('change', () => {
+      if (selAss.value !== 'Auto de Infração') {
+        selRec.value = 'Não se aplica';
+        selRec.disabled = true;
+      } else {
+        selRec.disabled = false;
+        if (selRec.value === 'Não se aplica' && optDefaultRec.selected) {
+          selRec.value = '';
+        }
       }
-    }
-  });
+    });
+  }
 
   const tdUn = document.createElement('td'); tdUn.className = 'unidade small'; tdUn.textContent = '';
 
@@ -252,9 +207,9 @@ function sortearProcessos() {
     const numProc = cells[1].querySelector('input').value.trim();
     const interessado = cells[2].querySelector('input').value.trim();
     const assunto = cells[3].querySelector('select').value;
-    const recurso = cells[5].querySelector('select').value;
+    const defesaOuRecurso = cells[5].querySelector('select').value;
 
-    if (!numProc || !interessado || !assunto || !recurso) {
+    if (!numProc || !interessado || !assunto || !defesaOuRecurso) {
       alert(`Por favor, preencha todos os campos da linha ${idx + 1} antes de sortear.`);
       return;
     }
@@ -426,31 +381,31 @@ function sortearProcessos() {
 }
 
 // ── Persistência (Supabase / PostgREST) ──────────────────────────────────────
-// Preencha com os dados do projeto Supabase. Vazio = baixa um .json de backup no lugar.
-// SUPABASE_KEY aceita tanto a chave "publishable" (sb_publishable_...) quanto a
-// "anon" legada. Ambas são públicas por natureza; quem protege a tabela é a RLS
-// (ver schema.sql). A chave "service_role"/"secret" NUNCA deve ser usada aqui.
-const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
-const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const TABELA = 'processos_sorteados';
+// A Câmara de Julgamento grava no próprio acervo — de lá saem os julgados
+// (ver schema.sql). O Conselho Regulador segue na tabela antiga enquanto não
+// ganha acervo_creg/julgados_creg. Sem Supabase configurado, o sorteio vira um
+// .json de backup.
+const TABELAS = { CJ: 'acervo_cj', CREG: 'processos_sorteados' };
 
-// Aceita a URL com ou sem o sufixo /rest/v1 e com ou sem barra final.
-function baseUrl() {
-  return SUPABASE_URL.replace(/\/+$/, '').replace(/\/rest\/v1$/, '');
-}
-
+// A 6ª coluna é Defesa na Câmara de Julgamento e Recurso no Conselho Regulador
+// — coisas diferentes, então cada modo guarda a sua com o próprio nome.
 function coletarDados(rows) {
   return rows.map(r => {
     const cells = Array.from(r.children);
-    return {
+    const processo = {
       ordem: Number(cells[0].textContent.trim()),
       numProcesso: cells[1].querySelector('input').value.trim(),
       interessado: cells[2].querySelector('input').value.trim(),
       assunto: cells[3].querySelector('select').value.trim(),
       dataDistribuicao: cells[4].querySelector('input').value.trim(),
-      recurso: cells[5].querySelector('select').value.trim(),
       unidade: cells[6].textContent.trim()
     };
+
+    const escolha = cells[5].querySelector('select').value.trim();
+    if (modoSorteio === 'CJ') processo.defesa = escolha;
+    else processo.recurso = escolha;
+
+    return processo;
   });
 }
 
@@ -491,15 +446,24 @@ function dataISO(dataBR) {
   return `${ano}-${mes}-${dia}`;
 }
 
-// Grava uma linha por processo na tabela. Sem Supabase configurado (ou em caso de
-// falha), baixa o JSON de backup para reenvio posterior — nenhum sorteio se perde.
-async function salvar(sorteio) {
-  if (!SUPABASE_URL || !SUPABASE_KEY || !accessToken) {
-    baixarBackup(sorteio);
-    return 'arquivo';
+// Uma linha por processo, no formato da tabela de cada modo. A unidade sorteada
+// (CJ1..CJ5) é o relator do processo no acervo da Câmara — é ela que os julgados
+// usam depois para saber quem levou o processo à sessão.
+function linhasParaBanco(sorteio) {
+  if (sorteio.modo === 'CJ') {
+    return sorteio.processos.map(p => ({
+      num_processo: p.numProcesso,
+      interessado: p.interessado,
+      relator: p.unidade,
+      data_distribuicao: dataISO(p.dataDistribuicao),
+      defesa: p.defesa === 'Sim',
+      assunto: p.assunto,
+      ordem: p.ordem,
+      sorteado_em: sorteio.dataHora
+    }));
   }
 
-  const linhas = sorteio.processos.map(p => ({
+  return sorteio.processos.map(p => ({
     modo: sorteio.modo,
     data_hora: sorteio.dataHora,
     ordem: p.ordem,
@@ -510,9 +474,21 @@ async function salvar(sorteio) {
     recurso: p.recurso,
     unidade: p.unidade
   }));
+}
+
+// Grava o sorteio no banco. Sem Supabase configurado (ou em caso de falha),
+// baixa o JSON de backup para reenvio posterior — nenhum sorteio se perde.
+async function salvar(sorteio) {
+  const tabela = TABELAS[sorteio.modo];
+  if (!SUPABASE_URL || !SUPABASE_KEY || !accessToken || !tabela) {
+    baixarBackup(sorteio);
+    return 'arquivo';
+  }
+
+  const linhas = linhasParaBanco(sorteio);
 
   try {
-    const resp = await fetch(`${baseUrl()}/rest/v1/${TABELA}`, {
+    const resp = await fetch(`${baseUrl()}/rest/v1/${tabela}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -523,6 +499,7 @@ async function salvar(sorteio) {
       body: JSON.stringify(linhas)
     });
     if (resp.status === 401) throw new Error('sessão expirada — recarregue a página e entre novamente');
+    if (resp.status === 409) throw new Error('este sorteio já está gravado: mesmo processo, mesma data e mesma unidade');
     if (!resp.ok) throw new Error(`HTTP ${resp.status} — ${await resp.text()}`);
     return 'banco';
   } catch (err) {
@@ -534,14 +511,6 @@ async function salvar(sorteio) {
 function baixarBackup(sorteio) {
   const json = JSON.stringify(sorteio, null, 2);
   saveAs(new Blob([json], { type: 'application/json' }), nomeArquivo(sorteio, 'json'));
-}
-
-function aviso(texto, alerta = false) {
-  const msg = document.createElement('div');
-  msg.className = alerta ? 'toast alerta' : 'toast';
-  msg.textContent = texto;
-  document.body.appendChild(msg);
-  setTimeout(() => msg.remove(), alerta ? 60000 : 8000);
 }
 
 createBtn.addEventListener('click', () => {
