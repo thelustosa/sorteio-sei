@@ -82,12 +82,15 @@ function mostrarPautas() {
     cartao.className = 'pauta-card';
     cartao.addEventListener('click', () => abrirPauta(chave));
 
+    // A data vem primeiro de propósito: ela confere com a listagem oficial da
+    // AGR em todas as sessões, enquanto o número da pauta é referência interna
+    // da Câmara e, até 2025, não bate com o número publicado (ver FLUXO-CJ.md).
     const titulo = document.createElement('strong');
-    titulo.textContent = numero === 'null' ? 'Sem pauta' : `${numero}ª reunião`;
+    titulo.textContent = dataBR(data);
 
     const quando = document.createElement('span');
     quando.className = 'pauta-data';
-    quando.textContent = dataBR(data);
+    quando.textContent = numero === 'null' ? 'sem número de pauta' : `${numero}ª reunião`;
 
     const quantos = document.createElement('span');
     quantos.className = 'pauta-quantidade';
@@ -128,7 +131,7 @@ function abrirPauta(chave) {
   btnVoltar.hidden = false;
   txtModo.textContent = numero === 'null'
     ? `Sessão de ${dataBR(data)}`
-    : `${numero}ª reunião — ${dataBR(data)}`;
+    : `Sessão de ${dataBR(data)} — ${numero}ª reunião`;
   tituloPauta.textContent = 'Processos aguardando voto e status';
 
   tbody.innerHTML = '';

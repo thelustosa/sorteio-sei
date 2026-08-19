@@ -12,6 +12,7 @@ Requisitos: docker e psycopg2.
 """
 
 import json
+import re
 import subprocess
 import sys
 from datetime import date, datetime
@@ -695,6 +696,70 @@ def creg_continua_gravando_na_tabela_antiga(cur):
                    returning unidade""")
     assert cur.fetchone()[0] == 'CREG3'
     cur.connection.rollback()
+
+
+@teste
+@exige_planilha
+def dados_importados_nao_produzem_nenhum_erro(cur):
+    """Roda o verificacao_cj.sql contra os dados reais e exige zero ERRO.
+
+    Os AVISOs são qualidade de dado herdada da planilha e estão documentados em
+    FLUXO-CJ.md; ERRO é quebra de regra do sistema e não pode existir.
+    """
+    cur.execute((RAIZ / 'verificacao_cj.sql').read_text(encoding='utf-8'))
+    achados = cur.fetchall()
+    assert achados, 'a verificação não devolveu nenhuma linha'
+
+    erros = [(nome, qtd) for grav, nome, qtd, _ in achados if grav == 'ERRO']
+    assert not erros, erros
+
+
+@teste
+@exige_planilha
+def correcoes_deixam_os_dados_consistentes(cur):
+    """As correções de correcoes_cj.sql resolvem o que prometem, sem perder linha."""
+    antes = uma(cur, 'select count(*) from julgados_cj')
+
+    # As duas correções, sem os blocos de conferência (que fazem commit próprio).
+    cur.execute("""update julgados_cj set data_sessao = date '2026-05-28'
+                    where pauta = 17 and extract(year from data_sessao) = 2026
+                      and data_sessao <> date '2026-05-28'""")
+    cur.execute("""update julgados_cj j
+                      set data_distribuicao = null, relator = null, defesa = null
+                    where j.dias_dt < 0
+                      and exists (select 1 from acervo_cj a
+                                   where a.num_processo = j.num_processo
+                                     and a.data_distribuicao <= j.data_sessao)""")
+
+    assert uma(cur, 'select count(*) from julgados_cj') == antes, 'perdeu ou criou linha'
+    assert uma(cur, """select count(*) from julgados_cj
+                        where extract(isodow from data_sessao) in (6, 7)""") == 0
+    assert uma(cur, """select count(distinct data_sessao) from julgados_cj
+                        where pauta = 17 and extract(year from data_sessao) = 2026""") == 1
+    assert uma(cur, 'select count(*) from julgados_cj where dias_dt < 0') == 1
+    assert uma(cur, 'select count(*) from julgados_cj where acervo_id is null') == 0
+    cur.connection.rollback()
+
+
+@teste
+def rotulos_da_pagina_batem_com_os_do_banco(cur):
+    """julgados.js e registrar_votos precisam aceitar exatamente a mesma lista.
+
+    Se divergirem, a secretaria escolhe um rótulo no seletor e o banco recusa na
+    hora de salvar — falha que só apareceria em produção.
+    """
+    pagina = (RAIZ / 'julgados.js').read_text(encoding='utf-8')
+    schema = (RAIZ / 'schema.sql').read_text(encoding='utf-8')
+
+    def rotulos(fonte, padrao):
+        achado = re.search(padrao, fonte)
+        assert achado, padrao
+        return re.findall(r"'([^']+)'", achado.group(1))
+
+    assert rotulos(pagina, r'const VOTOS = \[([^\]]+)\]') == \
+           rotulos(schema, r"'voto', ''\)\s*not in \(([^)]+)\)")
+    assert rotulos(pagina, r'const STATUS = \[([^\]]+)\]') == \
+           rotulos(schema, r"'status', ''\)\s*not in \(([^)]+)\)")
 
 
 @teste

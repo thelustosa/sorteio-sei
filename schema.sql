@@ -122,6 +122,23 @@ create table if not exists public.julgados_cj (
 
 create index if not exists idx_julgados_cj_acervo on public.julgados_cj (acervo_id);
 
+-- Numeração da pauta: cuidado ao usar em relatório.
+--
+-- Até 2025 a coluna guarda o número interno da Câmara, que conta PAUTAS
+-- EMITIDAS — ele pula números quando uma sessão é cancelada (2025 não tem
+-- 26, 33, 39, 48, 49 nem 51) e por isso corre à frente da numeração oficial da
+-- AGR, que conta REUNIÕES REALIZADAS: a diferença chega a +3 em 2024 e +5 em
+-- 2025. De 2026 em diante a sincronização grava o número da AGR, e naquele ano
+-- os dois coincidem.
+--
+-- Ou seja: pauta é referência interna e muda de significado conforme o ano.
+-- Para agrupar sessões, use data_sessao, que confere com a listagem oficial da
+-- AGR em 100% das sessões de 2024, 2025 e 2026. Ver FLUXO-CJ.md.
+comment on column public.julgados_cj.pauta is
+  'Número da reunião. Até 2025 é a numeração interna da CJ (conta pautas '
+  'emitidas, pula canceladas); de 2026 em diante é a numeração da AGR. '
+  'Para agrupar sessões use data_sessao.';
+
 -- ── CJ · Pautas publicadas pela AGR ──────────────────────────────────────────
 -- Um registro por documento de pauta já processado pela sincronização
 -- (sincronizacao/sincronizar.py). Serve para duas coisas: não reprocessar o

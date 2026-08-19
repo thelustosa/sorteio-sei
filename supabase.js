@@ -66,7 +66,12 @@ async function autenticar(email, senha) {
   return dados.access_token;
 }
 
+// Devolve a página à tela de login. Cada página instala a sua em ligarLogin;
+// até lá é um no-op, porque não há formulário para mostrar.
+let exigirLogin = () => {};
+
 // Chamada REST autenticada. Devolve o JSON da resposta (ou null quando vazia).
+// O erro carrega o status HTTP para quem precisa distinguir um caso específico.
 async function api(caminho, opcoes = {}) {
   const resp = await fetch(`${baseUrl()}/rest/v1/${caminho}`, {
     ...opcoes,
@@ -78,12 +83,27 @@ async function api(caminho, opcoes = {}) {
     }
   });
 
+  if (resp.ok) return resp.status === 204 ? null : resp.json().catch(() => null);
+
+  // O token do Supabase expira em cerca de uma hora. Devolver a tela de login
+  // aqui, e não em cada chamada, garante que nenhuma página fique com aparência
+  // de logada depois que a sessão morreu.
   if (resp.status === 401) {
-    encerrarSessao();
-    throw new Error('sessão expirada — clique em Sair e entre novamente');
+    exigirLogin('Sua sessão expirou. Entre novamente para continuar.');
+    throw Object.assign(new Error('sessão expirada — entre novamente'), { status: 401 });
   }
-  if (!resp.ok) throw new Error(`HTTP ${resp.status} — ${await resp.text()}`);
-  return resp.status === 204 ? null : resp.json().catch(() => null);
+
+  // O PostgREST devolve o erro em JSON; a mensagem sozinha é o que serve para o
+  // funcionário ler, sem o resto do envelope.
+  const corpo = await resp.text();
+  let detalhe = corpo;
+  try {
+    detalhe = JSON.parse(corpo).message || corpo;
+  } catch (_) {
+    // Resposta não era JSON: fica o texto cru mesmo.
+  }
+
+  throw Object.assign(new Error(detalhe || `HTTP ${resp.status}`), { status: resp.status });
 }
 
 // Liga o formulário de login padrão da página. Chama aoEntrar() quando der certo.
@@ -125,14 +145,19 @@ function ligarLogin(aoEntrar) {
     location.reload();
   });
 
+  exigirLogin = mensagem => {
+    encerrarSessao();
+    loginScreen.style.display = 'flex';
+    btnSair.hidden = true;
+    loginErro.textContent = mensagem;
+    loginEmail.focus();
+  };
+
   if (restaurarSessao()) {
     loginScreen.style.display = 'none';
     btnSair.hidden = false;
     Promise.resolve(aoEntrar()).catch(err => {
-      encerrarSessao();
-      loginScreen.style.display = 'flex';
-      btnSair.hidden = true;
-      loginErro.textContent = 'Não foi possível restaurar a sessão. Entre novamente.';
+      exigirLogin('Não foi possível restaurar a sessão. Entre novamente.');
       console.error(err);
     });
   }
