@@ -76,19 +76,6 @@
           <button id="btnCj" class="mode-button" type="button">Câmara de Julgamento (CJ)</button>
         </div>
 
-        <!-- Caminho de volta do backup: quando o banco está fora do ar, o sorteio
-             é baixado como .json. Sem isto o arquivo era um beco sem saída. -->
-        <div id="reenvio" class="reenvio">
-          <h3>Reenviar um sorteio guardado</h3>
-          <p class="mode-description">
-            Se um sorteio anterior caiu como arquivo <code>.json</code> porque o banco estava
-            fora do ar, escolha o arquivo aqui para gravá-lo agora. Nada é sorteado de novo:
-            as unidades já definidas são mantidas.
-          </p>
-          <input id="arquivoBackup" type="file" accept="application/json,.json" class="sr-only">
-          <label class="button-secondary reenvio-botao" for="arquivoBackup">Escolher arquivo .json</label>
-          <p id="reenvioArquivo" class="reenvio-arquivo" role="status" aria-live="polite"></p>
-        </div>
         <p class="atalho">
           <a class="button-secondary session-link" href="./julgados.html">Registrar voto e status das sessões da Câmara de Julgamento</a>
         </p>
