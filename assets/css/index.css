@@ -335,7 +335,6 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
   grid-template-areas:
     "title choices"
     "description choices"
-    "reenvio reenvio"
     "alternate alternate";
   align-items: center;
   column-gap: clamp(32px, 6vw, 72px);
@@ -365,49 +364,6 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
 }
 
 #modeSelector .mode-button { width: 100%; }
-
-.reenvio {
-  grid-area: reenvio;
-  margin: 22px 0 0;
-  padding-top: 18px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.reenvio h3 {
-  margin: 0 0 4px;
-  font-size: var(--text-md);
-}
-
-.reenvio .mode-description { max-width: 68ch; }
-
-.reenvio code {
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--accent-soft);
-  font-size: 0.92em;
-}
-
-/* O input de arquivo nativo não aceita estilo; o rótulo é o botão visível e o
-   input fica só para leitores de tela e teclado. */
-.reenvio-botao {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  margin-top: 12px;
-  cursor: pointer;
-}
-
-#arquivoBackup:focus-visible + .reenvio-botao { outline: 3px solid var(--focus); outline-offset: 3px; }
-
-.reenvio-arquivo {
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: var(--text-base);
-  overflow-wrap: anywhere;
-}
-
-.reenvio-arquivo:empty { display: none; }
 
 .atalho {
   grid-area: alternate;
@@ -932,7 +888,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
       "title"
       "description"
       "choices"
-      "reenvio"
       "alternate";
     gap: 12px;
     padding: 24px 8px 8px;

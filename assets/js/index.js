@@ -487,7 +487,7 @@ function coletarDados(rows, dataDistribuicao) {
 }
 
 // Cada processo carrega só a decisão do seu modo: recurso no CREG, defesa na CJ.
-// Quem lê os dois de uma vez — a ata e o reenvio de backup — passa por aqui.
+// Quem lê os dois de uma vez — a ata — passa por aqui.
 function decisaoDe(processo) {
   return processo.recurso ?? processo.defesa ?? '';
 }
@@ -587,14 +587,10 @@ function linhasParaBanco(sorteio) {
 
 // Grava o sorteio no banco. Sem Supabase configurado (ou em caso de falha),
 // baixa o JSON de backup para reenvio posterior — nenhum sorteio se perde.
-// baixarSeFalhar existe para o reenvio: ali o .json já está na máquina de quem
-// está reenviando, e baixá-lo de novo a cada tentativa só confunde.
-async function salvar(sorteio, { baixarSeFalhar = true } = {}) {
-  const baixarBackupSeCabe = () => { if (baixarSeFalhar) baixarBackup(sorteio); };
-
+async function salvar(sorteio) {
   const tabela = TABELAS[sorteio.modo];
   if (!SUPABASE_URL || !SUPABASE_KEY || !accessToken || !tabela) {
-    baixarBackupSeCabe();
+    baixarBackup(sorteio);
     return 'arquivo';
   }
 
@@ -610,7 +606,7 @@ async function salvar(sorteio, { baixarSeFalhar = true } = {}) {
     });
     return 'banco';
   } catch (err) {
-    baixarBackupSeCabe();
+    baixarBackup(sorteio);
     // O POST é uma transação só: basta uma linha em conflito para nenhuma
     // entrar. Dizer "o sorteio já está gravado" seria falso quando só um
     // processo repetiu — os outros continuam de fora.
@@ -626,113 +622,6 @@ async function salvar(sorteio, { baixarSeFalhar = true } = {}) {
 function baixarBackup(sorteio) {
   const json = JSON.stringify(sorteio, null, 2);
   baixarArquivo(new Blob([json], { type: 'application/json' }), nomeArquivo(sorteio, 'json'));
-}
-
-// ── Reenvio de um backup .json ───────────────────────────────────────────────
-// O backup só valia como seguro se houvesse volta. Sem isto, recuperar um
-// sorteio que caiu como arquivo exigia redigitar tudo ou montar o SQL à mão —
-// e redigitar um sorteio significa perder a distribuição que já foi feita.
-//
-// Nada é sorteado de novo: o arquivo já traz a unidade de cada processo, e é
-// exatamente isso que precisa ser preservado. O reenvio é a mesma gravação do
-// sorteio, com os mesmos dados.
-
-const DATA_BR = /^\d{2}\/\d{2}\/\d{4}$/;
-
-// O arquivo vem de fora, então é fronteira de confiança: nada entra sem conferir.
-// A mensagem aponta a linha, porque um arquivo recusado sem explicação é tão
-// beco sem saída quanto não ter importação nenhuma.
-function validarBackup(dados) {
-  if (!dados || typeof dados !== 'object' || Array.isArray(dados)) {
-    throw new Error('o arquivo não é um backup de sorteio.');
-  }
-  if (!TABELAS[dados.modo]) {
-    throw new Error(typeof dados.modo === 'string'
-      ? `modo desconhecido no arquivo: "${dados.modo}". Esperado CREG ou CJ.`
-      : 'o arquivo não diz de qual colegiado é o sorteio (CREG ou CJ).');
-  }
-  if (!Array.isArray(dados.processos) || dados.processos.length === 0) {
-    throw new Error('o arquivo não tem nenhum processo.');
-  }
-  if (Number.isNaN(Date.parse(dados.dataHora))) {
-    throw new Error('a data e hora do sorteio estão ausentes ou ilegíveis.');
-  }
-
-  const numerosVistos = new Map();
-  dados.processos.forEach((p, i) => {
-    const linha = i + 1;
-    const exigir = (valor, campo) => {
-      if (typeof valor !== 'string' || !valor.trim()) {
-        throw new Error(`processo ${linha}: falta ${campo}.`);
-      }
-      return valor.trim();
-    };
-
-    const numProcesso = exigir(p.numProcesso, 'o número do processo');
-    exigir(p.assunto, 'o assunto');
-    exigir(p.unidade, 'a unidade sorteada');
-
-    if (!Number.isInteger(p.ordem) || p.ordem < 1) {
-      throw new Error(`processo ${linha}: ordem inválida.`);
-    }
-    if (!DATA_BR.test(p.dataDistribuicao || '')) {
-      throw new Error(`processo ${linha}: data de distribuição fora do formato dd/mm/aaaa.`);
-    }
-    // dd/mm/aaaa passa no formato e ainda pode não existir no calendário.
-    const [dia, mes, ano] = p.dataDistribuicao.split('/').map(Number);
-    const conferida = new Date(ano, mes - 1, dia);
-    if (conferida.getDate() !== dia || conferida.getMonth() !== mes - 1 || conferida.getFullYear() !== ano) {
-      throw new Error(`processo ${linha}: a data ${p.dataDistribuicao} não existe.`);
-    }
-
-    if (dados.modo === 'CJ') {
-      if (!/^\d{15}$/.test(numProcesso)) {
-        throw new Error(`processo ${linha}: na Câmara de Julgamento o número precisa ter 15 dígitos.`);
-      }
-      if (!defesas.includes(p.defesa)) {
-        throw new Error(`processo ${linha}: defesa deve ser "Sim" ou "Não".`);
-      }
-    } else if (!recursos.includes(p.recurso)) {
-      throw new Error(`processo ${linha}: recurso fora da lista aceita.`);
-    }
-
-    const anterior = numerosVistos.get(numProcesso);
-    if (anterior) {
-      throw new Error(`o processo ${numProcesso} aparece duas vezes, nas linhas ${anterior} e ${linha}.`);
-    }
-    numerosVistos.set(numProcesso, linha);
-  });
-
-  return dados;
-}
-
-async function reenviarBackup(arquivo) {
-  const rotuloArquivo = document.getElementById('reenvioArquivo');
-  rotuloArquivo.textContent = `${arquivo.name} — conferindo…`;
-
-  let sorteio;
-  try {
-    sorteio = validarBackup(JSON.parse(await arquivo.text()));
-  } catch (err) {
-    const detalhe = err instanceof SyntaxError ? 'o arquivo não é um JSON válido.' : err.message;
-    rotuloArquivo.textContent = `${arquivo.name} — não foi possível usar este arquivo.`;
-    aviso(`Arquivo recusado: ${detalhe}`, 'erro');
-    return;
-  }
-
-  const quantos = sorteio.processos.length;
-  rotuloArquivo.textContent = `${arquivo.name} — gravando ${quantos} ${quantos === 1 ? 'processo' : 'processos'}…`;
-
-  try {
-    await salvar(sorteio, { baixarSeFalhar: false });
-    rotuloArquivo.textContent = `${arquivo.name} — gravado.`;
-    aviso(`Sorteio de ${sorteio.modo} reenviado: ${quantos} ${quantos === 1 ? 'processo gravado' : 'processos gravados'}.`);
-  } catch (err) {
-    rotuloArquivo.textContent = `${arquivo.name} — não foi gravado.`;
-    aviso(err.status === 409
-      ? `Nada foi gravado: ${err.message}. Este backup provavelmente já foi reenviado.`
-      : `Falha ao reenviar (${err.message}). O arquivo continua com você — tente de novo.`, 'erro');
-  }
 }
 
 createBtn.addEventListener('click', () => {
@@ -755,15 +644,3 @@ addRowBtn.addEventListener('click', () => {
 });
 
 sortearBtn.addEventListener('click', sortearProcessos);
-
-// O value é limpo no fim para que escolher o mesmo arquivo de novo — depois de
-// corrigi-lo, ou para repetir uma tentativa que falhou — dispare o change.
-document.getElementById('arquivoBackup').addEventListener('change', async e => {
-  const arquivo = e.target.files[0];
-  if (!arquivo) return;
-  try {
-    await reenviarBackup(arquivo);
-  } finally {
-    e.target.value = '';
-  }
-});

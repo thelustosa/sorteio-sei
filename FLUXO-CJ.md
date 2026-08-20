@@ -601,7 +601,7 @@ Chaves e índices que sustentam as regras:
 | [`assets/js/supabase.js`](assets/js/supabase.js) | configuração, login e chamadas, compartilhados |
 | [`assets/css/index.css`](assets/css/index.css) | o design das três páginas |
 | `.github/workflows/sincronizar-julgados-cj.yml` | o agendamento |
-| [`tests/`](tests/) | as quatro suítes: banco em container, parser da AGR, sorteio e backup |
+| [`tests/`](tests/) | as três suítes: banco em container, parser da AGR e sorteio |
 
 ---
 

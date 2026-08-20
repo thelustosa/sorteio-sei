@@ -40,7 +40,6 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 - **Exportação da Ata em Word**: geração automática da ata de distribuição em formato Word (`.doc`), nomeada dinamicamente (`Sorteio_CREG_18.08.2026.doc`). A ata traz as mesmas colunas da tela — ordem, processo, assunto, recurso (ou defesa, na CJ) e unidade sorteada — para que quem lê o documento consiga conferir a repartição por assunto sem abrir o sistema.
 - **Registro de Julgamentos**: página própria onde a secretaria abre uma pauta e preenche o voto e o status de cada processo julgado. Os processos chegam sozinhos das pautas publicadas pela AGR, e cada preenchimento guarda quem fez e quando.
 - **Registro no Banco de Dados**: ao final do sorteio, os dados que antes iam para as planilhas são gravados no banco (Supabase/PostgreSQL), uma linha por processo — a Câmara de Julgamento no seu acervo (`acervo_cj`), o Conselho Regulador em `processos_sorteados`. Enquanto o banco não estiver configurado — ou se o envio falhar — o sistema baixa automaticamente um arquivo `.json` de backup com o sorteio completo, para reenvio posterior, de modo que nenhum sorteio se perca.
-- **Reenvio do backup**: o arquivo `.json` tem caminho de volta. Na tela de escolha do colegiado, **Reenviar um sorteio guardado** recebe o arquivo e grava o sorteio como ele foi feito — as unidades já sorteadas são mantidas, nada é sorteado de novo. O arquivo é conferido campo a campo antes de qualquer gravação, e um arquivo recusado diz qual linha está errada.
 
 ---
 
@@ -67,7 +66,7 @@ endereço não existe. Todo o resto está agrupado por natureza.
 ├── assets/
 │   ├── css/index.css       o design de todas as páginas
 │   ├── js/
-│   │   ├── index.js        lógica do sorteio, da ata e do reenvio de backup
+│   │   ├── index.js        lógica do sorteio e da ata
 │   │   ├── julgados.js     lógica do registro de julgamentos
 │   │   └── supabase.js     configuração, login e chamadas — usado pelas duas páginas
 │   ├── fonts/              Montserrat em .woff2 e a licença OFL
@@ -83,7 +82,7 @@ endereço não existe. Todo o resto está agrupado por natureza.
 ├── sincronizacao/          job que lê as pautas da AGR (roda no GitHub Actions)
 ├── dados/                  conversão da planilha histórica em SQL
 ├── documentos/             Termo de Entrega oficial do projeto
-└── tests/                  as quatro suítes
+└── tests/                  as três suítes
 ```
 
 Documentação: este README, mais o [`FLUXO-CJ.md`](FLUXO-CJ.md) — o fluxo completo
@@ -209,10 +208,9 @@ Testa o parser e a sincronização contra fixtures reais (HTML da listagem, text
 
 ```bash
 node tests/test_sorteio.mjs
-node tests/test_backup.mjs
 ```
 
-Os dois não precisam de Docker nem de banco: leem o próprio `index.js` e exercitam as duas funções em que um erro passaria despercebido — o embaralhamento, que precisa ser uniforme para o sorteio ser auditável, e a conferência do backup `.json`, que é a porta por onde um arquivo de fora vira `INSERT`.
+Não precisa de Docker nem de banco: lê o próprio `index.js` e exercita o embaralhamento, que precisa ser uniforme para o sorteio ser auditável.
 
 ---
 
