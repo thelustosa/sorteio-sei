@@ -56,13 +56,11 @@ O visual foi adaptado com base na identidade visual institucional do portal do *
 - [`FLUXO-CJ.md`](FLUXO-CJ.md): **Fluxo completo da Câmara de Julgamento** — do sorteio ao julgamento registrado, com as regras, as tabelas, a API e o tratamento de falhas.
 - `documentos/`: Pasta contendo o Termo de Entrega oficial do projeto.
 - `schema.sql`: Script de criação das tabelas e das políticas de segurança (RLS) do banco.
-- `migracao_cj.sql`: Migração dos processos da Câmara de Julgamento para o novo acervo.
 - [`verificacao_cj.sql`](verificacao_cj.sql): Conferência de consistência dos dados da CJ — só lê, roda a qualquer momento.
-- [`correcoes_cj.sql`](correcoes_cj.sql): Correções pontuais do histórico importado da planilha.
+- [`backup_cj.sql`](backup_cj.sql) / [`restaurar_cj.sql`](restaurar_cj.sql): Cópia das tabelas da CJ dentro do banco, e a volta.
 - `dados/importar_planilha.py`: Converte a planilha histórica da CJ em SQL de importação.
 - `sincronizacao/`: Serviço que alimenta os julgados a partir das pautas publicadas pela AGR.
 - `tests/`: Testes da Câmara de Julgamento e da sincronização, contra um Postgres real.
-- `CONFIGURAR-SUPABASE.md`: Guia passo a passo de configuração do banco de dados.
 - `index.html` / `index.js`: Sorteio de processos — estrutura da página e lógica da distribuição.
 - `julgados.html` / `julgados.js`: Registro do voto e do status dos processos julgados.
 - `supabase.js`: Configuração e login do banco, compartilhados pelas duas páginas.
@@ -72,7 +70,9 @@ O visual foi adaptado com base na identidade visual institucional do portal do *
 
 ## Configuração do Banco de Dados
 
-O passo a passo completo está em **[CONFIGURAR-SUPABASE.md](CONFIGURAR-SUPABASE.md)** — criação do projeto, execução do `schema.sql`, credenciais, teste e solução de problemas. Em resumo: crie um projeto gratuito no [Supabase](https://supabase.com), rode o [schema.sql](schema.sql) e preencha as constantes `SUPABASE_URL` e `SUPABASE_KEY` no `supabase.js`.
+Crie um projeto gratuito no [Supabase](https://supabase.com), rode o [schema.sql](schema.sql) no SQL Editor e preencha as constantes `SUPABASE_URL` e `SUPABASE_KEY` no [supabase.js](supabase.js). O `schema.sql` cria as tabelas, o gatilho, a função de registro de votos e as políticas de segurança — e pode ser reaplicado a qualquer momento sem tocar em dado nenhum.
+
+Depois, em **Authentication → Users**, cadastre quem vai usar o sistema; e em **Authentication → Providers → Email**, mantenha **desativado** o "Enable sign ups", senão qualquer visitante criaria a própria conta.
 
 A chave publicável é pública por natureza e pode ficar no código: ela identifica o projeto, não autoriza operações. A proteção dos dados vem das políticas de RLS do `schema.sql`, que exigem **usuário autenticado** e dão a cada tabela o mínimo: o sorteio só **insere** (nenhum sorteio já gravado pode ser lido, alterado ou apagado pelo navegador), `julgados_cj` só é **lida** pela página de registro, e `pautas_cj` não é nem uma coisa nem outra. Não existe política de `UPDATE` ou `DELETE` em tabela nenhuma. É o que permite manter o código-fonte totalmente aberto para auditoria.
 
@@ -94,10 +94,9 @@ Quando o processo foi redistribuído, vale a distribuição vigente **na data da
 Ordem de execução no SQL Editor do Supabase:
 
 1. `schema.sql` — cria as tabelas, o gatilho e as políticas;
-2. `migracao_cj.sql` — move os sorteios CJ de `processos_sorteados` para `acervo_cj` (confere antes de apagar; a tabela antiga passa a aceitar só CREG);
-3. `dados/acervo_cj.sql` e `dados/julgados_cj.sql` — histórico da planilha, nessa ordem. São gerados por `python dados/importar_planilha.py "Câmara de Julgamento - REG.xlsx"` e ficam fora do Git: trazem nome de interessado pessoa física e este repositório é público.
+2. `dados/acervo_cj.sql` e `dados/julgados_cj.sql` — **só num banco novo**, para carregar o histórico da planilha. Gerados por `python dados/importar_planilha.py "Câmara de Julgamento - REG.xlsx"`, ficam fora do Git: trazem nome de interessado pessoa física e este repositório é público.
 
-Os três passos são idempotentes: rodar de novo não duplica nada.
+Os dois passos são idempotentes: rodar de novo não duplica nada. No banco em produção o histórico já foi carregado e depois arquivado — ver abaixo.
 
 O Conselho Regulador continua em `processos_sorteados` até ganhar o mesmo par de tabelas (`acervo_creg` e `julgados_creg`).
 
@@ -144,6 +143,31 @@ Como o parser identifica um processo: número SEI de **15 dígitos precedido de 
 Nada disso reimplementa a regra Acervo → Julgados: quem preenche relator, defesa e data de distribuição continua sendo o gatilho do banco. Processo que aparece na pauta e não está no acervo é gravado assim mesmo, sem inventar dado, e sai listado em `pautas_cj.processos_sem_acervo` para a secretaria completar o acervo.
 
 Rodar duas vezes não duplica nada: `pautas_cj.url` barra o documento repetido e a chave `(num_processo, data_sessao)` de `julgados_cj` barra o processo repetido.
+
+### Backup e restauração
+
+Em 19/08/2026 a série de julgados foi reiniciada: o histórico da planilha saiu
+das tabelas de produção e ficou guardado no schema `backup_cj`, dentro do mesmo
+banco. Produção passou a ter só os processos ainda não julgados, e os
+julgamentos passaram a ser registrados pelo sistema a partir dali.
+
+- [`backup_cj.sql`](backup_cj.sql) copia `acervo_cj`, `julgados_cj` e
+  `pautas_cj` para o schema `backup_cj`. Rode antes de qualquer alteração de
+  risco.
+- [`restaurar_cj.sql`](restaurar_cj.sql) é a volta: devolve as três tabelas ao
+  estado do backup.
+
+Cada um é **um único comando** — um bloco `do $$ … $$`. No SQL Editor do
+Supabase os comandos passam por um pooler em modo transação e podem cair em
+conexões diferentes, então `begin;…commit;` não segura nada. Num bloco único, ou
+tudo passa ou nada é gravado.
+
+Para uma cópia **fora** do Supabase, pegue a connection string em
+*Project Settings → Database* e rode:
+
+```bash
+docker run --rm -v "$PWD:/saida" postgres:15-alpine pg_dump "SUA_CONNECTION_STRING" -Fc -f /saida/sorteio-sei-backup.dump
+```
 
 ### Testes
 
