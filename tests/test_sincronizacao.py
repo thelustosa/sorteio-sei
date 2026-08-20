@@ -570,7 +570,7 @@ def main(argv):
 
     PG.subir()
     try:
-        PG.rodar_arquivo(RAIZ / 'schema.sql')
+        PG.rodar_arquivo(RAIZ / 'sql' / 'schema.sql')
 
         falhas = 0
         with PG.conectar() as conn:

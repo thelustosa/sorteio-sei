@@ -179,8 +179,6 @@ function createRowElement(index) {
     selAss.classList.add('fixed-field');
   }
   tdAss.appendChild(selAss);
-  const tdData = document.createElement('td'); tdData.className = 'hidden col-data';
-  const inpData = document.createElement('input'); inpData.type = 'text'; inpData.placeholder = 'Data (oculta)'; tdData.appendChild(inpData);
   const tdRec = document.createElement('td');
   tdRec.className = 'col-decisao';
   tdRec.dataset.label = modoSorteio === 'CJ' ? 'Defesa' : 'Recurso';
@@ -196,15 +194,20 @@ function createRowElement(index) {
   // Só no CREG: fora de Auto de Infração não existe recurso. Na CJ o assunto é
   // travado em Auto de Infração e a coluna é Defesa, que sempre se aplica.
   if (modoSorteio !== 'CJ') {
+    // "Não se aplica" posto pelo sistema volta a ser pergunta em aberto quando o
+    // assunto vira Auto de Infração de novo. Sem esta marca, uma correção de
+    // assunto deixava o recurso com o valor que o próprio sistema tinha escrito,
+    // e a validação aprovava um dado que ninguém escolheu.
+    let travadoPeloSistema = false;
     selAss.addEventListener('change', () => {
       if (selAss.value !== 'Auto de Infração') {
         selRec.value = 'Não se aplica';
         selRec.disabled = true;
+        travadoPeloSistema = true;
       } else {
         selRec.disabled = false;
-        if (selRec.value === 'Não se aplica' && optDefaultRec.selected) {
-          selRec.value = '';
-        }
+        if (travadoPeloSistema) selRec.value = '';
+        travadoPeloSistema = false;
       }
       atualizarEstadoDefesa();
     });
@@ -227,7 +230,7 @@ function createRowElement(index) {
   });
   tdDel.appendChild(btnDel);
 
-  tr.append(tdOrdem, tdProc, tdAss, tdData, tdRec, tdUn, tdDel);
+  tr.append(tdOrdem, tdProc, tdAss, tdRec, tdUn, tdDel);
   return tr;
 }
 
@@ -263,6 +266,17 @@ function sortearProcessos() {
       const campoPendente = !numProc ? campoProc
         : !campoAssunto.value ? campoAssunto : campoDecisao;
       mostrarMensagemFormulario(`Preencha todos os campos da linha ${idx + 1} antes de sortear.`, campoPendente);
+      return;
+    }
+
+    // Na Câmara de Julgamento o número é a chave que liga o acervo à pauta
+    // publicada pela AGR, que traz sempre 15 dígitos. Um número fora do padrão
+    // entra no acervo e nunca casa com o julgado — e só apareceria depois, no
+    // verificacao_cj.sql. Barrar aqui é onde ainda dá para corrigir.
+    if (modoSorteio === 'CJ' && !/^\d{15}$/.test(numProc)) {
+      mostrarMensagemFormulario(
+        `O processo da linha ${idx + 1} deve ter 15 dígitos, sem pontos ou barras. Corrija antes de sortear.`,
+        campoProc);
       return;
     }
 
@@ -303,6 +317,9 @@ function sortearProcessos() {
     return linhasPorAssunto[b].length - linhasPorAssunto[a].length;
   });
 
+  // Um só instante para o sorteio inteiro: a data que vai para o banco, a do
+  // nome do arquivo e a da ata precisam ser a mesma. Duas chamadas a new Date()
+  // podem cair em dias diferentes se o sorteio atravessar a meia-noite.
   const hoje = new Date();
   const dataHoje = hoje.toLocaleDateString('pt-BR');
 
@@ -317,8 +334,6 @@ function sortearProcessos() {
       for (let i = 0; i < base; i++) {
         const row = linhas.pop();
         row.querySelector('.unidade').textContent = creg;
-        const inputData = row.querySelector('.col-data input');
-        if (inputData) inputData.value = dataHoje;
         atribuicoesPorCreg[creg].total++;
         atribuicoesPorCreg[creg].assuntos[assunto] = (atribuicoesPorCreg[creg].assuntos[assunto] || 0) + 1;
       }
@@ -332,8 +347,6 @@ function sortearProcessos() {
         const creg = candidatos[i];
         const row = linhas.pop();
         row.querySelector('.unidade').textContent = creg;
-        const inputData = row.querySelector('.col-data input');
-        if (inputData) inputData.value = dataHoje;
         atribuicoesPorCreg[creg].total++;
         atribuicoesPorCreg[creg].assuntos[assunto] = (atribuicoesPorCreg[creg].assuntos[assunto] || 0) + 1;
       }
@@ -409,9 +422,9 @@ function sortearProcessos() {
 
   const sorteio = {
     modo: modoSorteio,
-    dataHora: new Date().toISOString(),
+    dataHora: hoje.toISOString(),
     unidades: participantes,
-    processos: coletarDados(rows)
+    processos: coletarDados(rows, dataHoje)
   };
 
   exportarWord(sorteio);
@@ -426,7 +439,12 @@ function sortearProcessos() {
     .then(destino => destino === 'banco'
       ? aviso('Sorteio gravado no banco de dados.')
       : aviso('Banco não configurado — guarde o arquivo .json de backup gerado.', 'atencao'))
-    .catch(err => aviso(`Falha ao gravar no banco (${err.message}). O backup .json foi baixado — reenvie depois.`, 'erro'))
+    // Conflito não é "não gravou": alguma linha deste sorteio já existe no
+    // banco, e mandar o backup de novo daria o mesmo erro. Pedir reenvio ali
+    // mandaria a secretaria repetir uma operação que nunca vai passar.
+    .catch(err => aviso(err.status === 409
+      ? `Nada foi gravado: ${err.message}. O .json foi baixado para conferência — confira o sorteio anterior antes de repetir.`
+      : `Falha ao gravar no banco (${err.message}). O backup .json foi baixado — reenvie depois.`, 'erro'))
     .finally(() => {
       if (resultadoStatus) {
         resultadoStatus.hidden = true;
@@ -446,13 +464,17 @@ const TABELAS = { CJ: 'acervo_cj', CREG: 'processos_sorteados' };
 // Regulador — coisas diferentes, então cada modo guarda a sua com o próprio nome.
 // As células são buscadas por classe, e não por posição: assim mexer nas colunas
 // da tabela não desalinha silenciosamente a leitura.
-function coletarDados(rows) {
+//
+// A data da distribuição é a mesma para o sorteio inteiro e chega por parâmetro.
+// Antes ela viajava numa coluna escondida da tabela, escrita durante o sorteio e
+// lida aqui — a tela servindo de variável entre duas funções.
+function coletarDados(rows, dataDistribuicao) {
   return rows.map(r => {
     const processo = {
       ordem: Number(r.querySelector('.num').textContent.trim()),
       numProcesso: r.querySelector('.col-processo input').value.trim(),
       assunto: r.querySelector('.col-assunto select').value.trim(),
-      dataDistribuicao: r.querySelector('.col-data input').value.trim(),
+      dataDistribuicao,
       unidade: r.querySelector('.unidade').textContent.trim()
     };
 
@@ -462,6 +484,12 @@ function coletarDados(rows) {
 
     return processo;
   });
+}
+
+// Cada processo carrega só a decisão do seu modo: recurso no CREG, defesa na CJ.
+// Quem lê os dois de uma vez — a ata e o reenvio de backup — passa por aqui.
+function decisaoDe(processo) {
+  return processo.recurso ?? processo.defesa ?? '';
 }
 
 // Usa a data local, não a do ISO (que é UTC): um sorteio às 22h de Brasília
@@ -482,12 +510,22 @@ function exportarWord(sorteio) {
 
   const cabecalho = `Aos ${dia} dias do mês de ${mesExtenso} de ${ano} na sede da Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos, realizou-se a distribuição de processos por sorteio eletrônico.`;
   const colunaNome = sorteio.modo === 'CREG' ? 'Unidade Conselho Regulador' : 'Unidade Câmara de Julgamento';
+  // A 6ª coluna muda de pergunta conforme o colegiado, como na tela.
+  const colunaDecisao = sorteio.modo === 'CJ' ? 'Defesa' : 'Recurso';
 
   const dados = [...sorteio.processos].sort((a, b) => a.unidade.localeCompare(b.unidade, 'pt-BR', { numeric: true }));
 
-  let tableHtml = `<table border="1" style="border-collapse:collapse;width:100%"><tr><th>Ordem</th><th>Nº Processo</th><th>${escaparHtml(colunaNome)}</th></tr>`;
+  // A ata repete as mesmas colunas que a secretaria preencheu: sem o assunto e a
+  // decisão, quem lê o documento não consegue conferir a repartição por assunto
+  // que o rodapé do sistema promete.
+  const colunas = ['Ordem', 'Nº Processo', 'Assunto', colunaDecisao, colunaNome];
+
+  let tableHtml = '<table border="1" style="border-collapse:collapse;width:100%"><tr>'
+    + colunas.map(c => `<th>${escaparHtml(c)}</th>`).join('')
+    + '</tr>';
   dados.forEach(d => {
-    tableHtml += `<tr><td>${escaparHtml(d.ordem)}</td><td>${escaparHtml(d.numProcesso)}</td><td>${escaparHtml(d.unidade)}</td></tr>`;
+    const celulas = [d.ordem, d.numProcesso, d.assunto, decisaoDe(d), d.unidade];
+    tableHtml += '<tr>' + celulas.map(c => `<td>${escaparHtml(c ?? '')}</td>`).join('') + '</tr>';
   });
   tableHtml += '</table>';
 
@@ -549,10 +587,14 @@ function linhasParaBanco(sorteio) {
 
 // Grava o sorteio no banco. Sem Supabase configurado (ou em caso de falha),
 // baixa o JSON de backup para reenvio posterior — nenhum sorteio se perde.
-async function salvar(sorteio) {
+// baixarSeFalhar existe para o reenvio: ali o .json já está na máquina de quem
+// está reenviando, e baixá-lo de novo a cada tentativa só confunde.
+async function salvar(sorteio, { baixarSeFalhar = true } = {}) {
+  const baixarBackupSeCabe = () => { if (baixarSeFalhar) baixarBackup(sorteio); };
+
   const tabela = TABELAS[sorteio.modo];
   if (!SUPABASE_URL || !SUPABASE_KEY || !accessToken || !tabela) {
-    baixarBackup(sorteio);
+    baixarBackupSeCabe();
     return 'arquivo';
   }
 
@@ -568,9 +610,14 @@ async function salvar(sorteio) {
     });
     return 'banco';
   } catch (err) {
-    baixarBackup(sorteio);
+    baixarBackupSeCabe();
+    // O POST é uma transação só: basta uma linha em conflito para nenhuma
+    // entrar. Dizer "o sorteio já está gravado" seria falso quando só um
+    // processo repetiu — os outros continuam de fora.
     if (err.status === 409) {
-      throw new Error('este sorteio já está gravado: mesmo processo, mesma data e mesma unidade');
+      throw Object.assign(
+        new Error('algum processo deste sorteio já foi distribuído hoje para a mesma unidade'),
+        { status: 409 });
     }
     throw err;
   }
@@ -579,6 +626,113 @@ async function salvar(sorteio) {
 function baixarBackup(sorteio) {
   const json = JSON.stringify(sorteio, null, 2);
   baixarArquivo(new Blob([json], { type: 'application/json' }), nomeArquivo(sorteio, 'json'));
+}
+
+// ── Reenvio de um backup .json ───────────────────────────────────────────────
+// O backup só valia como seguro se houvesse volta. Sem isto, recuperar um
+// sorteio que caiu como arquivo exigia redigitar tudo ou montar o SQL à mão —
+// e redigitar um sorteio significa perder a distribuição que já foi feita.
+//
+// Nada é sorteado de novo: o arquivo já traz a unidade de cada processo, e é
+// exatamente isso que precisa ser preservado. O reenvio é a mesma gravação do
+// sorteio, com os mesmos dados.
+
+const DATA_BR = /^\d{2}\/\d{2}\/\d{4}$/;
+
+// O arquivo vem de fora, então é fronteira de confiança: nada entra sem conferir.
+// A mensagem aponta a linha, porque um arquivo recusado sem explicação é tão
+// beco sem saída quanto não ter importação nenhuma.
+function validarBackup(dados) {
+  if (!dados || typeof dados !== 'object' || Array.isArray(dados)) {
+    throw new Error('o arquivo não é um backup de sorteio.');
+  }
+  if (!TABELAS[dados.modo]) {
+    throw new Error(typeof dados.modo === 'string'
+      ? `modo desconhecido no arquivo: "${dados.modo}". Esperado CREG ou CJ.`
+      : 'o arquivo não diz de qual colegiado é o sorteio (CREG ou CJ).');
+  }
+  if (!Array.isArray(dados.processos) || dados.processos.length === 0) {
+    throw new Error('o arquivo não tem nenhum processo.');
+  }
+  if (Number.isNaN(Date.parse(dados.dataHora))) {
+    throw new Error('a data e hora do sorteio estão ausentes ou ilegíveis.');
+  }
+
+  const numerosVistos = new Map();
+  dados.processos.forEach((p, i) => {
+    const linha = i + 1;
+    const exigir = (valor, campo) => {
+      if (typeof valor !== 'string' || !valor.trim()) {
+        throw new Error(`processo ${linha}: falta ${campo}.`);
+      }
+      return valor.trim();
+    };
+
+    const numProcesso = exigir(p.numProcesso, 'o número do processo');
+    exigir(p.assunto, 'o assunto');
+    exigir(p.unidade, 'a unidade sorteada');
+
+    if (!Number.isInteger(p.ordem) || p.ordem < 1) {
+      throw new Error(`processo ${linha}: ordem inválida.`);
+    }
+    if (!DATA_BR.test(p.dataDistribuicao || '')) {
+      throw new Error(`processo ${linha}: data de distribuição fora do formato dd/mm/aaaa.`);
+    }
+    // dd/mm/aaaa passa no formato e ainda pode não existir no calendário.
+    const [dia, mes, ano] = p.dataDistribuicao.split('/').map(Number);
+    const conferida = new Date(ano, mes - 1, dia);
+    if (conferida.getDate() !== dia || conferida.getMonth() !== mes - 1 || conferida.getFullYear() !== ano) {
+      throw new Error(`processo ${linha}: a data ${p.dataDistribuicao} não existe.`);
+    }
+
+    if (dados.modo === 'CJ') {
+      if (!/^\d{15}$/.test(numProcesso)) {
+        throw new Error(`processo ${linha}: na Câmara de Julgamento o número precisa ter 15 dígitos.`);
+      }
+      if (!defesas.includes(p.defesa)) {
+        throw new Error(`processo ${linha}: defesa deve ser "Sim" ou "Não".`);
+      }
+    } else if (!recursos.includes(p.recurso)) {
+      throw new Error(`processo ${linha}: recurso fora da lista aceita.`);
+    }
+
+    const anterior = numerosVistos.get(numProcesso);
+    if (anterior) {
+      throw new Error(`o processo ${numProcesso} aparece duas vezes, nas linhas ${anterior} e ${linha}.`);
+    }
+    numerosVistos.set(numProcesso, linha);
+  });
+
+  return dados;
+}
+
+async function reenviarBackup(arquivo) {
+  const rotuloArquivo = document.getElementById('reenvioArquivo');
+  rotuloArquivo.textContent = `${arquivo.name} — conferindo…`;
+
+  let sorteio;
+  try {
+    sorteio = validarBackup(JSON.parse(await arquivo.text()));
+  } catch (err) {
+    const detalhe = err instanceof SyntaxError ? 'o arquivo não é um JSON válido.' : err.message;
+    rotuloArquivo.textContent = `${arquivo.name} — não foi possível usar este arquivo.`;
+    aviso(`Arquivo recusado: ${detalhe}`, 'erro');
+    return;
+  }
+
+  const quantos = sorteio.processos.length;
+  rotuloArquivo.textContent = `${arquivo.name} — gravando ${quantos} ${quantos === 1 ? 'processo' : 'processos'}…`;
+
+  try {
+    await salvar(sorteio, { baixarSeFalhar: false });
+    rotuloArquivo.textContent = `${arquivo.name} — gravado.`;
+    aviso(`Sorteio de ${sorteio.modo} reenviado: ${quantos} ${quantos === 1 ? 'processo gravado' : 'processos gravados'}.`);
+  } catch (err) {
+    rotuloArquivo.textContent = `${arquivo.name} — não foi gravado.`;
+    aviso(err.status === 409
+      ? `Nada foi gravado: ${err.message}. Este backup provavelmente já foi reenviado.`
+      : `Falha ao reenviar (${err.message}). O arquivo continua com você — tente de novo.`, 'erro');
+  }
 }
 
 createBtn.addEventListener('click', () => {
@@ -601,3 +755,15 @@ addRowBtn.addEventListener('click', () => {
 });
 
 sortearBtn.addEventListener('click', sortearProcessos);
+
+// O value é limpo no fim para que escolher o mesmo arquivo de novo — depois de
+// corrigi-lo, ou para repetir uma tentativa que falhou — dispare o change.
+document.getElementById('arquivoBackup').addEventListener('change', async e => {
+  const arquivo = e.target.files[0];
+  if (!arquivo) return;
+  try {
+    await reenviarBackup(arquivo);
+  } finally {
+    e.target.value = '';
+  }
+});

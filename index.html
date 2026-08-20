@@ -8,9 +8,9 @@
   <meta name="description"
     content="Distribuição de processos SEI por sorteio eletrônico da AGR, com repartição igualitária por assunto e registro auditável." />
   <title>Sorteio de Processos SEI</title>
-  <link rel="preload" href="assets/fonts/Gotham-Bold.otf" as="font" type="font/otf" crossorigin />
-  <link rel="icon" href="assets/favicon.png" />
-  <link rel="stylesheet" href="index.css" />
+  <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="icon" href="assets/img/favicon.png" />
+  <link rel="stylesheet" href="assets/css/index.css" />
 </head>
 
 <body>
@@ -19,7 +19,7 @@
     <div class="container">
       <header>
         <div class="logo">
-          <img src="assets/logo_header.png" alt="Governo de Goiás" width="120" height="55" />
+          <img src="assets/img/logo_header.png" alt="Governo de Goiás" width="120" height="55" />
         </div>
         <div class="header-copy">
           <p class="institution-name">Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</p>
@@ -68,19 +68,33 @@
         </form>
       </div>
 
-      <div id="modeSelector" hidden>
+      <div id="modeSelector" data-sessao hidden>
         <h2>Selecione a unidade de sorteio para começar</h2>
         <p class="mode-description">Escolha o colegiado responsável pela distribuição dos processos.</p>
         <div class="buttons-wrapper">
           <button id="btnCreg" class="mode-button" type="button">Conselho Regulador (CREG)</button>
           <button id="btnCj" class="mode-button" type="button">Câmara de Julgamento (CJ)</button>
         </div>
+
+        <!-- Caminho de volta do backup: quando o banco está fora do ar, o sorteio
+             é baixado como .json. Sem isto o arquivo era um beco sem saída. -->
+        <div id="reenvio" class="reenvio">
+          <h3>Reenviar um sorteio guardado</h3>
+          <p class="mode-description">
+            Se um sorteio anterior caiu como arquivo <code>.json</code> porque o banco estava
+            fora do ar, escolha o arquivo aqui para gravá-lo agora. Nada é sorteado de novo:
+            as unidades já definidas são mantidas.
+          </p>
+          <input id="arquivoBackup" type="file" accept="application/json,.json" class="sr-only">
+          <label class="button-secondary reenvio-botao" for="arquivoBackup">Escolher arquivo .json</label>
+          <p id="reenvioArquivo" class="reenvio-arquivo" role="status" aria-live="polite"></p>
+        </div>
         <p class="atalho">
           <a class="button-secondary session-link" href="./julgados.html">Registrar voto e status das sessões da Câmara de Julgamento</a>
         </p>
       </div>
 
-      <div id="sorteadorContent" hidden>
+      <div id="sorteadorContent" data-sessao hidden>
         <div id="sortControls" class="controls">
           <label for="numRows">Quantidade de processos:</label>
           <input id="numRows" type="number" min="1" max="500" value="3" aria-describedby="processSetupHint processFormMessage">
@@ -104,7 +118,6 @@
               <th class="num">Ordem</th>
               <th>Nº Processo</th>
               <th>Assunto</th>
-              <th class="hidden">Data de Distribuição</th>
               <th id="thRecurso">Recurso</th>
               <th id="thUnidade">Unidade Conselho Regulador</th>
               <th><span class="sr-only">Ações</span></th>
@@ -150,7 +163,7 @@
   <footer class="page-footer">
     <div class="footer-container">
       <div class="logo footer-logo">
-        <img src="assets/logo_footer.png" alt="Estado de Goiás" width="104" height="48" />
+        <img src="assets/img/logo_footer.png" alt="Estado de Goiás" width="104" height="48" />
       </div>
       <p class="footer-info">
         Este sorteio segue regras de distribuição igualitária e proporcional por assunto e carga total de processos.<br>
@@ -160,8 +173,8 @@
     </div>
   </footer>
 
-  <script src="supabase.js"></script>
-  <script src="index.js"></script>
+  <script src="assets/js/supabase.js"></script>
+  <script src="assets/js/index.js"></script>
 </body>
 
 </html>

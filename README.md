@@ -10,7 +10,7 @@ Acesse a aplicação online em: [https://thelustosa.github.io/sorteio-sei/](http
 
 | Tela de Início | Interface do Sorteador |
 | :---: | :---: |
-| ![Tela de Início](assets/screenshot_start.png) | ![Interface do Sorteador](assets/screenshot.png) |
+| ![Tela de Início](assets/img/screenshot_start.png) | ![Interface do Sorteador](assets/img/screenshot.png) |
 
 ---
 
@@ -37,9 +37,10 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 - **Assunto Fixo na Câmara de Julgamento**: no modo CJ, todo processo é Auto de Infração — o campo já vem preenchido e travado, eliminando a possibilidade de erro.
 - **Travamento de Recurso Inteligente** (CREG): Define automaticamente o campo de recurso como "Não se aplica" e o desabilita caso o assunto selecionado não seja "Auto de Infração".
 - **Defesa no lugar de Recurso** (CJ): na Câmara de Julgamento a 6ª coluna registra se o autuado apresentou **Defesa** (Sim/Não) — é esse o dado que os julgados herdam do acervo. Recurso é conceito do Conselho Regulador e só aparece no modo CREG.
-- **Exportação da Ata em Word**: geração automática da ata de distribuição em formato Word (`.doc`), nomeada dinamicamente (`Sorteio_CREG_18.08.2026.doc`).
+- **Exportação da Ata em Word**: geração automática da ata de distribuição em formato Word (`.doc`), nomeada dinamicamente (`Sorteio_CREG_18.08.2026.doc`). A ata traz as mesmas colunas da tela — ordem, processo, assunto, recurso (ou defesa, na CJ) e unidade sorteada — para que quem lê o documento consiga conferir a repartição por assunto sem abrir o sistema.
 - **Registro de Julgamentos**: página própria onde a secretaria abre uma pauta e preenche o voto e o status de cada processo julgado. Os processos chegam sozinhos das pautas publicadas pela AGR, e cada preenchimento guarda quem fez e quando.
 - **Registro no Banco de Dados**: ao final do sorteio, os dados que antes iam para as planilhas são gravados no banco (Supabase/PostgreSQL), uma linha por processo — a Câmara de Julgamento no seu acervo (`acervo_cj`), o Conselho Regulador em `processos_sorteados`. Enquanto o banco não estiver configurado — ou se o envio falhar — o sistema baixa automaticamente um arquivo `.json` de backup com o sorteio completo, para reenvio posterior, de modo que nenhum sorteio se perca.
+- **Reenvio do backup**: o arquivo `.json` tem caminho de volta. Na tela de escolha do colegiado, **Reenviar um sorteio guardado** recebe o arquivo e grava o sorteio como ele foi feito — as unidades já sorteadas são mantidas, nada é sorteado de novo. O arquivo é conferido campo a campo antes de qualquer gravação, e um arquivo recusado diz qual linha está errada.
 
 ---
 
@@ -48,29 +49,52 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 O visual foi adaptado com base na identidade visual institucional do portal do **Estado de Goiás**:
 - **Paleta de Cores**: Uso do verde institucional (`#00534b`) como cor principal de realce e botões, fundo de tela branco, e painel interno em tom de verde menta claro (`#E9F5EC`).
 - **Rodapé Institucional**: Banner verde com logotipo branco oficial e informações de integridade e auditoria do sorteio.
+- **Tipografia**: títulos em **Montserrat**, sob a [SIL Open Font License 1.1](assets/fonts/OFL.txt), que permite uso, modificação e redistribuição. Ela substituiu a Gotham, que é comercial: como este repositório é público e está sob licença MIT, versionar o arquivo da fonte equivalia a redistribuí-la sem direito. Os dois arquivos `.woff2` cobrem os subconjuntos `latin` e `latin-ext`, que é o que o português usa.
 
 ---
 
 ## Estrutura de Arquivos
 
-- [`FLUXO-CJ.md`](FLUXO-CJ.md): **Fluxo completo da Câmara de Julgamento** — do sorteio ao julgamento registrado, com as regras, as tabelas, a API e o tratamento de falhas.
-- `documentos/`: Pasta contendo o Termo de Entrega oficial do projeto.
-- `schema.sql`: Script de criação das tabelas e das políticas de segurança (RLS) do banco.
-- [`verificacao_cj.sql`](verificacao_cj.sql): Conferência de consistência dos dados da CJ — só lê, roda a qualquer momento.
-- [`backup_cj.sql`](backup_cj.sql) / [`restaurar_cj.sql`](restaurar_cj.sql): Cópia das tabelas da CJ dentro do banco, e a volta.
-- `dados/importar_planilha.py`: Converte a planilha histórica da CJ em SQL de importação.
-- `sincronizacao/`: Serviço que alimenta os julgados a partir das pautas publicadas pela AGR.
-- `tests/`: Testes da Câmara de Julgamento e da sincronização, contra um Postgres real.
-- `index.html` / `index.js`: Sorteio de processos — estrutura da página e lógica da distribuição.
-- `julgados.html` / `julgados.js`: Registro do voto e do status dos processos julgados.
-- `supabase.js`: Configuração e login do banco, compartilhados pelas duas páginas.
-- `index.css`: Arquivo de estilização CSS contendo o design visual do sistema.
+As três páginas ficam na raiz porque é de lá que o GitHub Pages serve o site —
+`index.html` é a porta de entrada e `404.html` é o que o Pages procura quando o
+endereço não existe. Todo o resto está agrupado por natureza.
+
+```text
+├── index.html              sorteio de processos (entrada do site)
+├── julgados.html           registro do voto e do status
+├── 404.html                página de endereço inexistente
+│
+├── assets/
+│   ├── css/index.css       o design de todas as páginas
+│   ├── js/
+│   │   ├── index.js        lógica do sorteio, da ata e do reenvio de backup
+│   │   ├── julgados.js     lógica do registro de julgamentos
+│   │   └── supabase.js     configuração, login e chamadas — usado pelas duas páginas
+│   ├── fonts/              Montserrat em .woff2 e a licença OFL
+│   └── img/                logotipos, favicon e as capturas de tela do README
+│
+├── sql/                    tudo que roda no SQL Editor do Supabase
+│   ├── schema.sql          tabelas, gatilho, função de registro e RLS
+│   ├── verificacao_cj.sql  conferência de consistência — só lê
+│   ├── rederivar_cj.sql    religa ao acervo os julgados que entraram sem ele
+│   ├── backup_cj.sql       copia as tabelas da CJ para o schema backup_cj
+│   └── restaurar_cj.sql    a volta do backup
+│
+├── sincronizacao/          job que lê as pautas da AGR (roda no GitHub Actions)
+├── dados/                  conversão da planilha histórica em SQL
+├── documentos/             Termo de Entrega oficial do projeto
+└── tests/                  as quatro suítes
+```
+
+Documentação: este README, mais o [`FLUXO-CJ.md`](FLUXO-CJ.md) — o fluxo completo
+da Câmara de Julgamento, do sorteio ao julgamento registrado, com as regras, as
+tabelas, a API e o tratamento de falhas.
 
 ---
 
 ## Configuração do Banco de Dados
 
-Crie um projeto gratuito no [Supabase](https://supabase.com), rode o [schema.sql](schema.sql) no SQL Editor e preencha as constantes `SUPABASE_URL` e `SUPABASE_KEY` no [supabase.js](supabase.js). O `schema.sql` cria as tabelas, o gatilho, a função de registro de votos e as políticas de segurança — e pode ser reaplicado a qualquer momento sem tocar em dado nenhum.
+Crie um projeto gratuito no [Supabase](https://supabase.com), rode o [schema.sql](sql/schema.sql) no SQL Editor e preencha as constantes `SUPABASE_URL` e `SUPABASE_KEY` no [supabase.js](assets/js/supabase.js). O `sql/schema.sql` cria as tabelas, o gatilho, a função de registro de votos e as políticas de segurança — e pode ser reaplicado a qualquer momento sem tocar em dado nenhum.
 
 Depois, em **Authentication → Users**, cadastre quem vai usar o sistema; e em **Authentication → Providers → Email**, mantenha **desativado** o "Enable sign ups", senão qualquer visitante criaria a própria conta.
 
@@ -93,7 +117,7 @@ Quando o processo foi redistribuído, vale a distribuição vigente **na data da
 
 Ordem de execução no SQL Editor do Supabase:
 
-1. `schema.sql` — cria as tabelas, o gatilho e as políticas;
+1. `sql/schema.sql` — cria as tabelas, o gatilho e as políticas;
 2. `dados/acervo_cj.sql` e `dados/julgados_cj.sql` — **só num banco novo**, para carregar o histórico da planilha. Gerados por `python dados/importar_planilha.py "Câmara de Julgamento - REG.xlsx"`, ficam fora do Git por precaução: são dados administrativos em volume, e este repositório é público.
 
 Os dois passos são idempotentes: rodar de novo não duplica nada. No banco em produção o histórico já foi carregado e depois arquivado — ver abaixo.
@@ -151,10 +175,10 @@ das tabelas de produção e ficou guardado no schema `backup_cj`, dentro do mesm
 banco. Produção passou a ter só os processos ainda não julgados, e os
 julgamentos passaram a ser registrados pelo sistema a partir dali.
 
-- [`backup_cj.sql`](backup_cj.sql) copia `acervo_cj`, `julgados_cj` e
+- [`backup_cj.sql`](sql/backup_cj.sql) copia `acervo_cj`, `julgados_cj` e
   `pautas_cj` para o schema `backup_cj`. Rode antes de qualquer alteração de
   risco.
-- [`restaurar_cj.sql`](restaurar_cj.sql) é a volta: devolve as três tabelas ao
+- [`restaurar_cj.sql`](sql/restaurar_cj.sql) é a volta: devolve as três tabelas ao
   estado do backup.
 
 Cada um é **um único comando** — um bloco `do $$ … $$`. No SQL Editor do
@@ -183,6 +207,13 @@ python tests/test_sincronizacao.py
 
 Testa o parser e a sincronização contra fixtures reais (HTML da listagem, texto e PDF de pautas de datas diferentes) e contra o mesmo Postgres descartável, sem depender do site estar no ar. Com `--online` roda também um teste que consulta a AGR de verdade — serve para avisar quando o portal mudar de formato.
 
+```bash
+node tests/test_sorteio.mjs
+node tests/test_backup.mjs
+```
+
+Os dois não precisam de Docker nem de banco: leem o próprio `index.js` e exercitam as duas funções em que um erro passaria despercebido — o embaralhamento, que precisa ser uniforme para o sorteio ser auditável, e a conferência do backup `.json`, que é a porta por onde um arquivo de fora vira `INSERT`.
+
 ---
 
 ## Tecnologias Utilizadas
@@ -190,5 +221,5 @@ Testa o parser e a sincronização contra fixtures reais (HTML da listagem, text
 - **HTML5** (Semântico)
 - **CSS3** (Flexbox, variáveis nativas e design responsivo)
 - **JavaScript ES6+** (Lógica do sorteio e manipulação de DOM)
-- **FileSaver.js** (Biblioteca para controle e download dos arquivos gerados)
+- **Sem dependências de terceiros no navegador** (a ata em Word e o backup .json são gerados com `Blob` e `URL.createObjectURL`, da própria plataforma)
 - **Supabase / PostgreSQL** (Banco de dados dos sorteios, acessado via API REST com a Fetch API)
