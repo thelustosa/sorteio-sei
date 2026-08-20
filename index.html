@@ -4,113 +4,177 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Tabela: Sorteio de Processos SEI</title>
-  <link rel="stylesheet" href="index.css" />
+  <meta name="theme-color" content="#00534b" />
+  <meta name="description"
+    content="Distribuição de processos SEI por sorteio eletrônico da AGR, com repartição igualitária por assunto e registro auditável." />
+  <title>Sorteio de Processos SEI</title>
+  <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="icon" href="assets/img/favicon.png" />
+  <link rel="stylesheet" href="assets/css/index.css" />
 </head>
 
 <body>
-  <div class="container pt-36">
-    <header>
-      <div class="logo">
-        <img src="assets/logo_header.png" alt="Logo Goiás" />
-      </div>
-      <div>
-        <h1>Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</h1>
-        <h2>Sorteio de Processos SEI</h2>
-        <p class="lead">Preencha os campos solicitados, defina a quantidade de processos e sorteie.</p>
-      </div>
-    </header>
-  </div>
-
-  <div class="green-bar">
+  <a class="skip-link" href="#conteudo-principal">Pular para o conteúdo principal</a>
+  <div class="page-header-wrapper">
     <div class="container">
-      <span id="txtModo"></span>
-      <button id="btnVoltar" style="display:none">← Voltar</button>
+      <header>
+        <div class="logo">
+          <img src="assets/img/logo_header.png" alt="Governo de Goiás" width="120" height="55" />
+        </div>
+        <div class="header-copy">
+          <p class="institution-name">Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</p>
+          <h1>Sorteio de Processos SEI</h1>
+          <p class="lead">Preencha os campos solicitados, defina a quantidade de processos e sorteie.</p>
+        </div>
+      </header>
     </div>
   </div>
 
-  <div class="container pb-36">
+  <nav class="green-bar" aria-label="Navegação do sistema">
+    <div class="container">
+      <span id="txtModo">Sorteio de processos</span>
+      <div class="nav-actions">
+        <button id="btnVoltar" class="nav-action" type="button" hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15.5 10h-11"></path>
+            <path d="m8.5 6-4 4 4 4"></path>
+          </svg>
+          <span>Voltar</span>
+        </button>
+        <button id="btnSair" class="nav-action" type="button" hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"></path>
+            <path d="m11 7 3 3-3 3"></path>
+            <path d="M14 10H8"></path>
+          </svg>
+          <span>Sair</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="conteudo-principal" class="container pb-36" tabindex="-1">
     <div class="card">
-      <div id="modeSelector">
-        <h3>Selecione a unidade de sorteio para começar:</h3>
-        <div class="buttons-wrapper">
-          <button id="btnCreg">Conselho Regulador (CREG)</button>
-          <button id="btnCj">Câmara de Julgamento (CJ)</button>
-        </div>
+      <div id="loginScreen">
+        <h2>Acesso restrito</h2>
+        <p>Identifique-se para realizar o sorteio de processos.</p>
+        <form id="loginForm">
+          <label for="loginEmail">E-mail</label>
+          <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
+          <label for="loginSenha">Senha</label>
+          <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+          <button id="btnEntrar" type="submit">Entrar</button>
+          <div id="loginErro" role="alert" aria-live="assertive"></div>
+        </form>
       </div>
 
-      <div id="sorteadorContent">
-        <div class="controls">
-          <label for="numRows">Quantidade de Processos:</label>
-          <input id="numRows" type="number" min="1" value="3">
-          <button id="createRows">Gerar</button>
+      <div id="modeSelector" data-sessao hidden>
+        <h2>Selecione a unidade de sorteio para começar</h2>
+        <p class="mode-description">Escolha o colegiado responsável pela distribuição dos processos.</p>
+        <div class="buttons-wrapper">
+          <button id="btnCreg" class="mode-button" type="button">Conselho Regulador (CREG)</button>
+          <button id="btnCj" class="mode-button" type="button">Câmara de Julgamento (CJ)</button>
+        </div>
+
+        <!-- Caminho de volta do backup: quando o banco está fora do ar, o sorteio
+             é baixado como .json. Sem isto o arquivo era um beco sem saída. -->
+        <div id="reenvio" class="reenvio">
+          <h3>Reenviar um sorteio guardado</h3>
+          <p class="mode-description">
+            Se um sorteio anterior caiu como arquivo <code>.json</code> porque o banco estava
+            fora do ar, escolha o arquivo aqui para gravá-lo agora. Nada é sorteado de novo:
+            as unidades já definidas são mantidas.
+          </p>
+          <input id="arquivoBackup" type="file" accept="application/json,.json" class="sr-only">
+          <label class="button-secondary reenvio-botao" for="arquivoBackup">Escolher arquivo .json</label>
+          <p id="reenvioArquivo" class="reenvio-arquivo" role="status" aria-live="polite"></p>
+        </div>
+        <p class="atalho">
+          <a class="button-secondary session-link" href="./julgados.html">Registrar voto e status das sessões da Câmara de Julgamento</a>
+        </p>
+      </div>
+
+      <div id="sorteadorContent" data-sessao hidden>
+        <div id="sortControls" class="controls">
+          <label for="numRows">Quantidade de processos:</label>
+          <input id="numRows" type="number" min="1" max="500" value="3" aria-describedby="processSetupHint processFormMessage">
+          <button id="createRows" class="button-primary" type="button">Gerar linhas</button>
           <div id="spacer"></div>
-          <button id="sortear" class="secondary">Sortear CREG e Exportar</button>
+          <button id="sortear" class="button-primary" type="button" hidden>Sortear CREG e Exportar</button>
         </div>
+        <p id="processSetupHint" class="form-hint">Defina a quantidade e gere as linhas para começar o preenchimento.</p>
+        <p id="processFormMessage" class="form-message" role="alert" hidden></p>
 
-        <div id="cregSelector">
-          <span>Selecione as Unidades que <span style="color: #ef4444; font-weight: bold;">NÃO</span> vão participar:</span>
-          <div id="pillsContainer"></div>
-        </div>
+        <div id="processEntry" hidden>
+          <div id="cregSelector">
+            <span>Selecione as unidades que <strong class="text-danger">não</strong> vão participar:</span>
+            <div id="pillsContainer"></div>
+          </div>
 
+          <div class="table-scroll" role="region" aria-label="Processos para sorteio" tabindex="0">
         <table id="processTable">
           <thead>
             <tr>
               <th class="num">Ordem</th>
               <th>Nº Processo</th>
-              <th>Interessado</th>
               <th>Assunto</th>
-              <th class="hidden">Data de Distribuição</th>
-              <th>Recurso</th>
+              <th id="thRecurso">Recurso</th>
               <th id="thUnidade">Unidade Conselho Regulador</th>
-              <th></th>
+              <th><span class="sr-only">Ações</span></th>
             </tr>
           </thead>
           <tbody></tbody>
         </table>
+          </div>
+
+          <div class="table-toolbar">
+            <div>Desenvolvido por <strong>Lucas Lustosa Coelho</strong>.</div>
+            <button id="addRowBtn" class="button-secondary" type="button">Adicionar linha</button>
+          </div>
+        </div>
 
         <!-- Seção de Resultados Pós-Sorteio -->
-        <div id="resultadoSorteio">
-          <h3>Resultado do Sorteio</h3>
-          
+        <div id="resultadoSorteio" hidden>
+          <h2>Resultado do Sorteio</h2>
+          <div id="resultadoStatus" hidden></div>
+
           <div id="resumoContagem">
             <!-- Exemplo: CREG1: 2 processos | CREG2: 3 processos -->
           </div>
 
+          <div class="table-scroll" role="region" aria-label="Resultado do sorteio" tabindex="0">
           <table id="resultTable">
             <thead>
               <tr>
                 <th>Nº Processo</th>
-                <th>Interessado</th>
                 <th>Assunto</th>
                 <th id="thUnidadeResult">Sorteado Para</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
+          </div>
         </div>
 
-        <footer>
-          <div>Desenvolvido por <strong>Lucas Lustosa Coelho</strong>.</div>
-          <button id="addRowBtn">+ Adicionar Linha</button>
-        </footer>
       </div>
     </div>
-  </div>
+  </main>
 
   <footer class="page-footer">
     <div class="footer-container">
-      <img src="assets/logo_footer.png" alt="Estado de Goiás" class="footer-logo" />
-      <div class="footer-info">
+      <div class="logo footer-logo">
+        <img src="assets/img/logo_footer.png" alt="Estado de Goiás" width="104" height="48" />
+      </div>
+      <p class="footer-info">
         Este sorteio segue regras de distribuição igualitária e proporcional por assunto e carga total de processos.<br>
         Todos os sorteios são auditáveis para garantir transparência.
-      </div>
+      </p>
+      <div class="footer-version">Versão 1.5</div>
     </div>
   </footer>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="index.js"></script>
+  <script src="assets/js/supabase.js"></script>
+  <script src="assets/js/index.js"></script>
 </body>
 
 </html>

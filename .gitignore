@@ -1,0 +1,19 @@
+# Índice local do CodeGraph
+.codegraph/
+
+# Artefatos de teste automatizado
+.playwright-mcp/
+
+# Sistema operacional
+Thumbs.db
+.DS_Store
+
+# Dados históricos gerados a partir da planilha da CJ: contêm nome de
+# interessado pessoa física e o repositório é público.
+dados/*.sql
+
+# Cache do Python
+__pycache__/
+
+# Cache do pytest
+.pytest_cache/

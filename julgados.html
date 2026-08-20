@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#00534b" />
+  <meta name="description"
+    content="Registro do voto e do status dos processos julgados nas sessões da Câmara de Julgamento da AGR." />
+  <title>Registro de Julgamentos — Câmara de Julgamento</title>
+  <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="icon" href="assets/img/favicon.png" />
+  <link rel="stylesheet" href="assets/css/index.css" />
+</head>
+
+<body>
+  <a class="skip-link" href="#conteudo-principal">Pular para o conteúdo principal</a>
+  <div class="page-header-wrapper">
+    <div class="container">
+      <header>
+        <div class="logo">
+          <img src="assets/img/logo_header.png" alt="Governo de Goiás" width="120" height="55" />
+        </div>
+        <div class="header-copy">
+          <p class="institution-name">Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</p>
+          <h1>Registro de Julgamentos — Câmara de Julgamento</h1>
+          <p class="lead">Selecione a pauta e registre o voto e o status de cada processo julgado.</p>
+        </div>
+      </header>
+    </div>
+  </div>
+
+  <nav class="green-bar" aria-label="Navegação do sistema">
+    <div class="container">
+      <span id="txtModo">Pautas pendentes</span>
+      <div class="nav-actions">
+        <button id="btnVoltar" class="nav-action" type="button" hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15.5 10h-11"></path>
+            <path d="m8.5 6-4 4 4 4"></path>
+          </svg>
+          <span>Pautas</span>
+        </button>
+        <button id="btnSair" class="nav-action" type="button" hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"></path>
+            <path d="m11 7 3 3-3 3"></path>
+            <path d="M14 10H8"></path>
+          </svg>
+          <span>Sair</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="conteudo-principal" class="container pb-36" tabindex="-1">
+    <div class="card">
+      <div id="loginScreen">
+        <h2>Acesso restrito</h2>
+        <p>Identifique-se para registrar os julgamentos.</p>
+        <form id="loginForm">
+          <label for="loginEmail">E-mail</label>
+          <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
+          <label for="loginSenha">Senha</label>
+          <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+          <button id="btnEntrar" type="submit">Entrar</button>
+          <div id="loginErro" role="alert" aria-live="assertive"></div>
+        </form>
+      </div>
+
+      <!-- Tela 1: as pautas que ainda têm processo sem voto ou sem status -->
+      <div id="listaPautas" data-sessao hidden>
+        <h2>Pautas com julgamento pendente</h2>
+        <p id="pautasIntro" class="lead">Selecione uma pauta para preencher os processos pendentes.</p>
+        <div id="pautasContainer"></div>
+        <div id="semPendencia" class="empty-state" role="status" hidden>
+          <div class="empty-state-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 12a8 8 0 1 1-4.7-7.3"></path>
+              <path d="m8.5 12 2.3 2.3L16 9"></path>
+            </svg>
+          </div>
+          <div>
+            <h3>Todos os julgamentos estão em dia</h3>
+            <p>Não há pautas aguardando voto ou status neste momento.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tela 2: os processos daquela pauta -->
+      <div id="detalhePauta" data-sessao hidden>
+        <h2 id="tituloPauta"></h2>
+        <div class="table-scroll" role="region" aria-label="Processos pendentes de julgamento" tabindex="0">
+        <table id="julgadosTable">
+          <thead>
+            <tr>
+              <th>Nº Processo</th>
+              <th>Relator</th>
+              <th>Voto</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        </div>
+        <div class="table-toolbar">
+          <div id="contadorPendentes"></div>
+          <button id="btnSalvar" type="button">Salvar julgamentos</button>
+        </div>
+      </div>
+
+      <p class="atalho"><a class="button-secondary session-link" href="./index.html">Voltar para o sorteio de processos</a></p>
+    </div>
+  </main>
+
+  <footer class="page-footer">
+    <div class="footer-container">
+      <div class="logo footer-logo">
+        <img src="assets/img/logo_footer.png" alt="Estado de Goiás" width="104" height="48" />
+      </div>
+      <p class="footer-info">
+        Os processos chegam automaticamente das pautas publicadas pela AGR, sem voto e sem status.<br>
+        Cada registro guarda quem preencheu e quando, para garantir rastreabilidade.
+      </p>
+      <div class="footer-version">Versão 1.5</div>
+    </div>
+  </footer>
+
+  <script src="assets/js/supabase.js"></script>
+  <script src="assets/js/julgados.js"></script>
+</body>
+
+</html>
