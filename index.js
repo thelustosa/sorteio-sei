@@ -5,6 +5,31 @@ const recursos = ['Com recurso', 'Sem recurso', 'Não se aplica', 'Pedido de rev
 // apresentou defesa. É o campo que os julgados herdam do acervo.
 const defesas = ['Sim', 'Não'];
 
+// ── Aleatoriedade do sorteio ─── início do bloco verificado por tests/test_sorteio.mjs
+// sort() com comparador aleatório não embaralha: a distribuição resultante é
+// enviesada e varia conforme o algoritmo de ordenação do navegador. Num sorteio
+// de processos públicos isso é inaceitável. Fisher-Yates resolve o viés do
+// algoritmo; crypto.getRandomValues com descarte do resto resolve o do módulo.
+function inteiroAleatorio(limite) {
+  const teto = Math.floor(2 ** 32 / limite) * limite;
+  const buffer = new Uint32Array(1);
+  let valor;
+  do {
+    crypto.getRandomValues(buffer);
+    valor = buffer[0];
+  } while (valor >= teto);
+  return valor % limite;
+}
+
+function embaralhar(lista) {
+  for (let i = lista.length - 1; i > 0; i--) {
+    const j = inteiroAleatorio(i + 1);
+    [lista[i], lista[j]] = [lista[j], lista[i]];
+  }
+  return lista;
+}
+// ── fim do bloco verificado ─────────────────────────────────────────────────
+
 let modoSorteio = '';
 let unidadesList = [];
 let assuntosAtivos = [];
@@ -123,7 +148,12 @@ function esconderMensagemFormulario() {
 function recalculaOrdem() {
   const rows = Array.from(tbody.querySelectorAll('tr'));
   rows.forEach((r, idx) => {
-    r.querySelector('.num').textContent = idx + 1;
+    const ordem = idx + 1;
+    r.querySelector('.num').textContent = ordem;
+    r.querySelector('.col-processo input').setAttribute('aria-label', `Número do processo, linha ${ordem}`);
+    r.querySelector('.col-assunto select').setAttribute('aria-label', `Assunto, linha ${ordem}`);
+    r.querySelector('.col-decisao select').setAttribute('aria-label', `${modoSorteio === 'CJ' ? 'Defesa' : 'Recurso'}, linha ${ordem}`);
+    r.querySelector('.btn-excluir').setAttribute('aria-label', `Excluir linha ${ordem}`);
   });
 }
 
@@ -277,8 +307,7 @@ function sortearProcessos() {
   const dataHoje = hoje.toLocaleDateString('pt-BR');
 
   assuntosOrdenados.forEach(assunto => {
-    const linhas = [...linhasPorAssunto[assunto]];
-    linhas.sort(() => Math.random() - 0.5);
+    const linhas = embaralhar([...linhasPorAssunto[assunto]]);
 
     const totalLinhasAssunto = linhas.length;
     const base = Math.floor(totalLinhasAssunto / participantes.length);
@@ -296,11 +325,8 @@ function sortearProcessos() {
     });
 
     if (resto > 0) {
-      const candidatos = [...participantes].sort((a, b) => {
-        const diff = atribuicoesPorCreg[a].total - atribuicoesPorCreg[b].total;
-        if (diff === 0) return Math.random() - 0.5;
-        return diff;
-      });
+      const candidatos = embaralhar([...participantes])
+        .sort((a, b) => atribuicoesPorCreg[a].total - atribuicoesPorCreg[b].total);
 
       for (let i = 0; i < resto; i++) {
         const creg = candidatos[i];
@@ -398,9 +424,9 @@ function sortearProcessos() {
 
   salvar(sorteio)
     .then(destino => destino === 'banco'
-      ? aviso('✅ Sorteio gravado no banco de dados.')
-      : aviso('⚠️ Banco não configurado — guarde o arquivo .json de backup gerado.', true))
-    .catch(err => aviso(`❌ Falha ao gravar no banco (${err.message}). O backup .json foi baixado — reenvie depois.`, true))
+      ? aviso('Sorteio gravado no banco de dados.')
+      : aviso('Banco não configurado — guarde o arquivo .json de backup gerado.', 'atencao'))
+    .catch(err => aviso(`Falha ao gravar no banco (${err.message}). O backup .json foi baixado — reenvie depois.`, 'erro'))
     .finally(() => {
       if (resultadoStatus) {
         resultadoStatus.hidden = true;
