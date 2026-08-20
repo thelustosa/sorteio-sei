@@ -48,7 +48,6 @@ preenche uma linha por processo:
 | campo na tela | vira em `acervo_cj` |
 |---|---|
 | Nº Processo | `num_processo` |
-| Interessado | `interessado` |
 | Assunto (travado em "Auto de Infração") | `assunto` |
 | **Defesa** (Sim/Não) | `defesa` (boolean) |
 | — sorteado — cadeira CJ1..CJ5 | `relator` |
@@ -242,7 +241,7 @@ flowchart TD
     B -->|não| D{"há distribuição<br/>até a data da sessão?"}
     D -->|sim| E["a mais recente<br/>até a sessão"]
     D -->|não| F["a distribuição<br/>mais antiga"]
-    C --> G["preenche acervo_id, relator,<br/>defesa, data_distribuicao, interessado"]
+    C --> G["preenche acervo_id, relator,<br/>defesa e data_distribuicao"]
     E --> G
     F --> G
     G --> H["banco calcula<br/>dias_dt e periodo_dt"]
@@ -494,7 +493,6 @@ erDiagram
         text relator
         date data_distribuicao
         boolean defesa
-        text interessado
         text assunto
         int ordem
         timestamptz sorteado_em
@@ -595,16 +593,17 @@ Revisto depois do reinício da série, em 20/08/2026.
   em diante traz a **cadeira** (`CJ1`..`CJ5`). Não existe de-para entre os dois,
   então relatório que cruze as duas origens não fecha. Resolver isso é uma
   tabela pequena ligando cadeira e conselheiro por período.
-- **`interessado` fica nulo nos julgados automáticos.** A aba Acervo da planilha
-  nunca teve essa coluna, então nem as 37 linhas remanescentes ajudam; e o PDF
-  da pauta traz o nome, mas quebrado entre linhas — extraí-lo produziria lixo.
-  Preferimos nulo a dado errado num registro público. Entra sozinho quando o
-  processo for sorteado pelo sistema, que coleta o interessado na tela.
-- **Edição concorrente.** Se duas pessoas abrirem a mesma pauta ao mesmo tempo,
-  vale quem salvar por último. Aceitável para uma secretaria de duas pessoas;
-  se um dia incomodar, o caminho é comparar `atualizado_em` antes de gravar.
-- **CREG** continua em `processos_sorteados`. A estrutura está pronta para
-  ganhar `acervo_creg` e `julgados_creg` com a mesma lógica.
+- **CREG** continua em `processos_sorteados`. Fica para depois; a estrutura
+  está pronta para ganhar `acervo_creg` e `julgados_creg` com a mesma lógica.
+
+### Decidido e encerrado
+
+- **O interessado saiu do sistema** em 20/08/2026. Deixou de ser usado, e não
+  havia motivo para guardar nome de pessoa num registro que ninguém consultava:
+  some da tela dos dois modos, das três tabelas, da página de julgados e das
+  atas em Word. O `schema.sql` derruba a coluna de quem já existia.
+- **Edição concorrente** não é preocupação: a secretaria é pequena e, se duas
+  pessoas abrirem a mesma pauta, vale quem salvar por último.
 
 ### Do histórico, que hoje vive em `backup_cj`
 

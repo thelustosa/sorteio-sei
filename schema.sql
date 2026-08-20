@@ -20,7 +20,6 @@ create table if not exists public.processos_sorteados (
   data_hora         timestamptz not null,
   ordem             int         not null,
   num_processo      text        not null,
-  interessado       text        not null,
   assunto           text        not null,
   data_distribuicao date        not null,
   recurso           text        not null,
@@ -40,14 +39,13 @@ create index if not exists idx_processos_sorteados_modo_data
 --   planilha -> importado do histórico da aba Acervo (dados/importar_planilha.py).
 --
 -- Colunas que só uma das origens preenche ficam nulas na outra: a planilha não
--- registra interessado nem ordem. O relator recebe o nome do conselheiro
+-- registra ordem. O relator recebe o nome do conselheiro
 -- (planilha) ou a cadeira sorteada CJ1..CJ5 (sorteador) — enquanto não existir
 -- de-para entre cadeira e nome, é o mesmo campo "quem ficou com o processo"
 -- nas duas origens.
 create table if not exists public.acervo_cj (
   id                bigint generated always as identity primary key,
   num_processo      text        not null,
-  interessado       text,
   relator           text        not null,
   data_distribuicao date        not null,
   defesa            boolean,
@@ -74,8 +72,8 @@ create table if not exists public.acervo_cj (
 -- Uma linha por processo levado a uma sessão de julgamento.
 --
 -- Informado na sessão: num_processo, data_sessao, pauta, voto, status.
--- Derivado do acervo pelo gatilho abaixo: acervo_id, relator, defesa,
--- data_distribuicao, interessado — o equivalente às fórmulas da aba Julgados.
+-- Derivado do acervo pelo gatilho abaixo: acervo_id, relator, defesa e
+-- data_distribuicao — o equivalente às fórmulas da aba Julgados.
 -- Calculado pelo próprio banco: dias_dt e periodo_dt.
 --
 -- relator/defesa/data_distribuicao são cópia, não referência: registram o
@@ -85,7 +83,6 @@ create table if not exists public.julgados_cj (
   id                bigint generated always as identity primary key,
   acervo_id         bigint      references public.acervo_cj (id),
   num_processo      text        not null,
-  interessado       text,
   data_sessao       date        not null,
   pauta             int,
   voto              text,
@@ -234,7 +231,6 @@ begin
   new.relator           := coalesce(new.relator, origem.relator);
   new.defesa            := coalesce(new.defesa, origem.defesa);
   new.data_distribuicao := coalesce(new.data_distribuicao, origem.data_distribuicao);
-  new.interessado       := coalesce(new.interessado, origem.interessado);
   return new;
 end;
 $$;
@@ -242,7 +238,7 @@ $$;
 drop trigger if exists julgados_cj_derivar on public.julgados_cj;
 create trigger julgados_cj_derivar
   before insert or update of num_processo, data_sessao, relator, defesa,
-                             data_distribuicao, interessado
+                             data_distribuicao
   on public.julgados_cj
   for each row execute function public.julgados_cj_derivar_do_acervo();
 
@@ -258,6 +254,13 @@ create trigger julgados_cj_derivar
 alter table public.julgados_cj
   add column if not exists atualizado_em  timestamptz,
   add column if not exists atualizado_por text;
+
+-- O interessado saiu do sistema em 20/08/2026: deixou de ser usado e não vale a
+-- pena guardar nome de pessoa num registro que ninguém consulta. Em banco novo
+-- as tabelas acima já nascem sem ele; aqui a coluna cai de quem já existia.
+alter table public.processos_sorteados drop column if exists interessado;
+alter table public.acervo_cj           drop column if exists interessado;
+alter table public.julgados_cj         drop column if exists interessado;
 
 -- Os pendentes são poucos no meio de milhares de julgados: índice parcial, do
 -- tamanho da fila de trabalho e não da tabela.

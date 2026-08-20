@@ -96,7 +96,7 @@ def exige_planilha(fn):
 def tabelas_criadas(cur):
     """acervo_cj e julgados_cj existem, com as colunas e tipos esperados."""
     esperado_acervo = {
-        'id': 'bigint', 'num_processo': 'text', 'interessado': 'text',
+        'id': 'bigint', 'num_processo': 'text',
         'relator': 'text', 'data_distribuicao': 'date', 'defesa': 'boolean',
         'assunto': 'text', 'recurso': 'text', 'ordem': 'integer',
         'sorteado_em': 'timestamp with time zone', 'origem': 'text',
@@ -104,7 +104,7 @@ def tabelas_criadas(cur):
     }
     esperado_julgados = {
         'id': 'bigint', 'acervo_id': 'bigint', 'num_processo': 'text',
-        'interessado': 'text', 'data_sessao': 'date', 'pauta': 'integer',
+        'data_sessao': 'date', 'pauta': 'integer',
         'voto': 'text', 'status': 'text', 'defesa': 'boolean', 'relator': 'text',
         'data_distribuicao': 'date', 'dias_dt': 'integer', 'periodo_dt': 'text',
         'criado_em': 'timestamp with time zone',
@@ -182,9 +182,9 @@ def tabela_antiga_recusa_cj(cur):
     """processos_sorteados é só do CREG: processo da Câmara não entra ali."""
     try:
         cur.execute("""insert into processos_sorteados
-                       (modo, data_hora, ordem, num_processo, interessado, assunto,
+                       (modo, data_hora, ordem, num_processo, assunto,
                         data_distribuicao, recurso, unidade)
-                       values ('CJ', now(), 1, '1', 'X', 'Auto de Infração',
+                       values ('CJ', now(), 1, '1', 'Auto de Infração',
                                current_date, 'Com recurso', 'CJ1')""")
     except psycopg2.errors.CheckViolation:
         return
@@ -214,12 +214,12 @@ def importacao_dos_julgados(cur):
     """Toda sessão da aba Julgados está no banco, com os valores certos."""
     assert uma(cur, 'select count(*) from julgados_cj') == len(PLANILHA.julgados)
 
-    cur.execute("""select num_processo, data_sessao, interessado, pauta, voto, status,
+    cur.execute("""select num_processo, data_sessao, pauta, voto, status,
                           defesa, relator, data_distribuicao from julgados_cj""")
-    banco = {(n, s): (i, p, v, st, d, r, dd) for n, s, i, p, v, st, d, r, dd in cur.fetchall()}
+    banco = {(n, s): (p, v, st, d, r, dd) for n, s, p, v, st, d, r, dd in cur.fetchall()}
     for l in PLANILHA.julgados:
         chave = (l['num_processo'], l['data_sessao'])
-        assert banco[chave] == (l['interessado'], l['pauta'], l['voto'], l['status'],
+        assert banco[chave] == (l['pauta'], l['voto'], l['status'],
                                 l['defesa'], l['relator'], l['data_distribuicao']), chave
 
 
@@ -301,15 +301,13 @@ def periodo_dt_cobre_o_que_a_planilha_nao_cobria(cur):
 def preenche_a_partir_do_acervo(cur):
     """O fluxo do dia a dia: informa processo e sessão, o banco busca o resto."""
     cur.execute("""insert into acervo_cj
-                   (num_processo, interessado, relator, data_distribuicao, defesa, origem)
-                   values ('900000000000010', 'TRANSPORTES XPTO LTDA', 'CJ3',
-                           date '2026-03-02', true, 'sorteio')""")
+                   (num_processo, relator, data_distribuicao, defesa, origem)
+                   values ('900000000000010', 'CJ3', date '2026-03-02', true, 'sorteio')""")
     cur.execute("""insert into julgados_cj (num_processo, data_sessao, pauta, voto, status)
                    values ('900000000000010', date '2026-06-10', 7, 'Manter', 'Julgado')
-                   returning relator, defesa, data_distribuicao, interessado,
+                   returning relator, defesa, data_distribuicao,
                              dias_dt, periodo_dt, acervo_id is not null""")
-    assert cur.fetchone() == ('CJ3', True, date(2026, 3, 2), 'TRANSPORTES XPTO LTDA',
-                              100, '2T26', True)
+    assert cur.fetchone() == ('CJ3', True, date(2026, 3, 2), 100, '2T26', True)
     cur.connection.rollback()
 
 
@@ -389,13 +387,13 @@ def processo_fora_do_acervo_nao_quebra(cur):
 
 @teste
 def campos_opcionais_aceitam_vazio(cur):
-    """Voto, status, pauta e interessado podem faltar — a planilha tem linhas assim."""
+    """Voto, status e pauta podem faltar — a planilha tem linhas assim."""
     cur.execute("""insert into acervo_cj (num_processo, relator, data_distribuicao, origem)
                    values ('900000000000016', 'CJ1', date '2026-02-01', 'sorteio')""")
     cur.execute("""insert into julgados_cj (num_processo, data_sessao)
                    values ('900000000000016', date '2026-03-01')
-                   returning voto, status, pauta, interessado""")
-    assert cur.fetchone() == (None, None, None, None)
+                   returning voto, status, pauta""")
+    assert cur.fetchone() == (None, None, None)
     cur.connection.rollback()
 
 
@@ -460,8 +458,8 @@ def regras_do_banco_reproduzem_as_formulas(cur):
     """
     cur.execute('delete from julgados_cj')
     psycopg2.extras.execute_values(cur, """
-        insert into julgados_cj (num_processo, interessado, data_sessao, pauta, voto, status)
-        values %s""", [(l['num_processo'], l['interessado'], l['data_sessao'],
+        insert into julgados_cj (num_processo, data_sessao, pauta, voto, status)
+        values %s""", [(l['num_processo'], l['data_sessao'],
                         l['pauta'], l['voto'], l['status']) for l in PLANILHA.julgados])
 
     cur.execute("""select num_processo, data_sessao, relator, defesa, data_distribuicao,
@@ -619,14 +617,14 @@ def registrar_votos_permite_corrigir_o_proprio_registro(cur):
 def registrar_votos_so_mexe_em_voto_e_status(cur):
     ident, _, _ = julgado_pendente(cur, num='900000000000203')
     cur.execute("""select num_processo, data_sessao, pauta, relator, defesa,
-                          data_distribuicao, acervo_id, interessado
+                          data_distribuicao, acervo_id
                      from julgados_cj where id = %s""", (ident,))
     antes = cur.fetchone()
 
     registrar(cur, [{'id': ident, 'voto': 'Vista', 'status': 'Vista'}])
 
     cur.execute("""select num_processo, data_sessao, pauta, relator, defesa,
-                          data_distribuicao, acervo_id, interessado
+                          data_distribuicao, acervo_id
                      from julgados_cj where id = %s""", (ident,))
     assert cur.fetchone() == antes
     cur.connection.rollback()
@@ -660,9 +658,9 @@ def registrar_votos_e_a_unica_porta_de_escrita(cur):
 def creg_continua_gravando_na_tabela_antiga(cur):
     """O sorteio do Conselho Regulador não foi tocado."""
     cur.execute("""insert into processos_sorteados
-                   (modo, data_hora, ordem, num_processo, interessado, assunto,
+                   (modo, data_hora, ordem, num_processo, assunto,
                     data_distribuicao, recurso, unidade)
-                   values ('CREG', now(), 9, '202600029000999', 'EMPRESA C LTDA',
+                   values ('CREG', now(), 9, '202600029000999',
                            'Requerimento', current_date, 'Não se aplica', 'CREG3')
                    returning unidade""")
     assert cur.fetchone()[0] == 'CREG3'

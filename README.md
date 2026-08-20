@@ -94,7 +94,7 @@ Quando o processo foi redistribuído, vale a distribuição vigente **na data da
 Ordem de execução no SQL Editor do Supabase:
 
 1. `schema.sql` — cria as tabelas, o gatilho e as políticas;
-2. `dados/acervo_cj.sql` e `dados/julgados_cj.sql` — **só num banco novo**, para carregar o histórico da planilha. Gerados por `python dados/importar_planilha.py "Câmara de Julgamento - REG.xlsx"`, ficam fora do Git: trazem nome de interessado pessoa física e este repositório é público.
+2. `dados/acervo_cj.sql` e `dados/julgados_cj.sql` — **só num banco novo**, para carregar o histórico da planilha. Gerados por `python dados/importar_planilha.py "Câmara de Julgamento - REG.xlsx"`, ficam fora do Git por precaução: são dados administrativos em volume, e este repositório é público.
 
 Os dois passos são idempotentes: rodar de novo não duplica nada. No banco em produção o histórico já foi carregado e depois arquivado — ver abaixo.
 

@@ -530,9 +530,7 @@ tbody tr:hover td { background: var(--table-row-hover); }
 .loading-spinner-light { width: 16px; height: 16px; border-color: var(--on-accent-spinner); border-top-color: var(--on-accent); }
 button.is-loading { display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: wait; }
 
-.state-message,
 .load-error { margin: 18px 0 0; color: var(--muted); font-size: 0.875rem; line-height: 1.45; }
-.state-message-error { color: var(--danger); }
 
 .load-error { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .load-error p { margin: 0; color: var(--danger); font-weight: 700; }
