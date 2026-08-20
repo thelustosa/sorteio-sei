@@ -70,6 +70,49 @@ async function autenticar(email, senha) {
 // até lá é um no-op, porque não há formulário para mostrar.
 let exigirLogin = () => {};
 
+// Estados de carregamento compartilhados: a interface nunca depende de texto
+// solto para explicar uma operação que ainda está em andamento.
+function criarIndicadorCarregamento(texto) {
+  const estado = document.createElement('div');
+  estado.className = 'loading-state';
+  estado.setAttribute('role', 'status');
+  estado.setAttribute('aria-live', 'polite');
+
+  const spinner = document.createElement('span');
+  spinner.className = 'loading-spinner';
+  spinner.setAttribute('aria-hidden', 'true');
+
+  const rotulo = document.createElement('span');
+  rotulo.textContent = texto;
+  estado.append(spinner, rotulo);
+  return estado;
+}
+
+function alternarBotaoCarregando(botao, carregando, texto) {
+  if (!botao) return;
+
+  if (carregando) {
+    botao.dataset.rotuloOriginal = botao.textContent.trim();
+    botao.disabled = true;
+    botao.classList.add('is-loading');
+    botao.setAttribute('aria-busy', 'true');
+
+    const spinner = document.createElement('span');
+    spinner.className = 'loading-spinner loading-spinner-light';
+    spinner.setAttribute('aria-hidden', 'true');
+    const rotulo = document.createElement('span');
+    rotulo.textContent = texto;
+    botao.replaceChildren(spinner, rotulo);
+    return;
+  }
+
+  botao.disabled = false;
+  botao.classList.remove('is-loading');
+  botao.removeAttribute('aria-busy');
+  botao.textContent = botao.dataset.rotuloOriginal || botao.textContent;
+  delete botao.dataset.rotuloOriginal;
+}
+
 // Chamada REST autenticada. Devolve o JSON da resposta (ou null quando vazia).
 // O erro carrega o status HTTP para quem precisa distinguir um caso específico.
 async function api(caminho, opcoes = {}) {
@@ -120,13 +163,12 @@ function ligarLogin(aoEntrar) {
   loginForm.addEventListener('submit', async e => {
     e.preventDefault();
     loginErro.textContent = '';
-    btnEntrar.disabled = true;
-    btnEntrar.textContent = 'Entrando…';
+    alternarBotaoCarregando(btnEntrar, true, 'Entrando…');
 
     try {
       salvarSessao(await autenticar(loginEmail.value.trim(), loginSenha.value));
       loginForm.reset();
-      loginScreen.style.display = 'none';
+      loginScreen.hidden = true;
       btnSair.hidden = false;
       await aoEntrar();
     } catch (err) {
@@ -134,8 +176,7 @@ function ligarLogin(aoEntrar) {
         ? 'Não foi possível conectar ao servidor. Verifique sua conexão com a internet.'
         : err.message;
     } finally {
-      btnEntrar.disabled = false;
-      btnEntrar.textContent = 'Entrar';
+      alternarBotaoCarregando(btnEntrar, false);
     }
   });
 
@@ -147,14 +188,14 @@ function ligarLogin(aoEntrar) {
 
   exigirLogin = mensagem => {
     encerrarSessao();
-    loginScreen.style.display = 'flex';
+    loginScreen.hidden = false;
     btnSair.hidden = true;
     loginErro.textContent = mensagem;
     loginEmail.focus();
   };
 
   if (restaurarSessao()) {
-    loginScreen.style.display = 'none';
+    loginScreen.hidden = true;
     btnSair.hidden = false;
     Promise.resolve(aoEntrar()).catch(err => {
       exigirLogin('Não foi possível restaurar a sessão. Entre novamente.');
@@ -164,11 +205,57 @@ function ligarLogin(aoEntrar) {
 }
 
 function aviso(texto, alerta = false) {
+  let regiao = document.getElementById('toastRegion');
+  if (!regiao) {
+    regiao = document.createElement('div');
+    regiao.id = 'toastRegion';
+    regiao.className = 'toast-region';
+    regiao.setAttribute('aria-label', 'Notificações');
+    document.body.appendChild(regiao);
+  }
+
   const msg = document.createElement('div');
-  msg.className = alerta ? 'toast alerta' : 'toast';
+  const avisoDeAtencao = alerta && texto.trim().startsWith('⚠️');
+  msg.className = alerta ? 'toast toast-alerta' : 'toast toast-sucesso';
   msg.setAttribute('role', alerta ? 'alert' : 'status');
   msg.setAttribute('aria-live', alerta ? 'assertive' : 'polite');
-  msg.textContent = texto;
-  document.body.appendChild(msg);
-  setTimeout(() => msg.remove(), alerta ? 60000 : 8000);
+
+  const icone = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  icone.classList.add('toast-icon');
+  icone.setAttribute('viewBox', '0 0 24 24');
+  icone.setAttribute('fill', 'none');
+  icone.setAttribute('stroke', 'currentColor');
+  icone.setAttribute('stroke-width', '2');
+  icone.setAttribute('stroke-linecap', 'round');
+  icone.setAttribute('stroke-linejoin', 'round');
+  icone.setAttribute('aria-hidden', 'true');
+  const tracado = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  tracado.setAttribute('d', alerta ? 'M12 8v4m0 4h.01M5.1 19h13.8a1 1 0 0 0 .9-1.5L12.9 5a1 1 0 0 0-1.8 0L4.2 17.5a1 1 0 0 0 .9 1.5Z' : 'm5 12 4 4L19 6');
+  icone.appendChild(tracado);
+
+  const conteudo = document.createElement('div');
+  conteudo.className = 'toast-content';
+  const titulo = document.createElement('strong');
+  titulo.className = 'toast-title';
+  titulo.textContent = alerta ? (avisoDeAtencao ? 'Atenção' : 'Não foi possível concluir') : 'Concluído';
+  const detalhe = document.createElement('span');
+  detalhe.className = 'toast-detail';
+  detalhe.textContent = texto.replace(/^[✅⚠️❌]\s*/, '');
+  conteudo.append(titulo, detalhe);
+
+  const fechar = document.createElement('button');
+  fechar.type = 'button';
+  fechar.className = 'toast-dismiss';
+  fechar.setAttribute('aria-label', 'Fechar notificação');
+  fechar.textContent = 'Fechar';
+
+  const remover = () => msg.remove();
+  const temporizador = setTimeout(remover, alerta ? 60000 : 8000);
+  fechar.addEventListener('click', () => {
+    clearTimeout(temporizador);
+    remover();
+  });
+
+  msg.append(icone, conteudo, fechar);
+  regiao.appendChild(msg);
 }

@@ -16,6 +16,7 @@ const STATUS = ['Julgado', 'Retornou', 'Retirado', 'Vista'];
 const listaPautas = document.getElementById('listaPautas');
 const pautasContainer = document.getElementById('pautasContainer');
 const semPendencia = document.getElementById('semPendencia');
+const pautasIntro = document.getElementById('pautasIntro');
 const detalhePauta = document.getElementById('detalhePauta');
 const tituloPauta = document.getElementById('tituloPauta');
 const tbody = document.querySelector('#julgadosTable tbody');
@@ -41,8 +42,11 @@ function dataBR(iso) {
 // ── Tela 1: pautas pendentes ─────────────────────────────────────────────────
 
 async function carregarPautas() {
-  pautasContainer.innerHTML = '<p class="lead">Carregando…</p>';
-  listaPautas.style.display = 'block';
+  pautasIntro.hidden = true;
+  semPendencia.hidden = true;
+  pautasContainer.replaceChildren(criarIndicadorCarregamento('Buscando pautas com julgamento pendente…'));
+  listaPautas.hidden = false;
+  detalhePauta.hidden = true;
 
   let pendentes;
   try {
@@ -51,7 +55,7 @@ async function carregarPautas() {
       + '&or=(voto.is.null,status.is.null)'
       + '&order=data_sessao.desc,num_processo.asc');
   } catch (err) {
-    pautasContainer.innerHTML = '';
+    mostrarErroDeCarregamento();
     aviso(`❌ Não foi possível carregar os julgados (${err.message}).`, true);
     return;
   }
@@ -67,13 +71,14 @@ async function carregarPautas() {
 }
 
 function mostrarPautas() {
-  detalhePauta.style.display = 'none';
+  detalhePauta.hidden = true;
   btnVoltar.hidden = true;
-  txtModo.textContent = '';
-  listaPautas.style.display = 'block';
+  txtModo.textContent = 'Pautas pendentes';
+  listaPautas.hidden = false;
 
   pautasContainer.innerHTML = '';
   semPendencia.hidden = pendentesPorPauta.size > 0;
+  pautasIntro.hidden = pendentesPorPauta.size === 0;
 
   for (const [chave, processos] of pendentesPorPauta) {
     const [numero, data] = chave.split('|');
@@ -101,6 +106,24 @@ function mostrarPautas() {
   }
 }
 
+function mostrarErroDeCarregamento() {
+  const estado = document.createElement('div');
+  estado.className = 'load-error';
+  estado.setAttribute('role', 'alert');
+
+  const texto = document.createElement('p');
+  texto.textContent = 'Não foi possível carregar as pautas. Verifique sua conexão e tente novamente.';
+
+  const tentarNovamente = document.createElement('button');
+  tentarNovamente.type = 'button';
+  tentarNovamente.className = 'button-secondary';
+  tentarNovamente.textContent = 'Tentar novamente';
+  tentarNovamente.addEventListener('click', carregarPautas);
+
+  estado.append(texto, tentarNovamente);
+  pautasContainer.replaceChildren(estado);
+}
+
 // ── Tela 2: processos da pauta ───────────────────────────────────────────────
 
 function seletor(opcoes, valor, rotulo) {
@@ -109,6 +132,7 @@ function seletor(opcoes, valor, rotulo) {
   const vazio = document.createElement('option');
   vazio.value = '';
   vazio.textContent = rotulo;
+  vazio.disabled = true;
   sel.appendChild(vazio);
 
   opcoes.forEach(o => {
@@ -119,6 +143,9 @@ function seletor(opcoes, valor, rotulo) {
   });
 
   sel.value = valor || '';
+  const atualizarEstado = () => sel.classList.toggle('placeholder-select', !sel.value);
+  atualizarEstado();
+  sel.addEventListener('change', atualizarEstado);
   return sel;
 }
 
@@ -126,8 +153,8 @@ function abrirPauta(chave) {
   const [numero, data] = chave.split('|');
   const processos = pendentesPorPauta.get(chave);
 
-  listaPautas.style.display = 'none';
-  detalhePauta.style.display = 'block';
+  listaPautas.hidden = true;
+  detalhePauta.hidden = false;
   btnVoltar.hidden = false;
   txtModo.textContent = numero === 'null'
     ? `Sessão de ${dataBR(data)}`
@@ -188,8 +215,7 @@ async function salvar() {
     return;
   }
 
-  btnSalvar.disabled = true;
-  btnSalvar.textContent = 'Salvando…';
+  alternarBotaoCarregando(btnSalvar, true, 'Salvando…');
 
   try {
     const gravados = await api('rpc/registrar_votos', {
@@ -201,7 +227,6 @@ async function salvar() {
   } catch (err) {
     aviso(`❌ Falha ao gravar (${err.message}). Nada foi salvo — tente novamente.`, true);
   } finally {
-    btnSalvar.disabled = false;
-    btnSalvar.textContent = 'Salvar julgamentos';
+    alternarBotaoCarregando(btnSalvar, false);
   }
 }

@@ -11,68 +11,89 @@
 
 <body>
   <a class="skip-link" href="#conteudo-principal">Pular para o conteúdo principal</a>
-  <div class="container pt-36">
-    <header>
-      <div class="logo">
-        <img src="assets/logo_header.png" alt="Logo Goiás" width="138" height="66" />
-      </div>
-      <div>
-        <h1>Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</h1>
-        <h2>Sorteio de Processos SEI</h2>
-        <p class="lead">Preencha os campos solicitados, defina a quantidade de processos e sorteie.</p>
-      </div>
-    </header>
+  <div class="page-header-wrapper">
+    <div class="container">
+      <header>
+        <div class="logo">
+          <img src="assets/logo_header.png" alt="Governo de Goiás" width="120" height="55" />
+        </div>
+        <div class="header-copy">
+          <p class="institution-name">Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</p>
+          <h1>Sorteio de Processos SEI</h1>
+          <p class="lead">Preencha os campos solicitados, defina a quantidade de processos e sorteie.</p>
+        </div>
+      </header>
+    </div>
   </div>
 
   <nav class="green-bar" aria-label="Navegação do sistema">
     <div class="container">
-      <span id="txtModo"></span>
-      <button id="btnVoltar" type="button" hidden>← Voltar</button>
-      <button id="btnSair" type="button" hidden>Sair</button>
+      <span id="txtModo">Sorteio de processos</span>
+      <div class="nav-actions">
+        <button id="btnVoltar" class="nav-action" type="button" hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15.5 10h-11"></path>
+            <path d="m8.5 6-4 4 4 4"></path>
+          </svg>
+          <span>Voltar</span>
+        </button>
+        <button id="btnSair" class="nav-action" type="button" hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"></path>
+            <path d="m11 7 3 3-3 3"></path>
+            <path d="M14 10H8"></path>
+          </svg>
+          <span>Sair</span>
+        </button>
+      </div>
     </div>
   </nav>
 
   <main id="conteudo-principal" class="container pb-36" tabindex="-1">
     <div class="card">
       <div id="loginScreen">
-        <h3>Acesso restrito</h3>
+        <h2>Acesso restrito</h2>
         <p>Identifique-se para realizar o sorteio de processos.</p>
         <form id="loginForm">
-          <label class="sr-only" for="loginEmail">E-mail</label>
-          <input id="loginEmail" type="email" placeholder="E-mail" autocomplete="username" required>
-          <label class="sr-only" for="loginSenha">Senha</label>
-          <input id="loginSenha" type="password" placeholder="Senha" autocomplete="current-password" required>
+          <label for="loginEmail">E-mail</label>
+          <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
+          <label for="loginSenha">Senha</label>
+          <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
           <button id="btnEntrar" type="submit">Entrar</button>
           <div id="loginErro" role="alert" aria-live="assertive"></div>
         </form>
       </div>
 
-      <div id="modeSelector">
-        <h3>Selecione a unidade de sorteio para começar:</h3>
+      <div id="modeSelector" hidden>
+        <h2>Selecione a unidade de sorteio para começar</h2>
+        <p class="mode-description">Escolha o colegiado responsável pela distribuição dos processos.</p>
         <div class="buttons-wrapper">
-          <button id="btnCreg">Conselho Regulador (CREG)</button>
-          <button id="btnCj">Câmara de Julgamento (CJ)</button>
+          <button id="btnCreg" class="mode-button" type="button">Conselho Regulador (CREG)</button>
+          <button id="btnCj" class="mode-button" type="button">Câmara de Julgamento (CJ)</button>
         </div>
         <p class="atalho">
-          <a href="./julgados.html">Registrar voto e status das sessões da Câmara de Julgamento →</a>
+          <a class="button-secondary session-link" href="./julgados.html">Registrar voto e status das sessões da Câmara de Julgamento</a>
         </p>
       </div>
 
-      <div id="sorteadorContent">
-        <div class="controls">
+      <div id="sorteadorContent" hidden>
+        <div id="sortControls" class="controls">
           <label for="numRows">Quantidade de processos:</label>
-          <input id="numRows" type="number" min="1" value="3">
-          <button id="createRows" type="button">Gerar</button>
+          <input id="numRows" type="number" min="1" max="500" value="3" aria-describedby="processSetupHint processFormMessage">
+          <button id="createRows" class="button-primary" type="button">Gerar linhas</button>
           <div id="spacer"></div>
-          <button id="sortear" class="secondary" type="button">Sortear CREG e Exportar</button>
+          <button id="sortear" class="button-primary" type="button" hidden>Sortear CREG e Exportar</button>
         </div>
+        <p id="processSetupHint" class="form-hint">Defina a quantidade e gere as linhas para começar o preenchimento.</p>
+        <p id="processFormMessage" class="form-message" role="alert" hidden></p>
 
-        <div id="cregSelector">
-          <span>Selecione as unidades que <strong class="text-danger">não</strong> vão participar:</span>
-          <div id="pillsContainer"></div>
-        </div>
+        <div id="processEntry" hidden>
+          <div id="cregSelector">
+            <span>Selecione as unidades que <strong class="text-danger">não</strong> vão participar:</span>
+            <div id="pillsContainer"></div>
+          </div>
 
-        <div class="table-scroll" role="region" aria-label="Processos para sorteio" tabindex="0">
+          <div class="table-scroll" role="region" aria-label="Processos para sorteio" tabindex="0">
         <table id="processTable">
           <thead>
             <tr>
@@ -83,17 +104,24 @@
               <th class="hidden">Data de Distribuição</th>
               <th id="thRecurso">Recurso</th>
               <th id="thUnidade">Unidade Conselho Regulador</th>
-              <th></th>
+              <th><span class="sr-only">Ações</span></th>
             </tr>
           </thead>
           <tbody></tbody>
         </table>
+          </div>
+
+          <footer>
+            <div>Desenvolvido por <strong>Lucas Lustosa Coelho</strong>.</div>
+            <button id="addRowBtn" class="button-secondary" type="button">Adicionar linha</button>
+          </footer>
         </div>
 
         <!-- Seção de Resultados Pós-Sorteio -->
-        <div id="resultadoSorteio">
-          <h3>Resultado do Sorteio</h3>
-          
+        <div id="resultadoSorteio" hidden>
+          <h2>Resultado do Sorteio</h2>
+          <div id="resultadoStatus" hidden></div>
+
           <div id="resumoContagem">
             <!-- Exemplo: CREG1: 2 processos | CREG2: 3 processos -->
           </div>
@@ -113,21 +141,19 @@
           </div>
         </div>
 
-        <footer>
-          <div>Desenvolvido por <strong>Lucas Lustosa Coelho</strong>.</div>
-          <button id="addRowBtn" type="button">Adicionar linha</button>
-        </footer>
       </div>
     </div>
   </main>
 
   <footer class="page-footer">
     <div class="footer-container">
-      <img src="assets/logo_footer.png" alt="Estado de Goiás" class="footer-logo" width="139" height="65" />
-      <div class="footer-info">
+      <div class="logo footer-logo">
+        <img src="assets/logo_footer.png" alt="Estado de Goiás" width="104" height="48" />
+      </div>
+      <p class="footer-info">
         Este sorteio segue regras de distribuição igualitária e proporcional por assunto e carga total de processos.<br>
         Todos os sorteios são auditáveis para garantir transparência.
-      </div>
+      </p>
     </div>
   </footer>
 
