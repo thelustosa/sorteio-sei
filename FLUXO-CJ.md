@@ -7,6 +7,10 @@ peça faz, por que foi feita assim, e onde estão as regras.
 O Conselho Regulador (CREG) não está aqui — continua na tabela
 `processos_sorteados` até ganhar o mesmo par de tabelas.
 
+> **Reinício em 19/08/2026.** A série de julgados recomeçou nessa data: o
+> histórico importado da planilha saiu das tabelas de produção e ficou guardado
+> no schema `backup_cj`. Ver *Reinício da série*, mais abaixo.
+
 ---
 
 ## O ciclo em uma imagem
@@ -172,8 +176,9 @@ rodou.
 
 ### O número da pauta não é chave — a data é
 
-`julgados_cj.pauta` guarda coisas diferentes conforme o ano, e isso é uma
-decisão registrada, não um defeito pendente:
+De 2026 em diante `julgados_cj.pauta` guarda o número da AGR, gravado pela
+sincronização. O que segue vale para o histórico da planilha, hoje em
+`backup_cj`, e explica por que a data continua sendo a chave para agrupar:
 
 | ano | numeração | confere com a AGR |
 |---|---|---|
@@ -189,7 +194,8 @@ ao longo do ano (até +3 em 2024 e +5 em 2025).
 
 Renumerar o histórico para seguir a AGR reescreveria 1.678 das 3.146 linhas e 62
 sessões de registro administrativo, trocando o número que a própria Câmara usou
-pelo de outra contagem. A decisão foi **não renumerar**.
+pelo de outra contagem. A decisão foi **não renumerar** — e, com o reinício da
+série, esse histórico saiu das tabelas de produção de qualquer forma.
 
 Em consequência:
 
@@ -342,7 +348,84 @@ pendente e reaparece na próxima vez.
 
 ---
 
-## 5. A API
+## 5. Reinício da série (19/08/2026)
+
+O histórico da planilha ia até 20/06/2026 e trazia junto as inconsistências de
+três anos de digitação. A Câmara optou por recomeçar: guardar apenas os
+processos ainda **não julgados** e registrar os julgamentos dali em diante pelo
+próprio sistema.
+
+```text
+backup_cj.sql    →  copiou acervo_cj, julgados_cj e pautas_cj para o schema backup_cj
+(limpeza)        →  zerou julgados_cj
+                    tirou do acervo todo processo que aparecia em julgados_cj
+                    gravou o marco de início da nova série
+restaurar_cj.sql →  desfaz tudo e devolve o histórico
+```
+
+O script de limpeza era de execução única e saiu do repositório depois de
+cumprir o papel; ele está no histórico do Git. O backup e a restauração ficam,
+porque continuam valendo.
+
+O que aconteceu, em números: o acervo foi de **3.199 para 37 distribuições** e
+os julgados de **3.144 para 0**. As 37 que ficaram são de maio e junho de 2026 e
+nunca passaram por uma sessão.
+
+Antes de escrever o script, duas hipóteses de risco foram medidas e **as duas
+deram zero**:
+
+- nenhuma distribuição do acervo é posterior ao último julgamento do seu
+  processo — não existe processo que tenha voltado e ainda espere sessão;
+- o último julgamento de todos os 3.075 processos julgados tem status
+  `Julgado`; nenhum parou em `Retornou`, `Retirado` ou `Vista`.
+
+Por isso "processo já julgado" e "distribuição já julgada" davam o mesmo
+resultado, e o script usa a regra simples.
+
+### O marco de início
+
+`pautas_cj` ganha uma linha com `url = 'marco:inicio-da-serie'`. Não é um
+documento: é como a sincronização sabe a partir de quando começar. Ela processa
+as sessões **posteriores** à sessão mais recente que o banco conhece — e com
+`julgados_cj` vazia, sem esse marco, reimportaria o ano inteiro.
+
+A data é o dia anterior a hoje no fuso de Goiás, para que uma sessão de hoje
+ainda entre. O fuso é explícito porque o banco roda em UTC e, à noite, o
+`current_date` de lá já é o dia seguinte aqui.
+
+Relatórios que contem documentos de pauta devem filtrar `url like 'https://%'`.
+
+### O acervo fica vazio por um tempo
+
+Consequência direta e esperada: os processos que vierem nas próximas pautas não
+estarão no acervo, então entrarão com `acervo_id` nulo e sem relator, defesa nem
+data de distribuição. Isso se resolve conforme a Câmara passar a sortear pelo
+sistema — cada sorteio alimenta o acervo, e os julgados seguintes já encontram
+o processo.
+
+### Restaurar
+
+Os três scripts são **um comando só cada** — um único bloco `do $$ … $$`. Não é
+estilo: o SQL Editor do Supabase fala com o banco por um pooler em modo
+transação, e comandos separados podem cair em conexões diferentes. Ali
+`begin;…commit;` não segura nada e tabela temporária desaparece entre um comando
+e outro. Num bloco único, ou tudo passa ou nada é gravado.
+
+A lista de processos julgados que a limpeza usa sai de `backup_cj.julgados_cj`,
+e não da tabela que ela mesma acabou de esvaziar — por isso o script pode ser
+repetido, e termina o serviço mesmo se uma tentativa anterior parou no meio.
+
+O `restaurar_cj.sql` devolve as três tabelas ao estado do backup. Dois detalhes
+que fazem um restore ingênuo falhar, e por isso ele lista as colunas uma a uma:
+as colunas `id` são `generated always as identity` e exigem
+`overriding system value`; `dias_dt` e `periodo_dt` são geradas e recusam
+qualquer valor — o banco as recalcula. O gatilho é desligado durante a carga
+para que os campos derivados voltem como estavam, e as sequências são
+reposicionadas no fim.
+
+---
+
+## 6. A API
 
 Não existe backend próprio. O Supabase **é** a API: PostgREST na frente do
 Postgres, e as regras moram no banco.
@@ -398,7 +481,7 @@ com a `SUPABASE_DB_URL`, guardada nos secrets do GitHub.
 
 ---
 
-## 6. As tabelas
+## 7. As tabelas
 
 ```mermaid
 erDiagram
@@ -457,14 +540,15 @@ Chaves e índices que sustentam as regras:
 
 ---
 
-## 7. Arquivos
+## 8. Arquivos
 
 | arquivo | papel |
 |---|---|
 | [`schema.sql`](schema.sql) | tabelas, gatilho, função de registro, RLS — estado final do banco |
-| [`verificacao_cj.sql`](verificacao_cj.sql) | 24 conferências de consistência, só leitura |
-| [`correcoes_cj.sql`](correcoes_cj.sql) | correções pontuais do histórico, cada uma com conferência que desfaz |
-| [`migracao_cj.sql`](migracao_cj.sql) | move os sorteios CJ da tabela antiga para `acervo_cj` |
+| [`verificacao_cj.sql`](verificacao_cj.sql) | conferências de consistência, só leitura |
+| [`backup_cj.sql`](backup_cj.sql) | copia as três tabelas para o schema backup_cj |
+| [`restaurar_cj.sql`](restaurar_cj.sql) | devolve o backup às tabelas de produção |
+
 | [`dados/importar_planilha.py`](dados/importar_planilha.py) | converte a planilha histórica em SQL de importação |
 | [`sincronizacao/agr.py`](sincronizacao/agr.py) | listagem e download, só do portal do Estado de Goiás |
 | [`sincronizacao/pauta.py`](sincronizacao/pauta.py) | texto do PDF, data, processos, exclusão da Referência |
@@ -477,7 +561,7 @@ Chaves e índices que sustentam as regras:
 
 ---
 
-## 8. Tratamento de falhas
+## 9. Tratamento de falhas
 
 | situação | o que acontece |
 |---|---|
@@ -495,32 +579,53 @@ entrou nem impede o processamento dos demais.
 
 ---
 
-## 9. O que ainda não está resolvido
+## 10. O que ainda não está resolvido
 
+Revisto depois do reinício da série, em 20/08/2026.
+
+### Do sistema
+
+- **O acervo está em reconstrução.** Sobraram 37 distribuições, e nenhuma
+  corresponde aos processos que virão nas próximas pautas. Até a Câmara passar a
+  sortear pelo sistema, todo julgado sincronizado entra com `acervo_id` nulo e
+  sem relator, defesa nem data de distribuição. Não é defeito: é o preço do
+  recomeço, e se resolve sozinho conforme os sorteios alimentarem o acervo.
+- **Cadeira × conselheiro.** As 37 linhas que sobraram vieram da planilha e
+  trazem o **nome** do conselheiro em `relator`; tudo o que o sorteio gravar dali
+  em diante traz a **cadeira** (`CJ1`..`CJ5`). Não existe de-para entre os dois,
+  então relatório que cruze as duas origens não fecha. Resolver isso é uma
+  tabela pequena ligando cadeira e conselheiro por período.
+- **`interessado` fica nulo nos julgados automáticos.** A aba Acervo da planilha
+  nunca teve essa coluna, então nem as 37 linhas remanescentes ajudam; e o PDF
+  da pauta traz o nome, mas quebrado entre linhas — extraí-lo produziria lixo.
+  Preferimos nulo a dado errado num registro público. Entra sozinho quando o
+  processo for sorteado pelo sistema, que coleta o interessado na tela.
+- **Edição concorrente.** Se duas pessoas abrirem a mesma pauta ao mesmo tempo,
+  vale quem salvar por último. Aceitável para uma secretaria de duas pessoas;
+  se um dia incomodar, o caminho é comparar `atualizado_em` antes de gravar.
 - **CREG** continua em `processos_sorteados`. A estrutura está pronta para
   ganhar `acervo_creg` e `julgados_creg` com a mesma lógica.
-- **Cadeira × conselheiro**: `relator` guarda `CJ1`..`CJ5` quando vem do sorteio
-  e o nome do conselheiro quando veio da planilha. Não existe de-para entre os
-  dois; relatórios que cruzem as duas origens precisam disso.
-- **Interessado nos julgados automáticos** fica nulo. O PDF traz o nome, mas ele
-  quebra entre linhas e extraí-lo produziria lixo — preferimos nulo a dado
-  errado num registro público.
-- **Edição concorrente**: se duas pessoas abrirem a mesma pauta ao mesmo tempo,
-  vale quem salvar por último.
-- **Duas pautas duplicadas em 2025** (46 e 56), descritas acima: ficam como
-  estão porque corrigi-las exigiria inventar o número.
-- **Um julgado com sessão anterior à distribuição**: o processo tem uma única
-  distribuição registrada e ela é posterior ao julgamento. O dado que falta — a
-  distribuição original — nunca foi registrado em lugar nenhum.
 
-Já resolvidos, e mantidos aqui como histórico do que foi encontrado:
+### Do histórico, que hoje vive em `backup_cj`
+
+Nada disso afeta a produção; fica registrado porque volta junto se alguém rodar
+o `restaurar_cj.sql`.
+
+- **Duas pautas duplicadas em 2025** (46 e 56). Corrigi-las exigiria inventar o
+  número: para a 46 havia dois candidatos livres (48 e 49) e para a 56 nenhum.
+- **Um julgado com sessão anterior à distribuição.** O processo tem uma única
+  distribuição registrada e ela é posterior ao julgamento; a distribuição
+  original nunca foi anotada em lugar nenhum.
+- **A numeração da pauta de 2024 e 2025** não bate com a da AGR, pelo motivo
+  explicado na seção 2. Decidiu-se não renumerar.
+
+Encontrados e corrigidos antes do reinício, mantidos aqui como registro:
 
 - **24 linhas com data errada**: linhas 3067–3090 da planilha, todas
   `pauta = 17`, com datas incrementando de dia em dia de 28/05 a 20/06/2026,
   incluindo sábados e domingos. Arrastão de célula no Excel; a 17ª reunião foi
-  só em 28/05. Corrigido por `correcoes_cj.sql`. É também a razão de a
-  sincronização não confiar apenas em `max(data_sessao)` — `pautas_cj` registra
-  cada documento pela URL.
+  só em 28/05. É também a razão de a sincronização não confiar apenas em
+  `max(data_sessao)` — `pautas_cj` registra cada documento pela URL.
 - **33 julgados com sessão anterior à distribuição**, efeito da fórmula
   `AGGREGATE(…;1)` da planilha, que trazia a redistribuição posterior no lugar
   da distribuição vigente. Rederivados; sobrou o caso sem solução acima.

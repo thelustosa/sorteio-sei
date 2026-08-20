@@ -4,7 +4,7 @@
     python tests/test_cj.py ["C:/caminho/Câmara de Julgamento - REG.xlsx"]
 
 Sobe um container postgres descartável (é o mesmo motor do Supabase), aplica
-schema.sql e migracao_cj.sql, importa a planilha e confere que o banco reproduz
+schema.sql, importa a planilha e confere que o banco reproduz
 as regras que hoje só existem nas fórmulas. Sem a planilha, os testes que
 dependem dela são pulados e o resto roda igual.
 
@@ -177,30 +177,9 @@ def gatilho_roda_com_privilegio_proprio(cur):
     assert config and any(c.startswith('search_path=') for c in config)
 
 
-# ── Testes: migração da tabela antiga ────────────────────────────────────────
-
-@teste
-def migracao_move_cj_e_preserva_creg(cur):
-    """O que era CJ vira acervo, o que é CREG fica onde está, nada se perde."""
-    assert uma(cur, "select count(*) from processos_sorteados where modo = 'CJ'") == 0
-    assert uma(cur, "select count(*) from processos_sorteados where modo = 'CREG'") == 2
-
-    cur.execute("""select num_processo, interessado, relator, data_distribuicao,
-                          assunto, recurso, ordem, origem
-                     from acervo_cj where origem = 'sorteio' order by num_processo""")
-    assert cur.fetchall() == [
-        ('202400029000001', 'EMPRESA A LTDA', 'CJ1', date(2026, 8, 1),
-         'Auto de Infração', 'Com recurso', 1, 'sorteio'),
-        ('202400029000002', 'EMPRESA B LTDA', 'CJ2', date(2026, 8, 1),
-         'Auto de Infração', 'Sem recurso', 2, 'sorteio'),
-    ]
-    assert uma(cur, """select sorteado_em is not null from acervo_cj
-                        where num_processo = '202400029000001'""") is True
-
-
 @teste
 def tabela_antiga_recusa_cj(cur):
-    """Depois da migração não há como um processo CJ voltar para a tabela velha."""
+    """processos_sorteados é só do CREG: processo da Câmara não entra ali."""
     try:
         cur.execute("""insert into processos_sorteados
                        (modo, data_hora, ordem, num_processo, interessado, assunto,
@@ -212,14 +191,6 @@ def tabela_antiga_recusa_cj(cur):
     finally:
         cur.connection.rollback()
     raise AssertionError('processos_sorteados ainda aceita CJ')
-
-
-@teste
-def migracao_e_idempotente(cur):
-    """Rodar a migração de novo não duplica nem apaga."""
-    antes = uma(cur, 'select count(*) from acervo_cj')
-    rodar_arquivo(RAIZ / 'migracao_cj.sql')
-    assert uma(cur, 'select count(*) from acervo_cj') == antes
 
 
 # ── Testes: importação da planilha ───────────────────────────────────────────
@@ -715,33 +686,6 @@ def dados_importados_nao_produzem_nenhum_erro(cur):
 
 
 @teste
-@exige_planilha
-def correcoes_deixam_os_dados_consistentes(cur):
-    """As correções de correcoes_cj.sql resolvem o que prometem, sem perder linha."""
-    antes = uma(cur, 'select count(*) from julgados_cj')
-
-    # As duas correções, sem os blocos de conferência (que fazem commit próprio).
-    cur.execute("""update julgados_cj set data_sessao = date '2026-05-28'
-                    where pauta = 17 and extract(year from data_sessao) = 2026
-                      and data_sessao <> date '2026-05-28'""")
-    cur.execute("""update julgados_cj j
-                      set data_distribuicao = null, relator = null, defesa = null
-                    where j.dias_dt < 0
-                      and exists (select 1 from acervo_cj a
-                                   where a.num_processo = j.num_processo
-                                     and a.data_distribuicao <= j.data_sessao)""")
-
-    assert uma(cur, 'select count(*) from julgados_cj') == antes, 'perdeu ou criou linha'
-    assert uma(cur, """select count(*) from julgados_cj
-                        where extract(isodow from data_sessao) in (6, 7)""") == 0
-    assert uma(cur, """select count(distinct data_sessao) from julgados_cj
-                        where pauta = 17 and extract(year from data_sessao) = 2026""") == 1
-    assert uma(cur, 'select count(*) from julgados_cj where dias_dt < 0') == 1
-    assert uma(cur, 'select count(*) from julgados_cj where acervo_id is null') == 0
-    cur.connection.rollback()
-
-
-@teste
 def rotulos_da_pagina_batem_com_os_do_banco(cur):
     """julgados.js e registrar_votos precisam aceitar exatamente a mesma lista.
 
@@ -785,33 +729,60 @@ def colunas_que_o_index_js_envia_existem(cur):
     assert trecho.index("=== 'CJ'") < trecho.index('defesa:') < trecho.index('recurso:')
 
 
+@teste
+@exige_planilha
+def backup_e_restauracao_fecham_o_ciclo(cur):
+    """Backup → estrago → restauração devolve o banco exatamente como estava.
+
+    Testa o caminho inteiro porque um backup que não se restaura não é backup:
+    as colunas id são identity e dias_dt/periodo_dt são geradas, e as duas
+    coisas quebram um `insert ... select *` ingênuo.
+
+    Os scripts abrem transação própria em outra conexão, então este teste
+    fecha a sua antes de cada um — senão os locks se cruzam e o banco trava.
+    """
+    def conta():
+        cur.connection.commit()
+        with PG.conectar() as c, c.cursor() as k:
+            return (uma(k, 'select count(*) from acervo_cj'),
+                    uma(k, 'select count(*) from julgados_cj'))
+
+    def valor(sql):
+        with PG.conectar() as c, c.cursor() as k:
+            return uma(k, sql)
+
+    antes = conta()
+
+    PG.rodar_arquivo(RAIZ / 'backup_cj.sql')
+
+    # Um estrago do tamanho do que a limpeza fez em produção: julgados zerados e
+    # o acervo reduzido ao que nunca foi julgado.
+    PG.executar("""
+        delete from public.julgados_cj;
+        delete from public.acervo_cj a
+         where exists (select 1 from backup_cj.julgados_cj j
+                        where j.num_processo = a.num_processo);
+    """)
+
+    acervo, julgados = conta()
+    assert julgados == 0 and 0 < acervo < antes[0]
+
+    PG.rodar_arquivo(RAIZ / 'restaurar_cj.sql')
+
+    assert conta() == antes, 'a restauração não devolveu os mesmos totais'
+    assert valor('select count(*) from julgados_cj where dias_dt is null') == 0
+    assert valor("""select count(*) from julgados_cj j
+                     where j.acervo_id is not null
+                       and not exists (select 1 from acervo_cj a where a.id = j.acervo_id)""") == 0
+
+    PG.executar('drop schema backup_cj cascade')
+
+
 # ── Runner ───────────────────────────────────────────────────────────────────
 
 def preparar_banco(planilha):
     rodar_arquivo(RAIZ / "schema.sql")
     rodar_arquivo(RAIZ / "schema.sql")  # aplicar por cima de si mesmo é no-op
-
-    # A tabela antiga com dados dos dois modos, como está hoje em produção.
-    PG.executar("""
-        alter table public.processos_sorteados drop constraint processos_sorteados_modo_check;
-        alter table public.processos_sorteados
-          add constraint processos_sorteados_modo_check check (modo in ('CREG', 'CJ'));
-        insert into public.processos_sorteados
-          (modo, data_hora, ordem, num_processo, interessado, assunto,
-           data_distribuicao, recurso, unidade) values
-          ('CJ',   timestamptz '2026-08-01 10:00-03', 1, '202400029000001', 'EMPRESA A LTDA',
-           'Auto de Infração', date '2026-08-01', 'Com recurso', 'CJ1'),
-          ('CJ',   timestamptz '2026-08-01 10:00-03', 2, '202400029000002', 'EMPRESA B LTDA',
-           'Auto de Infração', date '2026-08-01', 'Sem recurso', 'CJ2'),
-          ('CJ',   timestamptz '2026-08-01 10:00-03', 2, '202400029000002', 'EMPRESA B LTDA',
-           'Auto de Infração', date '2026-08-01', 'Sem recurso', 'CJ2'),
-          ('CREG', timestamptz '2026-08-02 10:00-03', 1, '202400029000003', 'EMPRESA C LTDA',
-           'Requerimento', date '2026-08-02', 'Não se aplica', 'CREG1'),
-          ('CREG', timestamptz '2026-08-02 10:00-03', 2, '202400029000004', 'EMPRESA D LTDA',
-           'Minuta', date '2026-08-02', 'Não se aplica', 'CREG2');
-    """)
-
-    rodar_arquivo(RAIZ / 'migracao_cj.sql')
 
     if planilha:
         subprocess.run([sys.executable, str(RAIZ / 'dados' / 'importar_planilha.py'),

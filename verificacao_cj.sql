@@ -97,7 +97,7 @@ select 10, 'AVISO',
 union all
 select 11, 'AVISO',
        'Mesma pauta em datas de sessão diferentes',
-       'esperado: 2 casos conhecidos em 2025 (pautas 46 e 56). Acima disso, investigue',
+       'uma reunião tem uma data só; várias datas indicam data preenchida errada',
        (select count(*) from (
           select 1 from public.julgados_cj
            where pauta is not null
@@ -107,7 +107,7 @@ select 11, 'AVISO',
 union all
 select 11.5, 'AVISO',
        'Numeração da pauta andando para trás',
-       'esperado: 1 caso conhecido (21/10/2025). Acima disso, número trocado',
+       'a numeração cresce com o tempo; recuar indica número trocado',
        (select count(*) from (
           select 1 from (
             select extract(year from data_sessao)::int as ano, pauta,
@@ -197,7 +197,7 @@ union all
 select 23, 'INFO',
        'Pautas já sincronizadas da AGR',
        'documentos processados por sincronizacao/sincronizar.py',
-       (select count(*) from public.pautas_cj)
+       (select count(*) from public.pautas_cj where url like 'https://%')
 
 union all
 select 24, 'ERRO',

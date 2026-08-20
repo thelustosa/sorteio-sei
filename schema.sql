@@ -3,10 +3,6 @@
 -- do banco: pode ser aplicado num projeto novo ou por cima do atual (todo
 -- comando é "if not exists" / "create or replace").
 --
--- Se o banco já está em produção com a tabela antiga, rode DEPOIS o
--- migracao_cj.sql — é ele que move os processos da Câmara de Julgamento que
--- hoje vivem em processos_sorteados para acervo_cj.
---
 -- Nomes: o Postgres derruba para minúsculas todo identificador sem aspas, então
 -- Acervo_CJ e acervo_cj são a mesma tabela. As tabelas ficam em minúsculo para
 -- não obrigar aspas em toda consulta.
@@ -164,6 +160,11 @@ create table if not exists public.pautas_cj (
 );
 
 create index if not exists idx_pautas_cj_sessao on public.pautas_cj (data_sessao desc);
+
+-- Uma linha desta tabela pode não ser um documento: existe um marco com url
+-- 'marco:inicio-da-serie', gravado quando a série de julgados foi reiniciada em
+-- 19/08/2026, e é ele que diz à sincronização a partir de quando começar.
+-- Relatórios que contem documentos devem filtrar por url like 'https://%'.
 
 alter table public.pautas_cj enable row level security;
 
