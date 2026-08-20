@@ -661,6 +661,16 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   line-height: 1.5;
 }
 
+.footer-version {
+  display: flex;
+  align-items: center;
+  margin-inline-start: auto;
+  color: var(--on-accent-muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 /* Notificações */
 .toast-region {
   position: fixed;
@@ -831,6 +841,10 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     border-top: 1px solid var(--on-accent-divider);
     border-inline-start: 0;
     text-align: center;
+  }
+
+  .footer-version {
+    margin-inline-start: 0;
   }
 }
 
