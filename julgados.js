@@ -51,7 +51,7 @@ async function carregarPautas() {
   let pendentes;
   try {
     pendentes = await api(
-      'julgados_cj?select=id,num_processo,interessado,relator,data_sessao,pauta,voto,status'
+      'julgados_cj?select=id,num_processo,relator,data_sessao,pauta,voto,status'
       + '&or=(voto.is.null,status.is.null)'
       + '&order=data_sessao.desc,num_processo.asc');
   } catch (err) {
@@ -169,20 +169,19 @@ function abrirPauta(chave) {
     const proc = document.createElement('td');
     proc.textContent = j.num_processo;
 
-    const interessado = document.createElement('td');
-    interessado.textContent = j.interessado || '—';
-
     const relator = document.createElement('td');
     relator.className = 'small';
     relator.textContent = j.relator || '— fora do acervo —';
 
     const tdVoto = document.createElement('td');
+    tdVoto.className = 'col-voto';
     tdVoto.appendChild(seletor(VOTOS, j.voto, 'Selecione o voto'));
 
     const tdStatus = document.createElement('td');
+    tdStatus.className = 'col-status';
     tdStatus.appendChild(seletor(STATUS, j.status, 'Selecione o status'));
 
-    tr.append(proc, interessado, relator, tdVoto, tdStatus);
+    tr.append(proc, relator, tdVoto, tdStatus);
     tbody.appendChild(tr);
   });
 
@@ -192,8 +191,8 @@ function abrirPauta(chave) {
 function linhasDaTela() {
   return Array.from(tbody.querySelectorAll('tr')).map(tr => ({
     id: Number(tr.dataset.id),
-    voto: tr.children[3].querySelector('select').value,
-    status: tr.children[4].querySelector('select').value
+    voto: tr.querySelector('.col-voto select').value,
+    status: tr.querySelector('.col-status select').value
   }));
 }
 

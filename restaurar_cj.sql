@@ -19,6 +19,10 @@
 --   * dias_dt e periodo_dt são colunas geradas e recusam qualquer valor — o
 --     backup as copiou como dado comum e o banco vai recalculá-las.
 --
+-- O backup foi feito quando ainda existia a coluna `interessado`, que saiu do
+-- sistema depois. Ela simplesmente não é restaurada — por isso as colunas são
+-- listadas, e não copiadas com `select *`.
+--
 -- O gatilho fica desligado durante a carga para que os campos derivados voltem
 -- exatamente como estavam, e as sequências são reposicionadas no fim.
 
@@ -40,17 +44,17 @@ begin
   alter table public.julgados_cj disable trigger julgados_cj_derivar;
 
   insert into public.acervo_cj
-    (id, num_processo, interessado, relator, data_distribuicao, defesa, assunto,
+    (id, num_processo, relator, data_distribuicao, defesa, assunto,
      ordem, recurso, sorteado_em, origem, criado_em) overriding system value
-  select id, num_processo, interessado, relator, data_distribuicao, defesa, assunto,
+  select id, num_processo, relator, data_distribuicao, defesa, assunto,
          ordem, recurso, sorteado_em, origem, criado_em
     from backup_cj.acervo_cj;
 
   insert into public.julgados_cj
-    (id, acervo_id, num_processo, interessado, data_sessao, pauta, voto, status,
+    (id, acervo_id, num_processo, data_sessao, pauta, voto, status,
      defesa, relator, data_distribuicao, criado_em, atualizado_em,
      atualizado_por) overriding system value
-  select id, acervo_id, num_processo, interessado, data_sessao, pauta, voto, status,
+  select id, acervo_id, num_processo, data_sessao, pauta, voto, status,
          defesa, relator, data_distribuicao, criado_em, atualizado_em, atualizado_por
     from backup_cj.julgados_cj;
 

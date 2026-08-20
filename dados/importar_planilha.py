@@ -119,7 +119,6 @@ def ler_julgados(ws):
             continue
         linhas.append({
             'num_processo': num,
-            'interessado': texto(ws.cell(r, 2).value),
             'defesa': defesa(ws.cell(r, 3).value),
             'data_sessao': dia(ws.cell(r, 4).value),
             'voto': rotulo(ws.cell(r, 5).value, VOTOS),
@@ -186,7 +185,7 @@ def main(argv):
 
     (saida / 'julgados_cj.sql').write_text(gerar_sql(
         'julgados_cj',
-        ['num_processo', 'interessado', 'data_sessao', 'pauta', 'voto', 'status',
+        ['num_processo', 'data_sessao', 'pauta', 'voto', 'status',
          'defesa', 'relator', 'data_distribuicao'],
         julgados, 'julgados_cj_sessao_unica',
         f'Julgados da Câmara de Julgamento — {len(julgados)} sessões ({planilha.name}).',

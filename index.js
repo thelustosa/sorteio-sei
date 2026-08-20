@@ -131,14 +131,12 @@ function createRowElement(index) {
   const tr = document.createElement('tr');
   const tdOrdem = document.createElement('td'); tdOrdem.className = 'num'; tdOrdem.dataset.label = 'Ordem'; tdOrdem.textContent = index;
   const tdProc = document.createElement('td');
+  tdProc.className = 'col-processo';
   tdProc.dataset.label = 'Nº Processo';
   const inpProc = document.createElement('input'); inpProc.type = 'text'; inpProc.placeholder = 'Digite o nº do processo'; inpProc.setAttribute('aria-label', `Número do processo, linha ${index}`);
   tdProc.appendChild(inpProc);
-  const tdInt = document.createElement('td');
-  tdInt.dataset.label = 'Interessado';
-  const inpInt = document.createElement('input'); inpInt.type = 'text'; inpInt.placeholder = 'Interessado'; inpInt.setAttribute('aria-label', `Interessado, linha ${index}`);
-  tdInt.appendChild(inpInt);
   const tdAss = document.createElement('td');
+  tdAss.className = 'col-assunto';
   tdAss.dataset.label = 'Assunto';
   const selAss = document.createElement('select'); selAss.setAttribute('aria-label', `Assunto, linha ${index}`);
   const optDefaultAss = document.createElement('option'); optDefaultAss.value = ''; optDefaultAss.textContent = 'Selecione o Assunto'; optDefaultAss.disabled = true; optDefaultAss.selected = true;
@@ -151,9 +149,10 @@ function createRowElement(index) {
     selAss.classList.add('fixed-field');
   }
   tdAss.appendChild(selAss);
-  const tdData = document.createElement('td'); tdData.className = 'hidden';
+  const tdData = document.createElement('td'); tdData.className = 'hidden col-data';
   const inpData = document.createElement('input'); inpData.type = 'text'; inpData.placeholder = 'Data (oculta)'; tdData.appendChild(inpData);
   const tdRec = document.createElement('td');
+  tdRec.className = 'col-decisao';
   tdRec.dataset.label = modoSorteio === 'CJ' ? 'Defesa' : 'Recurso';
   const selRec = document.createElement('select'); selRec.setAttribute('aria-label', `${modoSorteio === 'CJ' ? 'Defesa' : 'Recurso'}, linha ${index}`);
   const optDefaultRec = document.createElement('option'); optDefaultRec.value = ''; optDefaultRec.textContent = modoSorteio === 'CJ' ? 'Houve defesa?' : 'Selecione o tipo de recurso'; optDefaultRec.disabled = true; optDefaultRec.selected = true;
@@ -198,7 +197,7 @@ function createRowElement(index) {
   });
   tdDel.appendChild(btnDel);
 
-  tr.append(tdOrdem, tdProc, tdInt, tdAss, tdData, tdRec, tdUn, tdDel);
+  tr.append(tdOrdem, tdProc, tdAss, tdData, tdRec, tdUn, tdDel);
   return tr;
 }
 
@@ -225,23 +224,21 @@ function sortearProcessos() {
   const numerosVistos = new Map();
   for (let idx = 0; idx < rows.length; idx++) {
     const r = rows[idx];
-    const cells = Array.from(r.children);
-    const numProc = cells[1].querySelector('input').value.trim();
-    const interessado = cells[2].querySelector('input').value.trim();
-    const assunto = cells[3].querySelector('select').value;
-    const defesaOuRecurso = cells[5].querySelector('select').value;
+    const campoProc = r.querySelector('.col-processo input');
+    const campoAssunto = r.querySelector('.col-assunto select');
+    const campoDecisao = r.querySelector('.col-decisao select');
+    const numProc = campoProc.value.trim();
 
-    if (!numProc || !interessado || !assunto || !defesaOuRecurso) {
-      const campoPendente = !numProc ? cells[1].querySelector('input')
-        : !interessado ? cells[2].querySelector('input')
-          : !assunto ? cells[3].querySelector('select') : cells[5].querySelector('select');
+    if (!numProc || !campoAssunto.value || !campoDecisao.value) {
+      const campoPendente = !numProc ? campoProc
+        : !campoAssunto.value ? campoAssunto : campoDecisao;
       mostrarMensagemFormulario(`Preencha todos os campos da linha ${idx + 1} antes de sortear.`, campoPendente);
       return;
     }
 
     const anterior = numerosVistos.get(numProc);
     if (anterior) {
-      mostrarMensagemFormulario(`O processo ${numProc} está repetido nas linhas ${anterior} e ${idx + 1}. Corrija antes de sortear.`, cells[1].querySelector('input'));
+      mostrarMensagemFormulario(`O processo ${numProc} está repetido nas linhas ${anterior} e ${idx + 1}. Corrija antes de sortear.`, campoProc);
       return;
     }
     numerosVistos.set(numProc, idx + 1);
@@ -265,7 +262,7 @@ function sortearProcessos() {
 
   const linhasPorAssunto = {};
   rows.forEach(r => {
-    const assunto = r.children[3].querySelector('select').value;
+    const assunto = r.querySelector('.col-assunto select').value;
     if (!linhasPorAssunto[assunto]) {
       linhasPorAssunto[assunto] = [];
     }
@@ -291,7 +288,7 @@ function sortearProcessos() {
       for (let i = 0; i < base; i++) {
         const row = linhas.pop();
         row.querySelector('.unidade').textContent = creg;
-        const inputData = row.children[4].querySelector('input');
+        const inputData = row.querySelector('.col-data input');
         if (inputData) inputData.value = dataHoje;
         atribuicoesPorCreg[creg].total++;
         atribuicoesPorCreg[creg].assuntos[assunto] = (atribuicoesPorCreg[creg].assuntos[assunto] || 0) + 1;
@@ -309,7 +306,7 @@ function sortearProcessos() {
         const creg = candidatos[i];
         const row = linhas.pop();
         row.querySelector('.unidade').textContent = creg;
-        const inputData = row.children[4].querySelector('input');
+        const inputData = row.querySelector('.col-data input');
         if (inputData) inputData.value = dataHoje;
         atribuicoesPorCreg[creg].total++;
         atribuicoesPorCreg[creg].assuntos[assunto] = (atribuicoesPorCreg[creg].assuntos[assunto] || 0) + 1;
@@ -352,19 +349,14 @@ function sortearProcessos() {
 
     // 4. Preencher a tabela de resultados
     rows.forEach(r => {
-      const cells = Array.from(r.children);
-      const numProc = cells[1].querySelector('input').value.trim();
-      const interessado = cells[2].querySelector('input').value.trim();
-      const assunto = cells[3].querySelector('select').value;
-      const unidadeSorteada = cells[6].textContent.trim();
+      const numProc = r.querySelector('.col-processo input').value.trim();
+      const assunto = r.querySelector('.col-assunto select').value;
+      const unidadeSorteada = r.querySelector('.unidade').textContent.trim();
 
       const tr = document.createElement('tr');
       
       const tdProc = document.createElement('td');
       tdProc.textContent = numProc;
-
-      const tdInt = document.createElement('td');
-      tdInt.textContent = interessado;
 
       const tdAss = document.createElement('td');
       tdAss.textContent = assunto;
@@ -373,7 +365,7 @@ function sortearProcessos() {
       tdUn.textContent = unidadeSorteada;
       tdUn.className = 'sorteado-unidade';
 
-      tr.append(tdProc, tdInt, tdAss, tdUn);
+      tr.append(tdProc, tdAss, tdUn);
       tbodyResult.appendChild(tr);
     });
 
@@ -424,21 +416,21 @@ function sortearProcessos() {
 // .json de backup.
 const TABELAS = { CJ: 'acervo_cj', CREG: 'processos_sorteados' };
 
-// A 6ª coluna é Defesa na Câmara de Julgamento e Recurso no Conselho Regulador
-// — coisas diferentes, então cada modo guarda a sua com o próprio nome.
+// A coluna de decisão é Defesa na Câmara de Julgamento e Recurso no Conselho
+// Regulador — coisas diferentes, então cada modo guarda a sua com o próprio nome.
+// As células são buscadas por classe, e não por posição: assim mexer nas colunas
+// da tabela não desalinha silenciosamente a leitura.
 function coletarDados(rows) {
   return rows.map(r => {
-    const cells = Array.from(r.children);
     const processo = {
-      ordem: Number(cells[0].textContent.trim()),
-      numProcesso: cells[1].querySelector('input').value.trim(),
-      interessado: cells[2].querySelector('input').value.trim(),
-      assunto: cells[3].querySelector('select').value.trim(),
-      dataDistribuicao: cells[4].querySelector('input').value.trim(),
-      unidade: cells[6].textContent.trim()
+      ordem: Number(r.querySelector('.num').textContent.trim()),
+      numProcesso: r.querySelector('.col-processo input').value.trim(),
+      assunto: r.querySelector('.col-assunto select').value.trim(),
+      dataDistribuicao: r.querySelector('.col-data input').value.trim(),
+      unidade: r.querySelector('.unidade').textContent.trim()
     };
 
-    const escolha = cells[5].querySelector('select').value.trim();
+    const escolha = r.querySelector('.col-decisao select').value.trim();
     if (modoSorteio === 'CJ') processo.defesa = escolha;
     else processo.recurso = escolha;
 
@@ -467,9 +459,9 @@ function exportarWord(sorteio) {
 
   const dados = [...sorteio.processos].sort((a, b) => a.unidade.localeCompare(b.unidade, 'pt-BR', { numeric: true }));
 
-  let tableHtml = `<table border="1" style="border-collapse:collapse;width:100%"><tr><th>Ordem</th><th>Nº Processo</th><th>Interessado</th><th>${escaparHtml(colunaNome)}</th></tr>`;
+  let tableHtml = `<table border="1" style="border-collapse:collapse;width:100%"><tr><th>Ordem</th><th>Nº Processo</th><th>${escaparHtml(colunaNome)}</th></tr>`;
   dados.forEach(d => {
-    tableHtml += `<tr><td>${escaparHtml(d.ordem)}</td><td>${escaparHtml(d.numProcesso)}</td><td>${escaparHtml(d.interessado)}</td><td>${escaparHtml(d.unidade)}</td></tr>`;
+    tableHtml += `<tr><td>${escaparHtml(d.ordem)}</td><td>${escaparHtml(d.numProcesso)}</td><td>${escaparHtml(d.unidade)}</td></tr>`;
   });
   tableHtml += '</table>';
 
@@ -508,7 +500,6 @@ function linhasParaBanco(sorteio) {
   if (sorteio.modo === 'CJ') {
     return sorteio.processos.map(p => ({
       num_processo: p.numProcesso,
-      interessado: p.interessado,
       relator: p.unidade,
       data_distribuicao: dataISO(p.dataDistribuicao),
       defesa: p.defesa === 'Sim',
@@ -523,7 +514,6 @@ function linhasParaBanco(sorteio) {
     data_hora: sorteio.dataHora,
     ordem: p.ordem,
     num_processo: p.numProcesso,
-    interessado: p.interessado,
     assunto: p.assunto,
     data_distribuicao: dataISO(p.dataDistribuicao),
     recurso: p.recurso,
