@@ -198,8 +198,8 @@ série, esse histórico saiu das tabelas de produção de qualquer forma.
 
 Em consequência:
 
-- **agrupe sessões por `data_sessao`**, que confere com a listagem oficial em
-  100% das sessões dos três anos;
+- **em relatório e consulta, agrupe sessões por `data_sessao`**, que confere com
+  a listagem oficial em 100% das sessões dos três anos;
 - a tela de registro mostra a **data como rótulo principal** do cartão, com o
   número da reunião abaixo, em segundo plano;
 - a coluna tem um `comment` no banco avisando disso, visível no Table Editor do
@@ -310,6 +310,33 @@ Isso é comum hoje: o acervo importado da planilha para no começo de julho de
 2026, então processos julgados depois disso ainda não têm distribuição
 registrada. Some conforme a CJ passar a sortear pelo sistema.
 
+### Completar o acervo depois não conserta o julgado sozinho
+
+O gatilho dispara em `julgados_cj`, e só nela. Inserir em `acervo_cj` a
+distribuição que faltava **não toca** no julgado órfão, então nada reexecuta: ele
+continua com `acervo_id` nulo por mais que o processo já esteja no acervo. Vale
+para o sorteio feito depois da sessão e para qualquer correção manual do acervo.
+
+Quem fecha o ciclo é [`rederivar_cj.sql`](sql/rederivar_cj.sql), rodado no SQL Editor
+do Supabase. Gravar `null` num campo derivado é o pedido de rederivação — o
+gatilho só preenche o que vem nulo — então zerar os três faz o banco procurar o
+processo outra vez e vincular o que agora existe:
+
+```sql
+update public.julgados_cj
+   set relator = null, defesa = null, data_distribuicao = null
+ where acervo_id is null;
+```
+
+O filtro é o que torna a operação segura de repetir: ele só alcança linha que já
+está vazia, nunca sobrescreve o relator de um julgamento que já aconteceu, e na
+segunda passada a linha vinculada não casa mais. **Voto e status não são
+tocados** — o gatilho não encosta neles, e o que a secretaria preencheu na tela
+continua lá.
+
+É operação manual de propósito: não existe política de `UPDATE` em
+`julgados_cj`, então nem o navegador nem a sincronização conseguem fazer isso.
+
 ---
 
 ## 4. Registro do voto e do status
@@ -332,6 +359,24 @@ flowchart LR
 Pendente é quem tem **voto ou status** nulo. Os dois campos são independentes:
 processo retirado de pauta fica com status e sem voto, e continua listado
 enquanto faltar qualquer um dos dois.
+
+### O cartão é uma pauta, não uma data
+
+Cada cartão da primeira tela agrupa os pendentes por **`pauta` + `data_sessao`**,
+não por data sozinha. A regra geral do projeto é agrupar sessões por
+`data_sessao` (seção 2), e aqui a tela faz diferente de propósito: ela edita o
+que a sincronização gravou, e o que a sincronização grava vem de **um documento
+de pauta**, que tem número e data. O cartão espelha o documento.
+
+Na prática os dois critérios dão o mesmo resultado. De 2026 em diante todas as
+linhas de uma mesma data entram na mesma rodada da sincronização, com o número
+que veio da listagem da AGR — não há como uma data ter dois números. Se um dia
+houvesse, a tela mostraria dois cartões na mesma data, cada um com o seu número,
+e o preenchimento continuaria correto: seriam dois documentos distintos.
+
+Processo sem número de pauta (`pauta` nulo) forma o seu próprio cartão, rotulado
+**“sem número de pauta”** — é o caso do histórico e de qualquer linha inserida à
+mão.
 
 Rótulos aceitos:
 
@@ -436,7 +481,7 @@ Postgres, e as regras moram no banco.
 | gravar voto e status | `POST /rest/v1/rpc/registrar_votos` | `julgados.html` |
 | importar pautas | conexão direta ao Postgres | GitHub Actions |
 
-Toda chamada do navegador passa por `api()` em [`supabase.js`](supabase.js), que
+Toda chamada do navegador passa por `api()` em [`supabase.js`](assets/js/supabase.js), que
 centraliza autenticação, tratamento de erro e o retorno à tela de login quando a
 sessão expira.
 
@@ -542,20 +587,21 @@ Chaves e índices que sustentam as regras:
 
 | arquivo | papel |
 |---|---|
-| [`schema.sql`](schema.sql) | tabelas, gatilho, função de registro, RLS — estado final do banco |
-| [`verificacao_cj.sql`](verificacao_cj.sql) | conferências de consistência, só leitura |
-| [`backup_cj.sql`](backup_cj.sql) | copia as três tabelas para o schema backup_cj |
-| [`restaurar_cj.sql`](restaurar_cj.sql) | devolve o backup às tabelas de produção |
-
+| [`sql/schema.sql`](sql/schema.sql) | tabelas, gatilho, função de registro, RLS — estado final do banco |
+| [`sql/verificacao_cj.sql`](sql/verificacao_cj.sql) | conferências de consistência, só leitura |
+| [`sql/rederivar_cj.sql`](sql/rederivar_cj.sql) | religa ao acervo os julgados que entraram sem ele |
+| [`sql/backup_cj.sql`](sql/backup_cj.sql) | copia as três tabelas para o schema backup_cj |
+| [`sql/restaurar_cj.sql`](sql/restaurar_cj.sql) | devolve o backup às tabelas de produção |
 | [`dados/importar_planilha.py`](dados/importar_planilha.py) | converte a planilha histórica em SQL de importação |
 | [`sincronizacao/agr.py`](sincronizacao/agr.py) | listagem e download, só do portal do Estado de Goiás |
 | [`sincronizacao/pauta.py`](sincronizacao/pauta.py) | texto do PDF, data, processos, exclusão da Referência |
 | [`sincronizacao/sincronizar.py`](sincronizacao/sincronizar.py) | orquestra, CLI, resumo JSON |
-| [`index.html`](index.html) / [`index.js`](index.js) | sorteio |
-| [`julgados.html`](julgados.html) / [`julgados.js`](julgados.js) | registro de voto e status |
-| [`supabase.js`](supabase.js) | configuração, login e chamadas, compartilhados |
+| [`index.html`](index.html) / [`assets/js/index.js`](assets/js/index.js) | sorteio |
+| [`julgados.html`](julgados.html) / [`assets/js/julgados.js`](assets/js/julgados.js) | registro de voto e status |
+| [`assets/js/supabase.js`](assets/js/supabase.js) | configuração, login e chamadas, compartilhados |
+| [`assets/css/index.css`](assets/css/index.css) | o design das três páginas |
 | `.github/workflows/sincronizar-julgados-cj.yml` | o agendamento |
-| [`tests/`](tests/) | as duas suítes, contra um Postgres real em container |
+| [`tests/`](tests/) | as quatro suítes: banco em container, parser da AGR, sorteio e backup |
 
 ---
 
@@ -587,7 +633,10 @@ Revisto depois do reinício da série, em 20/08/2026.
   corresponde aos processos que virão nas próximas pautas. Até a Câmara passar a
   sortear pelo sistema, todo julgado sincronizado entra com `acervo_id` nulo e
   sem relator, defesa nem data de distribuição. Não é defeito: é o preço do
-  recomeço, e se resolve sozinho conforme os sorteios alimentarem o acervo.
+  recomeço. Daqui em diante o sorteio que vem **antes** da sessão já resolve
+  sozinho; o julgado que entrou **antes** do sorteio precisa de um
+  [`rederivar_cj.sql`](sql/rederivar_cj.sql) depois — o gatilho não dispara sozinho
+  quando o acervo é completado (ver seção 3).
 - **Cadeira × conselheiro.** As 37 linhas que sobraram vieram da planilha e
   trazem o **nome** do conselheiro em `relator`; tudo o que o sorteio gravar dali
   em diante traz a **cadeira** (`CJ1`..`CJ5`). Não existe de-para entre os dois,

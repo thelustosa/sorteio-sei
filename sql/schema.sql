@@ -365,3 +365,14 @@ drop policy if exists "usuario autenticado pode inserir" on public.julgados_cj;
 drop policy if exists "usuario autenticado pode ler" on public.julgados_cj;
 create policy "usuario autenticado pode ler"
   on public.julgados_cj for select to authenticated using (true);
+
+-- No Supabase o papel authenticated já recebe privilégio nas tabelas de public
+-- por concessão padrão do projeto, e quem recorta o acesso é a RLS acima. As
+-- concessões abaixo escrevem esse mínimo de forma explícita, para que o
+-- schema.sql sozinho descreva o acesso — e para que ele funcione igual num
+-- Postgres comum, onde essa concessão padrão não existe e o site subiria sem
+-- conseguir gravar nada. São aditivas: não retiram nada de quem já tem.
+grant usage on schema public to anon, authenticated;
+grant insert on public.processos_sorteados to authenticated;
+grant insert on public.acervo_cj           to authenticated;
+grant select on public.julgados_cj         to authenticated;

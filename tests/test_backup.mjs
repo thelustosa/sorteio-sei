@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
-const fonte = readFileSync(join(raiz, 'index.js'), 'utf8');
+const fonte = readFileSync(join(raiz, 'assets', 'js', 'index.js'), 'utf8');
 
 // Recorta do index.js só o que a validação precisa, para testar o código que
 // está em produção e não uma cópia que envelhece em silêncio.

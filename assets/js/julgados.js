@@ -55,6 +55,10 @@ async function carregarPautas() {
       + '&or=(voto.is.null,status.is.null)'
       + '&order=data_sessao.desc,num_processo.asc');
   } catch (err) {
+    // Sessão expirada já foi tratada em api(), que recolocou a tela de login.
+    // Sem esta saída, a página dizia "verifique sua conexão" logo abaixo de
+    // "sua sessão expirou" — dois diagnósticos contraditórios ao mesmo tempo.
+    if (err.status === 401) return;
     mostrarErroDeCarregamento();
     aviso(`Não foi possível carregar os julgados (${err.message}).`, 'erro');
     return;
@@ -221,7 +225,15 @@ async function salvar() {
       method: 'POST',
       body: JSON.stringify({ itens })
     });
-    aviso(`${gravados} ${gravados === 1 ? 'julgamento gravado' : 'julgamentos gravados'}.`);
+    // A função do banco recusa em silêncio a linha que não é editável por essa
+    // porta (histórico da planilha). Sem comparar com o que foi enviado, um
+    // "0 julgamentos gravados" apareceria em verde, como se tivesse dado certo.
+    if (gravados < itens.length) {
+      aviso(`${gravados} de ${itens.length} julgamentos gravados. `
+        + 'O restante já estava registrado e não pode ser alterado por aqui.', 'atencao');
+    } else {
+      aviso(`${gravados} ${gravados === 1 ? 'julgamento gravado' : 'julgamentos gravados'}.`);
+    }
     await carregarPautas();
   } catch (err) {
     aviso(`Falha ao gravar (${err.message}). Nada foi salvo — tente novamente.`, 'erro');

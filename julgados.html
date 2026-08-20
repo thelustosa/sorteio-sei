@@ -8,9 +8,9 @@
   <meta name="description"
     content="Registro do voto e do status dos processos julgados nas sessões da Câmara de Julgamento da AGR." />
   <title>Registro de Julgamentos — Câmara de Julgamento</title>
-  <link rel="preload" href="assets/fonts/Gotham-Bold.otf" as="font" type="font/otf" crossorigin />
-  <link rel="icon" href="assets/favicon.png" />
-  <link rel="stylesheet" href="index.css" />
+  <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="icon" href="assets/img/favicon.png" />
+  <link rel="stylesheet" href="assets/css/index.css" />
 </head>
 
 <body>
@@ -19,7 +19,7 @@
     <div class="container">
       <header>
         <div class="logo">
-          <img src="assets/logo_header.png" alt="Governo de Goiás" width="120" height="55" />
+          <img src="assets/img/logo_header.png" alt="Governo de Goiás" width="120" height="55" />
         </div>
         <div class="header-copy">
           <p class="institution-name">Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</p>
@@ -69,7 +69,7 @@
       </div>
 
       <!-- Tela 1: as pautas que ainda têm processo sem voto ou sem status -->
-      <div id="listaPautas" hidden>
+      <div id="listaPautas" data-sessao hidden>
         <h2>Pautas com julgamento pendente</h2>
         <p id="pautasIntro" class="lead">Selecione uma pauta para preencher os processos pendentes.</p>
         <div id="pautasContainer"></div>
@@ -88,7 +88,7 @@
       </div>
 
       <!-- Tela 2: os processos daquela pauta -->
-      <div id="detalhePauta" hidden>
+      <div id="detalhePauta" data-sessao hidden>
         <h2 id="tituloPauta"></h2>
         <div class="table-scroll" role="region" aria-label="Processos pendentes de julgamento" tabindex="0">
         <table id="julgadosTable">
@@ -116,7 +116,7 @@
   <footer class="page-footer">
     <div class="footer-container">
       <div class="logo footer-logo">
-        <img src="assets/logo_footer.png" alt="Estado de Goiás" width="104" height="48" />
+        <img src="assets/img/logo_footer.png" alt="Estado de Goiás" width="104" height="48" />
       </div>
       <p class="footer-info">
         Os processos chegam automaticamente das pautas publicadas pela AGR, sem voto e sem status.<br>
@@ -126,8 +126,8 @@
     </div>
   </footer>
 
-  <script src="supabase.js"></script>
-  <script src="julgados.js"></script>
+  <script src="assets/js/supabase.js"></script>
+  <script src="assets/js/julgados.js"></script>
 </body>
 
 </html>

@@ -186,8 +186,16 @@ function ligarLogin(aoEntrar) {
     location.reload();
   });
 
+  // Quando a sessão cai, a tela de login voltava por cima do que estava aberto:
+  // a página mostrava o formulário e, logo abaixo, o resultado do sorteio ou a
+  // lista de pautas da sessão que acabou de expirar. Além de confuso, deixava o
+  // trabalho da pessoa anterior na tela para quem chegasse depois. Cada página
+  // marca com data-sessao o que só existe para quem está autenticado.
+  const conteudoDaSessao = document.querySelectorAll('[data-sessao]');
+
   exigirLogin = mensagem => {
     encerrarSessao();
+    conteudoDaSessao.forEach(el => { el.hidden = true; });
     loginScreen.hidden = false;
     btnSair.hidden = true;
     loginErro.textContent = mensagem;
@@ -229,6 +237,14 @@ function aviso(texto, tipo = 'sucesso') {
     regiao.setAttribute('aria-label', 'Notificações');
     document.body.appendChild(regiao);
   }
+
+  // Um aviso por vez. Cada ação do sistema produz exatamente um resultado, então
+  // o aviso anterior descreve um estado que já passou: deixá-lo na tela é como
+  // manter "nada para salvar" depois de um salvamento que deu certo. O erro dura
+  // 60s para dar tempo de ler, e era justamente ele que sobrevivia à própria
+  // causa. O temporizador antigo continua agendado e vira um no-op, porque
+  // remover um nó já removido não faz nada.
+  regiao.replaceChildren();
 
   const msg = document.createElement('div');
   msg.className = `toast ${classe}`;

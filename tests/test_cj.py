@@ -20,14 +20,12 @@ from pathlib import Path
 
 import psycopg2
 import psycopg2.extras
-from openpyxl.utils.datetime import to_excel
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import banco            # noqa: E402
 from banco import uma  # noqa: E402
-sys.path.insert(0, str(RAIZ / 'dados'))
-import importar_planilha as imp  # noqa: E402
+sys.path.insert(0, str(RAIZ / 'dados'))  # importar_planilha, carregado sob demanda
 
 PLANILHA_PADRAO = Path.home() / 'Downloads' / 'Câmara de Julgamento - REG.xlsx'
 PG = banco.Postgres('sorteio_sei_test', 55433)
@@ -55,6 +53,10 @@ def dias_excel(v):
     """
     if not isinstance(v, datetime):
         return v
+    # Importado aqui, e não no topo: openpyxl só é necessário para os testes que
+    # leem a planilha. No topo, a ausência dele derrubava a suíte inteira — o
+    # contrário do que o cabeçalho promete ("sem a planilha o resto roda igual").
+    from openpyxl.utils.datetime import to_excel
     return int(to_excel(v))
 
 
@@ -62,7 +64,11 @@ class Planilha:
     """Valores JÁ CALCULADOS pelas fórmulas — é contra eles que o banco é medido."""
 
     def __init__(self, caminho):
+        # Ambos só existem por causa da planilha, e importar_planilha carrega
+        # openpyxl no topo. Importar aqui é o que mantém a suíte de pé numa
+        # máquina sem openpyxl instalado, que é o caso de quem não tem a planilha.
         import openpyxl
+        import importar_planilha as imp
         wb = openpyxl.load_workbook(caminho, data_only=True)
         self.acervo, _ = imp.deduplicar(
             imp.ler_acervo(wb['Acervo']), ('num_processo', 'data_distribuicao', 'relator'))
@@ -386,6 +392,44 @@ def processo_fora_do_acervo_nao_quebra(cur):
 
 
 @teste
+def rederivar_liga_o_julgado_ao_acervo_que_chegou_depois(cur):
+    """Sortear um processo já julgado não conserta o julgado sozinho.
+
+    O gatilho só dispara em julgados_cj, e inserir no acervo não toca nela — o
+    julgado continua órfão por mais que a distribuição já exista. O
+    rederivar_cj.sql é o empurrão que refaz o vínculo, sem encostar em voto e
+    status e sem mexer em quem já estava vinculado.
+    """
+    cur.execute("""insert into acervo_cj
+                   (num_processo, relator, data_distribuicao, defesa, origem)
+                   values ('900000000000031', 'CJ1', date '2026-07-01', true, 'sorteio')""")
+    cur.execute("""insert into julgados_cj (num_processo, data_sessao, voto, status) values
+                     ('900000000000031', date '2026-08-06', 'Manter', 'Julgado'),
+                     ('900000000000032', date '2026-08-13', 'Anular', 'Julgado')""")
+
+    # O sorteio do 032 só acontece agora, depois de ele já ter ido à sessão.
+    cur.execute("""insert into acervo_cj
+                   (num_processo, relator, data_distribuicao, defesa, origem)
+                   values ('900000000000032', 'CJ4', date '2026-07-15', true, 'sorteio')""")
+    assert uma(cur, """select acervo_id from julgados_cj
+                        where num_processo = '900000000000032'""") is None, \
+        'inserir no acervo não deveria consertar o julgado sozinho'
+
+    cur.execute((RAIZ / 'sql' / 'rederivar_cj.sql').read_text(encoding='utf-8'))
+    relatorio = {num: (resultado, relator) for num, _, resultado, relator, _, _ in cur.fetchall()}
+
+    assert relatorio.get('900000000000032') == ('vinculado agora', 'CJ4')
+    assert '900000000000031' not in relatorio, 'julgado já vinculado não pode ser tocado'
+
+    # Voto e status são da sessão, não do acervo: a rederivação não os alcança.
+    assert uma(cur, """select acervo_id is not null, relator, defesa, dias_dt, voto, status
+                         from julgados_cj where num_processo = '900000000000032'""") == \
+        (True, 'CJ4', True, 29, 'Anular', 'Julgado')
+
+    cur.connection.rollback()
+
+
+@teste
 def campos_opcionais_aceitam_vazio(cur):
     """Voto, status e pauta podem faltar — a planilha tem linhas assim."""
     cur.execute("""insert into acervo_cj (num_processo, relator, data_distribuicao, origem)
@@ -675,7 +719,7 @@ def dados_importados_nao_produzem_nenhum_erro(cur):
     Os AVISOs são qualidade de dado herdada da planilha e estão documentados em
     FLUXO-CJ.md; ERRO é quebra de regra do sistema e não pode existir.
     """
-    cur.execute((RAIZ / 'verificacao_cj.sql').read_text(encoding='utf-8'))
+    cur.execute((RAIZ / 'sql' / 'verificacao_cj.sql').read_text(encoding='utf-8'))
     achados = cur.fetchall()
     assert achados, 'a verificação não devolveu nenhuma linha'
 
@@ -690,8 +734,8 @@ def rotulos_da_pagina_batem_com_os_do_banco(cur):
     Se divergirem, a secretaria escolhe um rótulo no seletor e o banco recusa na
     hora de salvar — falha que só apareceria em produção.
     """
-    pagina = (RAIZ / 'julgados.js').read_text(encoding='utf-8')
-    schema = (RAIZ / 'schema.sql').read_text(encoding='utf-8')
+    pagina = (RAIZ / 'assets' / 'js' / 'julgados.js').read_text(encoding='utf-8')
+    schema = (RAIZ / 'sql' / 'schema.sql').read_text(encoding='utf-8')
 
     def rotulos(fonte, padrao):
         achado = re.search(padrao, fonte)
@@ -707,7 +751,7 @@ def rotulos_da_pagina_batem_com_os_do_banco(cur):
 @teste
 def colunas_que_o_index_js_envia_existem(cur):
     """As chaves do payload de index.js batem com as colunas de cada tabela."""
-    fonte = (RAIZ / 'index.js').read_text(encoding='utf-8')
+    fonte = (RAIZ / 'assets' / 'js' / 'index.js').read_text(encoding='utf-8')
     trecho = fonte[fonte.index('function linhasParaBanco'):fonte.index('async function salvar')]
     enviadas = {linha.split(':')[0].strip()
                 for linha in trecho.splitlines()
@@ -751,7 +795,7 @@ def backup_e_restauracao_fecham_o_ciclo(cur):
 
     antes = conta()
 
-    PG.rodar_arquivo(RAIZ / 'backup_cj.sql')
+    PG.rodar_arquivo(RAIZ / 'sql' / 'backup_cj.sql')
 
     # Um estrago do tamanho do que a limpeza fez em produção: julgados zerados e
     # o acervo reduzido ao que nunca foi julgado.
@@ -765,7 +809,7 @@ def backup_e_restauracao_fecham_o_ciclo(cur):
     acervo, julgados = conta()
     assert julgados == 0 and 0 < acervo < antes[0]
 
-    PG.rodar_arquivo(RAIZ / 'restaurar_cj.sql')
+    PG.rodar_arquivo(RAIZ / 'sql' / 'restaurar_cj.sql')
 
     assert conta() == antes, 'a restauração não devolveu os mesmos totais'
     assert valor('select count(*) from julgados_cj where dias_dt is null') == 0
@@ -779,8 +823,8 @@ def backup_e_restauracao_fecham_o_ciclo(cur):
 # ── Runner ───────────────────────────────────────────────────────────────────
 
 def preparar_banco(planilha):
-    rodar_arquivo(RAIZ / "schema.sql")
-    rodar_arquivo(RAIZ / "schema.sql")  # aplicar por cima de si mesmo é no-op
+    rodar_arquivo(RAIZ / 'sql' / 'schema.sql')
+    rodar_arquivo(RAIZ / 'sql' / 'schema.sql')  # aplicar por cima de si mesmo é no-op
 
     if planilha:
         subprocess.run([sys.executable, str(RAIZ / 'dados' / 'importar_planilha.py'),

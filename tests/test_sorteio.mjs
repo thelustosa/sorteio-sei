@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
-const fonte = readFileSync(join(raiz, 'index.js'), 'utf8');
+const fonte = readFileSync(join(raiz, 'assets', 'js', 'index.js'), 'utf8');
 
 const inicio = fonte.indexOf('function inteiroAleatorio');
 const fim = fonte.indexOf('// ── fim do bloco verificado');
