@@ -56,7 +56,7 @@ async function carregarPautas() {
       + '&order=data_sessao.desc,num_processo.asc');
   } catch (err) {
     mostrarErroDeCarregamento();
-    aviso(`❌ Não foi possível carregar os julgados (${err.message}).`, true);
+    aviso(`Não foi possível carregar os julgados (${err.message}).`, 'erro');
     return;
   }
 
@@ -210,7 +210,7 @@ async function salvar() {
   // pendente e reaparece na próxima vez.
   const itens = linhasDaTela().filter(l => l.voto || l.status);
   if (itens.length === 0) {
-    aviso('Nada para salvar: preencha o voto ou o status de pelo menos um processo.', true);
+    aviso('Nada para salvar: preencha o voto ou o status de pelo menos um processo.', 'atencao');
     return;
   }
 
@@ -221,10 +221,10 @@ async function salvar() {
       method: 'POST',
       body: JSON.stringify({ itens })
     });
-    aviso(`✅ ${gravados} ${gravados === 1 ? 'julgamento gravado' : 'julgamentos gravados'}.`);
+    aviso(`${gravados} ${gravados === 1 ? 'julgamento gravado' : 'julgamentos gravados'}.`);
     await carregarPautas();
   } catch (err) {
-    aviso(`❌ Falha ao gravar (${err.message}). Nada foi salvo — tente novamente.`, true);
+    aviso(`Falha ao gravar (${err.message}). Nada foi salvo — tente novamente.`, 'erro');
   } finally {
     alternarBotaoCarregando(btnSalvar, false);
   }

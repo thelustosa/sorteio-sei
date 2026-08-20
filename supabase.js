@@ -204,7 +204,23 @@ function ligarLogin(aoEntrar) {
   }
 }
 
-function aviso(texto, alerta = false) {
+// A severidade vinha embutida como emoji no início do texto e era lida de volta
+// por regex — canal frágil, que já classificava "nada para salvar" como falha.
+// Agora é um parâmetro explícito.
+const TIPOS_AVISO = {
+  sucesso: { titulo: 'Concluído', classe: 'toast-sucesso', assertivo: false },
+  atencao: { titulo: 'Atenção', classe: 'toast-alerta', assertivo: true },
+  erro: { titulo: 'Não foi possível concluir', classe: 'toast-alerta', assertivo: true }
+};
+
+const TRACADO_AVISO = {
+  sucesso: 'm5 12 4 4L19 6',
+  alerta: 'M12 8v4m0 4h.01M5.1 19h13.8a1 1 0 0 0 .9-1.5L12.9 5a1 1 0 0 0-1.8 0L4.2 17.5a1 1 0 0 0 .9 1.5Z'
+};
+
+function aviso(texto, tipo = 'sucesso') {
+  const { titulo: rotulo, classe, assertivo } = TIPOS_AVISO[tipo] || TIPOS_AVISO.sucesso;
+
   let regiao = document.getElementById('toastRegion');
   if (!regiao) {
     regiao = document.createElement('div');
@@ -215,10 +231,9 @@ function aviso(texto, alerta = false) {
   }
 
   const msg = document.createElement('div');
-  const avisoDeAtencao = alerta && texto.trim().startsWith('⚠️');
-  msg.className = alerta ? 'toast toast-alerta' : 'toast toast-sucesso';
-  msg.setAttribute('role', alerta ? 'alert' : 'status');
-  msg.setAttribute('aria-live', alerta ? 'assertive' : 'polite');
+  msg.className = `toast ${classe}`;
+  msg.setAttribute('role', assertivo ? 'alert' : 'status');
+  msg.setAttribute('aria-live', assertivo ? 'assertive' : 'polite');
 
   const icone = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   icone.classList.add('toast-icon');
@@ -230,17 +245,17 @@ function aviso(texto, alerta = false) {
   icone.setAttribute('stroke-linejoin', 'round');
   icone.setAttribute('aria-hidden', 'true');
   const tracado = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  tracado.setAttribute('d', alerta ? 'M12 8v4m0 4h.01M5.1 19h13.8a1 1 0 0 0 .9-1.5L12.9 5a1 1 0 0 0-1.8 0L4.2 17.5a1 1 0 0 0 .9 1.5Z' : 'm5 12 4 4L19 6');
+  tracado.setAttribute('d', assertivo ? TRACADO_AVISO.alerta : TRACADO_AVISO.sucesso);
   icone.appendChild(tracado);
 
   const conteudo = document.createElement('div');
   conteudo.className = 'toast-content';
   const titulo = document.createElement('strong');
   titulo.className = 'toast-title';
-  titulo.textContent = alerta ? (avisoDeAtencao ? 'Atenção' : 'Não foi possível concluir') : 'Concluído';
+  titulo.textContent = rotulo;
   const detalhe = document.createElement('span');
   detalhe.className = 'toast-detail';
-  detalhe.textContent = texto.replace(/^[✅⚠️❌]\s*/, '');
+  detalhe.textContent = texto;
   conteudo.append(titulo, detalhe);
 
   const fechar = document.createElement('button');
@@ -250,7 +265,7 @@ function aviso(texto, alerta = false) {
   fechar.textContent = 'Fechar';
 
   const remover = () => msg.remove();
-  const temporizador = setTimeout(remover, alerta ? 60000 : 8000);
+  const temporizador = setTimeout(remover, assertivo ? 60000 : 8000);
   fechar.addEventListener('click', () => {
     clearTimeout(temporizador);
     remover();
