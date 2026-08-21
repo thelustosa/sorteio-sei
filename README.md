@@ -193,6 +193,12 @@ das tabelas de produção e ficou guardado no schema `backup_cj`, dentro do mesm
 banco. Produção passou a ter só os processos ainda não julgados, e os
 julgamentos passaram a ser registrados pelo sistema a partir dali.
 
+Dois dias depois, uma carga de recuperação repôs o período que a planilha não
+alcançava — de 25/06 a 20/08/2026 — lendo as atas de sorteio publicadas no SEI e
+as pautas publicadas pela AGR: 157 distribuições e 151 julgados. O script era de
+execução única e não ficou no repositório; o que ele decidiu, e onde deixou o
+banco, está em [`FLUXO-CJ.md`](FLUXO-CJ.md).
+
 - [`backup_cj.sql`](sql/backup_cj.sql) copia `acervo_cj`, `julgados_cj` e
   `pautas_cj` para o schema `backup_cj`. Rode antes de qualquer alteração de
   risco.
