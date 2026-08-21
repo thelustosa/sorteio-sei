@@ -45,7 +45,6 @@ const btnCj = document.getElementById('btnCj');
 const btnVoltar = document.getElementById('btnVoltar');
 const modeSelector = document.getElementById('modeSelector');
 const sorteadorContent = document.getElementById('sorteadorContent');
-const thUnidade = document.getElementById('thUnidade');
 const thRecurso = document.getElementById('thRecurso');
 const pillsContainer = document.getElementById('pillsContainer');
 const txtModo = document.getElementById('txtModo');
@@ -94,9 +93,8 @@ function iniciarSorteador(modo, unidades) {
   assuntosAtivos = modo === 'CREG' ? assuntosCreg : assuntosCj;
 
   btnVoltar.hidden = false;
-  txtModo.textContent = modo === 'CREG' ? 'Conselho Regulador' : 'Câmara de Julgamento';
+  txtModo.textContent = modo === 'CREG' ? 'Conselho Regulador (CREG)' : 'Câmara de Julgamento (CJ)';
 
-  thUnidade.textContent = modo === 'CREG' ? 'Unidade Conselho Regulador (CREG)' : 'Unidade Câmara de Julgamento (CJ)';
   thRecurso.textContent = modo === 'CREG' ? 'Recurso' : 'Defesa';
   sortearBtn.textContent = `Sortear ${modo} e Exportar`;
 
@@ -172,18 +170,22 @@ function createRowElement(index) {
   const optDefaultAss = document.createElement('option'); optDefaultAss.value = ''; optDefaultAss.textContent = 'Selecione o Assunto'; optDefaultAss.disabled = true; optDefaultAss.selected = true;
   selAss.appendChild(optDefaultAss);
   assuntosAtivos.forEach(a => { const o = document.createElement('option'); o.value = a; o.textContent = a; selAss.appendChild(o) });
+  const atualizarEstadoAssunto = () => selAss.classList.toggle('placeholder-select', !selAss.value);
+  atualizarEstadoAssunto();
+  selAss.addEventListener('change', atualizarEstadoAssunto);
   // Na Câmara de Julgamento o assunto é sempre Auto de Infração: já vem definido e travado.
   if (modoSorteio === 'CJ') {
     selAss.value = 'Auto de Infração';
     selAss.disabled = true;
     selAss.classList.add('fixed-field');
+    atualizarEstadoAssunto();
   }
   tdAss.appendChild(selAss);
   const tdRec = document.createElement('td');
   tdRec.className = 'col-decisao';
   tdRec.dataset.label = modoSorteio === 'CJ' ? 'Defesa' : 'Recurso';
   const selRec = document.createElement('select'); selRec.setAttribute('aria-label', `${modoSorteio === 'CJ' ? 'Defesa' : 'Recurso'}, linha ${index}`);
-  const optDefaultRec = document.createElement('option'); optDefaultRec.value = ''; optDefaultRec.textContent = modoSorteio === 'CJ' ? 'Houve defesa?' : 'Selecione o tipo de recurso'; optDefaultRec.disabled = true; optDefaultRec.selected = true;
+  const optDefaultRec = document.createElement('option'); optDefaultRec.value = ''; optDefaultRec.textContent = modoSorteio === 'CJ' ? 'Houve defesa?' : 'Selecione o Recurso'; optDefaultRec.disabled = true; optDefaultRec.selected = true;
   selRec.appendChild(optDefaultRec);
   (modoSorteio === 'CJ' ? defesas : recursos).forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; selRec.appendChild(o) });
   const atualizarEstadoDefesa = () => selRec.classList.toggle('placeholder-select', !selRec.value);
@@ -213,8 +215,6 @@ function createRowElement(index) {
     });
   }
 
-  const tdUn = document.createElement('td'); tdUn.className = 'unidade small'; tdUn.dataset.label = modoSorteio === 'CJ' ? 'Unidade Câmara de Julgamento' : 'Unidade Conselho Regulador'; tdUn.textContent = '';
-
   const tdDel = document.createElement('td');
   tdDel.className = 'acoes';
   tdDel.dataset.label = 'Ações';
@@ -230,7 +230,7 @@ function createRowElement(index) {
   });
   tdDel.appendChild(btnDel);
 
-  tr.append(tdOrdem, tdProc, tdAss, tdRec, tdUn, tdDel);
+  tr.append(tdOrdem, tdProc, tdAss, tdRec, tdDel);
   return tr;
 }
 
@@ -333,7 +333,7 @@ function sortearProcessos() {
     participantes.forEach(creg => {
       for (let i = 0; i < base; i++) {
         const row = linhas.pop();
-        row.querySelector('.unidade').textContent = creg;
+        row.dataset.unidade = creg;
         atribuicoesPorCreg[creg].total++;
         atribuicoesPorCreg[creg].assuntos[assunto] = (atribuicoesPorCreg[creg].assuntos[assunto] || 0) + 1;
       }
@@ -346,7 +346,7 @@ function sortearProcessos() {
       for (let i = 0; i < resto; i++) {
         const creg = candidatos[i];
         const row = linhas.pop();
-        row.querySelector('.unidade').textContent = creg;
+        row.dataset.unidade = creg;
         atribuicoesPorCreg[creg].total++;
         atribuicoesPorCreg[creg].assuntos[assunto] = (atribuicoesPorCreg[creg].assuntos[assunto] || 0) + 1;
       }
@@ -390,7 +390,7 @@ function sortearProcessos() {
     rows.forEach(r => {
       const numProc = r.querySelector('.col-processo input').value.trim();
       const assunto = r.querySelector('.col-assunto select').value;
-      const unidadeSorteada = r.querySelector('.unidade').textContent.trim();
+      const unidadeSorteada = r.dataset.unidade || '';
 
       const tr = document.createElement('tr');
       
@@ -401,8 +401,8 @@ function sortearProcessos() {
       tdAss.textContent = assunto;
 
       const tdUn = document.createElement('td');
-      tdUn.textContent = unidadeSorteada;
       tdUn.className = 'sorteado-unidade';
+      tdUn.textContent = unidadeSorteada;
 
       tr.append(tdProc, tdAss, tdUn);
       tbodyResult.appendChild(tr);
@@ -475,7 +475,7 @@ function coletarDados(rows, dataDistribuicao) {
       numProcesso: r.querySelector('.col-processo input').value.trim(),
       assunto: r.querySelector('.col-assunto select').value.trim(),
       dataDistribuicao,
-      unidade: r.querySelector('.unidade').textContent.trim()
+      unidade: r.dataset.unidade || ''
     };
 
     const escolha = r.querySelector('.col-decisao select').value.trim();
