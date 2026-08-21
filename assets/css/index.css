@@ -465,9 +465,7 @@ tbody td {
 
 tbody tr:last-child td { border-bottom: 0; }
 tbody tr:hover td { background: var(--table-row-hover); }
-.num { width: 64px; }
-#processTable td.num,
-#processTable td.unidade { text-align: center; }
+#processTable td.num { text-align: center; }
 .small { color: var(--muted); font-size: var(--text-sm); }
 .text-danger { color: var(--danger); }
 
@@ -486,21 +484,20 @@ tbody tr:hover td { background: var(--table-row-hover); }
   #processTable { min-width: 1040px; }
 
   #processTable th:nth-child(1),
-  #processTable td:nth-child(1) { width: 7%; }
+  #processTable td:nth-child(1) { width: 7%; }   /* Ordem */
   #processTable th:nth-child(2),
-  #processTable td:nth-child(2) { width: 18%; }
+  #processTable td:nth-child(2) { width: 26%; }  /* Nº Processo */
   #processTable th:nth-child(3),
-  #processTable td:nth-child(3) { width: 22%; }
+  #processTable td:nth-child(3) { width: 28%; }  /* Assunto */
+  #processTable th:nth-child(4),
+  #processTable td:nth-child(4) { width: 26%; }  /* Defesa / Recurso */
   #processTable th:nth-child(5),
-  #processTable td:nth-child(5) { width: 23%; }
-  #processTable th:nth-child(6),
-  #processTable td:nth-child(6) { width: 18%; }
-  #processTable th:nth-child(7),
-  #processTable td:nth-child(7) { width: 12%; }
+  #processTable td:nth-child(5) { width: 13%; }  /* Ações */
 }
 
 #processTable input,
 #processTable select { font-size: var(--text-md); }
+#processTable select { min-width: 130px; }
 
 /* 16px evita o zoom automático do iOS ao focar; no desktop cabe mais texto. */
 @media (pointer: fine) {
@@ -558,8 +555,28 @@ tbody tr:hover td { background: var(--table-row-hover); }
   font-size: var(--text-base);
   font-weight: 700;
 }
+#resultTable {
+  table-layout: fixed;
+}
 
-#resultTable td.sorteado-unidade { color: var(--accent); font-weight: 700; }
+#resultTable th,
+#resultTable td {
+  text-align: center;
+}
+
+#resultTable th:nth-child(1),
+#resultTable td:nth-child(1) { width: 33%; }  /* Nº Processo */
+
+#resultTable th:nth-child(2),
+#resultTable td:nth-child(2) { width: 34%; }  /* Assunto */
+
+#resultTable th:nth-child(3),
+#resultTable td:nth-child(3) { width: 33%; }  /* Sorteado Para */
+
+#resultTable td.sorteado-unidade {
+  color: var(--accent);
+  font-weight: 700;
+}
 
 /* Login e estados vazios */
 #loginScreen {
@@ -812,8 +829,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   }
 
   #processTable tbody td,
-  #processTable tbody td.num,
-  #processTable tbody td.unidade {
+  #processTable tbody td.num {
     display: grid;
     width: auto;
     gap: 6px;
@@ -837,8 +853,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     gap: 8px;
     font-weight: 700;
   }
-
-  #processTable tbody td.unidade:empty { display: none; }
 
   #processTable tbody td.acoes {
     display: flex;
