@@ -27,12 +27,28 @@ const txtModo = document.getElementById('txtModo');
 
 // Pendentes agrupados por pauta: chave "numero|data".
 let pendentesPorPauta = new Map();
-
-ligarLogin(carregarPautas);
+let pendentesNaTela = 0;
 
 btnVoltar.addEventListener('click', mostrarPautas);
 btnSalvar.addEventListener('click', salvar);
-tbody.addEventListener('change', atualizarContador);
+tbody.addEventListener('change', event => {
+  const select = event.target.closest('select');
+  if (!select || !tbody.contains(select)) return;
+  select.classList.toggle('placeholder-select', !select.value);
+
+  const tr = select.closest('tr');
+  const incompletoAntes = tr.dataset.incompleto === 'true';
+  const incompletoAgora = [...tr.querySelectorAll('select')].some(campo => !campo.value);
+  if (incompletoAntes !== incompletoAgora) {
+    pendentesNaTela += incompletoAgora ? 1 : -1;
+    tr.dataset.incompleto = String(incompletoAgora);
+  }
+  atualizarContador();
+});
+
+function inicializarJulgados() {
+  carregarPautas();
+}
 
 function dataBR(iso) {
   const [ano, mes, dia] = iso.split('-');
@@ -80,10 +96,10 @@ function mostrarPautas() {
   txtModo.textContent = 'Pautas pendentes';
   listaPautas.hidden = false;
 
-  pautasContainer.innerHTML = '';
   semPendencia.hidden = pendentesPorPauta.size > 0;
   pautasIntro.hidden = pendentesPorPauta.size === 0;
 
+  const fragmento = document.createDocumentFragment();
   for (const [chave, processos] of pendentesPorPauta) {
     const [numero, data] = chave.split('|');
 
@@ -106,8 +122,9 @@ function mostrarPautas() {
     quantos.textContent = `${processos.length} ${processos.length === 1 ? 'processo' : 'processos'}`;
 
     cartao.append(titulo, quando, quantos);
-    pautasContainer.appendChild(cartao);
+    fragmento.appendChild(cartao);
   }
+  pautasContainer.replaceChildren(fragmento);
 }
 
 function mostrarErroDeCarregamento() {
@@ -147,9 +164,7 @@ function seletor(opcoes, valor, rotulo) {
   });
 
   sel.value = valor || '';
-  const atualizarEstado = () => sel.classList.toggle('placeholder-select', !sel.value);
-  atualizarEstado();
-  sel.addEventListener('change', atualizarEstado);
+  sel.classList.toggle('placeholder-select', !sel.value);
   return sel;
 }
 
@@ -165,10 +180,14 @@ function abrirPauta(chave) {
     : `Sessão de ${dataBR(data)} — ${numero}ª reunião`;
   tituloPauta.textContent = 'Processos aguardando voto e status';
 
-  tbody.innerHTML = '';
+  const fragmento = document.createDocumentFragment();
+  pendentesNaTela = 0;
   processos.forEach(j => {
     const tr = document.createElement('tr');
     tr.dataset.id = j.id;
+    const incompleto = !j.voto || !j.status;
+    tr.dataset.incompleto = String(incompleto);
+    if (incompleto) pendentesNaTela++;
 
     const proc = document.createElement('td');
     proc.textContent = j.num_processo;
@@ -186,8 +205,9 @@ function abrirPauta(chave) {
     tdStatus.appendChild(seletor(STATUS, j.status, 'Selecione o status'));
 
     tr.append(proc, relator, tdVoto, tdStatus);
-    tbody.appendChild(tr);
+    fragmento.appendChild(tr);
   });
+  tbody.replaceChildren(fragmento);
 
   atualizarContador();
 }
@@ -201,7 +221,7 @@ function linhasDaTela() {
 }
 
 function atualizarContador() {
-  const faltando = linhasDaTela().filter(l => !l.voto || !l.status).length;
+  const faltando = pendentesNaTela;
   contadorPendentes.textContent = faltando === 0
     ? 'Todos preenchidos.'
     : `${faltando} ${faltando === 1 ? 'processo ainda sem' : 'processos ainda sem'} voto ou status.`;
