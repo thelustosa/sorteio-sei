@@ -53,11 +53,18 @@ const processSetupHint = document.getElementById('processSetupHint');
 const processFormMessage = document.getElementById('processFormMessage');
 const resultadoSorteio = document.getElementById('resultadoSorteio');
 const sortControls = document.getElementById('sortControls');
+const tbodyResult = document.querySelector('#resultTable tbody');
+const resumoContagem = document.getElementById('resumoContagem');
+const resultadoStatus = document.getElementById('resultadoStatus');
+const thUnidadeResult = document.getElementById('thUnidadeResult');
 
 // ── Autenticação ─────────────────────────────────────────────────────────────
 // Login, token e chamadas ao Supabase ficam em supabase.js, compartilhados com
-// a página de registro de voto e status.
-ligarLogin(() => { modeSelector.hidden = false; });
+// a página de registro de voto e status. bootstrap.js chama esta função somente
+// depois que a sessão foi validada e este arquivo terminou de carregar.
+function inicializarSorteio() {
+  modeSelector.hidden = false;
+}
 
 btnCreg.addEventListener('click', () => {
   iniciarSorteador('CREG', ['CREG1', 'CREG2', 'CREG3', 'CREG4']);
@@ -81,10 +88,8 @@ btnVoltar.addEventListener('click', () => {
   
   // Resetar visualização de resultados
   resultadoSorteio.hidden = true;
-  const tbodyResult = document.querySelector('#resultTable tbody');
-  if (tbodyResult) tbodyResult.innerHTML = '';
-  const resumoContagem = document.getElementById('resumoContagem');
-  if (resumoContagem) resumoContagem.innerHTML = '';
+  tbodyResult.replaceChildren();
+  resumoContagem.replaceChildren();
 });
 
 function iniciarSorteador(modo, unidades) {
@@ -98,7 +103,7 @@ function iniciarSorteador(modo, unidades) {
   thRecurso.textContent = modo === 'CREG' ? 'Recurso' : 'Defesa';
   sortearBtn.textContent = `Sortear ${modo} e Exportar`;
 
-  pillsContainer.innerHTML = '';
+  const fragmentoPills = document.createDocumentFragment();
   unidadesList.forEach(unit => {
     const pill = document.createElement('button');
     pill.type = 'button';
@@ -106,12 +111,9 @@ function iniciarSorteador(modo, unidades) {
     pill.dataset.creg = unit;
     pill.setAttribute('aria-pressed', 'false');
     pill.textContent = unit;
-    pill.addEventListener('click', () => {
-      const excluded = pill.classList.toggle('excluded');
-      pill.setAttribute('aria-pressed', String(excluded));
-    });
-    pillsContainer.appendChild(pill);
+    fragmentoPills.appendChild(pill);
   });
+  pillsContainer.replaceChildren(fragmentoPills);
 
   processEntry.hidden = true;
   sortearBtn.hidden = true;
@@ -129,7 +131,7 @@ function iniciarSorteador(modo, unidades) {
 }
 
 function clearRows() {
-  tbody.innerHTML = '';
+  tbody.replaceChildren();
 }
 
 function mostrarMensagemFormulario(mensagem, campo) {
@@ -170,15 +172,13 @@ function createRowElement(index) {
   const optDefaultAss = document.createElement('option'); optDefaultAss.value = ''; optDefaultAss.textContent = 'Selecione o Assunto'; optDefaultAss.disabled = true; optDefaultAss.selected = true;
   selAss.appendChild(optDefaultAss);
   assuntosAtivos.forEach(a => { const o = document.createElement('option'); o.value = a; o.textContent = a; selAss.appendChild(o) });
-  const atualizarEstadoAssunto = () => selAss.classList.toggle('placeholder-select', !selAss.value);
-  atualizarEstadoAssunto();
-  selAss.addEventListener('change', atualizarEstadoAssunto);
+  selAss.classList.toggle('placeholder-select', !selAss.value);
   // Na Câmara de Julgamento o assunto é sempre Auto de Infração: já vem definido e travado.
   if (modoSorteio === 'CJ') {
     selAss.value = 'Auto de Infração';
     selAss.disabled = true;
     selAss.classList.add('fixed-field');
-    atualizarEstadoAssunto();
+    selAss.classList.remove('placeholder-select');
   }
   tdAss.appendChild(selAss);
   const tdRec = document.createElement('td');
@@ -188,33 +188,11 @@ function createRowElement(index) {
   const optDefaultRec = document.createElement('option'); optDefaultRec.value = ''; optDefaultRec.textContent = modoSorteio === 'CJ' ? 'Houve defesa?' : 'Selecione o Recurso'; optDefaultRec.disabled = true; optDefaultRec.selected = true;
   selRec.appendChild(optDefaultRec);
   (modoSorteio === 'CJ' ? defesas : recursos).forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; selRec.appendChild(o) });
-  const atualizarEstadoDefesa = () => selRec.classList.toggle('placeholder-select', !selRec.value);
-  atualizarEstadoDefesa();
-  selRec.addEventListener('change', atualizarEstadoDefesa);
+  selRec.classList.toggle('placeholder-select', !selRec.value);
   tdRec.appendChild(selRec);
 
   // Só no CREG: fora de Auto de Infração não existe recurso. Na CJ o assunto é
   // travado em Auto de Infração e a coluna é Defesa, que sempre se aplica.
-  if (modoSorteio !== 'CJ') {
-    // "Não se aplica" posto pelo sistema volta a ser pergunta em aberto quando o
-    // assunto vira Auto de Infração de novo. Sem esta marca, uma correção de
-    // assunto deixava o recurso com o valor que o próprio sistema tinha escrito,
-    // e a validação aprovava um dado que ninguém escolheu.
-    let travadoPeloSistema = false;
-    selAss.addEventListener('change', () => {
-      if (selAss.value !== 'Auto de Infração') {
-        selRec.value = 'Não se aplica';
-        selRec.disabled = true;
-        travadoPeloSistema = true;
-      } else {
-        selRec.disabled = false;
-        if (travadoPeloSistema) selRec.value = '';
-        travadoPeloSistema = false;
-      }
-      atualizarEstadoDefesa();
-    });
-  }
-
   const tdDel = document.createElement('td');
   tdDel.className = 'acoes';
   tdDel.dataset.label = 'Ações';
@@ -224,23 +202,62 @@ function createRowElement(index) {
   btnDel.textContent = 'Excluir';
   btnDel.setAttribute('aria-label', `Excluir linha ${index}`);
   btnDel.title = 'Excluir esta linha';
-  btnDel.addEventListener('click', () => {
-    tr.remove();
-    recalculaOrdem();
-  });
   tdDel.appendChild(btnDel);
 
   tr.append(tdOrdem, tdProc, tdAss, tdRec, tdDel);
   return tr;
 }
 
-function createRows(n) {
-  clearRows();
+const proximoFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
+
+async function createRows(n) {
+  tbody.replaceChildren();
+  const fragmento = document.createDocumentFragment();
   for (let i = 1; i <= n; i++) {
-    const tr = createRowElement(i);
-    tbody.appendChild(tr);
+    fragmento.appendChild(createRowElement(i));
+    // Em lotes grandes, devolve o controle ao navegador para que o loading seja
+    // pintado e outras interações não esperem toda a construção das linhas.
+    if (i % 40 === 0 || i === n) {
+      tbody.appendChild(fragmento);
+      if (i < n) await proximoFrame();
+    }
   }
 }
+
+pillsContainer.addEventListener('click', event => {
+  const pill = event.target.closest('.pill');
+  if (!pill || !pillsContainer.contains(pill)) return;
+  const excluido = pill.classList.toggle('excluded');
+  pill.setAttribute('aria-pressed', String(excluido));
+});
+
+tbody.addEventListener('change', event => {
+  const select = event.target.closest('select');
+  if (!select || !tbody.contains(select)) return;
+  select.classList.toggle('placeholder-select', !select.value);
+
+  if (modoSorteio === 'CJ' || !select.closest('.col-assunto')) return;
+
+  const row = select.closest('tr');
+  const decisao = row.querySelector('.col-decisao select');
+  if (select.value !== 'Auto de Infração') {
+    decisao.value = 'Não se aplica';
+    decisao.disabled = true;
+    row.dataset.decisaoAutomatica = 'true';
+  } else {
+    decisao.disabled = false;
+    if (row.dataset.decisaoAutomatica === 'true') decisao.value = '';
+    delete row.dataset.decisaoAutomatica;
+  }
+  decisao.classList.toggle('placeholder-select', !decisao.value);
+});
+
+tbody.addEventListener('click', event => {
+  const botao = event.target.closest('.btn-excluir');
+  if (!botao || !tbody.contains(botao)) return;
+  botao.closest('tr').remove();
+  recalculaOrdem();
+});
 
 function getParticipantes() {
   const excluidos = Array.from(document.querySelectorAll('#pillsContainer .excluded')).map(p => p.dataset.creg);
@@ -356,9 +373,6 @@ function sortearProcessos() {
   // ── Renderizar Resultados na Interface ──────────────────────────────────────
   const divResultado = document.getElementById('resultadoSorteio');
   const divResumo = document.getElementById('resumoContagem');
-  const tbodyResult = document.querySelector('#resultTable tbody');
-  const thUnidadeResult = document.getElementById('thUnidadeResult');
-  
   if (divResultado && divResumo && tbodyResult) {
     // 1. Atualizar cabeçalho da coluna de resultado
     if (thUnidadeResult) {
@@ -368,8 +382,8 @@ function sortearProcessos() {
     }
 
     // 2. Limpar conteúdo anterior
-    tbodyResult.innerHTML = '';
-    divResumo.innerHTML = '';
+    tbodyResult.replaceChildren();
+    divResumo.replaceChildren();
     
     // 3. Montar a contagem de cada processo para cada unidade
     const countWrapper = document.createElement('div');
@@ -387,6 +401,7 @@ function sortearProcessos() {
     divResumo.appendChild(countWrapper);
 
     // 4. Preencher a tabela de resultados
+    const fragmentoResultado = document.createDocumentFragment();
     rows.forEach(r => {
       const numProc = r.querySelector('.col-processo input').value.trim();
       const assunto = r.querySelector('.col-assunto select').value;
@@ -405,8 +420,9 @@ function sortearProcessos() {
       tdUn.textContent = unidadeSorteada;
 
       tr.append(tdProc, tdAss, tdUn);
-      tbodyResult.appendChild(tr);
+      fragmentoResultado.appendChild(tr);
     });
+    tbodyResult.appendChild(fragmentoResultado);
 
     // Exibir a seção de resultados e ocultar a tabela de inputs / controles
     divResultado.hidden = false;
@@ -429,7 +445,6 @@ function sortearProcessos() {
 
   exportarWord(sorteio);
 
-  const resultadoStatus = document.getElementById('resultadoStatus');
   if (resultadoStatus) {
     resultadoStatus.replaceChildren(criarIndicadorCarregamento('Registrando o sorteio…'));
     resultadoStatus.hidden = false;
@@ -624,21 +639,34 @@ function baixarBackup(sorteio) {
   baixarArquivo(new Blob([json], { type: 'application/json' }), nomeArquivo(sorteio, 'json'));
 }
 
-createBtn.addEventListener('click', () => {
+createBtn.addEventListener('click', async () => {
   const n = parseInt(numRowsInput.value) || 0;
   if (n < 1 || n > 500) {
     mostrarMensagemFormulario('Informe uma quantidade entre 1 e 500 processos.', numRowsInput);
     return;
   }
   esconderMensagemFormulario();
-  createRows(n);
+  numRowsInput.disabled = true;
+  addRowBtn.disabled = true;
+  sortearBtn.hidden = true;
   processEntry.hidden = false;
-  sortearBtn.hidden = false;
-  tbody.querySelector('input')?.focus();
+  processEntry.setAttribute('aria-busy', 'true');
+  alternarBotaoCarregando(createBtn, true, 'Gerando linhas…');
+
+  try {
+    await createRows(n);
+    sortearBtn.hidden = false;
+    tbody.querySelector('input')?.focus();
+  } finally {
+    numRowsInput.disabled = false;
+    addRowBtn.disabled = false;
+    processEntry.removeAttribute('aria-busy');
+    alternarBotaoCarregando(createBtn, false);
+  }
 });
 
 addRowBtn.addEventListener('click', () => {
-  const nextIndex = tbody.querySelectorAll('tr').length + 1;
+  const nextIndex = tbody.children.length + 1;
   const tr = createRowElement(nextIndex);
   tbody.appendChild(tr);
 });

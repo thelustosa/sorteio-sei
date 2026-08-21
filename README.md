@@ -64,14 +64,18 @@ endereço não existe. Todo o resto está agrupado por natureza.
 ├── 404.html                página de endereço inexistente
 │
 ├── assets/
-│   ├── css/index.css       o design de todas as páginas
+│   ├── css/index.css       fonte legível do design de todas as páginas
+│   ├── css/index.min.css   versão otimizada servida pelo site
 │   ├── js/
-│   │   ├── index.js        lógica do sorteio e da ata
-│   │   ├── julgados.js     lógica do registro de julgamentos
-│   │   └── supabase.js     configuração, login e chamadas — usado pelas duas páginas
+│   │   ├── bootstrap.js    carrega cada área somente depois da autenticação
+│   │   ├── index.js        fonte da lógica do sorteio e da ata
+│   │   ├── julgados.js     fonte do registro de julgamentos
+│   │   ├── supabase.js     configuração, login e chamadas — usado pelas duas páginas
+│   │   └── *.min.js        versões otimizadas servidas pelo site
 │   ├── fonts/              Montserrat em .woff2 e a licença OFL
 │   └── img/                logotipos, favicon e as capturas de tela do README
 │
+├── sw.js                   cache versionado dos assets estáticos
 ├── sql/                    tudo que roda no SQL Editor do Supabase
 │   ├── schema.sql          tabelas, gatilho, função de registro e RLS
 │   ├── verificacao_cj.sql  conferência de consistência — só lê
@@ -88,6 +92,21 @@ endereço não existe. Todo o resto está agrupado por natureza.
 Documentação: este README, mais o [`FLUXO-CJ.md`](FLUXO-CJ.md) — o fluxo completo
 da Câmara de Julgamento, do sorteio ao julgamento registrado, com as regras, as
 tabelas, a API e o tratamento de falhas.
+
+O GitHub Pages define um cache curto para os arquivos publicados e não permite
+configurar cabeçalhos por repositório. Por isso, o `sw.js` guarda apenas CSS,
+JavaScript, fontes e imagens do próprio site; HTML e dados do Supabase nunca
+entram nesse cache. Ao alterar um asset, atualize a mesma versão em
+`ASSET_VERSION` (`assets/js/supabase.js`), nos parâmetros `?v=` dos HTMLs e em
+`CACHE_NAME` (`sw.js`), gere novamente os arquivos `.min.*` e rode os testes.
+
+```powershell
+npx --yes esbuild assets/css/index.css --minify --outfile=assets/css/index.min.css
+npx --yes esbuild assets/js/supabase.js --minify-syntax --minify-whitespace --outfile=assets/js/supabase.min.js
+npx --yes esbuild assets/js/bootstrap.js --minify-syntax --minify-whitespace --outfile=assets/js/bootstrap.min.js
+npx --yes esbuild assets/js/index.js --minify-syntax --minify-whitespace --outfile=assets/js/index.min.js
+npx --yes esbuild assets/js/julgados.js --minify-syntax --minify-whitespace --outfile=assets/js/julgados.min.js
+```
 
 ---
 
