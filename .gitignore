@@ -12,6 +12,11 @@ Thumbs.db
 # interessado pessoa física e o repositório é público.
 dados/*.sql
 
+# Credenciais locais. O repositório é público: a connection string do banco
+# nunca pode entrar num commit.
+.env
+.env.*
+
 # Cache do Python
 __pycache__/
 
