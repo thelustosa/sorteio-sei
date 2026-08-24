@@ -29,6 +29,8 @@ sys.path.insert(0, str(RAIZ / 'dados'))  # importar_planilha, carregado sob dema
 
 PLANILHA_PADRAO = Path.home() / 'Downloads' / 'Câmara de Julgamento - REG.xlsx'
 PG = banco.Postgres('sorteio_sei_test', 55433)
+MIGRACAO = RAIZ / 'supabase' / 'migrations' / \
+    '20260823165725_corrigir_integridade_creg_e_privilegios.sql'
 
 testes = []
 
@@ -123,6 +125,12 @@ def tabelas_criadas(cur):
 
 
 @teste
+def schema_provisiona_marco_da_serie(cur):
+    assert uma(cur, """select count(*), min(data_sessao) from pautas_cj
+                        where url = 'marco:inicio-da-serie'""") == (1, date(2026, 6, 18))
+
+
+@teste
 def restricoes_e_indices(cur):
     """Chaves, unicidade e FK no lugar — é o que impede duplicação e órfão."""
     cur.execute("""select conname, contype from pg_constraint
@@ -174,13 +182,46 @@ def navegador_nao_atualiza_nem_apaga_julgados(cur):
 
 
 @teste
+def privilegios_sql_repetem_o_minimo_da_rls(cur):
+    """Grants padrão do Supabase não podem ampliar o que cada política permite."""
+    esperado = {
+        ('authenticated', 'processos_sorteados'): {'INSERT'},
+        ('authenticated', 'acervo_cj'): {'INSERT'},
+        ('authenticated', 'julgados_cj'): {'SELECT'},
+    }
+    cur.execute("""select grantee, table_name, privilege_type
+                     from information_schema.role_table_grants
+                    where table_schema = 'public'
+                      and table_name in ('processos_sorteados', 'acervo_cj',
+                                         'julgados_cj', 'pautas_cj')
+                      and grantee in ('anon', 'authenticated')""")
+    obtido = {}
+    for papel, tabela, privilegio in cur.fetchall():
+        obtido.setdefault((papel, tabela), set()).add(privilegio)
+    assert obtido == esperado
+
+    cur.execute("""select grantee, object_name, privilege_type
+                     from information_schema.role_usage_grants
+                    where object_schema = 'public' and object_type = 'SEQUENCE'
+                      and grantee in ('anon', 'authenticated')""")
+    assert set(cur.fetchall()) == {
+        ('authenticated', 'processos_sorteados_id_seq', 'USAGE'),
+        ('authenticated', 'acervo_cj_id_seq', 'USAGE'),
+    }
+
+
+@teste
 def gatilho_roda_com_privilegio_proprio(cur):
     """SECURITY DEFINER com search_path fixo: lê o acervo sem abrir a tabela."""
-    cur.execute("""select prosecdef, proconfig from pg_proc
+    cur.execute("""select prosecdef, proconfig,
+                          has_function_privilege('anon', oid, 'execute'),
+                          has_function_privilege('authenticated', oid, 'execute')
+                     from pg_proc
                     where proname = 'julgados_cj_derivar_do_acervo'""")
-    secdef, config = cur.fetchone()
+    secdef, config, pode_anonimo, pode_autenticado = cur.fetchone()
     assert secdef is True
     assert config and any(c.startswith('search_path=') for c in config)
+    assert pode_anonimo is False and pode_autenticado is False
 
 
 @teste
@@ -190,7 +231,7 @@ def tabela_antiga_recusa_cj(cur):
         cur.execute("""insert into processos_sorteados
                        (modo, data_hora, ordem, num_processo, assunto,
                         data_distribuicao, recurso, unidade)
-                       values ('CJ', now(), 1, '1', 'Auto de Infração',
+                       values ('CJ', now(), 1, '202600029000001', 'Auto de Infração',
                                current_date, 'Com recurso', 'CJ1')""")
     except psycopg2.errors.CheckViolation:
         return
@@ -345,6 +386,20 @@ def distribuicao_informada_manda_no_vinculo(cur):
 
 
 @teste
+def distribuicao_informada_sem_correspondencia_nao_inventa_vinculo(cur):
+    """Data manual sem distribuição igual deve ficar órfã para revisão."""
+    cur.execute("""insert into acervo_cj (num_processo, relator, data_distribuicao, origem)
+                   values ('900000000000034', 'CJ5', date '2026-08-15', 'sorteio')""")
+    cur.execute("""insert into julgados_cj
+                   (num_processo, data_sessao, data_distribuicao, relator, defesa)
+                   values ('900000000000034', date '2026-08-20', date '2026-08-01',
+                           'Conselheira Manual', false)
+                   returning acervo_id, data_distribuicao, relator, defesa""")
+    assert cur.fetchone() == (None, date(2026, 8, 1), 'Conselheira Manual', False)
+    cur.connection.rollback()
+
+
+@teste
 def distribuicao_posterior_a_sessao_ainda_e_encontrada(cur):
     """Caso da planilha: única distribuição é posterior à sessão (INDEX/MATCH acha)."""
     cur.execute("""insert into acervo_cj (num_processo, relator, data_distribuicao, origem)
@@ -430,6 +485,28 @@ def rederivar_liga_o_julgado_ao_acervo_que_chegou_depois(cur):
 
 
 @teste
+def rederivar_vincula_orfao_sem_apagar_campos_manuais(cur):
+    """O vínculo faltante volta sem trocar os valores já revisados pela secretaria."""
+    cur.execute("""insert into julgados_cj
+                   (num_processo, data_sessao, relator, defesa, data_distribuicao)
+                   values ('900000000000033', date '2026-08-20',
+                           'Conselheira Manual', false, date '2026-08-01')""")
+    cur.execute("""insert into acervo_cj
+                   (num_processo, relator, data_distribuicao, defesa, origem)
+                   values ('900000000000033', 'CJ2', date '2026-08-01', true, 'sorteio'),
+                          ('900000000000033', 'CJ5', date '2026-08-15', true, 'sorteio')""")
+
+    cur.execute((RAIZ / 'sql' / 'rederivar_cj.sql').read_text(encoding='utf-8'))
+
+    assert uma(cur, """select j.acervo_id is not null, j.relator, j.defesa,
+                              j.data_distribuicao, j.dias_dt, a.data_distribuicao
+                         from julgados_cj j join acervo_cj a on a.id = j.acervo_id
+                        where j.num_processo = '900000000000033'""") == \
+        (True, 'Conselheira Manual', False, date(2026, 8, 1), 19, date(2026, 8, 1))
+    cur.connection.rollback()
+
+
+@teste
 def campos_opcionais_aceitam_vazio(cur):
     """Voto, status e pauta podem faltar — a planilha tem linhas assim."""
     cur.execute("""insert into acervo_cj (num_processo, relator, data_distribuicao, origem)
@@ -471,6 +548,57 @@ def sorteio_repetido_e_barrado(cur):
     finally:
         cur.connection.rollback()
     raise AssertionError('acervo_cj aceitou a mesma distribuição duas vezes')
+
+
+@teste
+def creg_recusa_a_mesma_distribuicao_duas_vezes(cur):
+    """Mesmo processo, dia e unidade do CREG não podem virar duas linhas."""
+    valores = ("CREG", "2026-08-22 09:00:00+00", "202600029000020",
+               "2026-08-22", "CREG1")
+    cur.execute("""insert into processos_sorteados
+                   (modo, data_hora, ordem, num_processo, assunto,
+                    data_distribuicao, recurso, unidade)
+                   values (%s, %s, 1, %s, 'Requerimento', %s, 'Não se aplica', %s)""",
+                valores)
+    try:
+        cur.execute("""insert into processos_sorteados
+                       (modo, data_hora, ordem, num_processo, assunto,
+                        data_distribuicao, recurso, unidade)
+                       values (%s, %s, 2, %s, 'Requerimento', %s, 'Não se aplica', %s)""",
+                    valores)
+    except psycopg2.errors.UniqueViolation:
+        return
+    finally:
+        cur.connection.rollback()
+    raise AssertionError('processos_sorteados aceitou a mesma distribuição duas vezes')
+
+
+@teste
+def creg_novo_exige_numero_de_processo_com_15_digitos(cur):
+    """O acervo limpo mantém validada a regra aplicada às novas gravações."""
+    assert uma(cur, """select convalidated from pg_constraint
+                         where conrelid = 'public.processos_sorteados'::regclass
+                           and conname = 'processos_sorteados_num_processo_15_digitos'""") is True
+    try:
+        cur.execute("""insert into processos_sorteados
+                       (modo, data_hora, ordem, num_processo, assunto,
+                        data_distribuicao, recurso, unidade)
+                       values ('CREG', now(), 3, '1234', 'Requerimento',
+                               current_date, 'Não se aplica', 'CREG3')""")
+    except psycopg2.errors.CheckViolation:
+        return
+    finally:
+        cur.connection.rollback()
+    raise AssertionError('novo CREG com processo fora de 15 dígitos foi aceito')
+
+
+@teste
+def migracao_preserva_creg_valido(cur):
+    """A limpeza remove só os dois fixtures inválidos, nunca o acervo real."""
+    assert uma(cur, """select modo, ordem, assunto, data_distribuicao, recurso, unidade
+                         from processos_sorteados
+                        where num_processo = '202600029000777'""") == (
+        'CREG', 3, 'Requerimento', date(2026, 8, 20), 'Com recurso', 'CREG2')
 
 
 @teste
@@ -580,7 +708,8 @@ def julgado_pendente(cur, num='900000000000200', sessao='2026-07-02', pauta=23):
 def registrar(cur, itens, email='secretaria@goias.gov.br'):
     if email:
         cur.execute("select set_config('request.jwt.claims', %s, true)",
-                    (json.dumps({'email': email}),))
+                    (json.dumps({'email': email, 'role': 'authenticated',
+                                 'sub': '00000000-0000-0000-0000-000000000001'}),))
     return uma(cur, 'select public.registrar_votos(%s::jsonb)', (json.dumps(itens),))
 
 
@@ -684,16 +813,37 @@ def registrar_votos_grava_varios_de_uma_vez(cur):
 
 
 @teste
+def registrar_votos_recusa_jwt_sem_usuario(cur):
+    ident, _, _ = julgado_pendente(cur, num='900000000000206')
+    cur.execute("select set_config('request.jwt.claims', %s, true)",
+                (json.dumps({'role': 'authenticated', 'email': 'intruso@example.org'}),))
+    try:
+        uma(cur, 'select public.registrar_votos(%s::jsonb)',
+            (json.dumps([{'id': ident, 'voto': 'Manter', 'status': 'Julgado'}]),))
+    except psycopg2.Error as erro:
+        assert erro.pgcode == '28000'
+        return
+    finally:
+        cur.connection.rollback()
+    raise AssertionError('registrar_votos aceitou JWT sem usuário')
+
+
+@teste
 def registrar_votos_e_a_unica_porta_de_escrita(cur):
     """SECURITY DEFINER, search_path fixo e execução só para autenticado."""
     cur.execute("""select prosecdef, proconfig,
                           has_function_privilege('authenticated', oid, 'execute'),
-                          has_function_privilege('anon', oid, 'execute')
+                          has_function_privilege('anon', oid, 'execute'),
+                          has_function_privilege('service_role', oid, 'execute')
                      from pg_proc where proname = 'registrar_votos'""")
-    secdef, config, pode_autenticado, pode_anonimo = cur.fetchone()
+    secdef, config, pode_autenticado, pode_anonimo, pode_servico = cur.fetchone()
     assert secdef is True
     assert config and any(c.startswith('search_path=') for c in config)
-    assert pode_autenticado is True and pode_anonimo is False
+    assert pode_autenticado is True and pode_anonimo is False and pode_servico is False
+
+    cur.execute("select proconfig from pg_proc where proname = 'auth_email'")
+    config_auth_email = cur.fetchone()[0]
+    assert config_auth_email and any(c.startswith('search_path=') for c in config_auth_email)
 
 
 # ── Testes: nada quebrou no que já existia ───────────────────────────────────
@@ -822,9 +972,132 @@ def backup_e_restauracao_fecham_o_ciclo(cur):
 
 # ── Runner ───────────────────────────────────────────────────────────────────
 
+def preparar_upgrade_da_migracao():
+    """Volta só os deltas desta migração ao estado do schema no HEAD."""
+    PG.executar("""
+        alter table public.processos_sorteados
+          drop constraint processos_sorteados_num_processo_15_digitos;
+        drop index public.ux_processos_sorteados_distribuicao;
+        delete from public.pautas_cj where url = 'marco:inicio-da-serie';
+
+        create or replace function public.julgados_cj_derivar_do_acervo()
+        returns trigger
+        language plpgsql
+        security definer
+        set search_path = ''
+        as $$
+        declare
+          origem public.acervo_cj%rowtype;
+        begin
+          if new.data_distribuicao is not null then
+            select * into origem
+              from public.acervo_cj
+             where num_processo = new.num_processo
+               and data_distribuicao = new.data_distribuicao
+             order by id
+             limit 1;
+          end if;
+
+          if origem.id is null then
+            select * into origem
+              from public.acervo_cj
+             where num_processo = new.num_processo
+               and data_distribuicao <= new.data_sessao
+             order by data_distribuicao desc, id desc
+             limit 1;
+          end if;
+
+          if origem.id is null then
+            select * into origem
+              from public.acervo_cj
+             where num_processo = new.num_processo
+             order by data_distribuicao, id
+             limit 1;
+          end if;
+
+          new.acervo_id         := origem.id;
+          new.relator           := coalesce(new.relator, origem.relator);
+          new.defesa            := coalesce(new.defesa, origem.defesa);
+          new.data_distribuicao := coalesce(new.data_distribuicao, origem.data_distribuicao);
+          return new;
+        end;
+        $$;
+
+        create or replace function public.auth_email()
+        returns text
+        language sql
+        stable
+        as $$
+          select nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'email'
+        $$;
+        alter function public.auth_email() reset all;
+
+        create or replace function public.registrar_votos(itens jsonb)
+        returns int
+        language plpgsql
+        security definer
+        set search_path = ''
+        as $$
+        declare
+          quem     text := coalesce(public.auth_email(), 'desconhecido');
+          invalido int;
+          gravados int;
+        begin
+          if jsonb_typeof(itens) is distinct from 'array' then
+            raise exception 'registrar_votos espera uma lista de itens';
+          end if;
+
+          select count(*) into invalido
+            from jsonb_array_elements(itens) i
+           where coalesce(i ->> 'id', '') !~ '^[0-9]+$'
+              or nullif(i ->> 'voto', '')   not in ('Manter', 'Anular', 'Vista')
+              or nullif(i ->> 'status', '') not in ('Julgado', 'Retornou', 'Retirado', 'Vista');
+
+          if invalido > 0 then
+            raise exception 'id, voto ou status fora do permitido (% item(ns))', invalido;
+          end if;
+
+          update public.julgados_cj j
+             set voto           = nullif(i ->> 'voto', ''),
+                 status         = nullif(i ->> 'status', ''),
+                 atualizado_em  = now(),
+                 atualizado_por = quem
+            from jsonb_array_elements(itens) i
+           where j.id = (i ->> 'id')::bigint
+             and (j.voto is null or j.status is null or j.atualizado_em is not null);
+
+          get diagnostics gravados = row_count;
+          return gravados;
+        end;
+        $$;
+
+        grant all on public.processos_sorteados, public.acervo_cj,
+                     public.julgados_cj, public.pautas_cj
+          to anon, authenticated;
+        grant all on all sequences in schema public to anon, authenticated;
+        grant execute on function public.julgados_cj_derivar_do_acervo()
+          to public, anon, authenticated;
+        grant execute on function public.auth_email() to public, anon, authenticated;
+        grant execute on function public.registrar_votos(jsonb)
+          to anon, service_role;
+
+        insert into public.processos_sorteados
+          (modo, data_hora, ordem, num_processo, assunto,
+           data_distribuicao, recurso, unidade)
+        values
+          ('CREG', now(), 1, '123421', 'Requerimento',
+           date '2026-08-20', 'Com recurso', 'CREG2'),
+          ('CREG', now(), 2, '1234', 'Requerimento',
+           date '2026-08-20', 'Sem recurso', 'CREG3'),
+          ('CREG', now(), 3, '202600029000777', 'Requerimento',
+           date '2026-08-20', 'Com recurso', 'CREG2');
+    """)
+
+
 def preparar_banco(planilha):
     rodar_arquivo(RAIZ / 'sql' / 'schema.sql')
-    rodar_arquivo(RAIZ / 'sql' / 'schema.sql')  # aplicar por cima de si mesmo é no-op
+    preparar_upgrade_da_migracao()
+    rodar_arquivo(MIGRACAO)
 
     if planilha:
         subprocess.run([sys.executable, str(RAIZ / 'dados' / 'importar_planilha.py'),
@@ -846,12 +1119,14 @@ def main(argv):
         if caminho:
             PLANILHA = Planilha(caminho)
 
-        falhas = 0
+        falhas = executados = pulados = 0
         with PG.conectar() as conn:
             for fn in testes:
                 if getattr(fn, 'precisa_planilha', False) and not caminho:
                     print(f'PULA  {fn.__name__}')
+                    pulados += 1
                     continue
+                executados += 1
                 with conn.cursor() as cur:
                     try:
                         fn(cur)
@@ -862,8 +1137,7 @@ def main(argv):
                         falhas += 1
                         print(f'FALHA {fn.__name__}: {type(e).__name__}: {e}')
 
-        total = len(testes)
-        print(f'\n{total - falhas}/{total} testes passaram.')
+        print(f'\n{executados - falhas}/{executados} testes passaram; {pulados} pulados.')
         return 1 if falhas else 0
     finally:
         PG.derrubar()

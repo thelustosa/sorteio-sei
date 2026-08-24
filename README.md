@@ -39,7 +39,7 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 - **Defesa no lugar de Recurso** (CJ): na Câmara de Julgamento a 6ª coluna registra se o autuado apresentou **Defesa** (Sim/Não) — é esse o dado que os julgados herdam do acervo. Recurso é conceito do Conselho Regulador e só aparece no modo CREG.
 - **Exportação da Ata em Word**: geração automática da ata de distribuição em formato Word (`.doc`), nomeada dinamicamente (`Sorteio_CREG_18.08.2026.doc`). A ata traz as mesmas colunas da tela — ordem, processo, assunto, recurso (ou defesa, na CJ) e unidade sorteada — para que quem lê o documento consiga conferir a repartição por assunto sem abrir o sistema.
 - **Registro de Julgamentos**: página própria onde a secretaria abre uma pauta e preenche o voto e o status de cada processo julgado. Os processos chegam sozinhos das pautas publicadas pela AGR, e cada preenchimento guarda quem fez e quando.
-- **Registro no Banco de Dados**: ao final do sorteio, os dados que antes iam para as planilhas são gravados no banco (Supabase/PostgreSQL), uma linha por processo — a Câmara de Julgamento no seu acervo (`acervo_cj`), o Conselho Regulador em `processos_sorteados`. Enquanto o banco não estiver configurado — ou se o envio falhar — o sistema baixa automaticamente um arquivo `.json` de backup com o sorteio completo, para reenvio posterior, de modo que nenhum sorteio se perca.
+- **Registro no Banco de Dados**: ao final do sorteio, os dados que antes iam para as planilhas são gravados no banco (Supabase/PostgreSQL), uma linha por processo — a Câmara de Julgamento no seu acervo (`acervo_cj`), o Conselho Regulador em `processos_sorteados`. Enquanto o banco não estiver configurado — ou se o envio falhar — o sistema oferece um botão para baixar o sorteio completo em `.json`, sem depender de downloads automáticos bloqueados pelo navegador.
 
 ---
 
@@ -64,14 +64,18 @@ endereço não existe. Todo o resto está agrupado por natureza.
 ├── 404.html                página de endereço inexistente
 │
 ├── assets/
-│   ├── css/index.css       o design de todas as páginas
+│   ├── css/index.css       fonte legível do design de todas as páginas
+│   ├── css/index.min.css   versão otimizada servida pelo site
 │   ├── js/
-│   │   ├── index.js        lógica do sorteio e da ata
-│   │   ├── julgados.js     lógica do registro de julgamentos
-│   │   └── supabase.js     configuração, login e chamadas — usado pelas duas páginas
+│   │   ├── bootstrap.js    carrega cada área somente depois da autenticação
+│   │   ├── index.js        fonte da lógica do sorteio e da ata
+│   │   ├── julgados.js     fonte do registro de julgamentos
+│   │   ├── supabase.js     configuração, login e chamadas — usado pelas duas páginas
+│   │   └── *.min.js        versões otimizadas servidas pelo site
 │   ├── fonts/              Montserrat em .woff2 e a licença OFL
 │   └── img/                logotipos, favicon e as capturas de tela do README
 │
+├── sw.js                   cache versionado dos assets estáticos
 ├── sql/                    tudo que roda no SQL Editor do Supabase
 │   ├── schema.sql          tabelas, gatilho, função de registro e RLS
 │   ├── verificacao_cj.sql  conferência de consistência — só lê
@@ -79,23 +83,52 @@ endereço não existe. Todo o resto está agrupado por natureza.
 │   ├── backup_cj.sql       copia as tabelas da CJ para o schema backup_cj
 │   └── restaurar_cj.sql    a volta do backup
 │
+├── supabase/migrations/    histórico aplicado ao projeto hospedado
 ├── sincronizacao/          job que lê as pautas da AGR (roda no GitHub Actions)
 ├── dados/                  conversão da planilha histórica em SQL
 ├── documentos/             Termo de Entrega oficial do projeto
-└── tests/                  as três suítes
+└── tests/                  suítes automatizadas e dependências de teste
 ```
 
 Documentação: este README, mais o [`FLUXO-CJ.md`](FLUXO-CJ.md) — o fluxo completo
 da Câmara de Julgamento, do sorteio ao julgamento registrado, com as regras, as
 tabelas, a API e o tratamento de falhas.
 
+O GitHub Pages define um cache curto para os arquivos publicados e não permite
+configurar cabeçalhos por repositório. Por isso, o `sw.js` guarda apenas CSS,
+JavaScript, fontes e imagens do próprio site; HTML e dados do Supabase nunca
+entram nesse cache. Ao alterar um asset, atualize a mesma versão em
+`ASSET_VERSION` (`assets/js/supabase.js`), nos parâmetros `?v=` dos HTMLs e em
+`CACHE_NAME` (`sw.js`), gere novamente os arquivos `.min.*` e rode os testes.
+
+```powershell
+npx --yes esbuild@0.28.2 assets/css/index.css --minify --outfile=assets/css/index.min.css
+npx --yes esbuild@0.28.2 assets/js/supabase.js --minify-syntax --minify-whitespace --outfile=assets/js/supabase.min.js
+npx --yes esbuild@0.28.2 assets/js/bootstrap.js --minify-syntax --minify-whitespace --outfile=assets/js/bootstrap.min.js
+npx --yes esbuild@0.28.2 assets/js/index.js --minify-syntax --minify-whitespace --outfile=assets/js/index.min.js
+npx --yes esbuild@0.28.2 assets/js/julgados.js --minify-syntax --minify-whitespace --outfile=assets/js/julgados.min.js
+```
+
 ---
 
 ## Configuração do Banco de Dados
 
-Crie um projeto gratuito no [Supabase](https://supabase.com), rode o [schema.sql](sql/schema.sql) no SQL Editor e preencha as constantes `SUPABASE_URL` e `SUPABASE_KEY` no [supabase.js](assets/js/supabase.js). O `sql/schema.sql` cria as tabelas, o gatilho, a função de registro de votos e as políticas de segurança — e pode ser reaplicado a qualquer momento sem tocar em dado nenhum.
+Crie um projeto gratuito no [Supabase](https://supabase.com), rode o [schema.sql](sql/schema.sql) no SQL Editor e preencha as constantes `SUPABASE_URL` e `SUPABASE_KEY` no [supabase.js](assets/js/supabase.js). O `sql/schema.sql` cria as tabelas, o gatilho, a função de registro de votos e as políticas de segurança — e pode ser reaplicado sem duplicar registros. Ele também garante o marco fixo da sincronização em 18/06/2026.
+
+Antes de reaplicá-lo numa base CREG já populada, rode
+[`sql/verificacao_cj.sql`](sql/verificacao_cj.sql). Se houver “Distribuição CREG
+repetida”, decida qual registro conservar: o índice único do schema falha com
+segurança, sem apagar ou escolher dados automaticamente.
+
+Sorteios CREG aceitam somente número SEI com 15 dígitos e a constraint fica
+validada. Se uma base antiga ainda tiver número fora do padrão, corrija-o pela
+fonte oficial antes de reaplicar o schema; a validação falha sem completar ou
+apagar números por inferência.
 
 Depois, em **Authentication → Users**, cadastre quem vai usar o sistema; e em **Authentication → Providers → Email**, mantenha **desativado** o "Enable sign ups", senão qualquer visitante criaria a própria conta.
+
+Se o projeto migrar para um plano Pro ou superior, ative também **Prevent use
+of leaked passwords**; o recurso não está disponível no plano Free.
 
 A chave publicável é pública por natureza e pode ficar no código: ela identifica o projeto, não autoriza operações. A proteção dos dados vem das políticas de RLS do `schema.sql`, que exigem **usuário autenticado** e dão a cada tabela o mínimo: o sorteio só **insere** (nenhum sorteio já gravado pode ser lido, alterado ou apagado pelo navegador), `julgados_cj` só é **lida** pela página de registro, e `pautas_cj` não é nem uma coisa nem outra. Não existe política de `UPDATE` ou `DELETE` em tabela nenhuma. É o que permite manter o código-fonte totalmente aberto para auditoria.
 
@@ -111,6 +144,10 @@ A CJ deixou de compartilhar a tabela `processos_sorteados` com o Conselho Regula
 - **`julgados_cj`** — uma linha por processo levado a uma **sessão de julgamento**, ligada ao registro do acervo por `acervo_id`.
 
 O que a planilha resolvia com fórmulas agora é regra do banco. Ao registrar um julgamento basta informar o processo e a data da sessão — um gatilho localiza o processo no acervo e preenche **relator**, **defesa** e **data de distribuição**, e o banco calcula **`dias_dt`** (dias entre a distribuição e a sessão) e **`periodo_dt`** (o trimestre, `1T26`). Valor informado à mão nunca é sobrescrito; gravar `null` num campo derivado pede a rederivação.
+
+Quando uma data de distribuição é informada à mão, o vínculo só é criado se
+existir no acervo aquela distribuição exata. Sem correspondência, o julgado fica
+órfão para revisão em vez de apontar para uma distribuição de outra data.
 
 Quando o processo foi redistribuído, vale a distribuição vigente **na data da sessão** — o relator que de fato levou o processo à mesa. Os campos derivados são gravados como cópia, e não lidos por referência, para que uma redistribuição posterior não reescreva um julgamento já ocorrido.
 
@@ -165,7 +202,7 @@ Como o parser identifica um processo: número SEI de **15 dígitos precedido de 
 
 Nada disso reimplementa a regra Acervo → Julgados: quem preenche relator, defesa e data de distribuição continua sendo o gatilho do banco. Processo que aparece na pauta e não está no acervo é gravado assim mesmo, sem inventar dado, e sai listado em `pautas_cj.processos_sem_acervo` para a secretaria completar o acervo.
 
-Rodar duas vezes não duplica nada: `pautas_cj.url` barra o documento repetido e a chave `(num_processo, data_sessao)` de `julgados_cj` barra o processo repetido.
+Rodar duas vezes não duplica nada: `pautas_cj.url` barra o documento repetido e a chave `(num_processo, data_sessao)` de `julgados_cj` barra o processo repetido. O marco de início é fixo e a rodada automática consulta todos os anos desde ele, então um PDF que falhou volta mesmo após a virada do ano; uma versão corrigida com URL nova também é processada.
 
 ### Backup e restauração
 
@@ -173,6 +210,12 @@ Em 19/08/2026 a série de julgados foi reiniciada: o histórico da planilha saiu
 das tabelas de produção e ficou guardado no schema `backup_cj`, dentro do mesmo
 banco. Produção passou a ter só os processos ainda não julgados, e os
 julgamentos passaram a ser registrados pelo sistema a partir dali.
+
+Dois dias depois, uma carga de recuperação repôs o período que a planilha não
+alcançava — de 25/06 a 20/08/2026 — lendo as atas de sorteio publicadas no SEI e
+as pautas publicadas pela AGR: 157 distribuições e 151 julgados. O script era de
+execução única e não ficou no repositório; o que ele decidiu, e onde deixou o
+banco, está em [`FLUXO-CJ.md`](FLUXO-CJ.md).
 
 - [`backup_cj.sql`](sql/backup_cj.sql) copia `acervo_cj`, `julgados_cj` e
   `pautas_cj` para o schema `backup_cj`. Rode antes de qualquer alteração de
@@ -194,6 +237,12 @@ docker run --rm -v "$PWD:/saida" postgres:15-alpine pg_dump "SUA_CONNECTION_STRI
 
 ### Testes
 
+Instale uma vez as dependências usadas pelas suítes Python:
+
+```bash
+python -m pip install -r tests/requirements.txt
+```
+
 ```bash
 python tests/test_cj.py "C:/caminho/Câmara de Julgamento - REG.xlsx"
 ```
@@ -208,9 +257,18 @@ Testa o parser e a sincronização contra fixtures reais (HTML da listagem, text
 
 ```bash
 node tests/test_sorteio.mjs
+node --test tests/test_frontend.mjs
+node tests/test_assets.mjs
 ```
 
-Não precisa de Docker nem de banco: lê o próprio `index.js` e exercita o embaralhamento, que precisa ser uniforme para o sorteio ser auditável.
+Não precisam de Docker nem de banco: exercitam o embaralhamento auditável, os
+fluxos do frontend e a coerência entre assets minificados, carregamento lazy e
+versão do cache.
+
+O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) repete essas
+verificações em todo push e pull request, executa as suítes PostgreSQL e rejeita
+fontes cujos arquivos `.min.*` não tenham sido regenerados com a versão fixada
+do esbuild.
 
 ---
 

@@ -345,6 +345,14 @@ def preparar(cur, acervo=None, sessao=date(2026, 6, 18)):
     cur.connection.commit()
 
 
+def inserir_marco(cur, sessao=date(2026, 6, 18)):
+    cur.execute("""insert into pautas_cj
+                   (url, titulo, numero, data_sessao, sha256)
+                   values ('marco:inicio-da-serie', 'Início da série', 0, %s, 'marco')""",
+                (sessao,))
+    cur.connection.commit()
+
+
 def fonte_com(numeros, falhas=()):
     """AGRFalsa servindo PDFs de verdade para as reuniões pedidas."""
     textos = {21: PAUTA_021, 22: PAUTA_022, 23: PAUTA_023}
@@ -475,6 +483,152 @@ def um_pdf_com_problema_nao_para_os_demais(cur):
 
 
 @teste
+def pauta_falha_e_retentada_depois_de_sessao_posterior(cur):
+    """Uma falha não pode fazer uma pauta antiga sumir nas rodadas seguintes."""
+    preparar(cur)
+    inserir_marco(cur)
+    with fonte_com([21, 22], falhas=[21]):
+        primeira = sincronizar.sincronizar(cur.connection, ano=2026, hoje=date(2026, 7, 1))
+
+    assert primeira['documentos_processados'] == 1
+    assert primeira['erros'][0]['numero'] == 21
+
+    with fonte_com([21]):
+        segunda = sincronizar.sincronizar(cur.connection, ano=2026, hoje=date(2026, 7, 1))
+
+    assert segunda['documentos_processados'] == 1
+    assert not segunda['erros']
+    assert segunda['ultima_sessao_conhecida'] == '2026-06-30'
+    assert segunda['data_de_corte'] == '2026-06-18'
+    assert uma(cur, """select count(*) from julgados_cj
+                        where data_sessao = date '2026-06-25' and pauta = 21""") > 0
+
+
+@teste
+def pauta_falha_continua_elegivel_apos_virada_do_ano(cur):
+    """A rodada automática precisa voltar aos anos cobertos pelo marco."""
+    preparar(cur)
+    inserir_marco(cur)
+    antiga = agr.Pauta(
+        url='https://goias.gov.br/agr/pauta-dezembro-2026.pdf',
+        titulo='Pauta de dezembro de 2026',
+        numero=40,
+        data_sessao=date(2026, 12, 17),
+    )
+    anos_consultados = []
+    listar_original = agr.listar_pautas
+
+    def listar(ano):
+        anos_consultados.append(ano)
+        return [antiga] if ano == 2026 else []
+
+    try:
+        agr.listar_pautas = listar
+        with AGRFalsa(pdfs={antiga.url: pdf_falso(PAUTA_022)}, falhas=[antiga.url]):
+            primeira = sincronizar.sincronizar(cur.connection, hoje=date(2026, 12, 31))
+
+        anos_consultados.clear()
+        with AGRFalsa(pdfs={antiga.url: pdf_falso(PAUTA_022)}):
+            segunda = sincronizar.sincronizar(cur.connection, hoje=date(2027, 1, 10))
+    finally:
+        agr.listar_pautas = listar_original
+
+    assert primeira['documentos_com_erro'] == 1
+    assert segunda['documentos_processados'] == 1 and not segunda['erros']
+    assert anos_consultados == [2026, 2027]
+    assert uma(cur, """select count(*) from julgados_cj
+                        where data_sessao = date '2026-12-17' and pauta = 40""") == 2
+
+
+@teste
+def banco_vazio_consulta_apenas_o_ano_corrente(cur):
+    """O sentinela 1900 não pode provocar uma centena de requisições."""
+    cur.execute('delete from julgados_cj; delete from pautas_cj')
+    cur.connection.commit()
+    anos_consultados = []
+    listar_original = agr.listar_pautas
+    try:
+        agr.listar_pautas = lambda ano: anos_consultados.append(ano) or []
+        resultado = sincronizar.sincronizar(cur.connection, hoje=date(2026, 8, 23))
+    finally:
+        agr.listar_pautas = listar_original
+
+    assert anos_consultados == [2026]
+    assert resultado['anos_consultados'] == [2026]
+
+
+@teste
+def banco_legado_sem_marco_preserva_consulta_do_ano_corrente(cur):
+    """Sem o marco novo, a última sessão continua sendo só o corte de datas."""
+    preparar(cur, sessao=date(2024, 12, 5))
+    anos_consultados = []
+    listar_original = agr.listar_pautas
+    try:
+        agr.listar_pautas = lambda ano: anos_consultados.append(ano) or []
+        sincronizar.sincronizar(cur.connection, hoje=date(2026, 8, 23))
+    finally:
+        agr.listar_pautas = listar_original
+
+    assert anos_consultados == [2026]
+
+
+@teste
+def desde_expande_a_consulta_mesmo_sem_marco(cur):
+    """A operação manual deve alcançar os anos pedidos numa base legada."""
+    preparar(cur, sessao=date(2024, 12, 5))
+    anos_consultados = []
+    listar_original = agr.listar_pautas
+    try:
+        agr.listar_pautas = lambda ano: anos_consultados.append(ano) or []
+        sincronizar.sincronizar(cur.connection, desde=date(2024, 1, 1),
+                                hoje=date(2026, 8, 23))
+    finally:
+        agr.listar_pautas = listar_original
+
+    assert anos_consultados == [2024, 2025, 2026]
+
+
+@teste
+def pauta_corrigida_com_url_nova_na_mesma_data_e_processada(cur):
+    """Uma republicação precisa entrar mesmo depois da pauta original da sessão."""
+    preparar(cur)
+    inserir_marco(cur)
+    original = next(p for p in _pautas_da_fixture() if p.numero == 22)
+    corrigida = agr.Pauta(
+        url=original.url.replace('.pdf', '-corrigida.pdf'),
+        titulo=original.titulo,
+        numero=original.numero,
+        data_sessao=original.data_sessao,
+    )
+    processo_novo = '202600029000803'
+    texto_corrigido = PAUTA_022.replace(
+        'Referência:',
+        f'2.3. Processo nº {processo_novo} - Interessado: Z - Auto de Infração nº 46.003\nReferência:',
+    )
+    cur.execute("""insert into acervo_cj
+                   (num_processo, relator, data_distribuicao, origem)
+                   values (%s, 'CJ1', date '2026-03-10', 'planilha')""", (processo_novo,))
+    cur.connection.commit()
+
+    listar_original = agr.listar_pautas
+    try:
+        agr.listar_pautas = lambda ano: [original]
+        with AGRFalsa(pdfs={original.url: pdf_falso(PAUTA_022)}):
+            primeira = sincronizar.sincronizar(cur.connection, ano=2026, hoje=date(2026, 7, 1))
+
+        agr.listar_pautas = lambda ano: [corrigida]
+        with AGRFalsa(pdfs={corrigida.url: pdf_falso(texto_corrigido)}):
+            segunda = sincronizar.sincronizar(cur.connection, ano=2026, hoje=date(2026, 7, 1))
+    finally:
+        agr.listar_pautas = listar_original
+
+    assert primeira['documentos_processados'] == 1
+    assert segunda['documentos_processados'] == 1
+    assert uma(cur, 'select count(*) from pautas_cj where url = %s', (corrigida.url,)) == 1
+    assert uma(cur, 'select count(*) from julgados_cj where num_processo = %s', (processo_novo,)) == 1
+
+
+@teste
 def documento_sem_processo_vira_erro_e_nao_e_marcado(cur):
     preparar(cur, sessao=date(2026, 6, 30))
     vazio = pdf_falso('PAUTA DE REUNIAO - 23\nData: 02/07/2026\n'
@@ -572,12 +726,14 @@ def main(argv):
     try:
         PG.rodar_arquivo(RAIZ / 'sql' / 'schema.sql')
 
-        falhas = 0
+        falhas = executados = pulados = 0
         with PG.conectar() as conn:
             for fn in testes:
                 if getattr(fn, 'precisa_rede', False) and not online:
                     print(f'PULA  {fn.__name__} (use --online)')
+                    pulados += 1
                     continue
+                executados += 1
                 precisa_cur = fn.__code__.co_argcount == 1
                 cur = conn.cursor() if precisa_cur else None
                 try:
@@ -592,7 +748,7 @@ def main(argv):
                     if cur:
                         cur.close()
 
-        print(f'\n{len(testes) - falhas}/{len(testes)} testes passaram.')
+        print(f'\n{executados - falhas}/{executados} testes passaram; {pulados} pulados.')
         return 1 if falhas else 0
     finally:
         PG.derrubar()

@@ -47,7 +47,13 @@ class Postgres:
         else:
             raise SystemExit('Postgres não subiu a tempo.')
 
-        self.executar('create role anon; create role authenticated; create role service_role;')
+        self.executar("""create role anon; create role authenticated; create role service_role;
+                        create schema auth;
+                        create function auth.uid() returns uuid language sql stable
+                        set search_path = '' as $$
+                          select (nullif(current_setting('request.jwt.claims', true), '')::jsonb
+                                  ->> 'sub')::uuid
+                        $$;""")
         return self
 
     def derrubar(self):

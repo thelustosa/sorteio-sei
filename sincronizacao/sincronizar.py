@@ -15,10 +15,12 @@ Fluxo:
         relator, defesa e data de distribuição
       → registra o documento em pautas_cj
 
-Quais pautas entram: as da comissão certa, com sessão já realizada, ainda não
-registradas em pautas_cj e posteriores à última sessão que o banco conhece. As
-duas últimas condições se cobrem — uma barra o mesmo documento, a outra barra o
-período que veio da planilha.
+Quais pautas entram: as da comissão certa, com sessão já realizada, URL ainda
+não registrada em pautas_cj e posteriores ao marco de início da série. O marco
+é fixo: uma pauta que falhar continua elegível mesmo que uma sessão posterior
+seja processada ou o ano vire, e uma republicação com URL nova também entra. Na
+execução automática são consultadas as listagens de todos os anos desde o marco;
+`--ano` limita a uma listagem quando a operação manual precisar disso.
 
 Nada aqui reimplementa a regra Acervo → Julgados: quem preenche os campos
 derivados é o gatilho julgados_cj_derivar_do_acervo, em schema.sql.
@@ -59,6 +61,13 @@ def urls_processadas(cur):
     return {u for (u,) in cur.fetchall()}
 
 
+def inicio_da_serie(cur):
+    """Devolve o marco fixo do histórico, quando configurado."""
+    cur.execute("""select max(data_sessao) from public.pautas_cj
+                    where url = 'marco:inicio-da-serie'""")
+    return cur.fetchone()[0]
+
+
 def gravar_julgados(cur, p, processos):
     """Insere os processos da pauta e devolve (importados, sem_acervo).
 
@@ -92,16 +101,23 @@ def registrar_pauta(cur, p, sha256, encontrados, importados, sem_acervo):
 
 # ── Orquestração ─────────────────────────────────────────────────────────────
 
-def pautas_pendentes(cur, ano, desde=None, hoje=None):
-    """(todas as pautas do ano, as que faltam processar, a data de corte)."""
+def pautas_pendentes(cur, ano=None, desde=None, hoje=None):
+    """(pautas encontradas, pendentes, corte e anos consultados)."""
     hoje = hoje or date.today()
-    corte = desde or ultima_sessao(cur)
+    marco = inicio_da_serie(cur)
+    corte = desde or marco or ultima_sessao(cur)
     ja_vistas = urls_processadas(cur)
 
-    todas = agr.listar_pautas(ano)
+    if ano is not None:
+        anos = [ano]
+    elif desde is not None or marco is not None:
+        anos = list(range(corte.year, hoje.year + 1))
+    else:
+        anos = [hoje.year]
+    todas = [p for a in anos for p in agr.listar_pautas(a)]
     pendentes = [p for p in todas
                  if p.url not in ja_vistas and corte < p.data_sessao <= hoje]
-    return todas, sorted(pendentes, key=lambda p: (p.data_sessao, p.numero)), corte
+    return todas, sorted(pendentes, key=lambda p: (p.data_sessao, p.numero)), corte, anos
 
 
 def processar_pauta(cur, p):
@@ -145,10 +161,13 @@ def processar_pauta(cur, p):
 
 def sincronizar(conn, ano=None, desde=None, hoje=None, simular=False):
     """Roda a sincronização inteira e devolve o resumo da operação."""
-    ano = ano or (hoje or date.today()).year
+    hoje = hoje or date.today()
+    ano_resumo = ano or hoje.year
     resumo = {
-        'ano': ano,
-        'fonte': agr.LISTAGEM.format(ano=ano),
+        'ano': ano_resumo,
+        'fonte': agr.LISTAGEM.format(ano=ano_resumo),
+        'anos_consultados': [],
+        'fontes': [],
         'simulacao': simular,
         'documentos_encontrados': 0,
         'documentos_novos': 0,
@@ -162,8 +181,12 @@ def sincronizar(conn, ano=None, desde=None, hoje=None, simular=False):
     }
 
     with conn.cursor() as cur:
-        todas, pendentes, corte = pautas_pendentes(cur, ano, desde, hoje)
-        resumo['ultima_sessao_conhecida'] = corte.isoformat()
+        ultima = ultima_sessao(cur)
+        todas, pendentes, corte, anos = pautas_pendentes(cur, ano, desde, hoje)
+        resumo['ultima_sessao_conhecida'] = ultima.isoformat()
+        resumo['data_de_corte'] = corte.isoformat()
+        resumo['anos_consultados'] = anos
+        resumo['fontes'] = [agr.LISTAGEM.format(ano=a) for a in anos]
         resumo['documentos_encontrados'] = len(todas)
         resumo['documentos_novos'] = len(pendentes)
 
@@ -200,10 +223,11 @@ def main(argv=None):
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--dsn', default=os.environ.get('SUPABASE_DB_URL'),
                    help='conexão do Postgres (padrão: variável SUPABASE_DB_URL)')
-    p.add_argument('--ano', type=int, help='ano da listagem (padrão: ano corrente)')
+    p.add_argument('--ano', type=int,
+                   help='limita a consulta a um ano (padrão: do marco ao ano corrente)')
     p.add_argument('--desde', type=lambda s: datetime.strptime(s, '%Y-%m-%d').date(),
                    help='reprocessa sessões depois desta data (AAAA-MM-DD), '
-                        'ignorando a última sessão do banco')
+                        'no lugar do marco automático')
     p.add_argument('--simular', action='store_true',
                    help='faz tudo e desfaz no fim: nada é gravado')
     args = p.parse_args(argv)

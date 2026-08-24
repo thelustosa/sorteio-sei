@@ -4,6 +4,9 @@
 # Artefatos de teste automatizado
 .playwright-mcp/
 
+# Estado local da CLI do Supabase
+supabase/.temp/
+
 # Sistema operacional
 Thumbs.db
 .DS_Store
@@ -11,6 +14,11 @@ Thumbs.db
 # Dados históricos gerados a partir da planilha da CJ: contêm nome de
 # interessado pessoa física e o repositório é público.
 dados/*.sql
+
+# Credenciais locais. O repositório é público: a connection string do banco
+# nunca pode entrar num commit.
+.env
+.env.*
 
 # Cache do Python
 __pycache__/
