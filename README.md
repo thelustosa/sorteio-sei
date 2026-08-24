@@ -107,6 +107,7 @@ npx --yes esbuild@0.28.2 assets/js/supabase.js --minify-syntax --minify-whitespa
 npx --yes esbuild@0.28.2 assets/js/bootstrap.js --minify-syntax --minify-whitespace --outfile=assets/js/bootstrap.min.js
 npx --yes esbuild@0.28.2 assets/js/index.js --minify-syntax --minify-whitespace --outfile=assets/js/index.min.js
 npx --yes esbuild@0.28.2 assets/js/julgados.js --minify-syntax --minify-whitespace --outfile=assets/js/julgados.min.js
+npx --yes esbuild@0.28.2 assets/js/acervo.js --minify-syntax --minify-whitespace --outfile=assets/js/acervo.min.js
 ```
 
 ---

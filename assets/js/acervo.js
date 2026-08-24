@@ -19,6 +19,7 @@ const acervoTotal = document.getElementById('acervoTotal');
 const acervoAtualizado = document.getElementById('acervoAtualizado');
 const btnAtualizar = document.getElementById('btnAtualizar');
 const btnImprimir = document.getElementById('btnImprimir');
+const loginOnlyCard = document.querySelector('[data-login-only]');
 
 btnAtualizar.addEventListener('click', () => carregarAcervo());
 btnImprimir.addEventListener('click', () => window.print());
@@ -29,6 +30,7 @@ function inicializarAcervo() {
   // rede deixaria a tela em branco, sem nem o botão de tentar de novo.
   btnAtualizar.hidden = false;
   acervoPanel.hidden = false;
+  if (loginOnlyCard) loginOnlyCard.hidden = true;
   carregarAcervo();
 }
 
@@ -101,6 +103,8 @@ async function carregarAcervo() {
   acervoVazio.hidden = true;
   acervoAtualizado.textContent = 'Carregando…';
   btnAtualizar.disabled = true;
+  btnAtualizar.setAttribute('aria-busy', 'true');
+  acervoPanel.setAttribute('aria-busy', 'true');
 
   let linhas;
   try {
@@ -111,11 +115,14 @@ async function carregarAcervo() {
     // "sua sessão expirou" — dois diagnósticos contraditórios na mesma tela.
     if (err.status === 401) return;
     acervoTabela.replaceChildren();
+    acervoAtualizado.textContent = 'Atualização indisponível';
     acervoErro.textContent = `Não foi possível carregar o acervo (${err.message}).`;
     acervoErro.hidden = false;
     return;
   } finally {
     btnAtualizar.disabled = false;
+    btnAtualizar.removeAttribute('aria-busy');
+    acervoPanel.removeAttribute('aria-busy');
   }
 
   const total = desenhar(linhas || []);

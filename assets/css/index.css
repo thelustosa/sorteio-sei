@@ -59,6 +59,20 @@
   --table-rule: rgba(0, 83, 75, 0.08);
   --table-row-hover: rgba(0, 83, 75, 0.025);
   --shadow-toast: 0 12px 28px rgba(17, 39, 32, 0.18);
+  --shadow-panel: 0 12px 32px rgba(17, 39, 32, 0.09);
+  --surface-subtle: #f8fbfa;
+  --surface-control: #f4f7f6;
+  --accent-panel: #e9f3ef;
+  --accent-secondary: #2f7668;
+  --accent-secondary-hover: #245f55;
+  --status-positive: #16816e;
+  --status-positive-ring: rgba(22, 129, 110, 0.11);
+  --on-accent-icon: #b8dbd1;
+  --on-accent-rule: rgba(255, 255, 255, 0.18);
+  --table-total-bg: #edf6f2;
+  --table-row-hover-strong: #f0f6f3;
+  --table-emphasis-bg: #e4f0eb;
+  --table-emphasis-total-bg: #cfe5dc;
   --radius-card: 12px;
   --radius-control: 8px;
   --radius-pill: 999px;
@@ -365,21 +379,21 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
   background: var(--surface-raised);
 }
 
-.selection-card-acervo { background: #f8fbfa; }
+.selection-card-acervo { background: var(--surface-subtle); }
 .selection-card-records {
-  border-color: rgba(0, 83, 75, 0.2);
-  background: #e9f3ef;
+  border-color: var(--accent-hover-soft);
+  background: var(--accent-panel);
 }
 
 .selection-card-records .mode-button-outline {
-  border-color: #2f7668;
-  background: #2f7668;
+  border-color: var(--accent-secondary);
+  background: var(--accent-secondary);
   color: var(--on-accent);
 }
 
 .selection-card-records .mode-button-outline:hover {
-  border-color: #245f55;
-  background: #245f55;
+  border-color: var(--accent-secondary-hover);
+  background: var(--accent-secondary-hover);
 }
 .selection-copy { display: grid; align-content: center; gap: 8px; }
 
@@ -704,7 +718,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 #julgadosTable select { min-width: 150px; }
 #contadorPendentes { color: var(--muted); font-size: var(--text-base); }
 
-/* Painel estático do acervo não julgado */
+/* Painel do acervo não julgado */
 .dashboard-main {
   flex: 1 0 auto;
   padding-top: 30px;
@@ -714,7 +728,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 .acervo-panel {
   overflow: hidden;
   border-radius: var(--radius-card);
-  box-shadow: 0 12px 32px rgba(17, 39, 32, 0.09);
+  box-shadow: var(--shadow-panel);
   animation: dashboard-reveal 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -757,7 +771,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   line-height: 1.35;
 }
 
-.acervo-scope svg { width: 26px; height: 26px; flex: 0 0 auto; color: #b8dbd1; }
+.acervo-scope svg { width: 26px; height: 26px; flex: 0 0 auto; color: var(--on-accent-icon); }
 
 .acervo-toolbar {
   display: flex;
@@ -779,28 +793,27 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   font-weight: 700;
 }
 
-.acervo-toolbar > p span,
-.acervo-panel-footer span {
+.status-dot {
   width: 8px;
   height: 8px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #16816e;
-  box-shadow: 0 0 0 4px rgba(22, 129, 110, 0.11);
+  background: var(--status-positive);
+  box-shadow: 0 0 0 4px var(--status-positive-ring);
 }
 
 .acervo-actions { display: flex; gap: 8px; }
 
 .acervo-actions button {
   display: inline-flex;
-  min-height: 36px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   gap: 7px;
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: #f4f7f6;
+  background: var(--surface-control);
   color: var(--muted);
   font-size: var(--text-sm);
   font-weight: 700;
@@ -828,7 +841,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 .acervo-table thead th {
   height: 52px;
   padding: 10px 12px;
-  border-right: 1px solid rgba(255, 255, 255, 0.18);
+  border-right: 1px solid var(--on-accent-rule);
   border-bottom: 0;
   background: var(--accent);
   color: var(--on-accent);
@@ -852,7 +865,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 .acervo-table tbody th {
   padding-left: 24px;
-  color: #314440;
+  color: var(--text);
   font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: 0.025em;
@@ -861,22 +874,44 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 }
 
 .acervo-table tbody td {
-  color: #87938f;
+  color: var(--muted);
   font-size: var(--text-md);
   font-weight: 700;
   text-align: center;
 }
 
 .acervo-table tbody tr:nth-child(even) th,
-.acervo-table tbody tr:nth-child(even) td:not(:last-child) { background: #f8fbfa; }
-.acervo-table tbody td:last-child { border-right: 0; background: #edf6f2; color: #5e847a; }
+.acervo-table tbody tr:nth-child(even) td:not(:last-child) { background: var(--surface-subtle); }
+.acervo-table tbody td:last-child { border-right: 0; background: var(--table-total-bg); color: var(--accent); }
 .acervo-table tbody tr:last-child th,
 .acervo-table tbody tr:last-child td { border-bottom: 0; }
 .acervo-table tbody tr:hover th,
-.acervo-table tbody tr:hover td { background: #f0f6f3; }
-.acervo-table tbody tr.acervo-emphasis th { background: #e4f0eb; color: #075246; }
-.acervo-table tbody tr.acervo-emphasis td:not(:last-child) { background: #f0f6f3; }
-.acervo-table tbody tr.acervo-emphasis td:last-child { background: #cfe5dc; color: #075246; }
+.acervo-table tbody tr:hover td { background: var(--table-row-hover-strong); }
+.acervo-table tbody tr.acervo-emphasis th { background: var(--table-emphasis-bg); color: var(--accent); }
+.acervo-table tbody tr.acervo-emphasis td:not(:last-child) { background: var(--table-row-hover-strong); }
+.acervo-table tbody tr.acervo-emphasis td:last-child { background: var(--table-emphasis-total-bg); color: var(--accent); }
+
+.acervo-table tfoot th,
+.acervo-table tfoot td {
+  height: 54px;
+  padding: 10px 12px;
+  border-top: 2px solid var(--border-strong);
+  border-right: 1px solid var(--table-rule);
+  background: var(--surface-subtle);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.acervo-table tfoot th {
+  padding-left: 24px;
+  font-size: var(--text-xs);
+  letter-spacing: 0.025em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.acervo-table tfoot td { font-size: var(--text-md); text-align: center; }
+.acervo-table tfoot td:last-child { border-right: 0; background: var(--accent-soft-strong); color: var(--accent); }
 
 .acervo-panel-footer {
   display: flex;
@@ -884,7 +919,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   gap: 10px;
   padding: 14px 20px;
   border-top: 1px solid var(--border-subtle);
-  background: #f8fbfa;
+  background: var(--surface-subtle);
   color: var(--muted);
   font-size: var(--text-xs);
   font-weight: 700;
@@ -1168,6 +1203,97 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   #processTable tbody tr { grid-template-columns: 1fr; }
   .empty-state { align-items: start; gap: 12px; }
   .toast-region { top: 12px; right: 16px; }
+}
+
+@media print {
+  @page { size: landscape; margin: 12mm; }
+
+  html,
+  body {
+    min-width: 0;
+    background: #fff;
+    color: #000;
+  }
+
+  body { display: block; }
+
+  .page-header-wrapper,
+  .green-bar,
+  .page-footer,
+  main > .card,
+  .acervo-actions { display: none !important; }
+
+  .container,
+  main.container {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .dashboard-main { padding: 0; }
+
+  .acervo-panel {
+    overflow: visible;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none;
+  }
+
+  .acervo-header {
+    padding: 0 0 12px;
+    border-bottom: 2px solid #000;
+    background: #fff;
+    color: #000;
+  }
+
+  .acervo-header h2,
+  .acervo-header p,
+  .acervo-scope { color: #000; }
+
+  .acervo-toolbar {
+    display: block;
+    padding: 8px 0;
+    border: 0;
+    background: #fff;
+  }
+
+  .acervo-toolbar > p { color: #000; }
+  .status-dot { display: none; }
+
+  .acervo-table-shell,
+  .table-scroll {
+    overflow: visible;
+    border: 0;
+  }
+
+  .acervo-table {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .acervo-table thead { display: table-header-group; }
+  .acervo-table tfoot { display: table-footer-group; }
+
+  .acervo-table thead th,
+  .acervo-table tbody th,
+  .acervo-table tbody td,
+  .acervo-table tfoot th,
+  .acervo-table tfoot td {
+    height: auto;
+    padding: 6px;
+    border: 1px solid #aaa;
+    background: #fff !important;
+    color: #000 !important;
+    break-inside: avoid;
+  }
+
+  .acervo-panel-footer {
+    padding: 10px 0 0;
+    border-top: 0;
+    background: #fff;
+    color: #000;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

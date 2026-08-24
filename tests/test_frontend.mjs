@@ -57,6 +57,7 @@ class Node {
   closest(selector) { return this.matches(selector) ? this : this.parentNode?.closest(selector) || null; }
   matches(selector) {
     if (selector.startsWith('.')) return this.classList.contains(selector.slice(1));
+    if (selector === '[data-login-only]') return Object.hasOwn(this.dataset, 'loginOnly');
     return this.tagName === selector.toUpperCase();
   }
   descendants() { return this.children.flatMap(child => [child, ...child.descendants()]); }
@@ -401,6 +402,9 @@ test('move o foco para a lista após o login', async () => {
 
 function acervoPage(api) {
   const document = new Document();
+  const loginOnlyCard = document.createElement('div');
+  loginOnlyCard.dataset.loginOnly = '';
+  document.body.append(loginOnlyCard);
   ['acervoPanel', 'acervoVazio', 'acervoErro', 'acervoTotal', 'acervoAtualizado']
     .forEach(id => document.add(id, 'div'));
   document.add('acervoTable', 'table');
@@ -410,7 +414,7 @@ function acervoPage(api) {
   const app = new Function('document', 'window', 'api',
     `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo };`)(
     document, { print() {} }, api);
-  return { document, ...app };
+  return { document, loginOnlyCard, ...app };
 }
 
 const celulas = linha => linha.children.map(c => c.textContent);
@@ -438,6 +442,12 @@ test('acervo monta as colunas a partir dos relatores que o banco devolve', async
   assert.deepEqual(celulas(tfoot.children[0]), ['Total', '4', '22', '26']);
   assert.equal(page.document.getElementById('acervoTotal').textContent,
     '26 processos aguardando julgamento');
+  assert.equal(page.loginOnlyCard.hidden, true,
+    'o cartão de autenticação precisa sair do layout depois do login');
+  assert.equal(page.document.getElementById('btnAtualizar')['aria-busy'], undefined,
+    'o botão não pode permanecer ocupado depois da resposta');
+  assert.equal(page.document.getElementById('acervoPanel')['aria-busy'], undefined,
+    'o painel não pode permanecer ocupado depois da resposta');
 });
 
 test('acervo mostra o painel antes do dado chegar, para o erro caber na tela', async () => {
@@ -452,6 +462,8 @@ test('acervo mostra o painel antes do dado chegar, para o erro caber na tela', a
   assert.match(erro.textContent, /rede fora/);
   assert.equal(page.document.getElementById('btnAtualizar').disabled, false,
     'o botão de atualizar precisa voltar a funcionar depois da falha');
+  assert.equal(page.document.getElementById('acervoAtualizado').textContent,
+    'Atualização indisponível');
 });
 
 test('acervo não anuncia falha de conexão quando a sessão expirou', async () => {
