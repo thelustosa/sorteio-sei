@@ -519,11 +519,11 @@ período ainda não existia.
 
 Só inserir não conserta isso — o `on conflict do nothing` pula essas linhas e
 elas ficariam órfãs para sempre. É exatamente o caso da seção 3, e a carga
-resolveu com o mesmo `update` de [`rederivar_cj.sql`](sql/rederivar_cj.sql),
-restrito às sessões do período. Pela mesma razão, `processos_importados` e
-`processos_sem_acervo` de `pautas_cj` foram recalculados a partir do estado real
-da tabela: o documento da 30ª tinha 17 processos "fora do acervo" congelados, e
-passou a ter zero.
+disparou o gatilho de novo nas sessões do período, pelo mesmo motivo que o
+[`rederivar_cj.sql`](sql/rederivar_cj.sql) existe. Pela mesma razão,
+`processos_importados` e `processos_sem_acervo` de `pautas_cj` foram
+recalculados a partir do estado real da tabela: o documento da 30ª tinha 17
+processos "fora do acervo" congelados, e passou a ter zero.
 
 **A lição, para a próxima carga:** depois de completar o acervo, rode sempre o
 `rederivar_cj.sql`. Inserir distribuição não desperta o gatilho.
@@ -541,8 +541,30 @@ de sorteios anteriores. As 37 residuais foram todas julgadas nas dez pautas.
 
 O `verificacao_cj.sql` fecha sem nenhum `ERRO`. Na CJ, os dois casos em aberto
 são *Julgado sem processo no acervo* (o `1283`) e *Relator divergente do acervo
-vinculado* (o `2208`). A conferência também mantém como `AVISO` os números CREG
-legados fora do padrão, até que uma fonte oficial permita corrigi-los.
+vinculado* (o `2208`).
+
+#### A 1.6 por cima desta carga
+
+A migração `20260823165725` foi escrita depois da carga, e o deploy foi ensaiado
+nessa ordem: schema anterior, as 37 residuais, o marco em 19/08, a carga, e só
+então a migração. Ela aplica limpa e não encosta nos dados — as 27 conferências
+da carga continuam passando depois dela.
+
+Dois pontos que o ensaio fechou, e que dependiam um do outro:
+
+- **O marco recua para 18/06/2026**, e o corte da sincronização passa a ser esse
+  marco fixo em vez da última sessão conhecida. 18/06 é exatamente a data da 20ª
+  reunião, e o filtro é `corte < data_sessao`, estritamente maior — então a 20ª
+  fica de fora e o universo da sincronização vira exatamente as reuniões 21ª a
+  30ª, que é o que a carga gravou. Nada é reprocessado, e nenhuma sessão
+  anterior ao reinício volta pela porta dos fundos.
+- **A constraint de 15 dígitos do CREG é validada** depois de remover duas
+  linhas de teste. Ela varre `processos_sorteados`, não as tabelas da CJ, então
+  a carga não a afeta — mas uma base com outro número inválido para a migração
+  inteira, de propósito, para exigir decisão humana. O `verificacao_cj.sql`
+  mantém o `AVISO` *Número de processo fora do padrão no CREG* como sentinela:
+  depois da migração ele lê zero, porque a validação não passaria de outro jeito,
+  e volta a acusar se alguém inserir por fora da constraint.
 
 ### Restaurar
 
