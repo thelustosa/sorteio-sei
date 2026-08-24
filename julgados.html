@@ -12,9 +12,9 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=20260823-2" />
-  <script defer src="assets/js/supabase.min.js?v=20260823-2"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=20260823-2"></script>
+  <link rel="stylesheet" href="assets/css/index.min.css?v=20260824-8" />
+  <script defer src="assets/js/supabase.min.js?v=20260824-8"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=20260824-8"></script>
 </head>
 
 <body data-page="julgados">
@@ -38,6 +38,13 @@
     <div class="container">
       <span id="txtModo">Pautas pendentes</span>
       <div class="nav-actions">
+        <a id="btnVoltarInicio" class="nav-action" href="./index.html" data-sessao hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15.5 10h-11"></path>
+            <path d="m8.5 6-4 4 4 4"></path>
+          </svg>
+          <span>Voltar</span>
+        </a>
         <button id="btnVoltar" class="nav-action" type="button" hidden>
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M15.5 10h-11"></path>
@@ -115,7 +122,6 @@
         </div>
       </div>
 
-      <p class="atalho"><a class="button-secondary session-link" href="./index.html">Voltar para o sorteio de processos</a></p>
     </div>
   </main>
 

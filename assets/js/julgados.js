@@ -23,6 +23,7 @@ const tbody = document.querySelector('#julgadosTable tbody');
 const contadorPendentes = document.getElementById('contadorPendentes');
 const btnSalvar = document.getElementById('btnSalvar');
 const btnVoltar = document.getElementById('btnVoltar');
+const btnVoltarInicio = document.getElementById('btnVoltarInicio');
 const txtModo = document.getElementById('txtModo');
 const listaPautasTitulo = document.getElementById('listaPautasTitulo');
 
@@ -97,6 +98,7 @@ async function carregarPautas(moverFoco = false) {
 function mostrarPautas(moverFoco = false) {
   detalhePauta.hidden = true;
   btnVoltar.hidden = true;
+  btnVoltarInicio.hidden = false;
   txtModo.textContent = 'Pautas pendentes';
   listaPautas.hidden = false;
 
@@ -180,6 +182,7 @@ function abrirPauta(chave) {
   listaPautas.hidden = true;
   detalhePauta.hidden = false;
   btnVoltar.hidden = false;
+  btnVoltarInicio.hidden = true;
   txtModo.textContent = numero === 'null'
     ? `Sessão de ${dataBR(data)}`
     : `Sessão de ${dataBR(data)} — ${numero}ª reunião`;
