@@ -33,6 +33,16 @@ select 2, 'ERRO',
           having count(*) > 1) x)
 
 union all
+select 2.5, 'ERRO',
+       'Distribuição CREG repetida',
+       'mesmo processo, data e unidade mais de uma vez',
+       (select count(*) from (
+          select 1 from public.processos_sorteados
+           where modo = 'CREG'
+           group by modo, num_processo, data_distribuicao, unidade
+          having count(*) > 1) x)
+
+union all
 select 3, 'ERRO',
        'Julgado apontando para processo diferente no acervo',
        'acervo_id existe mas o num_processo dos dois não bate',
@@ -61,6 +71,13 @@ select 6, 'ERRO',
        'Número de processo fora do padrão nos julgados',
        'processo SEI da AGR tem 15 dígitos, só dígitos',
        (select count(*) from public.julgados_cj where num_processo !~ '^[0-9]{15}$')
+
+union all
+select 6.5, 'AVISO',
+       'Número de processo fora do padrão no CREG',
+       'legado preservado; novos registros já exigem 15 dígitos, só dígitos',
+       (select count(*) from public.processos_sorteados
+         where modo = 'CREG' and num_processo !~ '^[0-9]{15}$')
 
 -- ── Rótulos ──────────────────────────────────────────────────────────────────
 

@@ -28,6 +28,18 @@ for (const pagina of ['index.html', 'julgados.html', '404.html']) {
   }
 }
 
+const erro404 = ler('404.html');
+const paginaAninhada = new URL('https://thelustosa.github.io/sorteio-sei/inexistente/aninhado');
+const base404 = erro404.match(/<base href="([^"]+)"/i)?.[1] || paginaAninhada.href;
+for (const [recurso, destino] of [
+  ['assets/img/favicon.png', '/sorteio-sei/assets/img/favicon.png'],
+  ['assets/css/index.min.css?v=20260823-2', '/sorteio-sei/assets/css/index.min.css'],
+  ['./index.html', '/sorteio-sei/index.html']
+]) {
+  assert.equal(new URL(recurso, new URL(base404, paginaAninhada)).pathname, destino,
+    `404 aninhada resolve ${recurso} fora da raiz do Pages`);
+}
+
 const index = ler('index.html');
 const julgados = ler('julgados.html');
 assert.doesNotMatch(index, /<script[^>]+index\.min\.js/, 'index.js voltou ao carregamento inicial');

@@ -24,12 +24,13 @@ const contadorPendentes = document.getElementById('contadorPendentes');
 const btnSalvar = document.getElementById('btnSalvar');
 const btnVoltar = document.getElementById('btnVoltar');
 const txtModo = document.getElementById('txtModo');
+const listaPautasTitulo = document.getElementById('listaPautasTitulo');
 
 // Pendentes agrupados por pauta: chave "numero|data".
 let pendentesPorPauta = new Map();
 let pendentesNaTela = 0;
 
-btnVoltar.addEventListener('click', mostrarPautas);
+btnVoltar.addEventListener('click', () => mostrarPautas(true));
 btnSalvar.addEventListener('click', salvar);
 tbody.addEventListener('change', event => {
   const select = event.target.closest('select');
@@ -43,11 +44,13 @@ tbody.addEventListener('change', event => {
     pendentesNaTela += incompletoAgora ? 1 : -1;
     tr.dataset.incompleto = String(incompletoAgora);
   }
+  tr.dataset.alterada = String([...tr.querySelectorAll('select')]
+    .some(campo => campo.value !== (campo.dataset.valorInicial || '')));
   atualizarContador();
 });
 
 function inicializarJulgados() {
-  carregarPautas();
+  carregarPautas(true);
 }
 
 function dataBR(iso) {
@@ -57,12 +60,13 @@ function dataBR(iso) {
 
 // ── Tela 1: pautas pendentes ─────────────────────────────────────────────────
 
-async function carregarPautas() {
+async function carregarPautas(moverFoco = false) {
   pautasIntro.hidden = true;
   semPendencia.hidden = true;
   pautasContainer.replaceChildren(criarIndicadorCarregamento('Buscando pautas com julgamento pendente…'));
   listaPautas.hidden = false;
   detalhePauta.hidden = true;
+  if (moverFoco) listaPautasTitulo.focus();
 
   let pendentes;
   try {
@@ -90,7 +94,7 @@ async function carregarPautas() {
   mostrarPautas();
 }
 
-function mostrarPautas() {
+function mostrarPautas(moverFoco = false) {
   detalhePauta.hidden = true;
   btnVoltar.hidden = true;
   txtModo.textContent = 'Pautas pendentes';
@@ -125,6 +129,7 @@ function mostrarPautas() {
     fragmento.appendChild(cartao);
   }
   pautasContainer.replaceChildren(fragmento);
+  if (moverFoco) listaPautasTitulo.focus();
 }
 
 function mostrarErroDeCarregamento() {
@@ -139,7 +144,7 @@ function mostrarErroDeCarregamento() {
   tentarNovamente.type = 'button';
   tentarNovamente.className = 'button-secondary';
   tentarNovamente.textContent = 'Tentar novamente';
-  tentarNovamente.addEventListener('click', carregarPautas);
+  tentarNovamente.addEventListener('click', () => carregarPautas(true));
 
   estado.append(texto, tentarNovamente);
   pautasContainer.replaceChildren(estado);
@@ -198,11 +203,15 @@ function abrirPauta(chave) {
 
     const tdVoto = document.createElement('td');
     tdVoto.className = 'col-voto';
-    tdVoto.appendChild(seletor(VOTOS, j.voto, 'Selecione o voto'));
+    const voto = seletor(VOTOS, j.voto, 'Selecione o voto');
+    voto.dataset.valorInicial = voto.value;
+    tdVoto.appendChild(voto);
 
     const tdStatus = document.createElement('td');
     tdStatus.className = 'col-status';
-    tdStatus.appendChild(seletor(STATUS, j.status, 'Selecione o status'));
+    const status = seletor(STATUS, j.status, 'Selecione o status');
+    status.dataset.valorInicial = status.value;
+    tdStatus.appendChild(status);
 
     tr.append(proc, relator, tdVoto, tdStatus);
     fragmento.appendChild(tr);
@@ -210,13 +219,15 @@ function abrirPauta(chave) {
   tbody.replaceChildren(fragmento);
 
   atualizarContador();
+  tituloPauta.focus();
 }
 
 function linhasDaTela() {
   return Array.from(tbody.querySelectorAll('tr')).map(tr => ({
     id: Number(tr.dataset.id),
     voto: tr.querySelector('.col-voto select').value,
-    status: tr.querySelector('.col-status select').value
+    status: tr.querySelector('.col-status select').value,
+    alterada: tr.dataset.alterada === 'true'
   }));
 }
 
@@ -232,7 +243,9 @@ function atualizarContador() {
 async function salvar() {
   // Só o que o funcionário efetivamente preencheu. Linha intocada continua
   // pendente e reaparece na próxima vez.
-  const itens = linhasDaTela().filter(l => l.voto || l.status);
+  const itens = linhasDaTela()
+    .filter(l => l.alterada)
+    .map(({ id, voto, status }) => ({ id, voto, status }));
   if (itens.length === 0) {
     aviso('Nada para salvar: preencha o voto ou o status de pelo menos um processo.', 'atencao');
     return;
@@ -254,7 +267,7 @@ async function salvar() {
     } else {
       aviso(`${gravados} ${gravados === 1 ? 'julgamento gravado' : 'julgamentos gravados'}.`);
     }
-    await carregarPautas();
+    await carregarPautas(true);
   } catch (err) {
     aviso(`Falha ao gravar (${err.message}). Nada foi salvo — tente novamente.`, 'erro');
   } finally {

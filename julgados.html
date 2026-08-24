@@ -12,9 +12,9 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=20260821" />
-  <script defer src="assets/js/supabase.min.js?v=20260821"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=20260821"></script>
+  <link rel="stylesheet" href="assets/css/index.min.css?v=20260823-2" />
+  <script defer src="assets/js/supabase.min.js?v=20260823-2"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=20260823-2"></script>
 </head>
 
 <body data-page="julgados">
@@ -76,7 +76,7 @@
 
       <!-- Tela 1: as pautas que ainda têm processo sem voto ou sem status -->
       <div id="listaPautas" data-sessao hidden>
-        <h2>Pautas com julgamento pendente</h2>
+        <h2 id="listaPautasTitulo" tabindex="-1">Pautas com julgamento pendente</h2>
         <p id="pautasIntro" class="lead">Selecione uma pauta para preencher os processos pendentes.</p>
         <div id="pautasContainer"></div>
         <div id="semPendencia" class="empty-state" role="status" hidden>
@@ -95,7 +95,7 @@
 
       <!-- Tela 2: os processos daquela pauta -->
       <div id="detalhePauta" data-sessao hidden>
-        <h2 id="tituloPauta"></h2>
+        <h2 id="tituloPauta" tabindex="-1"></h2>
         <div class="table-scroll" role="region" aria-label="Processos pendentes de julgamento" tabindex="0">
         <table id="julgadosTable">
           <thead>

@@ -4,6 +4,9 @@
 # Artefatos de teste automatizado
 .playwright-mcp/
 
+# Estado local da CLI do Supabase
+supabase/.temp/
+
 # Sistema operacional
 Thumbs.db
 .DS_Store

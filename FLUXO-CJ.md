@@ -67,7 +67,8 @@ existir depois do sorteio.
 > opções conforme o modo.
 
 Se o Supabase estiver fora do ar, ou a sessão tiver expirado, o sorteio **não se
-perde**: o sistema baixa um `.json` de backup para reenvio posterior.
+perde**: o sistema oferece um botão para baixar o `.json` de backup por um clique
+explícito, sem depender da permissão de downloads automáticos do navegador.
 
 ### `acervo_cj` é uma linha por *distribuição*, não por processo
 
@@ -100,11 +101,11 @@ sequenceDiagram
     participant AGR as goias.gov.br
     participant PG as Postgres (Supabase)
 
-    GA->>PG: qual a última sessão conhecida?
+    GA->>PG: qual o marco de início da série?
     GA->>PG: quais URLs já foram processadas?
-    GA->>AGR: GET pautas-das-reunioes-2026
-    AGR-->>GA: 30 reuniões (título, data, link do PDF)
-    Note over GA: filtra: CJ · sessão já realizada ·<br/>URL nova · posterior à última sessão
+    GA->>AGR: GET listagens de cada ano do marco até o atual
+    AGR-->>GA: reuniões (título, data, link do PDF)
+    Note over GA: filtra: CJ · sessão já realizada ·<br/>URL nova · posterior ao marco fixo
     loop cada pauta pendente
         GA->>AGR: GET o PDF
         AGR-->>GA: bytes
@@ -228,6 +229,11 @@ Duas guardas que se cobrem:
 A segunda também protege a época da planilha: reprocessar uma pauta antiga não
 duplica nada.
 
+O corte de data não avança com cada sucesso: ele é o marco fixo do início da
+série. A rodada automática consulta cada ano entre o marco e o atual. Assim, um
+PDF que falhou não é marcado e volta mesmo depois da virada do ano; uma
+republicação da mesma sessão, com URL nova, também é processada.
+
 ---
 
 ## 3. A relação entre pauta e acervo
@@ -239,11 +245,13 @@ Quando um processo entra em `julgados_cj`, o banco vai sozinho buscá-lo em
 ```mermaid
 flowchart TD
     A["INSERT em julgados_cj<br/>num_processo + data_sessao"] --> B{"data_distribuicao<br/>foi informada?"}
-    B -->|sim| C["o registro exato<br/>daquela distribuição"]
+    B -->|sim| C{"existe o registro exato<br/>daquela distribuição?"}
+    C -->|sim| G
+    C -->|não| I
     B -->|não| D{"há distribuição<br/>até a data da sessão?"}
     D -->|sim| E["a mais recente<br/>até a sessão"]
     D -->|não| F["a distribuição<br/>mais antiga"]
-    C --> G["preenche acervo_id, relator,<br/>defesa e data_distribuicao"]
+    G["preenche acervo_id, relator,<br/>defesa e data_distribuicao"]
     E --> G
     F --> G
     G --> H["banco calcula<br/>dias_dt e periodo_dt"]
@@ -323,19 +331,19 @@ continua com `acervo_id` nulo por mais que o processo já esteja no acervo. Vale
 para o sorteio feito depois da sessão e para qualquer correção manual do acervo.
 
 Quem fecha o ciclo é [`rederivar_cj.sql`](sql/rederivar_cj.sql), rodado no SQL Editor
-do Supabase. Gravar `null` num campo derivado é o pedido de rederivação — o
-gatilho só preenche o que vem nulo — então zerar os três faz o banco procurar o
-processo outra vez e vincular o que agora existe:
+do Supabase. Uma atribuição do campo a ele mesmo basta para disparar o gatilho,
+que procura o processo outra vez e vincula o acervo que agora existe. Os valores
+já revisados manualmente continuam vencendo os derivados:
 
 ```sql
 update public.julgados_cj
-   set relator = null, defesa = null, data_distribuicao = null
+   set data_distribuicao = data_distribuicao
  where acervo_id is null;
 ```
 
-O filtro é o que torna a operação segura de repetir: ele só alcança linha que já
-está vazia, nunca sobrescreve o relator de um julgamento que já aconteceu, e na
-segunda passada a linha vinculada não casa mais. **Voto e status não são
+O filtro é o que torna a operação segura de repetir: ele só alcança linha sem
+vínculo, nunca zera relator, defesa ou data já informados e, na segunda passada,
+a linha vinculada não casa mais. **Voto e status não são
 tocados** — o gatilho não encosta neles, e o que a secretaria preencheu na tela
 continua lá.
 
@@ -434,13 +442,14 @@ resultado, e o script usa a regra simples.
 ### O marco de início
 
 `pautas_cj` ganha uma linha com `url = 'marco:inicio-da-serie'`. Não é um
-documento: é como a sincronização sabe a partir de quando começar. Ela processa
-as sessões **posteriores** à sessão mais recente que o banco conhece — e com
-`julgados_cj` vazia, sem esse marco, reimportaria o ano inteiro.
+documento: é o corte fixo a partir do qual a sincronização procura toda URL
+ainda não processada. Ele não avança quando uma pauta entra; por isso uma falha
+antiga não fica escondida por uma sessão posterior. Sem o marco, a sincronização
+usa a sessão mais recente apenas como compatibilidade com instalações antigas.
 
-A data é o dia anterior a hoje no fuso de Goiás, para que uma sessão de hoje
-ainda entre. O fuso é explícito porque o banco roda em UTC e, à noite, o
-`current_date` de lá já é o dia seguinte aqui.
+A data canônica é **18/06/2026**, a última sessão mantida no histórico antes da
+nova série. Assim a sincronização sempre volta ao mesmo corte e encontra todas
+as pautas posteriores, inclusive a carga de recuperação iniciada em 25/06.
 
 Relatórios que contem documentos de pauta devem filtrar `url like 'https://%'`.
 
@@ -530,9 +539,10 @@ passou a ter zero.
 Sobram **44 distribuições ainda sem julgamento** — 34 do sorteio de 14/08 e 10
 de sorteios anteriores. As 37 residuais foram todas julgadas nas dez pautas.
 
-O `verificacao_cj.sql` fecha sem nenhum `ERRO`, com dois `AVISO` que são
-exatamente os dois casos em aberto: *Julgado sem processo no acervo* (o `1283`)
-e *Relator divergente do acervo vinculado* (o `2208`).
+O `verificacao_cj.sql` fecha sem nenhum `ERRO`. Na CJ, os dois casos em aberto
+são *Julgado sem processo no acervo* (o `1283`) e *Relator divergente do acervo
+vinculado* (o `2208`). A conferência também mantém como `AVISO` os números CREG
+legados fora do padrão, até que uma fonte oficial permita corrigi-los.
 
 ### Restaurar
 
@@ -662,6 +672,8 @@ Chaves e índices que sustentam as regras:
 
 | objeto | para quê |
 |---|---|
+| `ux_processos_sorteados_distribuicao (modo, num_processo, data_distribuicao, unidade)` | o mesmo sorteio CREG não é gravado duas vezes |
+| `processos_sorteados_num_processo_15_digitos` (validada) | todo sorteio CREG exige 15 dígitos |
 | `acervo_cj_distribuicao_unica (num_processo, data_distribuicao, relator)` | sorteio/importação repetidos não duplicam; é o índice da busca do processo |
 | `julgados_cj_sessao_unica (num_processo, data_sessao)` | um processo não é julgado duas vezes na mesma sessão |
 | `pautas_cj.url` único | o mesmo PDF não é processado duas vezes |
@@ -696,9 +708,9 @@ Chaves e índices que sustentam as regras:
 
 | situação | o que acontece |
 |---|---|
-| Supabase fora do ar durante o sorteio | baixa `.json` de backup; nenhum sorteio se perde |
-| sorteio repetido (mesmo processo, dia e cadeira) | banco recusa; mensagem clara e backup baixado |
-| sessão expirada | tela de login volta com a mensagem; o que estava para gravar vira backup |
+| Supabase fora do ar durante o sorteio | oferece o botão para baixar o `.json`; nenhum sorteio se perde |
+| sorteio repetido (mesmo processo, dia e cadeira) | banco recusa; mensagem clara e botão de backup aparece |
+| sessão expirada | tela de login volta com a mensagem; após entrar novamente, o botão de backup aparece |
 | site da AGR fora do ar | o job falha inteiro e tenta de novo na próxima rodada |
 | um PDF indisponível ou inválido | só aquele documento falha; os outros seguem, e ele **não** é marcado como processado |
 | PDF sem processos | vira erro do documento; não marca como processado |
