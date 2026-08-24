@@ -177,7 +177,7 @@ function julgadosPage(registrar) {
   const add = (id, tag) => document.add(id, tag);
   ['listaPautas', 'pautasContainer', 'semPendencia', 'pautasIntro', 'detalhePauta',
     'tituloPauta', 'contadorPendentes', 'btnSalvar', 'btnVoltar', 'txtModo',
-    'listaPautasTitulo'].forEach(id => add(id, id.startsWith('btn') ? 'button' : 'div'));
+    'listaPautasTitulo', 'btnVoltarInicio'].forEach(id => add(id, id.startsWith('btn') ? 'button' : 'div'));
   const tbody = add('julgadosTableBody', 'tbody');
 
   const app = new Function('document', 'api', 'aviso', 'alternarBotaoCarregando', 'criarIndicadorCarregamento',

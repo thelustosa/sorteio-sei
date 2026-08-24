@@ -12,9 +12,9 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=20260823-2" />
-  <script defer src="assets/js/supabase.min.js?v=20260823-2"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=20260823-2"></script>
+  <link rel="stylesheet" href="assets/css/index.min.css?v=20260824-8" />
+  <script defer src="assets/js/supabase.min.js?v=20260824-8"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=20260824-8"></script>
 </head>
 
 <body data-page="sorteio">
@@ -75,16 +75,37 @@
       <div id="sessionLoading" class="session-loading" data-sessao hidden></div>
 
       <div id="modeSelector" data-sessao hidden>
-        <h2 id="modeSelectorTitle" tabindex="-1">Selecione a unidade de sorteio para começar</h2>
-        <p class="mode-description">Escolha o colegiado responsável pela distribuição dos processos.</p>
-        <div class="buttons-wrapper">
-          <button id="btnCreg" class="mode-button" type="button">Conselho Regulador (CREG)</button>
-          <button id="btnCj" class="mode-button" type="button">Câmara de Julgamento (CJ)</button>
-        </div>
+        <section class="selection-card" aria-labelledby="modeSelectorTitle">
+          <div class="selection-copy">
+            <h2 id="modeSelectorTitle" tabindex="-1">Sorteio de processos</h2>
+            <p class="mode-description">Selecione o colegiado responsável pela nova distribuição.</p>
+          </div>
+          <div class="buttons-wrapper" role="group" aria-label="Colegiado para sorteio">
+            <button id="btnCreg" class="mode-button" type="button">Conselho Regulador (CREG)</button>
+            <button id="btnCj" class="mode-button" type="button">Câmara de Julgamento (CJ)</button>
+          </div>
+        </section>
 
-        <p class="atalho">
-          <a class="button-secondary session-link" href="./julgados.html">Registrar voto e status das sessões da Câmara de Julgamento</a>
-        </p>
+        <section class="selection-card selection-card-acervo" aria-labelledby="acervoSelectorTitle">
+          <div class="selection-copy">
+            <h2 id="acervoSelectorTitle">Acervo de processos não julgados</h2>
+            <p class="mode-description">Selecione o colegiado para consultar os processos que aguardam julgamento.</p>
+          </div>
+          <div class="buttons-wrapper" role="group" aria-label="Colegiado para consulta do acervo">
+            <button id="btnAcervoCreg" class="mode-button mode-button-outline" type="button" aria-disabled="true">Conselho Regulador (CREG)</button>
+            <a id="btnAcervoCj" class="mode-button mode-button-outline" href="./acervo.html">Câmara de Julgamento (CJ)</a>
+          </div>
+        </section>
+
+        <section class="selection-card selection-card-records" aria-labelledby="recordsSelectorTitle">
+          <div class="selection-copy">
+            <h2 id="recordsSelectorTitle">Registrar dados faltantes</h2>
+            <p class="mode-description">Complete as informações das sessões que ainda precisam de atualização.</p>
+          </div>
+          <div class="buttons-wrapper single-choice" role="group" aria-label="Dados faltantes para registrar">
+            <a class="mode-button mode-button-outline" href="./julgados.html">Registrar voto e status das sessões da Câmara de Julgamento</a>
+          </div>
+        </section>
       </div>
 
       <div id="sorteadorContent" data-sessao hidden>
