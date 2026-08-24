@@ -52,7 +52,7 @@ preenche uma linha por processo:
 | Nº Processo | `num_processo` |
 | Assunto (travado em "Auto de Infração") | `assunto` |
 | **Defesa** (Sim/Não) | `defesa` (boolean) |
-| — sorteado — cadeira CJ1..CJ5 | `relator` |
+| — sorteado — conselheiro da CJ | `relator` |
 | — sorteado — data de hoje | `data_distribuicao` |
 | ordem na tabela / hora do sorteio | `ordem`, `sorteado_em` |
 | | `origem = 'sorteio'` |
@@ -741,12 +741,14 @@ Revisto depois da carga de recuperação, em 21/08/2026.
   para Paulo Henrique, 28ª reunião pela Lorena. Está registrado assim de
   propósito — ver *A pauta confere o acervo* — mas se a troca teve um documento,
   ela vira uma redistribuição no acervo e o caso fecha.
-- **Cadeira × conselheiro.** As 194 distribuições que o acervo tem hoje vieram
-  da planilha e das atas, e todas trazem o **nome** do conselheiro em `relator`;
-  o que o sorteio gravar daqui em diante traz a **cadeira** (`CJ1`..`CJ5`). Não
-  existe de-para entre os dois, então relatório que cruze as duas origens não
-  fecha. Resolver isso é uma tabela pequena ligando cadeira e conselheiro por
-  período. É a única coisa entre a CJ e o fluxo rodando inteiro pelo sistema.
+- **Cadeira × conselheiro.** Resolvido por ora do jeito mais simples: o sorteio
+  passou a gravar o **nome** do conselheiro, igual ao que as 194 distribuições
+  do acervo e as atas publicadas no SEI já usam. Antes ele gravava a cadeira
+  (`CJ1`..`CJ5`), e as duas convenções na mesma coluna quebrariam qualquer
+  relatório por relator — além de a ata gerada divergir da oficial, que nomeia a
+  pessoa. O que fica em aberto é o inverso: se a Câmara quiser a cadeira de
+  volta, ela precisa de uma tabela pequena ligando cadeira e conselheiro **por
+  período**, para que a troca de composição não reescreva o histórico.
 - **CREG** continua em `processos_sorteados`. Fica para depois; a estrutura
   está pronta para ganhar `acervo_creg` e `julgados_creg` com a mesma lógica.
 

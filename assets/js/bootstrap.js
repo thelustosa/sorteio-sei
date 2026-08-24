@@ -3,7 +3,8 @@
 // execução no caminho crítico sem mudar o fluxo do sistema.
 const PAGINAS = {
   sorteio: { arquivo: 'index.min.js', iniciar: 'inicializarSorteio', texto: 'Preparando o sorteio…' },
-  julgados: { arquivo: 'julgados.min.js', iniciar: 'inicializarJulgados', texto: 'Preparando as pautas…' }
+  julgados: { arquivo: 'julgados.min.js', iniciar: 'inicializarJulgados', texto: 'Preparando as pautas…' },
+  acervo: { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Carregando o acervo…' }
 };
 
 const paginaAtual = PAGINAS[document.body.dataset.page];

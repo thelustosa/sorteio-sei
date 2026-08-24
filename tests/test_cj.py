@@ -848,6 +848,111 @@ def registrar_votos_e_a_unica_porta_de_escrita(cur):
 
 # ── Testes: nada quebrou no que já existia ───────────────────────────────────
 
+# ── Painel do acervo ─────────────────────────────────────────────────────────
+
+def autenticar(cur, email='secretaria@goias.gov.br'):
+    cur.execute("select set_config('request.jwt.claims', %s, true)",
+                (json.dumps({'email': email, 'role': 'authenticated',
+                             'sub': '00000000-0000-0000-0000-000000000001'}),))
+
+
+@teste
+def resumo_do_acervo_exige_sessao(cur):
+    """A função lê acervo_cj, que é fechada ao navegador.
+
+    Sem a checagem, ela seria um endpoint /rest/v1/rpc que devolve o acervo
+    inteiro agregado para quem tiver só a chave publicável.
+    """
+    cur.execute("select set_config('request.jwt.claims', '', true)")
+    try:
+        cur.execute('select * from public.resumo_acervo_cj()')
+        raise AssertionError('respondeu sem sessão autenticada')
+    except psycopg2.errors.InvalidAuthorizationSpecification:
+        pass
+    cur.connection.rollback()
+
+
+@teste
+def resumo_do_acervo_so_e_executavel_por_authenticated(cur):
+    """EXECUTE é concedido a PUBLIC por padrão; sem o revoke, anon chamaria."""
+    cur.execute("""select coalesce(string_agg(grantee, ',' order by grantee), '')
+                     from information_schema.role_routine_grants
+                    where routine_schema = 'public'
+                      and routine_name = 'resumo_acervo_cj'
+                      and grantee in ('anon', 'authenticated', 'service_role', 'PUBLIC')""")
+    assert cur.fetchone()[0] == 'authenticated', cur.fetchone()
+
+
+@teste
+def resumo_do_acervo_conta_o_que_nao_foi_julgado(cur):
+    """Processo julgado sai do painel; o que nunca foi a sessão fica."""
+    autenticar(cur)
+    cur.execute("delete from public.julgados_cj")
+    cur.execute("delete from public.acervo_cj")
+    cur.execute("""insert into public.acervo_cj
+                     (num_processo, relator, data_distribuicao, defesa, origem) values
+                   ('202600029000001', 'Fulano', current_date - 5,   true, 'sorteio'),
+                   ('202600029000002', 'Fulano', current_date - 200, true, 'sorteio'),
+                   ('202600029000003', 'Sicrano', current_date - 900, true, 'sorteio')""")
+    # o 3 foi julgado: sai do painel
+    cur.execute("""insert into public.julgados_cj (num_processo, data_sessao, pauta)
+                   values ('202600029000003', current_date - 10, 1)""")
+
+    cur.execute('select ordem, faixa, relator, processos from public.resumo_acervo_cj()')
+    linhas = cur.fetchall()
+
+    # a grade é sempre completa: 8 faixas x 2 relatores, com zero onde não há nada
+    assert len(linhas) == 16, len(linhas)
+    assert {r for _, _, r, _ in linhas} == {'Fulano', 'Sicrano'}
+    assert sum(n for _, _, _, n in linhas) == 2, 'o julgado deveria ter saído'
+
+    por_celula = {(f, r): n for _, f, r, n in linhas}
+    assert por_celula[('Até 15 dias', 'Fulano')] == 1
+    assert por_celula[('Entre 6 meses e 1 ano', 'Fulano')] == 1
+    assert por_celula[('Há 2 anos', 'Sicrano')] == 0, 'julgado ainda contando'
+    cur.connection.rollback()
+
+
+@teste
+def resumo_do_acervo_conta_processo_redistribuido_uma_vez(cur):
+    """Duas distribuições, um processo: conta na cadeira mais recente."""
+    autenticar(cur)
+    cur.execute("delete from public.julgados_cj")
+    cur.execute("delete from public.acervo_cj")
+    cur.execute("""insert into public.acervo_cj
+                     (num_processo, relator, data_distribuicao, defesa, origem) values
+                   ('202600029000004', 'Antigo', current_date - 300, true, 'sorteio'),
+                   ('202600029000004', 'Atual',  current_date - 3,   true, 'sorteio')""")
+
+    cur.execute('select faixa, relator, processos from public.resumo_acervo_cj()'
+                ' where processos > 0')
+    assert cur.fetchall() == [('Até 15 dias', 'Atual', 1)], 'contou a distribuição antiga'
+    cur.connection.rollback()
+
+
+@teste
+def sorteio_da_cj_usa_os_nomes_que_o_acervo_conhece(cur):
+    """O sorteio grava o nome do conselheiro, não a cadeira.
+
+    O acervo herdou 194 distribuições com o nome por extenso, e as atas do SEI
+    publicam o nome. Se o sorteio gravasse 'CJ3', a mesma coluna passaria a ter
+    dois vocabulários e nenhum relatório por relator fecharia.
+
+    Este teste falha se alguém trocar a lista de conselheiros por um nome que o
+    acervo não conhece — uma troca de composição da Câmara precisa vir com a
+    decisão sobre o histórico, não escondida numa linha de JavaScript.
+    """
+    fonte = (RAIZ / 'assets' / 'js' / 'index.js').read_text(encoding='utf-8')
+    trecho = fonte[fonte.index('const CONSELHEIROS_CJ'):fonte.index('btnCj.addEventListener')]
+    sorteados = set(re.findall(r"'([^']+)'", trecho))
+    assert len(sorteados) == 5, sorted(sorteados)
+    assert not any(n.startswith('CJ') and n[2:].isdigit() for n in sorteados),         'o sorteio voltou a gravar cadeira'
+
+    cur.execute("select distinct relator from public.acervo_cj")
+    conhecidos = {r for (r,) in cur.fetchall()}
+    assert sorteados <= conhecidos, sorted(sorteados - conhecidos)
+
+
 @teste
 def creg_continua_gravando_na_tabela_antiga(cur):
     """O sorteio do Conselho Regulador não foi tocado."""
