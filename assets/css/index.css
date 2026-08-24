@@ -95,7 +95,10 @@ button,
 input,
 select { font: inherit; min-height: 44px; }
 
-button { -webkit-tap-highlight-color: transparent; }
+button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
 
 button:focus-visible,
 a:focus-visible,
@@ -605,6 +608,9 @@ tbody tr:hover td { background: var(--table-row-hover); }
   font-weight: 700;
 }
 
+.session-loading { min-height: 180px; padding: 40px 20px; }
+.session-loading .loading-state { justify-content: center; }
+
 .loading-spinner {
   width: 18px;
   height: 18px;
@@ -719,6 +725,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   display: grid;
   width: min(390px, calc(100vw - 32px));
   gap: 10px;
+  contain: layout paint;
 }
 
 .toast {

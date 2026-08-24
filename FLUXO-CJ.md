@@ -9,7 +9,9 @@ O Conselho Regulador (CREG) não está aqui — continua na tabela
 
 > **Reinício em 19/08/2026.** A série de julgados recomeçou nessa data: o
 > histórico importado da planilha saiu das tabelas de produção e ficou guardado
-> no schema `backup_cj`. Ver *Reinício da série*, mais abaixo.
+> no schema `backup_cj`. Dois dias depois, uma carga de recuperação repôs o que
+> a planilha não alcançava, lendo as atas de sorteio e as pautas publicadas. Ver
+> *Reinício da série*, mais abaixo.
 
 ---
 
@@ -65,7 +67,8 @@ existir depois do sorteio.
 > opções conforme o modo.
 
 Se o Supabase estiver fora do ar, ou a sessão tiver expirado, o sorteio **não se
-perde**: o sistema baixa um `.json` de backup para reenvio posterior.
+perde**: o sistema oferece um botão para baixar o `.json` de backup por um clique
+explícito, sem depender da permissão de downloads automáticos do navegador.
 
 ### `acervo_cj` é uma linha por *distribuição*, não por processo
 
@@ -98,11 +101,11 @@ sequenceDiagram
     participant AGR as goias.gov.br
     participant PG as Postgres (Supabase)
 
-    GA->>PG: qual a última sessão conhecida?
+    GA->>PG: qual o marco de início da série?
     GA->>PG: quais URLs já foram processadas?
-    GA->>AGR: GET pautas-das-reunioes-2026
-    AGR-->>GA: 30 reuniões (título, data, link do PDF)
-    Note over GA: filtra: CJ · sessão já realizada ·<br/>URL nova · posterior à última sessão
+    GA->>AGR: GET listagens de cada ano do marco até o atual
+    AGR-->>GA: reuniões (título, data, link do PDF)
+    Note over GA: filtra: CJ · sessão já realizada ·<br/>URL nova · posterior ao marco fixo
     loop cada pauta pendente
         GA->>AGR: GET o PDF
         AGR-->>GA: bytes
@@ -226,6 +229,11 @@ Duas guardas que se cobrem:
 A segunda também protege a época da planilha: reprocessar uma pauta antiga não
 duplica nada.
 
+O corte de data não avança com cada sucesso: ele é o marco fixo do início da
+série. A rodada automática consulta cada ano entre o marco e o atual. Assim, um
+PDF que falhou não é marcado e volta mesmo depois da virada do ano; uma
+republicação da mesma sessão, com URL nova, também é processada.
+
 ---
 
 ## 3. A relação entre pauta e acervo
@@ -237,11 +245,13 @@ Quando um processo entra em `julgados_cj`, o banco vai sozinho buscá-lo em
 ```mermaid
 flowchart TD
     A["INSERT em julgados_cj<br/>num_processo + data_sessao"] --> B{"data_distribuicao<br/>foi informada?"}
-    B -->|sim| C["o registro exato<br/>daquela distribuição"]
+    B -->|sim| C{"existe o registro exato<br/>daquela distribuição?"}
+    C -->|sim| G
+    C -->|não| I
     B -->|não| D{"há distribuição<br/>até a data da sessão?"}
     D -->|sim| E["a mais recente<br/>até a sessão"]
     D -->|não| F["a distribuição<br/>mais antiga"]
-    C --> G["preenche acervo_id, relator,<br/>defesa e data_distribuicao"]
+    G["preenche acervo_id, relator,<br/>defesa e data_distribuicao"]
     E --> G
     F --> G
     G --> H["banco calcula<br/>dias_dt e periodo_dt"]
@@ -306,9 +316,12 @@ sem os campos derivados — **sem inventar dado nenhum** — e o número sai lis
 em `pautas_cj.processos_sem_acervo` para a secretaria completar o acervo. Na
 planilha, o equivalente era a fórmula devolver "Não encontrado".
 
-Isso é comum hoje: o acervo importado da planilha para no começo de julho de
-2026, então processos julgados depois disso ainda não têm distribuição
-registrada. Some conforme a CJ passar a sortear pelo sistema.
+Hoje é raro: depois da carga de recuperação de 21/08/2026, 150 dos 151 julgados
+de 2026 encontram a distribuição. O único que não encontra é o
+`202600029001283`, da 25ª reunião, cuja distribuição não está em fonte nenhuma —
+nem nas atas de sorteio 010 a 014, nem na planilha. Dele se sabe o relator,
+porque a própria pauta o diz; a data da distribuição é que não existe em lugar
+nenhum, e sem ela não há linha de acervo a criar.
 
 ### Completar o acervo depois não conserta o julgado sozinho
 
@@ -318,19 +331,19 @@ continua com `acervo_id` nulo por mais que o processo já esteja no acervo. Vale
 para o sorteio feito depois da sessão e para qualquer correção manual do acervo.
 
 Quem fecha o ciclo é [`rederivar_cj.sql`](sql/rederivar_cj.sql), rodado no SQL Editor
-do Supabase. Gravar `null` num campo derivado é o pedido de rederivação — o
-gatilho só preenche o que vem nulo — então zerar os três faz o banco procurar o
-processo outra vez e vincular o que agora existe:
+do Supabase. Uma atribuição do campo a ele mesmo basta para disparar o gatilho,
+que procura o processo outra vez e vincula o acervo que agora existe. Os valores
+já revisados manualmente continuam vencendo os derivados:
 
 ```sql
 update public.julgados_cj
-   set relator = null, defesa = null, data_distribuicao = null
+   set data_distribuicao = data_distribuicao
  where acervo_id is null;
 ```
 
-O filtro é o que torna a operação segura de repetir: ele só alcança linha que já
-está vazia, nunca sobrescreve o relator de um julgamento que já aconteceu, e na
-segunda passada a linha vinculada não casa mais. **Voto e status não são
+O filtro é o que torna a operação segura de repetir: ele só alcança linha sem
+vínculo, nunca zera relator, defesa ou data já informados e, na segunda passada,
+a linha vinculada não casa mais. **Voto e status não são
 tocados** — o gatilho não encosta neles, e o que a secretaria preencheu na tela
 continua lá.
 
@@ -429,27 +442,111 @@ resultado, e o script usa a regra simples.
 ### O marco de início
 
 `pautas_cj` ganha uma linha com `url = 'marco:inicio-da-serie'`. Não é um
-documento: é como a sincronização sabe a partir de quando começar. Ela processa
-as sessões **posteriores** à sessão mais recente que o banco conhece — e com
-`julgados_cj` vazia, sem esse marco, reimportaria o ano inteiro.
+documento: é o corte fixo a partir do qual a sincronização procura toda URL
+ainda não processada. Ele não avança quando uma pauta entra; por isso uma falha
+antiga não fica escondida por uma sessão posterior. Sem o marco, a sincronização
+usa a sessão mais recente apenas como compatibilidade com instalações antigas.
 
-A data é o dia anterior a hoje no fuso de Goiás, para que uma sessão de hoje
-ainda entre. O fuso é explícito porque o banco roda em UTC e, à noite, o
-`current_date` de lá já é o dia seguinte aqui.
+A data canônica é **18/06/2026**, a última sessão mantida no histórico antes da
+nova série. Assim a sincronização sempre volta ao mesmo corte e encontra todas
+as pautas posteriores, inclusive a carga de recuperação iniciada em 25/06.
 
 Relatórios que contem documentos de pauta devem filtrar `url like 'https://%'`.
 
-### O acervo fica vazio por um tempo
+### A carga de recuperação (21/08/2026)
 
-Consequência direta e esperada: os processos que vierem nas próximas pautas não
-estarão no acervo, então entrarão com `acervo_id` nulo e sem relator, defesa nem
-data de distribuição. Isso se resolve conforme a Câmara passar a sortear pelo
-sistema — cada sorteio alimenta o acervo, e os julgados seguintes já encontram
-o processo.
+O reinício deixou um vão. A planilha parava em 10/06 (sorteios) e 20/06
+(julgados), mas a Câmara seguiu se reunindo: sem o acervo daquele período, todo
+julgado sincronizado entraria com `acervo_id` nulo e sem relator, defesa nem
+data de distribuição.
+
+Um script de execução única fechou o vão até 20/08/2026, com duas fontes
+oficiais e um insert por tabela, na ordem que o gatilho exige — acervo primeiro,
+senão não há de onde derivar:
+
+| tabela | fonte | linhas |
+|---|---|---|
+| `acervo_cj` | atas de sorteio 011 a 014/2026 (SEI 202600029000052) | 157 distribuições |
+| `julgados_cj` | pautas da 21ª à 30ª reunião, lidas pelo mesmo parser do job | 151 julgados |
+| `pautas_cj` | as dez URLs, com título e sha256 | 10 documentos |
+
+Como a limpeza do reinício, ele saiu do repositório depois de cumprir o papel.
+O que fica é o que ele decidiu, porque isso vale para as próximas cargas.
+
+#### Três coisas que a ata de sorteio não traz
+
+- **Defesa** sai do relator. Em 2026 o lote de homologação de auto de infração
+  vai todo para um único relator — é o que as próprias atas anunciam no
+  cabeçalho — e é o lote que corre sem defesa. A planilha confirma a regra sem
+  uma exceção nas 518 distribuições do ano: 365 linhas de Paulo Otoni Ribeiro,
+  todas `false`; 153 dos demais, todas `true`. A ata 010/2026 fecha com a
+  planilha nas 32 distribuições que as duas cobrem, relator por relator.
+
+  A regra tem três exceções, e nenhuma é palpite: a pauta da 28ª reunião lista
+  `202600029001899`, `202600029001961` e `202600029000516` sob o rótulo
+  *"Processo sem defesas:"*, dentro de um bloco que não é o do Otoni. Documento
+  oficial vence heurística, e as três entraram com `defesa = false`.
+- **Voto e status** ficam nulos, pelo motivo de sempre: a pauta é convocação, e
+  o resultado da sessão não está no documento.
+- **Grafia do relator** é normalizada para a da planilha (`Belem` → `Belém`,
+  `Sousa` → `Souza`, esta última um erro de digitação numa linha da ata 011).
+  Não é cosmético: `relator` entra na chave única do acervo, e duas grafias
+  virariam duas distribuições do mesmo processo.
+
+#### A pauta confere o acervo
+
+A pauta agrupa os processos por relator — *"a serem relatados pelo relator X:"*
+— e isso é uma segunda fonte, independente da ata, para o mesmo fato. Cruzando
+as duas: **150 dos 151 julgados batem**. A exceção é o `202600029002208`, que a
+ata 013 sorteou para Paulo Henrique Oliveira Marques em 27/07 e a 28ª reunião
+levou à mesa pela Lorena Patricia de Oliveira em 06/08.
+
+Os dois documentos estão certos, cada um sobre o seu fato, e é por isso que o
+banco guarda os dois separados: o acervo registra o **sorteio** e fica com a
+ata; `julgados_cj.relator` registra **quem levou o processo à mesa** e fica com
+a pauta. Como o gatilho só preenche o que vem nulo, informar o relator na linha
+do julgado basta para ele vencer o derivado.
+
+Não dá para transformar isso numa redistribuição no acervo sem inventar a data
+em que ela teria acontecido — e é justamente o que a carga não fez.
+
+#### A corrida com a sincronização
+
+O job do Actions grava os julgados assim que a AGR publica a pauta. Foi o que
+aconteceu com a 30ª reunião, na manhã de 21/08: ele rodou antes da carga e
+gravou 17 julgados sem relator, sem defesa e sem `acervo_id`, porque o acervo do
+período ainda não existia.
+
+Só inserir não conserta isso — o `on conflict do nothing` pula essas linhas e
+elas ficariam órfãs para sempre. É exatamente o caso da seção 3, e a carga
+resolveu com o mesmo `update` de [`rederivar_cj.sql`](sql/rederivar_cj.sql),
+restrito às sessões do período. Pela mesma razão, `processos_importados` e
+`processos_sem_acervo` de `pautas_cj` foram recalculados a partir do estado real
+da tabela: o documento da 30ª tinha 17 processos "fora do acervo" congelados, e
+passou a ter zero.
+
+**A lição, para a próxima carga:** depois de completar o acervo, rode sempre o
+`rederivar_cj.sql`. Inserir distribuição não desperta o gatilho.
+
+#### Onde isso deixou o banco
+
+| | antes | depois |
+|---|---|---|
+| `acervo_cj` | 37 distribuições | **194** (37 residuais + 157 das atas) |
+| `julgados_cj` | 17, todos órfãos | **151**, todos com relator e defesa |
+| `pautas_cj` | o marco + 1 documento | o marco + **10** documentos |
+
+Sobram **44 distribuições ainda sem julgamento** — 34 do sorteio de 14/08 e 10
+de sorteios anteriores. As 37 residuais foram todas julgadas nas dez pautas.
+
+O `verificacao_cj.sql` fecha sem nenhum `ERRO`. Na CJ, os dois casos em aberto
+são *Julgado sem processo no acervo* (o `1283`) e *Relator divergente do acervo
+vinculado* (o `2208`). A conferência também mantém como `AVISO` os números CREG
+legados fora do padrão, até que uma fonte oficial permita corrigi-los.
 
 ### Restaurar
 
-Os três scripts são **um comando só cada** — um único bloco `do $$ … $$`. Não é
+Todo script desta seção é **um comando só** — um único bloco `do $$ … $$`. Não é
 estilo: o SQL Editor do Supabase fala com o banco por um pooler em modo
 transação, e comandos separados podem cair em conexões diferentes. Ali
 `begin;…commit;` não segura nada e tabela temporária desaparece entre um comando
@@ -575,6 +672,8 @@ Chaves e índices que sustentam as regras:
 
 | objeto | para quê |
 |---|---|
+| `ux_processos_sorteados_distribuicao (modo, num_processo, data_distribuicao, unidade)` | o mesmo sorteio CREG não é gravado duas vezes |
+| `processos_sorteados_num_processo_15_digitos` (validada) | todo sorteio CREG exige 15 dígitos |
 | `acervo_cj_distribuicao_unica (num_processo, data_distribuicao, relator)` | sorteio/importação repetidos não duplicam; é o índice da busca do processo |
 | `julgados_cj_sessao_unica (num_processo, data_sessao)` | um processo não é julgado duas vezes na mesma sessão |
 | `pautas_cj.url` único | o mesmo PDF não é processado duas vezes |
@@ -609,9 +708,9 @@ Chaves e índices que sustentam as regras:
 
 | situação | o que acontece |
 |---|---|
-| Supabase fora do ar durante o sorteio | baixa `.json` de backup; nenhum sorteio se perde |
-| sorteio repetido (mesmo processo, dia e cadeira) | banco recusa; mensagem clara e backup baixado |
-| sessão expirada | tela de login volta com a mensagem; o que estava para gravar vira backup |
+| Supabase fora do ar durante o sorteio | oferece o botão para baixar o `.json`; nenhum sorteio se perde |
+| sorteio repetido (mesmo processo, dia e cadeira) | banco recusa; mensagem clara e botão de backup aparece |
+| sessão expirada | tela de login volta com a mensagem; após entrar novamente, o botão de backup aparece |
 | site da AGR fora do ar | o job falha inteiro e tenta de novo na próxima rodada |
 | um PDF indisponível ou inválido | só aquele documento falha; os outros seguem, e ele **não** é marcado como processado |
 | PDF sem processos | vira erro do documento; não marca como processado |
@@ -625,23 +724,29 @@ entrou nem impede o processamento dos demais.
 
 ## 10. O que ainda não está resolvido
 
-Revisto depois do reinício da série, em 20/08/2026.
+Revisto depois da carga de recuperação, em 21/08/2026.
 
 ### Do sistema
 
-- **O acervo está em reconstrução.** Sobraram 37 distribuições, e nenhuma
-  corresponde aos processos que virão nas próximas pautas. Até a Câmara passar a
-  sortear pelo sistema, todo julgado sincronizado entra com `acervo_id` nulo e
-  sem relator, defesa nem data de distribuição. Não é defeito: é o preço do
-  recomeço. Daqui em diante o sorteio que vem **antes** da sessão já resolve
-  sozinho; o julgado que entrou **antes** do sorteio precisa de um
-  [`rederivar_cj.sql`](sql/rederivar_cj.sql) depois — o gatilho não dispara sozinho
-  quando o acervo é completado (ver seção 3).
-- **Cadeira × conselheiro.** As 37 linhas que sobraram vieram da planilha e
-  trazem o **nome** do conselheiro em `relator`; tudo o que o sorteio gravar dali
-  em diante traz a **cadeira** (`CJ1`..`CJ5`). Não existe de-para entre os dois,
-  então relatório que cruze as duas origens não fecha. Resolver isso é uma
-  tabela pequena ligando cadeira e conselheiro por período.
+- **Um julgado sem distribuição.** O `202600029001283`, da 25ª reunião
+  (16/07/2026), é o único dos 151 que a carga de recuperação não conseguiu
+  ligar ao acervo. Ele não está nas atas de sorteio 010 a 014 nem no histórico
+  da planilha, que cobre tudo até 10/06 — a mesma data da ata 010, com as mesmas
+  32 distribuições. Relator e defesa foram gravados no julgado, porque a pauta
+  diz de quem é, mas `acervo_id` e `data_distribuicao` ficam nulos e o número
+  segue listado em `pautas_cj.processos_sem_acervo` da 25ª reunião. Aparecendo o
+  documento que registra a distribuição, basta inseri-la no acervo e rodar o
+  [`rederivar_cj.sql`](sql/rederivar_cj.sql).
+- **Um processo relatado por quem não o sorteou.** O `202600029002208`: ata 013
+  para Paulo Henrique, 28ª reunião pela Lorena. Está registrado assim de
+  propósito — ver *A pauta confere o acervo* — mas se a troca teve um documento,
+  ela vira uma redistribuição no acervo e o caso fecha.
+- **Cadeira × conselheiro.** As 194 distribuições que o acervo tem hoje vieram
+  da planilha e das atas, e todas trazem o **nome** do conselheiro em `relator`;
+  o que o sorteio gravar daqui em diante traz a **cadeira** (`CJ1`..`CJ5`). Não
+  existe de-para entre os dois, então relatório que cruze as duas origens não
+  fecha. Resolver isso é uma tabela pequena ligando cadeira e conselheiro por
+  período. É a única coisa entre a CJ e o fluxo rodando inteiro pelo sistema.
 - **CREG** continua em `processos_sorteados`. Fica para depois; a estrutura
   está pronta para ganhar `acervo_creg` e `julgados_creg` com a mesma lógica.
 

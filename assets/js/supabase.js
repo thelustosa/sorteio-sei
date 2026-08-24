@@ -6,6 +6,8 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
+const ASSET_VERSION = '20260823-2';
+const TEMPO_LIMITE_REDE = 20000;
 
 // O token fica somente na aba atual: navegar entre as páginas preserva a sessão,
 // mas fechar a aba a encerra. Senhas nunca são armazenadas.
@@ -44,12 +46,50 @@ function baseUrl() {
   return SUPABASE_URL.replace(/\/+$/, '').replace(/\/rest\/v1$/, '');
 }
 
+async function fetchComTimeout(url, opcoes = {}) {
+  const controlador = new AbortController();
+  const temporizador = setTimeout(() => controlador.abort(), TEMPO_LIMITE_REDE);
+
+  try {
+    return await fetch(url, { ...opcoes, signal: controlador.signal });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('O servidor demorou mais de 20 segundos para responder. Tente novamente.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(temporizador);
+  }
+}
+
+const scriptsCarregados = new Map();
+
+function carregarScript(caminho) {
+  if (scriptsCarregados.has(caminho)) return scriptsCarregados.get(caminho);
+
+  const carregamento = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = caminho;
+    script.async = true;
+    script.addEventListener('load', resolve, { once: true });
+    script.addEventListener('error', () => {
+      scriptsCarregados.delete(caminho);
+      script.remove();
+      reject(new Error('Falha ao carregar os recursos da página.'));
+    }, { once: true });
+    document.head.appendChild(script);
+  });
+
+  scriptsCarregados.set(caminho, carregamento);
+  return carregamento;
+}
+
 async function autenticar(email, senha) {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     throw new Error('Banco de dados não configurado. Procure o responsável pela manutenção.');
   }
 
-  const resp = await fetch(`${baseUrl()}/auth/v1/token?grant_type=password`, {
+  const resp = await fetchComTimeout(`${baseUrl()}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY },
     body: JSON.stringify({ email, password: senha })
@@ -93,6 +133,7 @@ function alternarBotaoCarregando(botao, carregando, texto) {
 
   if (carregando) {
     botao.dataset.rotuloOriginal = botao.textContent.trim();
+    botao.style.minWidth = `${Math.ceil(botao.getBoundingClientRect().width)}px`;
     botao.disabled = true;
     botao.classList.add('is-loading');
     botao.setAttribute('aria-busy', 'true');
@@ -110,13 +151,14 @@ function alternarBotaoCarregando(botao, carregando, texto) {
   botao.classList.remove('is-loading');
   botao.removeAttribute('aria-busy');
   botao.textContent = botao.dataset.rotuloOriginal || botao.textContent;
+  botao.style.removeProperty('min-width');
   delete botao.dataset.rotuloOriginal;
 }
 
 // Chamada REST autenticada. Devolve o JSON da resposta (ou null quando vazia).
 // O erro carrega o status HTTP para quem precisa distinguir um caso específico.
 async function api(caminho, opcoes = {}) {
-  const resp = await fetch(`${baseUrl()}/rest/v1/${caminho}`, {
+  const resp = await fetchComTimeout(`${baseUrl()}/rest/v1/${caminho}`, {
     ...opcoes,
     headers: {
       'Content-Type': 'application/json',
@@ -290,3 +332,19 @@ function aviso(texto, tipo = 'sucesso') {
   msg.append(icone, conteudo, fechar);
   regiao.appendChild(msg);
 }
+
+// O registro acontece só depois do carregamento e quando o navegador estiver
+// ocioso, para não disputar rede ou CPU com a primeira pintura e o formulário.
+function registrarCacheEstatico() {
+  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+  navigator.serviceWorker.register(`./sw.js?v=${ASSET_VERSION}`, { updateViaCache: 'none' })
+    .catch(() => {});
+}
+
+window.addEventListener('load', () => {
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(registrarCacheEstatico, { timeout: 3000 });
+  } else {
+    setTimeout(registrarCacheEstatico, 1000);
+  }
+}, { once: true });

@@ -53,11 +53,32 @@ const processSetupHint = document.getElementById('processSetupHint');
 const processFormMessage = document.getElementById('processFormMessage');
 const resultadoSorteio = document.getElementById('resultadoSorteio');
 const sortControls = document.getElementById('sortControls');
+const tbodyResult = document.querySelector('#resultTable tbody');
+const resumoContagem = document.getElementById('resumoContagem');
+const resultadoStatus = document.getElementById('resultadoStatus');
+const thUnidadeResult = document.getElementById('thUnidadeResult');
+const modeSelectorTitle = document.getElementById('modeSelectorTitle');
+const resultadoSorteioTitle = document.getElementById('resultadoSorteioTitle');
+const baixarBackupBtn = document.getElementById('baixarBackup');
+let backupPendente;
 
 // ── Autenticação ─────────────────────────────────────────────────────────────
 // Login, token e chamadas ao Supabase ficam em supabase.js, compartilhados com
-// a página de registro de voto e status.
-ligarLogin(() => { modeSelector.hidden = false; });
+// a página de registro de voto e status. bootstrap.js chama esta função somente
+// depois que a sessão foi validada e este arquivo terminou de carregar.
+function inicializarSorteio() {
+  if (backupPendente) {
+    modeSelector.hidden = true;
+    sorteadorContent.hidden = false;
+    resultadoSorteio.hidden = false;
+    baixarBackupBtn.hidden = false;
+    btnVoltar.hidden = false;
+    baixarBackupBtn.focus();
+    return;
+  }
+  modeSelector.hidden = false;
+  modeSelectorTitle.focus();
+}
 
 btnCreg.addEventListener('click', () => {
   iniciarSorteador('CREG', ['CREG1', 'CREG2', 'CREG3', 'CREG4']);
@@ -81,10 +102,11 @@ btnVoltar.addEventListener('click', () => {
   
   // Resetar visualização de resultados
   resultadoSorteio.hidden = true;
-  const tbodyResult = document.querySelector('#resultTable tbody');
-  if (tbodyResult) tbodyResult.innerHTML = '';
-  const resumoContagem = document.getElementById('resumoContagem');
-  if (resumoContagem) resumoContagem.innerHTML = '';
+  tbodyResult.replaceChildren();
+  resumoContagem.replaceChildren();
+  backupPendente = undefined;
+  baixarBackupBtn.hidden = true;
+  modeSelectorTitle.focus();
 });
 
 function iniciarSorteador(modo, unidades) {
@@ -98,7 +120,7 @@ function iniciarSorteador(modo, unidades) {
   thRecurso.textContent = modo === 'CREG' ? 'Recurso' : 'Defesa';
   sortearBtn.textContent = `Sortear ${modo} e Exportar`;
 
-  pillsContainer.innerHTML = '';
+  const fragmentoPills = document.createDocumentFragment();
   unidadesList.forEach(unit => {
     const pill = document.createElement('button');
     pill.type = 'button';
@@ -106,12 +128,9 @@ function iniciarSorteador(modo, unidades) {
     pill.dataset.creg = unit;
     pill.setAttribute('aria-pressed', 'false');
     pill.textContent = unit;
-    pill.addEventListener('click', () => {
-      const excluded = pill.classList.toggle('excluded');
-      pill.setAttribute('aria-pressed', String(excluded));
-    });
-    pillsContainer.appendChild(pill);
+    fragmentoPills.appendChild(pill);
   });
+  pillsContainer.replaceChildren(fragmentoPills);
 
   processEntry.hidden = true;
   sortearBtn.hidden = true;
@@ -121,15 +140,18 @@ function iniciarSorteador(modo, unidades) {
   
   // Garantir que a área de resultados anterior seja limpa e escondida
   resultadoSorteio.hidden = true;
+  backupPendente = undefined;
+  baixarBackupBtn.hidden = true;
 
   modeSelector.hidden = true;
   sorteadorContent.hidden = false;
 
   clearRows();
+  numRowsInput.focus();
 }
 
 function clearRows() {
-  tbody.innerHTML = '';
+  tbody.replaceChildren();
 }
 
 function mostrarMensagemFormulario(mensagem, campo) {
@@ -170,15 +192,13 @@ function createRowElement(index) {
   const optDefaultAss = document.createElement('option'); optDefaultAss.value = ''; optDefaultAss.textContent = 'Selecione o Assunto'; optDefaultAss.disabled = true; optDefaultAss.selected = true;
   selAss.appendChild(optDefaultAss);
   assuntosAtivos.forEach(a => { const o = document.createElement('option'); o.value = a; o.textContent = a; selAss.appendChild(o) });
-  const atualizarEstadoAssunto = () => selAss.classList.toggle('placeholder-select', !selAss.value);
-  atualizarEstadoAssunto();
-  selAss.addEventListener('change', atualizarEstadoAssunto);
+  selAss.classList.toggle('placeholder-select', !selAss.value);
   // Na Câmara de Julgamento o assunto é sempre Auto de Infração: já vem definido e travado.
   if (modoSorteio === 'CJ') {
     selAss.value = 'Auto de Infração';
     selAss.disabled = true;
     selAss.classList.add('fixed-field');
-    atualizarEstadoAssunto();
+    selAss.classList.remove('placeholder-select');
   }
   tdAss.appendChild(selAss);
   const tdRec = document.createElement('td');
@@ -188,33 +208,11 @@ function createRowElement(index) {
   const optDefaultRec = document.createElement('option'); optDefaultRec.value = ''; optDefaultRec.textContent = modoSorteio === 'CJ' ? 'Houve defesa?' : 'Selecione o Recurso'; optDefaultRec.disabled = true; optDefaultRec.selected = true;
   selRec.appendChild(optDefaultRec);
   (modoSorteio === 'CJ' ? defesas : recursos).forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; selRec.appendChild(o) });
-  const atualizarEstadoDefesa = () => selRec.classList.toggle('placeholder-select', !selRec.value);
-  atualizarEstadoDefesa();
-  selRec.addEventListener('change', atualizarEstadoDefesa);
+  selRec.classList.toggle('placeholder-select', !selRec.value);
   tdRec.appendChild(selRec);
 
   // Só no CREG: fora de Auto de Infração não existe recurso. Na CJ o assunto é
   // travado em Auto de Infração e a coluna é Defesa, que sempre se aplica.
-  if (modoSorteio !== 'CJ') {
-    // "Não se aplica" posto pelo sistema volta a ser pergunta em aberto quando o
-    // assunto vira Auto de Infração de novo. Sem esta marca, uma correção de
-    // assunto deixava o recurso com o valor que o próprio sistema tinha escrito,
-    // e a validação aprovava um dado que ninguém escolheu.
-    let travadoPeloSistema = false;
-    selAss.addEventListener('change', () => {
-      if (selAss.value !== 'Auto de Infração') {
-        selRec.value = 'Não se aplica';
-        selRec.disabled = true;
-        travadoPeloSistema = true;
-      } else {
-        selRec.disabled = false;
-        if (travadoPeloSistema) selRec.value = '';
-        travadoPeloSistema = false;
-      }
-      atualizarEstadoDefesa();
-    });
-  }
-
   const tdDel = document.createElement('td');
   tdDel.className = 'acoes';
   tdDel.dataset.label = 'Ações';
@@ -224,23 +222,62 @@ function createRowElement(index) {
   btnDel.textContent = 'Excluir';
   btnDel.setAttribute('aria-label', `Excluir linha ${index}`);
   btnDel.title = 'Excluir esta linha';
-  btnDel.addEventListener('click', () => {
-    tr.remove();
-    recalculaOrdem();
-  });
   tdDel.appendChild(btnDel);
 
   tr.append(tdOrdem, tdProc, tdAss, tdRec, tdDel);
   return tr;
 }
 
-function createRows(n) {
-  clearRows();
+const proximoFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
+
+async function createRows(n) {
+  tbody.replaceChildren();
+  const fragmento = document.createDocumentFragment();
   for (let i = 1; i <= n; i++) {
-    const tr = createRowElement(i);
-    tbody.appendChild(tr);
+    fragmento.appendChild(createRowElement(i));
+    // Em lotes grandes, devolve o controle ao navegador para que o loading seja
+    // pintado e outras interações não esperem toda a construção das linhas.
+    if (i % 40 === 0 || i === n) {
+      tbody.appendChild(fragmento);
+      if (i < n) await proximoFrame();
+    }
   }
 }
+
+pillsContainer.addEventListener('click', event => {
+  const pill = event.target.closest('.pill');
+  if (!pill || !pillsContainer.contains(pill)) return;
+  const excluido = pill.classList.toggle('excluded');
+  pill.setAttribute('aria-pressed', String(excluido));
+});
+
+tbody.addEventListener('change', event => {
+  const select = event.target.closest('select');
+  if (!select || !tbody.contains(select)) return;
+  select.classList.toggle('placeholder-select', !select.value);
+
+  if (modoSorteio === 'CJ' || !select.closest('.col-assunto')) return;
+
+  const row = select.closest('tr');
+  const decisao = row.querySelector('.col-decisao select');
+  if (select.value !== 'Auto de Infração') {
+    decisao.value = 'Não se aplica';
+    decisao.disabled = true;
+    row.dataset.decisaoAutomatica = 'true';
+  } else {
+    decisao.disabled = false;
+    if (row.dataset.decisaoAutomatica === 'true') decisao.value = '';
+    delete row.dataset.decisaoAutomatica;
+  }
+  decisao.classList.toggle('placeholder-select', !decisao.value);
+});
+
+tbody.addEventListener('click', event => {
+  const botao = event.target.closest('.btn-excluir');
+  if (!botao || !tbody.contains(botao)) return;
+  botao.closest('tr').remove();
+  recalculaOrdem();
+});
 
 function getParticipantes() {
   const excluidos = Array.from(document.querySelectorAll('#pillsContainer .excluded')).map(p => p.dataset.creg);
@@ -269,11 +306,9 @@ function sortearProcessos() {
       return;
     }
 
-    // Na Câmara de Julgamento o número é a chave que liga o acervo à pauta
-    // publicada pela AGR, que traz sempre 15 dígitos. Um número fora do padrão
-    // entra no acervo e nunca casa com o julgado — e só apareceria depois, no
-    // verificacao_cj.sql. Barrar aqui é onde ainda dá para corrigir.
-    if (modoSorteio === 'CJ' && !/^\d{15}$/.test(numProc)) {
+    // O número SEI tem 15 dígitos nos dois colegiados. Barrar máscara ou número
+    // incompleto aqui mantém ata, backup e banco com a mesma chave auditável.
+    if (!/^\d{15}$/.test(numProc)) {
       mostrarMensagemFormulario(
         `O processo da linha ${idx + 1} deve ter 15 dígitos, sem pontos ou barras. Corrija antes de sortear.`,
         campoProc);
@@ -356,9 +391,6 @@ function sortearProcessos() {
   // ── Renderizar Resultados na Interface ──────────────────────────────────────
   const divResultado = document.getElementById('resultadoSorteio');
   const divResumo = document.getElementById('resumoContagem');
-  const tbodyResult = document.querySelector('#resultTable tbody');
-  const thUnidadeResult = document.getElementById('thUnidadeResult');
-  
   if (divResultado && divResumo && tbodyResult) {
     // 1. Atualizar cabeçalho da coluna de resultado
     if (thUnidadeResult) {
@@ -368,8 +400,8 @@ function sortearProcessos() {
     }
 
     // 2. Limpar conteúdo anterior
-    tbodyResult.innerHTML = '';
-    divResumo.innerHTML = '';
+    tbodyResult.replaceChildren();
+    divResumo.replaceChildren();
     
     // 3. Montar a contagem de cada processo para cada unidade
     const countWrapper = document.createElement('div');
@@ -387,6 +419,7 @@ function sortearProcessos() {
     divResumo.appendChild(countWrapper);
 
     // 4. Preencher a tabela de resultados
+    const fragmentoResultado = document.createDocumentFragment();
     rows.forEach(r => {
       const numProc = r.querySelector('.col-processo input').value.trim();
       const assunto = r.querySelector('.col-assunto select').value;
@@ -405,8 +438,9 @@ function sortearProcessos() {
       tdUn.textContent = unidadeSorteada;
 
       tr.append(tdProc, tdAss, tdUn);
-      tbodyResult.appendChild(tr);
+      fragmentoResultado.appendChild(tr);
     });
+    tbodyResult.appendChild(fragmentoResultado);
 
     // Exibir a seção de resultados e ocultar a tabela de inputs / controles
     divResultado.hidden = false;
@@ -416,6 +450,7 @@ function sortearProcessos() {
     processSetupHint.hidden = true;
     processEntry.hidden = true;
 
+    resultadoSorteioTitle.focus({ preventScroll: true });
     // Fazer scroll suave para o resultado
     divResultado.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
@@ -429,23 +464,35 @@ function sortearProcessos() {
 
   exportarWord(sorteio);
 
-  const resultadoStatus = document.getElementById('resultadoStatus');
   if (resultadoStatus) {
     resultadoStatus.replaceChildren(criarIndicadorCarregamento('Registrando o sorteio…'));
     resultadoStatus.hidden = false;
   }
 
+  btnVoltar.disabled = true;
   salvar(sorteio)
-    .then(destino => destino === 'banco'
-      ? aviso('Sorteio gravado no banco de dados.')
-      : aviso('Banco não configurado — guarde o arquivo .json de backup gerado.', 'atencao'))
+    .then(destino => {
+      if (destino === 'banco') {
+        aviso('Sorteio gravado no banco de dados.');
+        return;
+      }
+      backupPendente = sorteio;
+      baixarBackupBtn.hidden = false;
+      aviso('Banco não configurado — o backup .json está pronto para baixar.', 'atencao');
+    })
     // Conflito não é "não gravou": alguma linha deste sorteio já existe no
     // banco, e mandar o backup de novo daria o mesmo erro. Pedir reenvio ali
     // mandaria a secretaria repetir uma operação que nunca vai passar.
-    .catch(err => aviso(err.status === 409
-      ? `Nada foi gravado: ${err.message}. O .json foi baixado para conferência — confira o sorteio anterior antes de repetir.`
-      : `Falha ao gravar no banco (${err.message}). O backup .json foi baixado — reenvie depois.`, 'erro'))
+    .catch(err => {
+      backupPendente = sorteio;
+      baixarBackupBtn.hidden = false;
+      if (err.status === 401) btnVoltar.hidden = true;
+      aviso(err.status === 409
+        ? `Nada foi gravado: ${err.message}. O backup .json está pronto para baixar — confira o sorteio anterior antes de repetir.`
+        : `Falha ao gravar no banco (${err.message}). O backup .json está pronto para baixar.`, 'erro');
+    })
     .finally(() => {
+      btnVoltar.disabled = false;
       if (resultadoStatus) {
         resultadoStatus.hidden = true;
         resultadoStatus.replaceChildren();
@@ -457,7 +504,7 @@ function sortearProcessos() {
 // A Câmara de Julgamento grava no próprio acervo — de lá saem os julgados
 // (ver schema.sql). O Conselho Regulador segue na tabela antiga enquanto não
 // ganha acervo_creg/julgados_creg. Sem Supabase configurado, o sorteio vira um
-// .json de backup.
+// botão para baixar um .json de backup.
 const TABELAS = { CJ: 'acervo_cj', CREG: 'processos_sorteados' };
 
 // A coluna de decisão é Defesa na Câmara de Julgamento e Recurso no Conselho
@@ -585,12 +632,11 @@ function linhasParaBanco(sorteio) {
   }));
 }
 
-// Grava o sorteio no banco. Sem Supabase configurado (ou em caso de falha),
-// baixa o JSON de backup para reenvio posterior — nenhum sorteio se perde.
+// Grava o sorteio no banco. A interface oferece o JSON por clique explícito
+// quando não há Supabase configurado ou a chamada falha.
 async function salvar(sorteio) {
   const tabela = TABELAS[sorteio.modo];
   if (!SUPABASE_URL || !SUPABASE_KEY || !accessToken || !tabela) {
-    baixarBackup(sorteio);
     return 'arquivo';
   }
 
@@ -606,7 +652,6 @@ async function salvar(sorteio) {
     });
     return 'banco';
   } catch (err) {
-    baixarBackup(sorteio);
     // O POST é uma transação só: basta uma linha em conflito para nenhuma
     // entrar. Dizer "o sorteio já está gravado" seria falso quando só um
     // processo repetiu — os outros continuam de fora.
@@ -624,21 +669,47 @@ function baixarBackup(sorteio) {
   baixarArquivo(new Blob([json], { type: 'application/json' }), nomeArquivo(sorteio, 'json'));
 }
 
-createBtn.addEventListener('click', () => {
-  const n = parseInt(numRowsInput.value) || 0;
-  if (n < 1 || n > 500) {
+baixarBackupBtn.addEventListener('click', () => {
+  if (!backupPendente) return;
+  baixarBackup(backupPendente);
+  backupPendente = undefined;
+  baixarBackupBtn.hidden = true;
+  btnVoltar.focus();
+  aviso('Backup .json baixado.');
+});
+
+createBtn.addEventListener('click', async () => {
+  const n = Number(numRowsInput.value);
+  if (!Number.isInteger(n) || n < 1 || n > 500) {
     mostrarMensagemFormulario('Informe uma quantidade entre 1 e 500 processos.', numRowsInput);
     return;
   }
   esconderMensagemFormulario();
-  createRows(n);
+  numRowsInput.disabled = true;
+  addRowBtn.disabled = true;
+  sortearBtn.hidden = true;
   processEntry.hidden = false;
-  sortearBtn.hidden = false;
-  tbody.querySelector('input')?.focus();
+  processEntry.setAttribute('aria-busy', 'true');
+  alternarBotaoCarregando(createBtn, true, 'Gerando linhas…');
+
+  try {
+    await createRows(n);
+    sortearBtn.hidden = false;
+    tbody.querySelector('input')?.focus();
+  } finally {
+    numRowsInput.disabled = false;
+    addRowBtn.disabled = false;
+    processEntry.removeAttribute('aria-busy');
+    alternarBotaoCarregando(createBtn, false);
+  }
 });
 
 addRowBtn.addEventListener('click', () => {
-  const nextIndex = tbody.querySelectorAll('tr').length + 1;
+  if (tbody.children.length >= 500) {
+    mostrarMensagemFormulario('O limite é de 500 processos.', addRowBtn);
+    return;
+  }
+  const nextIndex = tbody.children.length + 1;
   const tr = createRowElement(nextIndex);
   tbody.appendChild(tr);
 });
