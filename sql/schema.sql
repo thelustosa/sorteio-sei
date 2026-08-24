@@ -428,3 +428,20 @@ grant select on public.julgados_cj         to authenticated;
 grant usage on sequence public.processos_sorteados_id_seq,
                         public.acervo_cj_id_seq
   to authenticated;
+
+-- ── Monitoramento / Keep-Alive (UptimeRobot / Health Check) ──────────────────
+-- Função leve sem efeitos colaterais (STABLE) que permite requisições HEAD/GET
+-- anônimas via RPC (/rest/v1/rpc/ping). Usada por serviços de monitoramento
+-- para registrar atividade no banco e evitar o auto-pause do plano gratuito.
+create or replace function public.ping()
+returns text
+language sql
+stable
+set search_path = ''
+as $$
+  select 'pong'
+$$;
+
+revoke all on function public.ping() from public;
+grant execute on function public.ping() to anon, authenticated;
+

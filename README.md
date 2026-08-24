@@ -130,6 +130,18 @@ Depois, em **Authentication → Users**, cadastre quem vai usar o sistema; e em 
 Se o projeto migrar para um plano Pro ou superior, ative também **Prevent use
 of leaked passwords**; o recurso não está disponível no plano Free.
 
+### Prevenção de Inatividade (Keep-Alive do Supabase)
+
+No plano gratuito, o Supabase pausa automaticamente projetos que ficam 7 dias sem requisições. Para evitar a hibernação sem custos, o `sql/schema.sql` inclui a função `public.ping()`, que é leve, segura (não lê nem altera dados) e marcada como `STABLE` para responder a requisições `HEAD` e `GET` anônimas com `200 OK`.
+
+Para configurar no **UptimeRobot** (plano gratuito com método `HEAD`) ou no **cron-job.org**:
+- **Tipo de Monitor:** `HTTP(s)`
+- **URL:**
+  ```text
+  https://<SEU_PROJECT_REF>.supabase.co/rest/v1/rpc/ping?apikey=<SUA_PUBLISHABLE_KEY>
+  ```
+- **Intervalo:** A cada 5 a 15 minutos (ou diário via cron).
+
 A chave publicável é pública por natureza e pode ficar no código: ela identifica o projeto, não autoriza operações. A proteção dos dados vem das políticas de RLS do `schema.sql`, que exigem **usuário autenticado** e dão a cada tabela o mínimo: o sorteio só **insere** (nenhum sorteio já gravado pode ser lido, alterado ou apagado pelo navegador), `julgados_cj` só é **lida** pela página de registro, e `pautas_cj` não é nem uma coisa nem outra. Não existe política de `UPDATE` ou `DELETE` em tabela nenhuma. É o que permite manter o código-fonte totalmente aberto para auditoria.
 
 ---
