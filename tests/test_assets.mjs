@@ -33,7 +33,7 @@ const paginaAninhada = new URL('https://thelustosa.github.io/sorteio-sei/inexist
 const base404 = erro404.match(/<base href="([^"]+)"/i)?.[1] || paginaAninhada.href;
 for (const [recurso, destino] of [
   ['assets/img/favicon.png', '/sorteio-sei/assets/img/favicon.png'],
-  ['assets/css/index.min.css?v=20260823-2', '/sorteio-sei/assets/css/index.min.css'],
+  ['assets/css/index.min.css?v=20260824', '/sorteio-sei/assets/css/index.min.css'],
   ['./index.html', '/sorteio-sei/index.html']
 ]) {
   assert.equal(new URL(recurso, new URL(base404, paginaAninhada)).pathname, destino,
