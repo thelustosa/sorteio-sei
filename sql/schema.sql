@@ -67,10 +67,9 @@ create unique index if not exists ux_processos_sorteados_distribuicao
 --   planilha -> importado do histórico da aba Acervo (dados/importar_planilha.py).
 --
 -- Colunas que só uma das origens preenche ficam nulas na outra: a planilha não
--- registra ordem. O relator recebe o nome do conselheiro
--- (planilha) ou a cadeira sorteada CJ1..CJ5 (sorteador) — enquanto não existir
--- de-para entre cadeira e nome, é o mesmo campo "quem ficou com o processo"
--- nas duas origens.
+-- registra ordem. Em relator vai o nome do conselheiro nas duas origens — o
+-- histórico da planilha e o sorteio gravam o mesmo vocabulário, que é também o
+-- que as atas publicadas no SEI usam.
 create table if not exists public.acervo_cj (
   id                bigint generated always as identity primary key,
   num_processo      text        not null,
@@ -369,6 +368,75 @@ $$;
 
 revoke all on function public.registrar_votos(jsonb) from public, anon, service_role;
 grant execute on function public.registrar_votos(jsonb) to authenticated;
+
+-- ── CJ · Painel do acervo ────────────────────────────────────────────────────
+-- A matriz do acervo.html: processos parados por faixa de tempo e por relator.
+--
+-- O navegador não lê acervo_cj — a tabela só tem política de INSERT. Abrir
+-- SELECT nela só para montar o painel entregaria o acervo inteiro ao cliente
+-- para ele contar no JavaScript. A agregação fica aqui: a porta continua
+-- estreita, o payload é de algumas dezenas de células, e a definição de "não
+-- julgado" mora em um lugar só, junto das outras regras.
+create or replace function public.resumo_acervo_cj()
+returns table (ordem int, faixa text, relator text, processos int)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if (select auth.uid()) is null then
+    raise exception 'autenticação exigida' using errcode = '28000';
+  end if;
+
+  return query
+  with faixas(ordem, faixa, de, ate) as (values
+      (1, 'Até 15 dias',            0,  15),
+      (2, 'Até 30 dias',           16,  30),
+      (3, 'Até 45 dias',           31,  45),
+      (4, 'Há 3 meses',            46,  90),
+      (5, 'Entre 3 e 6 meses',     91, 180),
+      (6, 'Entre 6 meses e 1 ano',181, 365),
+      (7, 'Há mais de 1 ano',     366, 730),
+      (8, 'Há 2 anos',            731, 2147483647)
+  ),
+
+  -- Uma linha por PROCESSO, não por distribuição: um processo redistribuído
+  -- conta uma vez só, na cadeira e na data da distribuição mais recente.
+  --
+  -- "Não julgado" = não aparece em julgados_cj. Quem foi à mesa e voltou sem
+  -- decisão (Retornou, Vista, Retirado) sai do painel — tem fila própria, que é
+  -- a tela de registro. Para contá-los aqui, acrescente
+  -- `and j.status = 'Julgado'` ao not exists.
+  pendentes as (
+    select distinct on (a.num_processo)
+           a.relator,
+           (current_date - a.data_distribuicao) as dias
+      from public.acervo_cj a
+     where not exists (select 1 from public.julgados_cj j
+                        where j.num_processo = a.num_processo)
+     order by a.num_processo, a.data_distribuicao desc, a.id desc
+  ),
+
+  -- Todo relator do acervo vira coluna, mesmo sem processo parado: coluna que
+  -- aparece e some conforme o dado muda faz a tabela dançar de um dia para o
+  -- outro. É também o que faz o painel seguir a composição da Câmara sem
+  -- precisar de lista fixa no HTML.
+  relatores as (select distinct acervo_cj.relator from public.acervo_cj)
+
+  select f.ordem, f.faixa, r.relator, count(p.relator)::int
+    from faixas f
+   cross join relatores r
+    left join pendentes p
+           on p.relator = r.relator
+          and p.dias between f.de and f.ate
+   group by f.ordem, f.faixa, r.relator
+   order by f.ordem, r.relator;
+end;
+$$;
+
+revoke all on function public.resumo_acervo_cj() from public, anon, service_role;
+grant execute on function public.resumo_acervo_cj() to authenticated;
 
 -- ── Segurança (RLS) ──────────────────────────────────────────────────────────
 -- Duas camadas de proteção, iguais para as três tabelas:

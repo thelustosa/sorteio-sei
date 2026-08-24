@@ -393,3 +393,86 @@ test('move o foco para a lista após o login', async () => {
 
   assert.equal(page.document.activeElement, page.document.getElementById('listaPautasTitulo'));
 });
+
+// ── Painel do acervo ─────────────────────────────────────────────────────────
+// As colunas do painel saem do dado, não do HTML: quem decide quais relatores
+// aparecem é a função resumo_acervo_cj. Estes testes fixam esse contrato e os
+// três estados da tela — matriz, vazio e falha.
+
+function acervoPage(api) {
+  const document = new Document();
+  ['acervoPanel', 'acervoVazio', 'acervoErro', 'acervoTotal', 'acervoAtualizado']
+    .forEach(id => document.add(id, 'div'));
+  document.add('acervoTable', 'table');
+  document.add('btnAtualizar', 'button');
+  document.add('btnImprimir', 'button');
+
+  const app = new Function('document', 'window', 'api',
+    `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo };`)(
+    document, { print() {} }, api);
+  return { document, ...app };
+}
+
+const celulas = linha => linha.children.map(c => c.textContent);
+
+test('acervo monta as colunas a partir dos relatores que o banco devolve', async () => {
+  const page = acervoPage(async () => [
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'Dorivan de Souza Lima', processos: 3 },
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'Paulo Otoni Ribeiro', processos: 22 },
+    { ordem: 2, faixa: 'Até 30 dias', relator: 'Dorivan de Souza Lima', processos: 1 },
+    { ordem: 2, faixa: 'Até 30 dias', relator: 'Paulo Otoni Ribeiro', processos: 0 }
+  ]);
+  page.inicializarAcervo();
+  await wait();
+
+  const tabela = page.document.getElementById('acervoTable');
+  const [thead, tbody, tfoot] = tabela.children;
+
+  assert.deepEqual(celulas(thead.children[0]),
+    ['Período', 'Dorivan de Souza Lima', 'Paulo Otoni Ribeiro', 'Total'],
+    'o cabeçalho não veio dos relatores do banco');
+
+  assert.deepEqual(celulas(tbody.children[0]), ['Até 15 dias', '3', '22', '25']);
+  // Zero vira travessão: coluna de "0" repetido esconde o número que importa.
+  assert.deepEqual(celulas(tbody.children[1]), ['Até 30 dias', '1', '—', '1']);
+  assert.deepEqual(celulas(tfoot.children[0]), ['Total', '4', '22', '26']);
+  assert.equal(page.document.getElementById('acervoTotal').textContent,
+    '26 processos aguardando julgamento');
+});
+
+test('acervo mostra o painel antes do dado chegar, para o erro caber na tela', async () => {
+  const page = acervoPage(async () => { throw new Error('rede fora'); });
+  page.inicializarAcervo();
+  await wait();
+
+  assert.equal(page.document.getElementById('acervoPanel').hidden, false,
+    'painel escondido deixaria a falha invisível');
+  const erro = page.document.getElementById('acervoErro');
+  assert.equal(erro.hidden, false);
+  assert.match(erro.textContent, /rede fora/);
+  assert.equal(page.document.getElementById('btnAtualizar').disabled, false,
+    'o botão de atualizar precisa voltar a funcionar depois da falha');
+});
+
+test('acervo não anuncia falha de conexão quando a sessão expirou', async () => {
+  const page = acervoPage(async () => {
+    throw Object.assign(new Error('sessão expirada'), { status: 401 });
+  });
+  page.inicializarAcervo();
+  await wait();
+
+  assert.equal(page.document.getElementById('acervoErro').hidden, true,
+    'a tela de login já explica o que houve; dois diagnósticos se contradizem');
+});
+
+test('acervo avisa quando não há processo parado', async () => {
+  const page = acervoPage(async () => [
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'Dorivan de Souza Lima', processos: 0 }
+  ]);
+  page.inicializarAcervo();
+  await wait();
+
+  assert.equal(page.document.getElementById('acervoVazio').hidden, false);
+  assert.equal(page.document.getElementById('acervoTotal').textContent,
+    '0 processos aguardando julgamento');
+});

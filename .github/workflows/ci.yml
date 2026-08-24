@@ -56,7 +56,7 @@ jobs:
         shell: bash
         run: |
           npx --yes esbuild@0.28.2 assets/css/index.css --minify --outfile=assets/css/index.min.css
-          for arquivo in supabase bootstrap index julgados; do
+          for arquivo in supabase bootstrap index julgados acervo; do
             npx --yes esbuild@0.28.2 "assets/js/$arquivo.js" --minify-syntax --minify-whitespace --outfile="assets/js/$arquivo.min.js"
           done
           git diff --exit-code -- assets/css/index.min.css assets/js/*.min.js

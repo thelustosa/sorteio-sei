@@ -9,10 +9,12 @@
   <title>Acervo não julgado | Sorteio de Processos SEI</title>
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=20260824-8" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=20260824-9" />
+  <script defer src="assets/js/supabase.min.js?v=20260824-9"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=20260824-9"></script>
 </head>
 
-<body class="dashboard-page">
+<body class="dashboard-page" data-page="acervo">
   <a class="skip-link" href="#conteudo-principal">Pular para o conteúdo principal</a>
 
   <div class="page-header-wrapper">
@@ -34,18 +36,47 @@
     <div class="container">
       <span id="txtModo">Acervo de processos não julgados</span>
       <div class="nav-actions">
+        <button id="btnAtualizar" class="nav-action" type="button" data-sessao hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M16.5 10a6.5 6.5 0 1 1-1.9-4.6"></path><path d="M16.5 3v4h-4"></path>
+          </svg>
+          <span>Atualizar</span>
+        </button>
         <a class="nav-action" href="./index.html">
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M15.5 10h-11"></path><path d="m8.5 6-4 4 4 4"></path>
           </svg>
           <span>Voltar</span>
         </a>
+        <button id="btnSair" class="nav-action" type="button" hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12.5 6.5V4.5h-8v11h8v-2"></path><path d="M8.5 10h8"></path><path d="m14 7.5 2.5 2.5L14 12.5"></path>
+          </svg>
+          <span>Sair</span>
+        </button>
       </div>
     </div>
   </nav>
 
   <main id="conteudo-principal" class="container dashboard-main" tabindex="-1">
-    <section class="acervo-panel" aria-labelledby="acervo-title">
+    <div class="card">
+      <div id="loginScreen">
+        <h2>Acesso restrito</h2>
+        <p>Identifique-se para consultar o acervo.</p>
+        <form id="loginForm">
+          <label for="loginEmail">E-mail</label>
+          <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
+          <label for="loginSenha">Senha</label>
+          <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+          <button id="btnEntrar" type="submit">Entrar</button>
+          <div id="loginErro" role="alert" aria-live="assertive"></div>
+        </form>
+      </div>
+
+      <div id="sessionLoading" class="session-loading" data-sessao hidden></div>
+    </div>
+
+    <section id="acervoPanel" class="acervo-panel" aria-labelledby="acervo-title" data-sessao hidden>
       <header class="acervo-header">
         <div>
           <h2 id="acervo-title">Acervo de processos não julgados</h2>
@@ -55,20 +86,20 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M4 7.5h16v12H4z"></path><path d="M3 4.5h18v3H3z"></path><path d="M9 12h6"></path>
           </svg>
-          <span>Processos aguardando julgamento</span>
+          <span id="acervoTotal">Processos aguardando julgamento</span>
         </div>
       </header>
 
       <div class="acervo-toolbar">
-        <p><span aria-hidden="true"></span>Estrutura preparada para atualização dos dados</p>
-        <div class="acervo-actions" aria-label="Ações futuras do painel">
+        <p><span aria-hidden="true"></span><span id="acervoAtualizado">Carregando…</span></p>
+        <div class="acervo-actions" aria-label="Ações do painel">
           <button type="button" disabled>
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M10 3v9"></path><path d="m6.5 8.5 3.5 3.5 3.5-3.5"></path><path d="M4 15.5h12"></path>
             </svg>
             Exportar tabela
           </button>
-          <button type="button" disabled>
+          <button id="btnImprimir" type="button">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M5.5 7V3.5h9V7"></path><path d="M5.5 14.5H4A1.5 1.5 0 0 1 2.5 13V9A1.5 1.5 0 0 1 4 7.5h12A1.5 1.5 0 0 1 17.5 9v4A1.5 1.5 0 0 1 16 14.5h-1.5"></path><path d="M5.5 12h9v4.5h-9z"></path>
             </svg>
@@ -78,32 +109,17 @@
       </div>
 
       <div class="acervo-table-shell">
-        <div class="table-scroll" role="region" aria-label="Acervo por período e relatoria" tabindex="0">
-          <table class="acervo-table">
-            <thead>
-              <tr>
-                <th scope="col">Período</th>
-                <th scope="col">CJ1</th>
-                <th scope="col">CJ2</th>
-                <th scope="col">CJ3</th>
-                <th scope="col">CJ4</th>
-                <th scope="col">CJ5</th>
-                <th scope="col">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><th scope="row">Até 15 dias</th><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
-              <tr><th scope="row">Até 30 dias</th><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
-              <tr><th scope="row">Até 45 dias</th><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
-              <tr><th scope="row">Há 3 meses</th><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
-              <tr><th scope="row">Entre 3 e 6 meses</th><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
-              <tr><th scope="row">Entre 6 meses e 1 ano</th><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
-              <tr class="acervo-emphasis"><th scope="row">Há mais de 1 ano</th><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
-              <tr class="acervo-emphasis"><th scope="row">Há 2 anos</th><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
-            </tbody>
-          </table>
+        <div id="acervoErro" class="load-error" role="alert" hidden></div>
+        <div id="acervoVazio" class="empty-state" role="status" hidden>
+          <p>Nenhum processo aguardando julgamento. Todo o acervo distribuído já passou por uma sessão.</p>
         </div>
-        <footer class="acervo-panel-footer"><span aria-hidden="true"></span>Campos reservados para atualização executiva</footer>
+        <div class="table-scroll" role="region" aria-label="Acervo por período e relatoria" tabindex="0">
+          <!-- Cabeçalho e linhas são montados por acervo.js a partir do que a
+               função resumo_acervo_cj devolve: as colunas são os relatores que
+               existem no acervo, não uma lista fixa aqui. -->
+          <table id="acervoTable" class="acervo-table"></table>
+        </div>
+        <footer class="acervo-panel-footer"><span aria-hidden="true"></span>Uma linha por processo, na distribuição mais recente</footer>
       </div>
     </section>
   </main>

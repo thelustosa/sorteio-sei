@@ -84,8 +84,26 @@ btnCreg.addEventListener('click', () => {
   iniciarSorteador('CREG', ['CREG1', 'CREG2', 'CREG3', 'CREG4']);
 });
 
+// Os conselheiros da Câmara, na grafia da planilha histórica — que é a mesma
+// que o acervo já usa em 194 distribuições e a que as atas do SEI publicam.
+//
+// Aqui esteve 'CJ1'..'CJ5'. A cadeira era anônima por desenho, mas gravar
+// cadeira num acervo cujo histórico inteiro traz nome produzia duas convenções
+// na mesma coluna: relatório por relator passaria a ter dez valores para cinco
+// pessoas, e a ata gerada divergiria da publicada no SEI, que nomeia a pessoa.
+//
+// Quando existir o de-para entre cadeira e conselheiro por período, a cadeira
+// volta — com a tradução feita no banco, não com dois vocabulários soltos.
+const CONSELHEIROS_CJ = [
+  'Deusdete Cardoso Belém',
+  'Dorivan de Souza Lima',
+  'Lorena Patricia de Oliveira',
+  'Paulo Henrique Oliveira Marques',
+  'Paulo Otoni Ribeiro'
+];
+
 btnCj.addEventListener('click', () => {
-  iniciarSorteador('CJ', ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5']);
+  iniciarSorteador('CJ', CONSELHEIROS_CJ);
 });
 
 btnVoltar.addEventListener('click', () => {
@@ -605,8 +623,8 @@ function dataISO(dataBR) {
 }
 
 // Uma linha por processo, no formato da tabela de cada modo. A unidade sorteada
-// (CJ1..CJ5) é o relator do processo no acervo da Câmara — é ela que os julgados
-// usam depois para saber quem levou o processo à sessão.
+// é o relator do processo no acervo da Câmara — é ele que os julgados usam
+// depois para saber quem levou o processo à sessão.
 function linhasParaBanco(sorteio) {
   if (sorteio.modo === 'CJ') {
     return sorteio.processos.map(p => ({
