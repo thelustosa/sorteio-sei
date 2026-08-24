@@ -57,13 +57,27 @@ const tbodyResult = document.querySelector('#resultTable tbody');
 const resumoContagem = document.getElementById('resumoContagem');
 const resultadoStatus = document.getElementById('resultadoStatus');
 const thUnidadeResult = document.getElementById('thUnidadeResult');
+const modeSelectorTitle = document.getElementById('modeSelectorTitle');
+const resultadoSorteioTitle = document.getElementById('resultadoSorteioTitle');
+const baixarBackupBtn = document.getElementById('baixarBackup');
+let backupPendente;
 
 // ── Autenticação ─────────────────────────────────────────────────────────────
 // Login, token e chamadas ao Supabase ficam em supabase.js, compartilhados com
 // a página de registro de voto e status. bootstrap.js chama esta função somente
 // depois que a sessão foi validada e este arquivo terminou de carregar.
 function inicializarSorteio() {
+  if (backupPendente) {
+    modeSelector.hidden = true;
+    sorteadorContent.hidden = false;
+    resultadoSorteio.hidden = false;
+    baixarBackupBtn.hidden = false;
+    btnVoltar.hidden = false;
+    baixarBackupBtn.focus();
+    return;
+  }
   modeSelector.hidden = false;
+  modeSelectorTitle.focus();
 }
 
 btnCreg.addEventListener('click', () => {
@@ -90,6 +104,9 @@ btnVoltar.addEventListener('click', () => {
   resultadoSorteio.hidden = true;
   tbodyResult.replaceChildren();
   resumoContagem.replaceChildren();
+  backupPendente = undefined;
+  baixarBackupBtn.hidden = true;
+  modeSelectorTitle.focus();
 });
 
 function iniciarSorteador(modo, unidades) {
@@ -123,11 +140,14 @@ function iniciarSorteador(modo, unidades) {
   
   // Garantir que a área de resultados anterior seja limpa e escondida
   resultadoSorteio.hidden = true;
+  backupPendente = undefined;
+  baixarBackupBtn.hidden = true;
 
   modeSelector.hidden = true;
   sorteadorContent.hidden = false;
 
   clearRows();
+  numRowsInput.focus();
 }
 
 function clearRows() {
@@ -286,11 +306,9 @@ function sortearProcessos() {
       return;
     }
 
-    // Na Câmara de Julgamento o número é a chave que liga o acervo à pauta
-    // publicada pela AGR, que traz sempre 15 dígitos. Um número fora do padrão
-    // entra no acervo e nunca casa com o julgado — e só apareceria depois, no
-    // verificacao_cj.sql. Barrar aqui é onde ainda dá para corrigir.
-    if (modoSorteio === 'CJ' && !/^\d{15}$/.test(numProc)) {
+    // O número SEI tem 15 dígitos nos dois colegiados. Barrar máscara ou número
+    // incompleto aqui mantém ata, backup e banco com a mesma chave auditável.
+    if (!/^\d{15}$/.test(numProc)) {
       mostrarMensagemFormulario(
         `O processo da linha ${idx + 1} deve ter 15 dígitos, sem pontos ou barras. Corrija antes de sortear.`,
         campoProc);
@@ -432,6 +450,7 @@ function sortearProcessos() {
     processSetupHint.hidden = true;
     processEntry.hidden = true;
 
+    resultadoSorteioTitle.focus({ preventScroll: true });
     // Fazer scroll suave para o resultado
     divResultado.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
@@ -450,17 +469,30 @@ function sortearProcessos() {
     resultadoStatus.hidden = false;
   }
 
+  btnVoltar.disabled = true;
   salvar(sorteio)
-    .then(destino => destino === 'banco'
-      ? aviso('Sorteio gravado no banco de dados.')
-      : aviso('Banco não configurado — guarde o arquivo .json de backup gerado.', 'atencao'))
+    .then(destino => {
+      if (destino === 'banco') {
+        aviso('Sorteio gravado no banco de dados.');
+        return;
+      }
+      backupPendente = sorteio;
+      baixarBackupBtn.hidden = false;
+      aviso('Banco não configurado — o backup .json está pronto para baixar.', 'atencao');
+    })
     // Conflito não é "não gravou": alguma linha deste sorteio já existe no
     // banco, e mandar o backup de novo daria o mesmo erro. Pedir reenvio ali
     // mandaria a secretaria repetir uma operação que nunca vai passar.
-    .catch(err => aviso(err.status === 409
-      ? `Nada foi gravado: ${err.message}. O .json foi baixado para conferência — confira o sorteio anterior antes de repetir.`
-      : `Falha ao gravar no banco (${err.message}). O backup .json foi baixado — reenvie depois.`, 'erro'))
+    .catch(err => {
+      backupPendente = sorteio;
+      baixarBackupBtn.hidden = false;
+      if (err.status === 401) btnVoltar.hidden = true;
+      aviso(err.status === 409
+        ? `Nada foi gravado: ${err.message}. O backup .json está pronto para baixar — confira o sorteio anterior antes de repetir.`
+        : `Falha ao gravar no banco (${err.message}). O backup .json está pronto para baixar.`, 'erro');
+    })
     .finally(() => {
+      btnVoltar.disabled = false;
       if (resultadoStatus) {
         resultadoStatus.hidden = true;
         resultadoStatus.replaceChildren();
@@ -472,7 +504,7 @@ function sortearProcessos() {
 // A Câmara de Julgamento grava no próprio acervo — de lá saem os julgados
 // (ver schema.sql). O Conselho Regulador segue na tabela antiga enquanto não
 // ganha acervo_creg/julgados_creg. Sem Supabase configurado, o sorteio vira um
-// .json de backup.
+// botão para baixar um .json de backup.
 const TABELAS = { CJ: 'acervo_cj', CREG: 'processos_sorteados' };
 
 // A coluna de decisão é Defesa na Câmara de Julgamento e Recurso no Conselho
@@ -600,12 +632,11 @@ function linhasParaBanco(sorteio) {
   }));
 }
 
-// Grava o sorteio no banco. Sem Supabase configurado (ou em caso de falha),
-// baixa o JSON de backup para reenvio posterior — nenhum sorteio se perde.
+// Grava o sorteio no banco. A interface oferece o JSON por clique explícito
+// quando não há Supabase configurado ou a chamada falha.
 async function salvar(sorteio) {
   const tabela = TABELAS[sorteio.modo];
   if (!SUPABASE_URL || !SUPABASE_KEY || !accessToken || !tabela) {
-    baixarBackup(sorteio);
     return 'arquivo';
   }
 
@@ -621,7 +652,6 @@ async function salvar(sorteio) {
     });
     return 'banco';
   } catch (err) {
-    baixarBackup(sorteio);
     // O POST é uma transação só: basta uma linha em conflito para nenhuma
     // entrar. Dizer "o sorteio já está gravado" seria falso quando só um
     // processo repetiu — os outros continuam de fora.
@@ -639,9 +669,18 @@ function baixarBackup(sorteio) {
   baixarArquivo(new Blob([json], { type: 'application/json' }), nomeArquivo(sorteio, 'json'));
 }
 
+baixarBackupBtn.addEventListener('click', () => {
+  if (!backupPendente) return;
+  baixarBackup(backupPendente);
+  backupPendente = undefined;
+  baixarBackupBtn.hidden = true;
+  btnVoltar.focus();
+  aviso('Backup .json baixado.');
+});
+
 createBtn.addEventListener('click', async () => {
-  const n = parseInt(numRowsInput.value) || 0;
-  if (n < 1 || n > 500) {
+  const n = Number(numRowsInput.value);
+  if (!Number.isInteger(n) || n < 1 || n > 500) {
     mostrarMensagemFormulario('Informe uma quantidade entre 1 e 500 processos.', numRowsInput);
     return;
   }
@@ -666,6 +705,10 @@ createBtn.addEventListener('click', async () => {
 });
 
 addRowBtn.addEventListener('click', () => {
+  if (tbody.children.length >= 500) {
+    mostrarMensagemFormulario('O limite é de 500 processos.', addRowBtn);
+    return;
+  }
   const nextIndex = tbody.children.length + 1;
   const tr = createRowElement(nextIndex);
   tbody.appendChild(tr);

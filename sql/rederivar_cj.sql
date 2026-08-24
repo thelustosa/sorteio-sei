@@ -6,18 +6,16 @@
 -- conserta sozinho: inserir em acervo_cj não toca em julgados_cj, então nada
 -- reexecuta e o julgado fica órfão para sempre.
 --
--- Este script é o empurrão que falta. Gravar null num campo derivado é como
--- pedir a fórmula de volta — o gatilho só preenche o que vem nulo, por causa do
--- coalesce — então zerar os três faz o banco procurar o processo no acervo de
--- novo e vincular o que agora existe.
+-- Este script é o empurrão que falta. Gravar um campo derivado nele mesmo faz o
+-- gatilho procurar o processo no acervo de novo. O vínculo é preenchido, mas os
+-- valores já informados continuam vencendo os derivados por causa do coalesce.
 --
 -- Rode no SQL Editor do Supabase depois de cada sorteio, enquanto o acervo
 -- estiver em reconstrução: é o passo que fecha o ciclo "sorteei um processo que
 -- já tinha ido a julgamento". Ver FLUXO-CJ.md, seção 3.
 --
 -- É seguro repetir:
---   · o filtro só alcança linha que já está vazia, então nunca sobrescreve o
---     relator de um julgamento que já aconteceu;
+--   · o filtro só alcança linha sem vínculo e nenhum valor manual é zerado;
 --   · na segunda passada a linha vinculada já não casa com o filtro;
 --   · voto e status não são tocados — o gatilho não encosta neles, e o que a
 --     secretaria preencheu na tela continua lá.
@@ -32,9 +30,7 @@
 -- processo no acervo" do verificacao_cj.sql.
 
 update public.julgados_cj
-   set relator           = null,
-       defesa            = null,
-       data_distribuicao = null
+   set data_distribuicao = data_distribuicao
  where acervo_id is null
 returning num_processo,
           data_sessao,

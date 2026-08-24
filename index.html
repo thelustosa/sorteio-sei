@@ -12,9 +12,9 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=20260821" />
-  <script defer src="assets/js/supabase.min.js?v=20260821"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=20260821"></script>
+  <link rel="stylesheet" href="assets/css/index.min.css?v=20260823-2" />
+  <script defer src="assets/js/supabase.min.js?v=20260823-2"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=20260823-2"></script>
 </head>
 
 <body data-page="sorteio">
@@ -75,7 +75,7 @@
       <div id="sessionLoading" class="session-loading" data-sessao hidden></div>
 
       <div id="modeSelector" data-sessao hidden>
-        <h2>Selecione a unidade de sorteio para começar</h2>
+        <h2 id="modeSelectorTitle" tabindex="-1">Selecione a unidade de sorteio para começar</h2>
         <p class="mode-description">Escolha o colegiado responsável pela distribuição dos processos.</p>
         <div class="buttons-wrapper">
           <button id="btnCreg" class="mode-button" type="button">Conselho Regulador (CREG)</button>
@@ -90,7 +90,7 @@
       <div id="sorteadorContent" data-sessao hidden>
         <div id="sortControls" class="controls">
           <label for="numRows">Quantidade de processos:</label>
-          <input id="numRows" type="number" min="1" max="500" value="3" aria-describedby="processSetupHint processFormMessage">
+          <input id="numRows" type="number" min="1" max="500" step="1" value="3" aria-describedby="processSetupHint processFormMessage">
           <button id="createRows" class="button-primary" type="button">Gerar linhas</button>
           <div id="spacer"></div>
           <button id="sortear" class="button-primary" type="button" hidden>Sortear CREG e Exportar</button>
@@ -127,8 +127,9 @@
 
         <!-- Seção de Resultados Pós-Sorteio -->
         <div id="resultadoSorteio" hidden>
-          <h2>Resultado do Sorteio</h2>
+          <h2 id="resultadoSorteioTitle" tabindex="-1">Resultado do Sorteio</h2>
           <div id="resultadoStatus" hidden></div>
+          <button id="baixarBackup" class="button-secondary" type="button" hidden>Baixar backup .json</button>
 
           <div id="resumoContagem">
             <!-- Exemplo: CREG1: 2 processos | CREG2: 3 processos -->
@@ -161,7 +162,7 @@
         Este sorteio segue regras de distribuição igualitária e proporcional por assunto e carga total de processos.<br>
         Todos os sorteios são auditáveis para garantir transparência.
       </p>
-      <div class="footer-version">Versão 1.5</div>
+      <div class="footer-version">Versão 1.6</div>
     </div>
   </footer>
 

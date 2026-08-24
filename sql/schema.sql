@@ -26,8 +26,36 @@ create table if not exists public.processos_sorteados (
   unidade           text        not null
 );
 
+-- Criar em duas etapas mantém a proteção para novas linhas enquanto uma base
+-- antiga é conferida; a validação abaixo exige que nenhum legado inválido reste.
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_constraint
+     where conrelid = 'public.processos_sorteados'::regclass
+       and conname = 'processos_sorteados_num_processo_15_digitos'
+  ) then
+    alter table public.processos_sorteados
+      add constraint processos_sorteados_num_processo_15_digitos
+      check (num_processo ~ '^[0-9]{15}$') not valid;
+  end if;
+end
+$$;
+
+alter table public.processos_sorteados
+  validate constraint processos_sorteados_num_processo_15_digitos;
+
 create index if not exists idx_processos_sorteados_modo_data
   on public.processos_sorteados (modo, data_hora desc);
+
+-- A API devolve 409 quando o mesmo processo é reenviado para a mesma unidade
+-- no mesmo dia. Em base já populada, confira antes o ERRO correspondente em
+-- verificacao_cj.sql: o índice recusa duplicatas existentes em vez de apagar
+-- ou escolher uma delas sem decisão humana.
+create unique index if not exists ux_processos_sorteados_distribuicao
+  on public.processos_sorteados
+  (modo, num_processo, data_distribuicao, unidade);
 
 -- ── CJ · Acervo ──────────────────────────────────────────────────────────────
 -- Uma linha por DISTRIBUIÇÃO de um processo a um relator — não uma linha por
@@ -159,9 +187,16 @@ create table if not exists public.pautas_cj (
 create index if not exists idx_pautas_cj_sessao on public.pautas_cj (data_sessao desc);
 
 -- Uma linha desta tabela pode não ser um documento: existe um marco com url
--- 'marco:inicio-da-serie', gravado quando a série de julgados foi reiniciada em
--- 19/08/2026, e é ele que diz à sincronização a partir de quando começar.
+-- 'marco:inicio-da-serie'. Seu corte canônico é 18/06/2026, anterior ao
+-- reinício operacional, e diz à sincronização a partir de quando começar.
 -- Relatórios que contem documentos devem filtrar por url like 'https://%'.
+insert into public.pautas_cj (url, titulo, numero, data_sessao, sha256)
+values ('marco:inicio-da-serie', 'Início da série', 0, date '2026-06-18', 'marco')
+on conflict (url) do update
+set titulo = excluded.titulo,
+    numero = excluded.numero,
+    data_sessao = excluded.data_sessao,
+    sha256 = excluded.sha256;
 
 alter table public.pautas_cj enable row level security;
 
@@ -181,10 +216,11 @@ alter table public.pautas_cj enable row level security;
 -- ficaram com intervalos desatualizados).
 --
 -- Ordem de resolução:
---   1. data_distribuicao informada -> o registro exato daquela distribuição;
---   2. a última distribuição até a data da sessão;
---   3. a distribuição mais antiga (equivale ao INDEX/MATCH da planilha, que
---      acha o processo mesmo quando a única distribuição é posterior à sessão).
+--   1. data_distribuicao informada -> somente o registro exato; se não existir,
+--      o julgado fica sem vínculo para não apontar a uma distribuição diferente;
+--   2. sem data informada -> a última distribuição até a data da sessão;
+--   3. ainda sem resultado -> a distribuição mais antiga (equivale ao
+--      INDEX/MATCH da planilha quando a única distribuição é posterior à sessão).
 --
 -- Valor informado sempre vence o derivado: a aba Julgados tem 1.122 linhas com
 -- Defesa digitada à mão, e importar não pode sobrescrevê-las. Para forçar a
@@ -208,23 +244,20 @@ begin
        and data_distribuicao = new.data_distribuicao
      order by id
      limit 1;
-  end if;
-
-  if origem.id is null then
+  else
     select * into origem
       from public.acervo_cj
      where num_processo = new.num_processo
        and data_distribuicao <= new.data_sessao
      order by data_distribuicao desc, id desc
      limit 1;
-  end if;
-
-  if origem.id is null then
-    select * into origem
-      from public.acervo_cj
-     where num_processo = new.num_processo
-     order by data_distribuicao, id
-     limit 1;
+    if origem.id is null then
+      select * into origem
+        from public.acervo_cj
+       where num_processo = new.num_processo
+       order by data_distribuicao, id
+       limit 1;
+    end if;
   end if;
 
   new.acervo_id         := origem.id;
@@ -234,6 +267,9 @@ begin
   return new;
 end;
 $$;
+
+revoke all on function public.julgados_cj_derivar_do_acervo()
+  from public, anon, authenticated;
 
 drop trigger if exists julgados_cj_derivar on public.julgados_cj;
 create trigger julgados_cj_derivar
@@ -274,9 +310,12 @@ create or replace function public.auth_email()
 returns text
 language sql
 stable
+set search_path = ''
 as $$
   select nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'email'
 $$;
+
+revoke all on function public.auth_email() from public, anon, authenticated;
 
 -- Rótulos aceitos. Não viraram CHECK na tabela de propósito: a planilha
 -- histórica tem valores que a CJ pode querer estender, e não há tela de
@@ -289,10 +328,14 @@ security definer
 set search_path = ''
 as $$
 declare
-  quem     text := coalesce(public.auth_email(), 'desconhecido');
+  quem     text := nullif(public.auth_email(), '');
   invalido int;
   gravados int;
 begin
+  if (select auth.uid()) is null or quem is null then
+    raise exception 'autenticação exigida' using errcode = '28000';
+  end if;
+
   if jsonb_typeof(itens) is distinct from 'array' then
     raise exception 'registrar_votos espera uma lista de itens';
   end if;
@@ -324,7 +367,7 @@ begin
 end;
 $$;
 
-revoke all on function public.registrar_votos(jsonb) from public;
+revoke all on function public.registrar_votos(jsonb) from public, anon, service_role;
 grant execute on function public.registrar_votos(jsonb) to authenticated;
 
 -- ── Segurança (RLS) ──────────────────────────────────────────────────────────
@@ -366,13 +409,22 @@ drop policy if exists "usuario autenticado pode ler" on public.julgados_cj;
 create policy "usuario autenticado pode ler"
   on public.julgados_cj for select to authenticated using (true);
 
--- No Supabase o papel authenticated já recebe privilégio nas tabelas de public
--- por concessão padrão do projeto, e quem recorta o acesso é a RLS acima. As
--- concessões abaixo escrevem esse mínimo de forma explícita, para que o
--- schema.sql sozinho descreva o acesso — e para que ele funcione igual num
--- Postgres comum, onde essa concessão padrão não existe e o site subiria sem
--- conseguir gravar nada. São aditivas: não retiram nada de quem já tem.
+-- O Supabase concede privilégios amplos aos papéis da API por padrão. RLS ainda
+-- bloquearia as linhas, mas os grants abaixo repetem o mesmo mínimo como segunda
+-- camada e deixam o schema idêntico num Postgres comum.
+revoke all privileges on table public.processos_sorteados, public.acervo_cj,
+                               public.julgados_cj, public.pautas_cj
+  from anon, authenticated;
+revoke all privileges on sequence public.processos_sorteados_id_seq,
+                                  public.acervo_cj_id_seq,
+                                  public.julgados_cj_id_seq,
+                                  public.pautas_cj_id_seq
+  from anon, authenticated;
+
 grant usage on schema public to anon, authenticated;
 grant insert on public.processos_sorteados to authenticated;
 grant insert on public.acervo_cj           to authenticated;
 grant select on public.julgados_cj         to authenticated;
+grant usage on sequence public.processos_sorteados_id_seq,
+                        public.acervo_cj_id_seq
+  to authenticated;
