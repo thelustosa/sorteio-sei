@@ -785,6 +785,14 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 }
 
 .acervo-panel {
+  /* Escala local, maior que a base do site: este painel é lido à distância
+     (sessão de julgamento, projeção) e a escala global fica pequena demais
+     para isso. As variáveis herdam em cascata para cabeçalho, tabela e
+     rodapé do painel — nada muda fora daqui. */
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-md: 1.0625rem;
+  --text-lg: 1.375rem;
   display: flex;
   width: 100%;
   flex-direction: column;
