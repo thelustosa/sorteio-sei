@@ -1002,9 +1002,18 @@ def painel_traduz_cadeira_e_deixa_o_resto_intacto(cur):
     """Cadeira vem com o nome para o hover; sem de-para, o rótulo se repete.
 
     O coalesce da função é o que evita hover vazio: uma coluna cujo relator não
-    é cadeira mostra o próprio valor, em vez de um title em branco.
+    é cadeira mostra o próprio valor, em vez de um title em branco. Sem a
+    planilha (CI), acervo_cj está vazio — o próprio teste tem que semear os
+    dois casos, senão "painel vazio" nem chega a exercitar o coalesce.
     """
     autenticar(cur)
+    cur.execute("delete from public.julgados_cj")
+    cur.execute("delete from public.acervo_cj")
+    cur.execute("""insert into public.acervo_cj
+                     (num_processo, relator, data_distribuicao, defesa, origem) values
+                   ('202600029000005', 'CJ2',                    current_date - 5, true, 'sorteio'),
+                   ('202600029000006', 'Conselheiro Sem Cadeira', current_date - 5, true, 'sorteio')""")
+
     cur.execute('select distinct relator, conselheiro from public.resumo_acervo_cj()')
     pares = dict(cur.fetchall())
     assert pares, 'painel vazio'
@@ -1014,6 +1023,9 @@ def painel_traduz_cadeira_e_deixa_o_resto_intacto(cur):
     for relator, conselheiro in pares.items():
         esperado = depara.get(relator, relator)
         assert conselheiro == esperado, f'{relator} -> {conselheiro}, esperado {esperado}'
+    assert pares['CJ2'] != 'CJ2', 'CJ2 deveria mostrar o conselheiro, não a própria cadeira'
+    assert pares['Conselheiro Sem Cadeira'] == 'Conselheiro Sem Cadeira', 'sem de-para deveria repetir o rótulo'
+    cur.connection.rollback()
 
 
 @teste
