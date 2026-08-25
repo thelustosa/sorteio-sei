@@ -405,11 +405,14 @@ function acervoPage(api) {
   const loginOnlyCard = document.createElement('div');
   loginOnlyCard.dataset.loginOnly = '';
   document.body.append(loginOnlyCard);
-  ['acervoPanel', 'acervoVazio', 'acervoErro', 'acervoTotal', 'acervoAtualizado']
+  ['acervoPanel', 'acervoVazio', 'acervoTotal', 'acervoAtualizado']
     .forEach(id => document.add(id, 'div'));
+  const erroDiv = document.add('acervoErro', 'div');
+  erroDiv.appendChild(document.createElement('p'));
   document.add('acervoTable', 'table');
   document.add('btnAtualizar', 'button');
   document.add('btnImprimir', 'button');
+  document.add('btnTentarNovamente', 'button');
 
   const app = new Function('document', 'window', 'api',
     `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo };`)(
@@ -440,6 +443,12 @@ test('acervo monta as colunas a partir dos relatores que o banco devolve', async
   // Zero vira travessão: coluna de "0" repetido esconde o número que importa.
   assert.deepEqual(celulas(tbody.children[1]), ['Até 30 dias', '1', '—', '1']);
   assert.deepEqual(celulas(tfoot.children[0]), ['Total', '4', '22', '26']);
+  assert.equal(tbody.children[0].children[1].classList.contains('acervo-detalhe'), true,
+    'célula numérica precisa expor o estado individual de hover');
+  assert.equal(tbody.children[1].children[2].classList.contains('acervo-detalhe'), false,
+    'travessão não representa uma lista de processos para detalhar');
+  assert.equal(tfoot.children[0].children[3].classList.contains('acervo-detalhe'), true,
+    'o total geral também precisa expor o estado de hover');
   assert.equal(page.document.getElementById('acervoTotal').textContent,
     '26 processos aguardando julgamento');
   assert.equal(page.loginOnlyCard.hidden, true,
@@ -459,11 +468,31 @@ test('acervo mostra o painel antes do dado chegar, para o erro caber na tela', a
     'painel escondido deixaria a falha invisível');
   const erro = page.document.getElementById('acervoErro');
   assert.equal(erro.hidden, false);
-  assert.match(erro.textContent, /rede fora/);
+  assert.match(erro.querySelector('p').textContent, /rede fora/);
   assert.equal(page.document.getElementById('btnAtualizar').disabled, false,
     'o botão de atualizar precisa voltar a funcionar depois da falha');
   assert.equal(page.document.getElementById('acervoAtualizado').textContent,
     'Atualização indisponível');
+});
+
+test('acervo sinaliza apenas o total das faixas críticas com processos', async () => {
+  const page = acervoPage(async () => [
+    { ordem: 7, faixa: 'Há mais de 1 ano', relator: 'Dorivan de Souza Lima', processos: 2 },
+    { ordem: 8, faixa: 'Há 2 anos', relator: 'Dorivan de Souza Lima', processos: 0 }
+  ]);
+  page.inicializarAcervo();
+  await wait();
+
+  const linhas = page.document.getElementById('acervoTable').children[1].children;
+  assert.equal(linhas[0].children[1].classList.contains('acervo-alerta'), false,
+    'a célula do relator deve continuar branca');
+  assert.equal(linhas[0].children[2].classList.contains('acervo-alerta'), true,
+    'o total com processo antigo deve receber o estado de alerta');
+  assert.equal(linhas[0].children[2].classList.contains('acervo-detalhe'), true,
+    'o alerta também deve preservar o hover do futuro detalhamento');
+  assert.match(linhas[0].children[2]['aria-label'], /Alerta: 2 processos/);
+  assert.equal(linhas[1].children[2].classList.contains('acervo-alerta'), false,
+    'faixa crítica zerada não deve parecer um alerta');
 });
 
 test('acervo não anuncia falha de conexão quando a sessão expirou', async () => {

@@ -9,9 +9,9 @@
   <title>Acervo não julgado | Sorteio de Processos SEI</title>
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=20260824-10" />
-  <script defer src="assets/js/supabase.min.js?v=20260824-10"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=20260824-10"></script>
+  <link rel="stylesheet" href="assets/css/index.min.css?v=2b29df4a3b" />
+  <script defer src="assets/js/supabase.min.js?v=2b29df4a3b"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=2b29df4a3b"></script>
 </head>
 
 <body class="dashboard-page" data-page="acervo">
@@ -78,34 +78,50 @@
 
     <section id="acervoPanel" class="acervo-panel" aria-labelledby="acervo-title" data-sessao hidden>
       <header class="acervo-header">
-        <div>
-          <h2 id="acervo-title">Acervo de processos não julgados</h2>
-          <p>Visão gerencial do tempo de permanência dos processos distribuídos à Câmara de Julgamento.</p>
+        <div class="acervo-header-main">
+          <div class="acervo-header-title-group">
+            <h2 id="acervo-title">Acervo de processos não julgados</h2>
+            <p class="acervo-subtitle">Visão gerencial do tempo de permanência dos processos distribuídos à Câmara de Julgamento.</p>
+          </div>
+          <div class="acervo-scope" aria-label="Escopo do painel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 7.5h16v12H4z"></path><path d="M3 4.5h18v3H3z"></path><path d="M9 12h6"></path>
+            </svg>
+            <span id="acervoTotal">Processos aguardando julgamento</span>
+          </div>
         </div>
-        <div class="acervo-scope" aria-label="Escopo do painel">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 7.5h16v12H4z"></path><path d="M3 4.5h18v3H3z"></path><path d="M9 12h6"></path>
-          </svg>
-          <span id="acervoTotal">Processos aguardando julgamento</span>
+
+        <div class="acervo-header-bar">
+          <div class="acervo-meta" role="status" aria-live="polite" aria-atomic="true">
+            <span class="status-dot status-dot-header" aria-hidden="true"></span>
+            <span id="acervoAtualizado">Carregando…</span>
+          </div>
+          <div class="acervo-header-actions" aria-label="Ações do painel">
+            <button id="btnImprimir" class="acervo-btn-print" type="button">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5.5 7V3.5h9V7"></path><path d="M5.5 14.5H4A1.5 1.5 0 0 1 2.5 13V9A1.5 1.5 0 0 1 4 7.5h12A1.5 1.5 0 0 1 17.5 9v4A1.5 1.5 0 0 1 16 14.5h-1.5"></path><path d="M5.5 12h9v4.5h-9z"></path>
+              </svg>
+              <span>Imprimir</span>
+            </button>
+          </div>
         </div>
       </header>
 
-      <div class="acervo-toolbar">
-        <p role="status" aria-live="polite" aria-atomic="true"><span class="status-dot" aria-hidden="true"></span><span id="acervoAtualizado">Carregando…</span></p>
-        <div class="acervo-actions" aria-label="Ações do painel">
-          <button id="btnImprimir" type="button">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M5.5 7V3.5h9V7"></path><path d="M5.5 14.5H4A1.5 1.5 0 0 1 2.5 13V9A1.5 1.5 0 0 1 4 7.5h12A1.5 1.5 0 0 1 17.5 9v4A1.5 1.5 0 0 1 16 14.5h-1.5"></path><path d="M5.5 12h9v4.5h-9z"></path>
-            </svg>
-            Imprimir
-          </button>
-        </div>
-      </div>
-
       <div class="acervo-table-shell">
-        <div id="acervoErro" class="load-error" role="alert" hidden></div>
+        <div id="acervoErro" class="load-error" role="alert" hidden>
+          <p></p>
+          <button id="btnTentarNovamente" class="button-secondary" type="button">Tentar novamente</button>
+        </div>
         <div id="acervoVazio" class="empty-state" role="status" hidden>
-          <p>Nenhum processo aguardando julgamento. Todo o acervo distribuído já passou por uma sessão.</p>
+          <div class="empty-state-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21H4a1 1 0 0 1-1-1V8l3-5h12l3 5v12a1 1 0 0 1-1 1Z"></path><path d="M3 8h18"></path><path d="M10 12h4"></path>
+            </svg>
+          </div>
+          <div>
+            <h3>Acervo zerado</h3>
+            <p>Nenhum processo aguardando julgamento. Todo o acervo distribuído já passou por uma sessão.</p>
+          </div>
         </div>
         <div class="table-scroll" role="region" aria-label="Acervo por período e relatoria" tabindex="0">
           <!-- Cabeçalho e linhas são montados por acervo.js a partir do que a

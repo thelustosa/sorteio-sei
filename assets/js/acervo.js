@@ -19,10 +19,12 @@ const acervoTotal = document.getElementById('acervoTotal');
 const acervoAtualizado = document.getElementById('acervoAtualizado');
 const btnAtualizar = document.getElementById('btnAtualizar');
 const btnImprimir = document.getElementById('btnImprimir');
+const btnTentarNovamente = document.getElementById('btnTentarNovamente');
 const loginOnlyCard = document.querySelector('[data-login-only]');
 
 btnAtualizar.addEventListener('click', () => carregarAcervo());
 btnImprimir.addEventListener('click', () => window.print());
+btnTentarNovamente.addEventListener('click', () => carregarAcervo());
 
 function inicializarAcervo() {
   // O painel aparece antes do dado chegar, e não depois: os estados de erro e
@@ -74,12 +76,21 @@ function desenhar(linhas) {
     relatores.forEach(r => {
       const n = valor.get(`${ordem}|${r}`) || 0;
       somaLinha += n;
-      tr.append(celula(n || '—'));
+      tr.append(celula(n || '—', 'td', n ? 'acervo-detalhe' : 'acervo-zero'));
     });
 
-    tr.append(celula(somaLinha || '—', 'td', 'acervo-total-col'));
-    // Faixas longas são o que o painel existe para destacar.
-    if (ordem >= 7 && somaLinha > 0) tr.classList.add('acervo-emphasis');
+    const periodoCritico = ordem >= 7 && somaLinha > 0;
+    const totalLinha = celula(
+      somaLinha || '—',
+      'td',
+      `acervo-total-col${somaLinha ? ' acervo-detalhe' : ''}${periodoCritico ? ' acervo-alerta' : ''}`
+    );
+    if (periodoCritico) {
+      const quantidade = somaLinha === 1 ? '1 processo' : `${somaLinha} processos`;
+      totalLinha.setAttribute('aria-label', `Alerta: ${quantidade} nesta faixa de permanência`);
+      totalLinha.title = `Alerta: ${quantidade} nesta faixa de permanência`;
+    }
+    tr.append(totalLinha);
     total += somaLinha;
     tbody.append(tr);
   });
@@ -89,9 +100,9 @@ function desenhar(linhas) {
   trTotal.append(celula('Total', 'th', 'linha'));
   relatores.forEach(r => {
     const soma = faixas.reduce((acc, [ordem]) => acc + (valor.get(`${ordem}|${r}`) || 0), 0);
-    trTotal.append(celula(soma || '—'));
+    trTotal.append(celula(soma || '—', 'td', soma ? 'acervo-detalhe' : 'acervo-zero'));
   });
-  trTotal.append(celula(total || '—', 'td', 'acervo-total-col'));
+  trTotal.append(celula(total || '—', 'td', `acervo-total-col${total ? ' acervo-detalhe' : ''}`));
   rodape.append(trTotal);
 
   acervoTabela.replaceChildren(thead, tbody, rodape);
@@ -116,7 +127,7 @@ async function carregarAcervo() {
     if (err.status === 401) return;
     acervoTabela.replaceChildren();
     acervoAtualizado.textContent = 'Atualização indisponível';
-    acervoErro.textContent = `Não foi possível carregar o acervo (${err.message}).`;
+    acervoErro.querySelector('p').textContent = `Não foi possível carregar o acervo (${err.message}).`;
     acervoErro.hidden = false;
     return;
   } finally {

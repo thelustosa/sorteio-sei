@@ -1,21 +1,21 @@
 #!/usr/bin/env node
-// Garante que o Pages sirva os arquivos otimizados e que a versão do cache
-// avance junto com as URLs. Isso evita tanto regressão de peso quanto clientes
-// presos indefinidamente em um asset antigo do service worker.
+// Garante que o Pages sirva os arquivos otimizados e que a versão nas URLs
+// seja o hash do conteúdo atual. Isso evita tanto regressão de peso quanto
+// clientes presos num asset antigo por uma versão reaproveitada.
 
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { calcularVersao, versaoGravada } from '../tools/versionar.mjs';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ler = caminho => readFileSync(join(raiz, caminho), 'utf8');
 
-const supabase = ler('assets/js/supabase.js');
-const sw = ler('sw.js');
-const versao = supabase.match(/const ASSET_VERSION = '([^']+)'/)?.[1];
+const versao = versaoGravada();
 assert.ok(versao, 'ASSET_VERSION não encontrada');
-assert.match(sw, new RegExp(`sorteio-sei-assets-${versao}`), 'cache do service worker está em outra versão');
+assert.equal(versao, calcularVersao(),
+  'assets mudaram sem versionar: rode node tools/versionar.mjs');
 
 for (const pagina of ['index.html', 'julgados.html', 'acervo.html', '404.html']) {
   const html = ler(pagina);
@@ -45,4 +45,4 @@ const julgados = ler('julgados.html');
 assert.doesNotMatch(index, /<script[^>]+index\.min\.js/, 'index.js voltou ao carregamento inicial');
 assert.doesNotMatch(julgados, /<script[^>]+julgados\.min\.js/, 'julgados.js voltou ao carregamento inicial');
 
-console.log('assets: minificação, lazy load e versão de cache coerentes ✓');
+console.log('assets: minificação, lazy load e versão por hash coerentes ✓');

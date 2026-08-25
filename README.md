@@ -75,7 +75,6 @@ endereço não existe. Todo o resto está agrupado por natureza.
 │   ├── fonts/              Montserrat em .woff2 e a licença OFL
 │   └── img/                logotipos, favicon e as capturas de tela do README
 │
-├── sw.js                   cache versionado dos assets estáticos
 ├── sql/                    tudo que roda no SQL Editor do Supabase
 │   ├── schema.sql          tabelas, gatilho, função de registro e RLS
 │   ├── verificacao_cj.sql  conferência de consistência — só lê
@@ -87,6 +86,7 @@ endereço não existe. Todo o resto está agrupado por natureza.
 ├── sincronizacao/          job que lê as pautas da AGR (roda no GitHub Actions)
 ├── dados/                  conversão da planilha histórica em SQL
 ├── documentos/             Termo de Entrega oficial do projeto
+├── tools/versionar.mjs     grava nos assets a versão derivada do conteúdo
 └── tests/                  suítes automatizadas e dependências de teste
 ```
 
@@ -95,11 +95,12 @@ da Câmara de Julgamento, do sorteio ao julgamento registrado, com as regras, as
 tabelas, a API e o tratamento de falhas.
 
 O GitHub Pages define um cache curto para os arquivos publicados e não permite
-configurar cabeçalhos por repositório. Por isso, o `sw.js` guarda apenas CSS,
-JavaScript, fontes e imagens do próprio site; HTML e dados do Supabase nunca
-entram nesse cache. Ao alterar um asset, atualize a mesma versão em
-`ASSET_VERSION` (`assets/js/supabase.js`), nos parâmetros `?v=` dos HTMLs e em
-`CACHE_NAME` (`sw.js`), gere novamente os arquivos `.min.*` e rode os testes.
+configurar cabeçalhos por repositório. Por isso os assets entram com `?v=`, e
+essa versão é o hash do próprio conteúdo: `node tools/versionar.mjs` recalcula
+o hash e grava em `ASSET_VERSION` (`assets/js/supabase.js`) e nos `?v=` dos
+HTMLs. Não existe versão para escolher à mão — nenhuma URL é reaproveitada com
+conteúdo diferente, que era o que deixava o navegador com CSS antigo e JS novo.
+Ao alterar um asset, gere os `.min.*`, rode o versionador e os testes.
 
 ```powershell
 npx --yes esbuild@0.28.2 assets/css/index.css --minify --outfile=assets/css/index.min.css
@@ -108,6 +109,7 @@ npx --yes esbuild@0.28.2 assets/js/bootstrap.js --minify-syntax --minify-whitesp
 npx --yes esbuild@0.28.2 assets/js/index.js --minify-syntax --minify-whitespace --outfile=assets/js/index.min.js
 npx --yes esbuild@0.28.2 assets/js/julgados.js --minify-syntax --minify-whitespace --outfile=assets/js/julgados.min.js
 npx --yes esbuild@0.28.2 assets/js/acervo.js --minify-syntax --minify-whitespace --outfile=assets/js/acervo.min.js
+node tools/versionar.mjs
 ```
 
 ---
