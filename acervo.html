@@ -9,9 +9,9 @@
   <title>Acervo não julgado | Sorteio de Processos SEI</title>
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=2b29df4a3b" />
-  <script defer src="assets/js/supabase.min.js?v=2b29df4a3b"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=2b29df4a3b"></script>
+  <link rel="stylesheet" href="assets/css/index.min.css?v=d968f66d0d" />
+  <script defer src="assets/js/supabase.min.js?v=d968f66d0d"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=d968f66d0d"></script>
 </head>
 
 <body class="dashboard-page" data-page="acervo">
@@ -50,7 +50,9 @@
         </a>
         <button id="btnSair" class="nav-action" type="button" hidden>
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12.5 6.5V4.5h-8v11h8v-2"></path><path d="M8.5 10h8"></path><path d="m14 7.5 2.5 2.5L14 12.5"></path>
+            <path d="M8 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"></path>
+            <path d="m11 7 3 3-3 3"></path>
+            <path d="M14 10H8"></path>
           </svg>
           <span>Sair</span>
         </button>
@@ -83,26 +85,27 @@
             <h2 id="acervo-title">Acervo de processos não julgados</h2>
             <p class="acervo-subtitle">Visão gerencial do tempo de permanência dos processos distribuídos à Câmara de Julgamento.</p>
           </div>
-          <div class="acervo-scope" aria-label="Escopo do painel">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M4 7.5h16v12H4z"></path><path d="M3 4.5h18v3H3z"></path><path d="M9 12h6"></path>
-            </svg>
-            <span id="acervoTotal">Processos aguardando julgamento</span>
-          </div>
-        </div>
-
-        <div class="acervo-header-bar">
-          <div class="acervo-meta" role="status" aria-live="polite" aria-atomic="true">
-            <span class="status-dot status-dot-header" aria-hidden="true"></span>
-            <span id="acervoAtualizado">Carregando…</span>
-          </div>
-          <div class="acervo-header-actions" aria-label="Ações do painel">
-            <button id="btnImprimir" class="acervo-btn-print" type="button">
-              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M5.5 7V3.5h9V7"></path><path d="M5.5 14.5H4A1.5 1.5 0 0 1 2.5 13V9A1.5 1.5 0 0 1 4 7.5h12A1.5 1.5 0 0 1 17.5 9v4A1.5 1.5 0 0 1 16 14.5h-1.5"></path><path d="M5.5 12h9v4.5h-9z"></path>
+          <div class="acervo-header-summary">
+            <div class="acervo-scope" aria-label="Escopo do painel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 7.5h16v12H4z"></path><path d="M3 4.5h18v3H3z"></path><path d="M9 12h6"></path>
               </svg>
-              <span>Imprimir</span>
-            </button>
+              <span id="acervoTotal">Processos aguardando julgamento</span>
+            </div>
+            <div class="acervo-header-actions" aria-label="Ações do painel">
+              <button id="btnImprimir" class="acervo-btn-action" type="button">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M5.5 7V3.5h9V7"></path><path d="M5.5 14.5H4A1.5 1.5 0 0 1 2.5 13V9A1.5 1.5 0 0 1 4 7.5h12A1.5 1.5 0 0 1 17.5 9v4A1.5 1.5 0 0 1 16 14.5h-1.5"></path><path d="M5.5 12h9v4.5h-9z"></path>
+                </svg>
+                <span>Imprimir</span>
+              </button>
+              <button id="btnExportar" class="acervo-btn-action acervo-btn-export" type="button" aria-label="Exportar dados (em breve)" title="Exportação disponível em breve" disabled>
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M10 2.5v10"></path><path d="m6.5 9 3.5 3.5L13.5 9"></path><path d="M4 13.5v3h12v-3"></path>
+                </svg>
+                <span>Exportar</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -129,7 +132,12 @@
                existem no acervo, não uma lista fixa aqui. -->
           <table id="acervoTable" class="acervo-table"></table>
         </div>
-        <footer class="acervo-panel-footer"><span class="status-dot" aria-hidden="true"></span>Uma linha por processo, na distribuição mais recente</footer>
+        <footer class="acervo-panel-footer">
+          <div class="acervo-updated" role="status" aria-live="polite" aria-atomic="true">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="acervoAtualizado">Carregando…</span>
+          </div>
+        </footer>
       </div>
     </section>
   </main>

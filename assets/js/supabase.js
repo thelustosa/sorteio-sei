@@ -6,7 +6,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '2b29df4a3b';
+const ASSET_VERSION = 'd968f66d0d';
 const TEMPO_LIMITE_REDE = 20000;
 
 // O token fica somente na aba atual: navegar entre as páginas preserva a sessão,

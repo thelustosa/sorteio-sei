@@ -400,6 +400,37 @@ test('move o foco para a lista após o login', async () => {
 // aparecem é a função resumo_acervo_cj. Estes testes fixam esse contrato e os
 // três estados da tela — matriz, vazio e falha.
 
+function bootstrapPage(inicializar) {
+  const document = new Document();
+  document.body.dataset.page = 'acervo';
+  const sessionLoading = document.add('sessionLoading', 'div');
+  sessionLoading.hidden = true;
+  let aoEntrar;
+
+  new Function('document', 'window', 'ASSET_VERSION', 'carregarScript',
+    'criarIndicadorCarregamento', 'ligarLogin', source('bootstrap.js'))(
+    document, { inicializarAcervo: inicializar }, 'teste', async () => {},
+    texto => { const estado = document.createElement('div'); estado.textContent = texto; return estado; },
+    callback => { aoEntrar = callback; });
+
+  return { sessionLoading, iniciar: () => aoEntrar() };
+}
+
+test('bootstrap mantém o loading geral até a inicialização assíncrona terminar', async () => {
+  let concluir;
+  const page = bootstrapPage(() => new Promise(resolve => { concluir = resolve; }));
+  const carregamento = page.iniciar();
+  await wait();
+
+  assert.equal(page.sessionLoading.hidden, false);
+  assert.equal(page.sessionLoading.children.length, 1);
+
+  concluir();
+  await carregamento;
+  assert.equal(page.sessionLoading.hidden, true,
+    'o loading não pode sair enquanto dados e interface ainda estão sendo preparados');
+});
+
 function acervoPage(api) {
   const document = new Document();
   const loginOnlyCard = document.createElement('div');
@@ -413,6 +444,7 @@ function acervoPage(api) {
   document.add('btnAtualizar', 'button');
   document.add('btnImprimir', 'button');
   document.add('btnTentarNovamente', 'button');
+  document.getElementById('acervoPanel').hidden = true;
 
   const app = new Function('document', 'window', 'api',
     `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo };`)(
@@ -459,20 +491,35 @@ test('acervo monta as colunas a partir dos relatores que o banco devolve', async
     'o painel não pode permanecer ocupado depois da resposta');
 });
 
-test('acervo mostra o painel antes do dado chegar, para o erro caber na tela', async () => {
-  const page = acervoPage(async () => { throw new Error('rede fora'); });
-  page.inicializarAcervo();
+test('acervo só revela o dashboard depois que os dados estão prontos', async () => {
+  let responder;
+  const page = acervoPage(() => new Promise(resolve => { responder = resolve; }));
+  const inicializacao = page.inicializarAcervo();
   await wait();
 
-  assert.equal(page.document.getElementById('acervoPanel').hidden, false,
-    'painel escondido deixaria a falha invisível');
-  const erro = page.document.getElementById('acervoErro');
-  assert.equal(erro.hidden, false);
-  assert.match(erro.querySelector('p').textContent, /rede fora/);
+  assert.equal(page.document.getElementById('acervoPanel').hidden, true,
+    'cabeçalho e rodapé do dashboard não devem aparecer sem os dados');
+  assert.equal(page.loginOnlyCard.hidden, false,
+    'o contêiner do loading geral precisa permanecer visível');
+
+  responder([
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'Dorivan de Souza Lima', processos: 1 }
+  ]);
+  await inicializacao;
+
+  assert.equal(page.document.getElementById('acervoPanel').hidden, false);
+  assert.equal(page.loginOnlyCard.hidden, true,
+    'o loading geral deve sair junto com a entrada do dashboard completo');
+});
+
+test('falha inicial permanece no carregamento geral sem revelar painel incompleto', async () => {
+  const page = acervoPage(async () => { throw new Error('rede fora'); });
+
+  await assert.rejects(page.inicializarAcervo(), /rede fora/);
+  assert.equal(page.document.getElementById('acervoPanel').hidden, true);
+  assert.equal(page.loginOnlyCard.hidden, false);
   assert.equal(page.document.getElementById('btnAtualizar').disabled, false,
-    'o botão de atualizar precisa voltar a funcionar depois da falha');
-  assert.equal(page.document.getElementById('acervoAtualizado').textContent,
-    'Atualização indisponível');
+    'o botão de atualizar precisa voltar ao estado normal depois da falha');
 });
 
 test('acervo sinaliza apenas o total das faixas críticas com processos', async () => {

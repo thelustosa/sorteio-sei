@@ -26,14 +26,14 @@ btnAtualizar.addEventListener('click', () => carregarAcervo());
 btnImprimir.addEventListener('click', () => window.print());
 btnTentarNovamente.addEventListener('click', () => carregarAcervo());
 
-function inicializarAcervo() {
-  // O painel aparece antes do dado chegar, e não depois: os estados de erro e
-  // de vazio são desenhados dentro dele. Revelando só no sucesso, uma falha de
-  // rede deixaria a tela em branco, sem nem o botão de tentar de novo.
+async function inicializarAcervo() {
   btnAtualizar.hidden = false;
-  acervoPanel.hidden = false;
+  const carregado = await carregarAcervo({ carregamentoInicial: true });
+  if (!carregado) return;
+
+  // Troca atômica: o loading geral desaparece e o dashboard entra já completo.
   if (loginOnlyCard) loginOnlyCard.hidden = true;
-  carregarAcervo();
+  acervoPanel.hidden = false;
 }
 
 function hojeBR() {
@@ -109,7 +109,7 @@ function desenhar(linhas) {
   return total;
 }
 
-async function carregarAcervo() {
+async function carregarAcervo({ carregamentoInicial = false } = {}) {
   acervoErro.hidden = true;
   acervoVazio.hidden = true;
   acervoAtualizado.textContent = 'Carregando…';
@@ -124,12 +124,13 @@ async function carregarAcervo() {
     // Sessão expirada já foi tratada em api(), que recolocou a tela de login.
     // Sem esta saída, o painel diria "verifique sua conexão" logo abaixo de
     // "sua sessão expirou" — dois diagnósticos contraditórios na mesma tela.
-    if (err.status === 401) return;
+    if (err.status === 401) return false;
+    if (carregamentoInicial) throw err;
     acervoTabela.replaceChildren();
     acervoAtualizado.textContent = 'Atualização indisponível';
     acervoErro.querySelector('p').textContent = `Não foi possível carregar o acervo (${err.message}).`;
     acervoErro.hidden = false;
-    return;
+    return false;
   } finally {
     btnAtualizar.disabled = false;
     btnAtualizar.removeAttribute('aria-busy');
@@ -142,4 +143,5 @@ async function carregarAcervo() {
     : `${total} processos aguardando julgamento`;
   acervoAtualizado.textContent = `Posição de ${hojeBR()}`;
   acervoVazio.hidden = total > 0;
+  return true;
 }
