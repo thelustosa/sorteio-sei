@@ -79,13 +79,16 @@ function desenhar(linhas) {
       tr.append(celula(n || '—', 'td', n ? 'acervo-detalhe' : 'acervo-zero'));
     });
 
-    const periodoCritico = ordem >= 7 && somaLinha > 0;
+    // A partir de 46 dias ("Há 3 meses"), a célula Total é uma faixa visual
+    // crítica mesmo quando está zerada. A quantidade só vira alerta acessível
+    // quando há processo, para não anunciar "0 processos" como ocorrência.
+    const periodoCritico = ordem >= 4;
     const totalLinha = celula(
       somaLinha || '—',
       'td',
       `acervo-total-col${somaLinha ? ' acervo-detalhe' : ''}${periodoCritico ? ' acervo-alerta' : ''}`
     );
-    if (periodoCritico) {
+    if (periodoCritico && somaLinha > 0) {
       const quantidade = somaLinha === 1 ? '1 processo' : `${somaLinha} processos`;
       totalLinha.setAttribute('aria-label', `Alerta: ${quantidade} nesta faixa de permanência`);
       totalLinha.title = `Alerta: ${quantidade} nesta faixa de permanência`;

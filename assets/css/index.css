@@ -41,6 +41,10 @@
   --on-accent: #ffffff;
   --danger: #b42318;
   --danger-hover: #8f1d14;
+  --danger-panel: #f4dedb;
+  --danger-panel-hover: #eccfca;
+  --danger-panel-text: #7f241c;
+  --danger-panel-border: rgba(127, 36, 28, 0.3);
   --border: rgba(0, 83, 75, 0.16);
   --border-subtle: rgba(0, 83, 75, 0.1);
   --border-strong: rgba(0, 83, 75, 0.22);
@@ -996,7 +1000,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 .acervo-table tbody td:last-child { border-right: 0; border-left: 1px solid var(--border); background: var(--table-total-bg); color: var(--accent); font-size: calc(var(--text-lg) + 1px); }
 .acervo-table tbody tr:last-child th,
 .acervo-table tbody tr:last-child td { border-bottom: 0; }
-.acervo-table tbody td.acervo-alerta { background: var(--danger); color: var(--on-accent); }
+.acervo-table tbody td.acervo-alerta { background: var(--danger-panel); color: var(--danger-panel-text); }
 
 @media (hover: hover) {
   .acervo-table tbody td.acervo-detalhe:hover,
@@ -1010,9 +1014,9 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .acervo-table tfoot td.acervo-total-col.acervo-detalhe:hover { background: var(--table-total-hover-bg); }
 
   .acervo-table tbody td.acervo-alerta.acervo-detalhe:hover {
-    background: var(--danger-hover);
-    color: var(--on-accent);
-    box-shadow: inset 0 0 0 1px var(--on-accent-border);
+    background: var(--danger-panel-hover);
+    color: var(--danger-panel-text);
+    box-shadow: inset 0 0 0 1px var(--danger-panel-border);
   }
 }
 
@@ -1022,7 +1026,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   padding: 10px 12px;
   border-top: 1px solid var(--border);
   border-right: 1px solid var(--border);
-  background: var(--surface-raised);
+  background: var(--accent-panel);
   color: var(--text);
   font-weight: 700;
 }
@@ -1036,7 +1040,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 }
 
 .acervo-table tfoot td { font-size: var(--text-lg); text-align: center; }
-.acervo-table tfoot td:last-child { border-right: 0; border-left: 1px solid var(--border); background: var(--accent-soft-strong); color: var(--accent); font-size: calc(var(--text-lg) + 1px); }
+.acervo-table tfoot td:last-child { border-right: 0; border-left: 1px solid var(--border); background: var(--table-total-bg); color: var(--accent); font-size: calc(var(--text-lg) + 1px); }
 
 .acervo-panel-footer {
   display: flex;
@@ -1487,7 +1491,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     display: block !important;
   }
 
-  /* Cabeçalho do documento impresso - Centralizado */
   .acervo-panel {
     overflow: visible !important;
     border: none !important;
@@ -1564,7 +1567,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     text-align: center !important;
   }
 
-  /* Estrutura e layout da tabela */
   .acervo-table-shell,
   .table-scroll {
     overflow: visible !important;
@@ -1589,14 +1591,12 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     break-inside: avoid;
   }
 
-  /* Todas as células possuem bordas sólidas garantidas */
   .acervo-table th,
   .acervo-table td {
     border: 1.5px solid #00534b !important;
     box-sizing: border-box !important;
   }
 
-  /* Cabeçalho da tabela (Bloco Header) */
   .acervo-table thead {
     display: table-header-group;
     break-inside: avoid;
@@ -1633,7 +1633,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     width: 10%;
   }
 
-  /* Linhas de dados (Bloco Body) */
   .acervo-table tbody tr {
     break-inside: avoid;
     page-break-inside: avoid;
@@ -1647,7 +1646,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     background-color: #ffffff !important;
   }
 
-  /* Bloco de Rótulos de Período (Primeira Coluna) */
   .acervo-table tbody th {
     height: auto !important;
     padding: 6px 6px 6px 10px !important;
@@ -1663,7 +1661,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     break-inside: avoid;
   }
 
-  /* Células de Dados da Matriz - Linhas verticais e horizontais sólidas */
   .acervo-table tbody td {
     height: auto !important;
     padding: 6px !important;
@@ -1682,7 +1679,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     font-weight: 400 !important;
   }
 
-  /* Bloco da Coluna TOTAL */
   .acervo-table tbody td:last-child,
   .acervo-table tbody td.acervo-total-col {
     background-color: #dcefe6 !important;
@@ -1694,11 +1690,17 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     font-size: 9.5pt !important;
   }
 
-  .acervo-table tbody td.acervo-alerta {
-    background-color: #fecaca !important;
-    color: #991b1b !important;
+  /* Célula de Alerta em Vermelho na Impressão (mantém as bordas verdes sólidas de 2px à esquerda e à direita) */
+  .acervo-table tbody td.acervo-alerta,
+  .acervo-table tbody td.acervo-total-col.acervo-alerta {
+    background-color: var(--danger-panel, #fee2e2) !important;
+    color: var(--danger-panel-text, #991b1b) !important;
     font-weight: 800 !important;
     border: 1.5px solid #00534b !important;
+    border-left: 2px solid #00534b !important;
+    border-right: 2px solid #00534b !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .acervo-table tbody td.acervo-alerta::after {
@@ -1765,6 +1767,20 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
   /* Rodapé do painel */
   .acervo-panel-footer {
+    display: flex !important;
+    justify-content: flex-end !important;
+    padding: 8px 2px 0 0 !important;
+    border-top: none !important;
+    background: transparent !important;
+    color: #718096 !important;
+    font-size: 8.5pt !important;
+  }
+
+  .acervo-updated {
+    color: #718096 !important;
+    font-size: 8.5pt !important;
+    font-weight: 500 !important;
+    gap: 0 !important;
   }
 }
 
