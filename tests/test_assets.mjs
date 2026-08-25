@@ -46,10 +46,13 @@ assert.doesNotMatch(index, /<script[^>]+index\.min\.js/, 'index.js voltou ao car
 assert.doesNotMatch(julgados, /<script[^>]+julgados\.min\.js/, 'julgados.js voltou ao carregamento inicial');
 
 const css = ler('assets/css/index.css');
-const alertaImpresso = css.match(/@media print[\s\S]*?\.acervo-table tbody td\.acervo-alerta\s*\{([^}]*)\}/)?.[1] || '';
-assert.match(alertaImpresso, /background-color:\s*var\(--danger-panel\)\s*!important/,
+// O seletor pode vir sozinho ou em lista, e a var pode trazer fallback — o que
+// importa é a regra que o bloco aplica, não a forma exata de escrevê-la.
+const alertaImpresso = css.match(
+  /@media print[\s\S]*?\.acervo-table tbody td\.acervo-alerta[^{]*\{([^}]*)\}/)?.[1] || '';
+assert.match(alertaImpresso, /background-color:\s*var\(--danger-panel[^)]*\)\s*!important/,
   'impressão do alerta deve usar o mesmo vermelho da tela');
-assert.match(alertaImpresso, /color:\s*var\(--danger-panel-text\)\s*!important/,
+assert.match(alertaImpresso, /color:\s*var\(--danger-panel-text[^)]*\)\s*!important/,
   'impressão do alerta deve preservar o texto vinho sobre o vermelho claro');
 assert.match(alertaImpresso, /print-color-adjust:\s*exact/,
   'impressão do alerta deve solicitar preservação exata das cores');

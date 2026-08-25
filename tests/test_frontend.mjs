@@ -491,10 +491,10 @@ const celulas = linha => linha.children.map(c => c.textContent);
 
 test('acervo monta as colunas a partir dos relatores que o banco devolve', async () => {
   const page = acervoPage(async () => [
-    { ordem: 1, faixa: 'Até 15 dias', relator: 'Dorivan de Souza Lima', processos: 3 },
-    { ordem: 1, faixa: 'Até 15 dias', relator: 'Paulo Otoni Ribeiro', processos: 22 },
-    { ordem: 2, faixa: 'Até 30 dias', relator: 'Dorivan de Souza Lima', processos: 1 },
-    { ordem: 2, faixa: 'Até 30 dias', relator: 'Paulo Otoni Ribeiro', processos: 0 }
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ3', conselheiro: 'Dorivan de Souza Lima', processos: 3 },
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 22 },
+    { ordem: 2, faixa: 'Até 30 dias', relator: 'CJ3', conselheiro: 'Dorivan de Souza Lima', processos: 1 },
+    { ordem: 2, faixa: 'Até 30 dias', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 0 }
   ]);
   page.inicializarAcervo();
   await wait();
@@ -503,16 +503,17 @@ test('acervo monta as colunas a partir dos relatores que o banco devolve', async
   const [thead, tbody, tfoot] = tabela.children;
 
   assert.deepEqual(celulas(thead.children[0]),
-    ['Período', 'Dorivan de Souza Lima', 'Paulo Otoni Ribeiro', 'Total'],
-    'o cabeçalho não veio dos relatores do banco');
+    ['Período', 'CJ1', 'CJ3', 'Total'],
+    'o cabeçalho não veio das cadeiras do banco');
 
-  assert.deepEqual(celulas(tbody.children[0]), ['Até 15 dias', '3', '22', '25']);
+  assert.deepEqual(celulas(tbody.children[0]), ['Até 15 dias', '22', '3', '25']);
   // Zero vira travessão: coluna de "0" repetido esconde o número que importa.
-  assert.deepEqual(celulas(tbody.children[1]), ['Até 30 dias', '1', '—', '1']);
-  assert.deepEqual(celulas(tfoot.children[0]), ['Total', '4', '22', '26']);
+  assert.deepEqual(celulas(tbody.children[1]), ['Até 30 dias', '—', '1', '1']);
+  assert.deepEqual(celulas(tfoot.children[0]), ['Total', '22', '4', '26']);
   assert.equal(tbody.children[0].children[1].classList.contains('acervo-detalhe'), true,
     'célula numérica precisa expor o estado individual de hover');
-  assert.equal(tbody.children[1].children[2].classList.contains('acervo-detalhe'), false,
+  // Na linha "Até 30 dias" o travessão é a CJ1 (zero), primeira coluna de dado.
+  assert.equal(tbody.children[1].children[1].classList.contains('acervo-detalhe'), false,
     'travessão não representa uma lista de processos para detalhar');
   assert.equal(tfoot.children[0].children[3].classList.contains('acervo-detalhe'), true,
     'o total geral também precisa expor o estado de hover');
@@ -597,7 +598,7 @@ test('acervo não anuncia falha de conexão quando a sessão expirou', async () 
 
 test('acervo avisa quando não há processo parado', async () => {
   const page = acervoPage(async () => [
-    { ordem: 1, faixa: 'Até 15 dias', relator: 'Dorivan de Souza Lima', processos: 0 }
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ3', conselheiro: 'Dorivan de Souza Lima', processos: 0 }
   ]);
   page.inicializarAcervo();
   await wait();
@@ -605,4 +606,48 @@ test('acervo avisa quando não há processo parado', async () => {
   assert.equal(page.document.getElementById('acervoVazio').hidden, false);
   assert.equal(page.document.getElementById('acervoTotal').textContent,
     '0 processos aguardando julgamento');
+});
+
+test('acervo revela o conselheiro no hover da coluna', async () => {
+  const page = acervoPage(async () => [
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 2 },
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ5', conselheiro: 'Lorena Patricia de Oliveira', processos: 1 }
+  ]);
+  await page.inicializarAcervo();
+  await wait();
+
+  const [th1, th5] = page.document.getElementById('acervoTable')
+    .children[0].children[0].children.slice(1, 3);
+  assert.equal(th1.textContent, 'CJ1');
+  assert.equal(th1.title, 'Paulo Otoni Ribeiro', 'a cadeira sozinha não diz quem é');
+  assert.equal(th1['aria-label'], 'CJ1 — Paulo Otoni Ribeiro');
+  assert.equal(th5.title, 'Lorena Patricia de Oliveira');
+});
+
+test('acervo não inventa hover quando a cadeira não tem de-para', async () => {
+  const page = acervoPage(async () => [
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ9', conselheiro: 'CJ9', processos: 1 }
+  ]);
+  await page.inicializarAcervo();
+  await wait();
+
+  const th = page.document.getElementById('acervoTable').children[0].children[0].children[1];
+  assert.equal(th.textContent, 'CJ9');
+  assert.equal(th.title, undefined, 'title repetindo o rótulo é ruído');
+});
+
+test('sorteio da CJ mostra a cadeira e o conselheiro no hover', () => {
+  const { document } = indexPage();
+  document.getElementById('btnCj').dispatch('click');
+
+  const pills = document.getElementById('pillsContainer').children;
+  assert.deepEqual(pills.map(p => p.textContent), ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'],
+    'o sorteio precisa gravar a cadeira, que é o que acervo_cj guarda');
+  assert.equal(pills[0].title, 'Paulo Otoni Ribeiro');
+  assert.equal(pills[1].title, 'Deusdete Cardoso Belém');
+  assert.equal(pills[2].title, 'Dorivan de Souza Lima');
+  assert.equal(pills[3].title, 'Paulo Henrique Oliveira Marques');
+  assert.equal(pills[4].title, 'Lorena Patricia de Oliveira');
+  assert.equal(pills[0]['aria-label'], 'CJ1 — Paulo Otoni Ribeiro',
+    'o leitor de tela precisa anunciar a pessoa, não soletrar a cadeira');
 });

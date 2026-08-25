@@ -84,26 +84,24 @@ btnCreg.addEventListener('click', () => {
   iniciarSorteador('CREG', ['CREG1', 'CREG2', 'CREG3', 'CREG4']);
 });
 
-// Os conselheiros da Câmara, na grafia da planilha histórica — que é a mesma
-// que o acervo já usa em 194 distribuições e a que as atas do SEI publicam.
+// Quem ocupa cada cadeira da CJ. O que vai para o banco é a CADEIRA — ela é
+// estável quando a composição da Câmara muda, e é assim que acervo_cj.relator
+// guarda. O nome existe aqui só para a tela: aparece no title de cada unidade,
+// para quem escolhe não precisar decorar o número da cadeira.
 //
-// Aqui esteve 'CJ1'..'CJ5'. A cadeira era anônima por desenho, mas gravar
-// cadeira num acervo cujo histórico inteiro traz nome produzia duas convenções
-// na mesma coluna: relatório por relator passaria a ter dez valores para cinco
-// pessoas, e a ata gerada divergiria da publicada no SEI, que nomeia a pessoa.
-//
-// Quando existir o de-para entre cadeira e conselheiro por período, a cadeira
-// volta — com a tradução feita no banco, não com dois vocabulários soltos.
-const CONSELHEIROS_CJ = [
-  'Deusdete Cardoso Belém',
-  'Dorivan de Souza Lima',
-  'Lorena Patricia de Oliveira',
-  'Paulo Henrique Oliveira Marques',
-  'Paulo Otoni Ribeiro'
-];
+// Espelha a tabela cadeiras_cj do banco, que é a fonte da verdade. Um teste
+// falha se as duas divergirem — trocar a composição exige mexer nas duas, e é
+// para exigir mesmo: mudar só aqui deixaria o hover mentindo.
+const CADEIRAS_CJ = {
+  CJ1: 'Paulo Otoni Ribeiro',
+  CJ2: 'Deusdete Cardoso Belém',
+  CJ3: 'Dorivan de Souza Lima',
+  CJ4: 'Paulo Henrique Oliveira Marques',
+  CJ5: 'Lorena Patricia de Oliveira'
+};
 
 btnCj.addEventListener('click', () => {
-  iniciarSorteador('CJ', CONSELHEIROS_CJ);
+  iniciarSorteador('CJ', Object.keys(CADEIRAS_CJ));
 });
 
 btnVoltar.addEventListener('click', () => {
@@ -146,6 +144,14 @@ function iniciarSorteador(modo, unidades) {
     pill.dataset.creg = unit;
     pill.setAttribute('aria-pressed', 'false');
     pill.textContent = unit;
+    // A cadeira sozinha não diz quem é. O nome vai no title (hover do mouse) e
+    // no aria-label, para que o leitor de tela também anuncie o conselheiro em
+    // vez de soletrar "CJ3".
+    const conselheiro = CADEIRAS_CJ[unit];
+    if (conselheiro) {
+      pill.title = conselheiro;
+      pill.setAttribute('aria-label', `${unit} — ${conselheiro}`);
+    }
     fragmentoPills.appendChild(pill);
   });
   pillsContainer.replaceChildren(fragmentoPills);
@@ -431,6 +437,7 @@ function sortearProcessos() {
       const badge = document.createElement('div');
       badge.className = 'unidade-badge';
       badge.textContent = `${p}: ${totalProcessosUnidade} ${totalProcessosUnidade === 1 ? 'processo' : 'processos'}`;
+      if (CADEIRAS_CJ[p]) badge.title = CADEIRAS_CJ[p];
       
       countWrapper.appendChild(badge);
     });
