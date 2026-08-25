@@ -12,9 +12,9 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=20260824" />
-  <script defer src="assets/js/supabase.min.js?v=20260824"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=20260824"></script>
+  <link rel="stylesheet" href="assets/css/index.min.css?v=20260825" />
+  <script defer src="assets/js/supabase.min.js?v=20260825"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=20260825"></script>
 </head>
 
 <body data-page="julgados">
@@ -95,7 +95,15 @@
 
       <!-- Tela 2: os processos daquela pauta -->
       <div id="detalhePauta" data-sessao hidden>
-        <h2 id="tituloPauta" tabindex="-1"></h2>
+        <div class="pauta-header">
+          <h2 id="tituloPauta" tabindex="-1"></h2>
+          <div class="preenchimento-rapido">
+            <button id="btnTodosManter" class="button-secondary" type="button"
+              title="Preenche com Manter apenas os votos que ainda estão em branco.">Marcar tudo como Manter</button>
+            <button id="btnTodosJulgado" class="button-secondary" type="button"
+              title="Preenche com Julgado apenas os status que ainda estão em branco.">Marcar tudo como Julgado</button>
+          </div>
+        </div>
         <div class="table-scroll" role="region" aria-label="Processos pendentes de julgamento" tabindex="0">
         <table id="julgadosTable">
           <thead>

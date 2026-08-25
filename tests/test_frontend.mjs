@@ -177,7 +177,7 @@ function julgadosPage(registrar) {
   const add = (id, tag) => document.add(id, tag);
   ['listaPautas', 'pautasContainer', 'semPendencia', 'pautasIntro', 'detalhePauta',
     'tituloPauta', 'contadorPendentes', 'btnSalvar', 'btnVoltar', 'txtModo',
-    'listaPautasTitulo'].forEach(id => add(id, id.startsWith('btn') ? 'button' : 'div'));
+    'listaPautasTitulo', 'btnTodosManter', 'btnTodosJulgado'].forEach(id => add(id, id.startsWith('btn') ? 'button' : 'div'));
   const tbody = add('julgadosTableBody', 'tbody');
 
   const app = new Function('document', 'api', 'aviso', 'alternarBotaoCarregando', 'criarIndicadorCarregamento',
@@ -360,6 +360,41 @@ test('envia apenas o julgamento que foi alterado', async () => {
   await page.salvar();
 
   assert.deepEqual(enviado, [{ id: 2, voto: '', status: 'Julgado' }]);
+});
+
+test('preenche em massa só o que está em branco e marca a linha para salvar', async () => {
+  let enviado;
+  const page = julgadosPage(async (path, options) => {
+    if (path === 'rpc/registrar_votos') {
+      enviado = JSON.parse(options.body).itens;
+      return 2;
+    }
+    return [];
+  });
+  page.pendentesPorPauta.set('1|2026-08-21', [
+    { id: 1, num_processo: '123', relator: 'CJ1', voto: '', status: '' },
+    { id: 2, num_processo: '456', relator: 'CJ2', voto: '', status: '' }
+  ]);
+  page.abrirPauta('1|2026-08-21');
+
+  // Exceção escolhida à mão antes do clique: o botão não pode sobrescrever.
+  const excecao = page.tbody.children[1].querySelector('.col-voto select');
+  excecao.value = 'Anular';
+  page.tbody.dispatch('change', { target: excecao });
+
+  page.document.getElementById('btnTodosManter').click();
+  page.document.getElementById('btnTodosJulgado').click();
+
+  assert.equal(page.tbody.children[0].querySelector('.col-voto select').value, 'Manter');
+  assert.equal(excecao.value, 'Anular');
+  assert.equal(page.document.getElementById('contadorPendentes').textContent, 'Todos preenchidos.');
+
+  await page.salvar();
+
+  assert.deepEqual(enviado, [
+    { id: 1, voto: 'Manter', status: 'Julgado' },
+    { id: 2, voto: 'Anular', status: 'Julgado' }
+  ]);
 });
 
 test('move o foco para o cadastro ao escolher uma modalidade', () => {
