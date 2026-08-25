@@ -557,24 +557,31 @@ test('falha inicial permanece no carregamento geral sem revelar painel incomplet
     'o botão de atualizar precisa voltar ao estado normal depois da falha');
 });
 
-test('acervo sinaliza apenas o total das faixas críticas com processos', async () => {
+test('acervo mantém o total vermelho desde Há 3 meses, inclusive quando zerado', async () => {
   const page = acervoPage(async () => [
-    { ordem: 7, faixa: 'Há mais de 1 ano', relator: 'Dorivan de Souza Lima', processos: 2 },
-    { ordem: 8, faixa: 'Há 2 anos', relator: 'Dorivan de Souza Lima', processos: 0 }
+    { ordem: 3, faixa: 'Até 45 dias', relator: 'Dorivan de Souza Lima', processos: 1 },
+    { ordem: 4, faixa: 'Há 3 meses', relator: 'Dorivan de Souza Lima', processos: 2 },
+    { ordem: 5, faixa: 'Entre 3 e 6 meses', relator: 'Dorivan de Souza Lima', processos: 0 }
   ]);
   page.inicializarAcervo();
   await wait();
 
   const linhas = page.document.getElementById('acervoTable').children[1].children;
-  assert.equal(linhas[0].children[1].classList.contains('acervo-alerta'), false,
+  assert.equal(linhas[0].children[2].classList.contains('acervo-alerta'), false,
+    'a faixa anterior a Há 3 meses deve manter o total verde');
+  assert.equal(linhas[1].children[1].classList.contains('acervo-alerta'), false,
     'a célula do relator deve continuar branca');
-  assert.equal(linhas[0].children[2].classList.contains('acervo-alerta'), true,
-    'o total com processo antigo deve receber o estado de alerta');
-  assert.equal(linhas[0].children[2].classList.contains('acervo-detalhe'), true,
+  assert.equal(linhas[1].children[2].classList.contains('acervo-alerta'), true,
+    'o total de Há 3 meses deve iniciar o vermelho permanente');
+  assert.equal(linhas[1].children[2].classList.contains('acervo-detalhe'), true,
     'o alerta também deve preservar o hover do futuro detalhamento');
-  assert.match(linhas[0].children[2]['aria-label'], /Alerta: 2 processos/);
-  assert.equal(linhas[1].children[2].classList.contains('acervo-alerta'), false,
-    'faixa crítica zerada não deve parecer um alerta');
+  assert.match(linhas[1].children[2]['aria-label'], /Alerta: 2 processos/);
+  assert.equal(linhas[2].children[2].classList.contains('acervo-alerta'), true,
+    'faixa crítica zerada deve permanecer vermelha');
+  assert.equal(linhas[2].children[2].classList.contains('acervo-detalhe'), false,
+    'faixa zerada não deve sugerir detalhamento disponível');
+  assert.equal(linhas[2].children[2]['aria-label'], undefined,
+    'faixa zerada não deve anunciar uma ocorrência inexistente');
 });
 
 test('acervo não anuncia falha de conexão quando a sessão expirou', async () => {
