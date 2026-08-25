@@ -128,9 +128,14 @@ function supabaseApp(fetch) {
   const location = { protocol: 'http:' };
   const sessionStorage = { getItem() { return null; }, setItem() {}, removeItem() {} };
   return new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'fetch',
-    `${source('supabase.js')}\nreturn { autenticar };`)(
+    `${source('supabase.js')}\nreturn { autenticar, CADEIRAS_CJ, rotularCadeira };`)(
     document, window, navigator, location, sessionStorage, fetch);
 }
+
+// O de-para das cadeiras mora no supabase.js, que toda página carrega antes do
+// seu próprio script. As telas o enxergam como global; aqui ele é injetado, e
+// vem do arquivo de verdade para que uma divergência apareça como falha.
+const { CADEIRAS_CJ, rotularCadeira } = supabaseApp(async () => {});
 
 function indexPage({ api = async () => null, aviso = () => {},
   supabaseUrl = 'url', supabaseKey = 'key', token = 'token' } = {}) {
@@ -151,11 +156,12 @@ function indexPage({ api = async () => null, aviso = () => {},
 
   const app = new Function('document', 'window', 'crypto', 'URL', 'Blob', 'setTimeout', 'requestAnimationFrame',
     'SUPABASE_URL', 'SUPABASE_KEY', 'accessToken', 'api', 'criarIndicadorCarregamento', 'alternarBotaoCarregando', 'aviso',
+    'CADEIRAS_CJ', 'rotularCadeira',
     `${source('index.js')}\nreturn { inicializarSorteio };`)(
     document, { matchMedia: () => ({ matches: true }) }, { getRandomValues: values => values.fill(0) },
     { createObjectURL: () => 'blob:test', revokeObjectURL() {} }, Blob, () => 0,
     callback => callback(), supabaseUrl, supabaseKey, token, api,
-    () => document.createElement('div'), () => {}, aviso);
+    () => document.createElement('div'), () => {}, aviso, CADEIRAS_CJ, rotularCadeira);
   return { document, tbody, ...app };
 }
 
@@ -182,8 +188,9 @@ function julgadosPage(registrar) {
   const tbody = add('julgadosTableBody', 'tbody');
 
   const app = new Function('document', 'api', 'aviso', 'alternarBotaoCarregando', 'criarIndicadorCarregamento',
+    'rotularCadeira',
     `${source('julgados.js')}\nreturn { abrirPauta, salvar, inicializarJulgados, pendentesPorPauta };`)(
-    document, registrar, () => {}, () => {}, () => document.createElement('div'));
+    document, registrar, () => {}, () => {}, () => document.createElement('div'), rotularCadeira);
   return { document, tbody, ...app };
 }
 
@@ -363,6 +370,25 @@ test('envia apenas o julgamento que foi alterado', async () => {
   assert.deepEqual(enviado, [{ id: 2, voto: '', status: 'Julgado' }]);
 });
 
+test('julgados revela o conselheiro no hover da cadeira', () => {
+  // A coluna mostra "CJ1"; sem o de-para a secretaria teria de decorar o
+  // número da cadeira. Relator fora do de-para (composição anterior, que ficou
+  // pelo nome) não pode ganhar title vazio.
+  const page = julgadosPage(async () => []);
+  page.pendentesPorPauta.set('1|2026-08-21', [
+    { id: 1, num_processo: '123', relator: 'CJ1', voto: '', status: '' },
+    { id: 2, num_processo: '456', relator: 'Conselheiro De Antes', voto: '', status: '' }
+  ]);
+  page.abrirPauta('1|2026-08-21');
+
+  const relator = linha => page.tbody.children[linha].children[1];
+  assert.equal(relator(0).textContent, 'CJ1');
+  assert.equal(relator(0).title, 'Paulo Otoni Ribeiro');
+  assert.equal(relator(0)['aria-label'], 'CJ1 — Paulo Otoni Ribeiro');
+  assert.equal(relator(1).textContent, 'Conselheiro De Antes');
+  assert.equal(relator(1).title, undefined, 'title repetindo o rótulo é ruído');
+});
+
 test('preenche em massa só o que está em branco e marca a linha para salvar', async () => {
   let enviado;
   const page = julgadosPage(async (path, options) => {
@@ -480,6 +506,7 @@ function acervoPage(api) {
   document.add('btnImprimir', 'button');
   document.add('btnTentarNovamente', 'button');
   document.getElementById('acervoPanel').hidden = true;
+  document.getElementById('btnAtualizar').hidden = true;  // como no acervo.html
 
   const app = new Function('document', 'window', 'api',
     `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo };`)(
@@ -546,6 +573,16 @@ test('acervo só revela o dashboard depois que os dados estão prontos', async (
   assert.equal(page.document.getElementById('acervoPanel').hidden, false);
   assert.equal(page.loginOnlyCard.hidden, true,
     'o loading geral deve sair junto com a entrada do dashboard completo');
+  assert.equal(page.document.getElementById('btnAtualizar').hidden, false);
+});
+
+test('acervo não oferece Atualizar antes de o painel existir', async () => {
+  // Revelado cedo demais, o botão redesenha uma tabela ainda escondida: o
+  // clique "funciona", nada muda na tela e a mensagem de erro continua lá.
+  const page = acervoPage(async () => { throw new Error('rede fora'); });
+
+  await assert.rejects(page.inicializarAcervo(), /rede fora/);
+  assert.equal(page.document.getElementById('btnAtualizar').hidden, true);
 });
 
 test('falha inicial permanece no carregamento geral sem revelar painel incompleto', async () => {

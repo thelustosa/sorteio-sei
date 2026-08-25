@@ -31,8 +31,8 @@ PLANILHA_PADRAO = Path.home() / 'Downloads' / 'Câmara de Julgamento - REG.xlsx'
 PG = banco.Postgres('sorteio_sei_test', 55433)
 MIGRACAO = RAIZ / 'supabase' / 'migrations' / \
     '20260823165725_corrigir_integridade_creg_e_privilegios.sql'
-# Converte relator de nome para cadeira. Roda DEPOIS da planilha, porque e o
-# dado importado que ela tem de alcancar.
+# Converte relator de nome para cadeira. Rodada em preparar_banco DEPOIS da
+# planilha, porque e o dado importado que ela tem de alcancar.
 MIGRACAO_CADEIRAS = RAIZ / 'supabase' / 'migrations' / '20260824180000_cadeiras_cj.sql'
 
 testes = []
@@ -45,6 +45,16 @@ def teste(fn):
 
 def rodar_arquivo(caminho):
     PG.rodar_arquivo(caminho)
+
+
+def comando_da_migracao(tabela):
+    """O UPDATE de nome para cadeira, extraído do arquivo da migração.
+
+    Serve para que o teste exercite o comando que roda de verdade em produção,
+    em vez de uma cópia que continuaria verde depois de a migração quebrar.
+    """
+    fonte = MIGRACAO_CADEIRAS.read_text(encoding='utf-8')
+    return re.search(rf'update public\.{tabela}\b.*?;', fonte, re.S).group(0)
 
 
 # ── Planilha ─────────────────────────────────────────────────────────────────
@@ -883,7 +893,8 @@ def resumo_do_acervo_so_e_executavel_por_authenticated(cur):
                     where routine_schema = 'public'
                       and routine_name = 'resumo_acervo_cj'
                       and grantee in ('anon', 'authenticated', 'service_role', 'PUBLIC')""")
-    assert cur.fetchone()[0] == 'authenticated', cur.fetchone()
+    concedido = cur.fetchone()[0]
+    assert concedido == 'authenticated', concedido
 
 
 @teste
@@ -950,15 +961,15 @@ def de_para_das_cadeiras_esta_completo(cur):
 
 @teste
 def sorteio_da_cj_grava_cadeira_e_o_front_sabe_o_nome(cur):
-    """O de-para do index.js espelha a tabela do banco.
+    """O de-para do supabase.js espelha a tabela do banco.
 
     O que vai para acervo_cj é a cadeira; o nome existe no front só para o
     hover. Se as duas listas divergirem, a tela passa a anunciar o conselheiro
     errado — e nada no banco perceberia, porque o nome não é gravado.
     """
-    fonte = (RAIZ / 'assets' / 'js' / 'index.js').read_text(encoding='utf-8')
-    trecho = fonte[fonte.index('const CADEIRAS_CJ'):fonte.index('btnCj.addEventListener')]
-    no_front = dict(re.findall(r"(CJ\d+):\s*'([^']+)'", trecho))
+    fonte = (RAIZ / 'assets' / 'js' / 'supabase.js').read_text(encoding='utf-8')
+    trecho = fonte[fonte.index('const CADEIRAS_CJ'):]
+    no_front = dict(re.findall(r"(CJ\d+):\s*'([^']+)'", trecho[:trecho.index('};')]))
     assert len(no_front) == 5, no_front
 
     cur.execute('select cadeira, conselheiro from public.cadeiras_cj where ate is null')
@@ -973,6 +984,9 @@ def conversao_troca_nome_por_cadeira_e_poupa_o_resto(cur):
     Quem está no de-para vira cadeira. Quem não está — conselheiro de
     composição anterior, que o histórico de 2024 e 2025 tem — fica pelo nome:
     inventar o número da cadeira dele seria pior do que não traduzir.
+
+    O comando é LIDO do arquivo da migração, não copiado para cá: uma cópia
+    continuaria passando depois de a migração ser alterada ou quebrada.
     """
     cur.execute("""insert into public.acervo_cj
                      (num_processo, relator, data_distribuicao, defesa, origem) values
@@ -980,20 +994,72 @@ def conversao_troca_nome_por_cadeira_e_poupa_o_resto(cur):
                    ('900000000000091', 'Paulo Otoni Ribeiro',    date '2026-07-01', false,'sorteio'),
                    ('900000000000092', 'Conselheiro De Antes',   date '2026-07-01', true, 'planilha')""")
 
-    cur.execute("""update public.acervo_cj a
-                      set relator = c.cadeira
-                     from public.cadeiras_cj c
-                    where a.relator = c.conselheiro
-                      and a.data_distribuicao >= c.desde
-                      and (c.ate is null or a.data_distribuicao <= c.ate)
-                      and a.num_processo like '9000000000000%'""")
+    cur.execute(comando_da_migracao('acervo_cj'))
 
     cur.execute("""select num_processo, relator from public.acervo_cj
                     where num_processo in ('900000000000090','900000000000091','900000000000092')
                     order by num_processo""")
-    assert cur.fetchall() == [('900000000000090', 'CJ3'),
-                              ('900000000000091', 'CJ1'),
-                              ('900000000000092', 'Conselheiro De Antes')], cur.fetchall()
+    convertidos = cur.fetchall()
+    assert convertidos == [('900000000000090', 'CJ3'),
+                           ('900000000000091', 'CJ1'),
+                           ('900000000000092', 'Conselheiro De Antes')], convertidos
+    cur.connection.rollback()
+
+
+@teste
+def reimportar_a_planilha_nao_duplica_o_relator(cur):
+    """Rodar o SQL da importação duas vezes não cria uma segunda coluna.
+
+    A planilha traz o NOME do conselheiro; o banco guarda a CADEIRA. Se a
+    tradução ficasse para um UPDATE depois do insert, a segunda importação
+    gravaria a linha pelo nome — que não colide com a da cadeira, porque a
+    restrição inclui relator — e o painel passaria a ter duas colunas para a
+    mesma pessoa. O SQL vem do importador de verdade, não de uma cópia.
+    """
+    import importar_planilha as imp
+
+    colunas = ['num_processo', 'relator', 'data_distribuicao', 'defesa', 'origem']
+    linhas = [
+        {'num_processo': '900000000000093', 'relator': 'Dorivan de Souza Lima',
+         'data_distribuicao': date(2026, 7, 1), 'defesa': True, 'origem': 'planilha'},
+        # Composição anterior: sem cadeira no de-para, fica pelo nome.
+        {'num_processo': '900000000000094', 'relator': 'Conselheiro De Antes',
+         'data_distribuicao': date(2026, 7, 1), 'defesa': None, 'origem': 'planilha'},
+    ]
+    sql = imp.gerar_sql('acervo_cj', colunas, linhas, 'acervo_cj_distribuicao_unica',
+                        'teste', 'data_distribuicao')
+    cur.execute(sql)
+    cur.execute(sql)
+
+    cur.execute("""select num_processo, relator from public.acervo_cj
+                    where num_processo in ('900000000000093', '900000000000094')
+                    order by num_processo, relator""")
+    gravado = cur.fetchall()
+    assert gravado == [('900000000000093', 'CJ3'),
+                       ('900000000000094', 'Conselheiro De Antes')], gravado
+    cur.connection.rollback()
+
+
+@teste
+def cadeira_nao_aceita_dois_ocupantes_vigentes(cur):
+    """Duas linhas com `ate` nulo dobrariam cada célula do painel.
+
+    A chave primária é (cadeira, desde) e não impede isso: o de-para entra no
+    FROM da mesma consulta que conta os processos, então uma cadeira com dois
+    períodos abertos multiplicaria o count por dois — sem erro nenhum na tela.
+    """
+    try:
+        cur.execute("""insert into public.cadeiras_cj (cadeira, conselheiro, desde)
+                       values ('CJ3', 'Outro Conselheiro', date '2027-01-01')""")
+        raise AssertionError('aceitou dois ocupantes vigentes na mesma cadeira')
+    except psycopg2.errors.UniqueViolation:
+        pass
+    cur.connection.rollback()
+
+    # Fechar o período anterior é o caminho previsto, e continua permitido.
+    cur.execute("update public.cadeiras_cj set ate = date '2026-12-31' where cadeira = 'CJ3'")
+    cur.execute("""insert into public.cadeiras_cj (cadeira, conselheiro, desde)
+                   values ('CJ3', 'Outro Conselheiro', date '2027-01-01')""")
     cur.connection.rollback()
 
 
@@ -1284,6 +1350,12 @@ def preparar_banco(planilha):
                         str(planilha)], check=True, capture_output=True)
         rodar_arquivo(RAIZ / 'dados' / 'acervo_cj.sql')
         rodar_arquivo(RAIZ / 'dados' / 'julgados_cj.sql')
+
+    # Depois da planilha, e sempre: é a única forma de o arquivo da migração ser
+    # de fato executado em CI. Ele tem de ser repetível — rodar sobre um banco
+    # que já veio do schema.sql, com o dado já em cadeira, não pode falhar nem
+    # converter nada duas vezes.
+    rodar_arquivo(MIGRACAO_CADEIRAS)
 
 
 def main(argv):

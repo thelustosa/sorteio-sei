@@ -27,13 +27,15 @@ btnImprimir.addEventListener('click', () => window.print());
 btnTentarNovamente.addEventListener('click', () => carregarAcervo());
 
 async function inicializarAcervo() {
-  btnAtualizar.hidden = false;
   const carregado = await carregarAcervo({ carregamentoInicial: true });
   if (!carregado) return;
 
   // Troca atômica: o loading geral desaparece e o dashboard entra já completo.
+  // "Atualizar" só aparece junto com o painel: revelado antes, ele redesenharia
+  // uma tabela ainda escondida — o clique "funcionaria" sem nada mudar na tela.
   if (loginOnlyCard) loginOnlyCard.hidden = true;
   acervoPanel.hidden = false;
+  btnAtualizar.hidden = false;
 }
 
 function hojeBR() {
