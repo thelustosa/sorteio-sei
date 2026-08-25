@@ -1432,109 +1432,339 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 }
 
 @media print {
-  @page { size: landscape; margin: 12mm; }
+  @page {
+    size: landscape;
+    margin: 10mm 15mm;
+  }
 
   html,
   body {
-    min-width: 0;
-    background: #fff;
-    color: #000;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    background: #ffffff !important;
+    color: #112720 !important;
+    font-size: 9.5pt;
+    line-height: 1.4;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
-  body { display: block; }
+  body {
+    display: block !important;
+    overflow: visible !important;
+  }
 
+  /* Ocultar elementos de navegação, botões, modais e todos os ícones decorativos */
   .page-header-wrapper,
   .green-bar,
   .page-footer,
   main > .card,
-  .acervo-header-actions { display: none !important; }
-
-  .container,
-  main.container {
-    width: 100%;
-    max-width: none;
-    margin: 0;
-    padding: 0;
+  .acervo-header-actions,
+  .acervo-btn-action,
+  .status-dot,
+  .nav-icon,
+  .empty-state-icon,
+  svg {
+    display: none !important;
   }
 
-  .dashboard-main { padding: 0; }
+  .dashboard-page {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
 
+  .container,
+  main.container,
+  .dashboard-main {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    display: block !important;
+  }
+
+  /* Cabeçalho do documento impresso - Centralizado */
   .acervo-panel {
-    overflow: visible;
-    border-radius: 0;
-    box-shadow: none;
-    animation: none;
-    border: 0;
+    overflow: visible !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    animation: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
   }
 
   .acervo-header {
-    padding: 0 0 10px;
-    border-bottom: 2px solid #000;
-    background: #fff;
-    color: #000;
+    padding: 0 0 6px 0 !important;
+    border: none !important;
+    background: transparent !important;
+    color: #112720 !important;
+    margin-bottom: 8px !important;
   }
 
   .acervo-header-main {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    padding: 0;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+    gap: 4px !important;
+    padding: 0 !important;
+    width: 100% !important;
   }
 
-  .acervo-header-title-group h2,
-  .acervo-subtitle { color: #000; }
+  .acervo-header-title-group {
+    text-align: center !important;
+    width: 100% !important;
+  }
+
+  .acervo-header-title-group h2 {
+    color: #00534b !important;
+    font-size: 16pt !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    margin: 0 0 4px 0 !important;
+    line-height: 1.2 !important;
+    text-align: center !important;
+  }
+
+  .acervo-subtitle {
+    color: #4a5568 !important;
+    font-size: 9.5pt !important;
+    margin: 0 0 6px 0 !important;
+    line-height: 1.35 !important;
+    text-align: center !important;
+  }
+
+  .acervo-header-summary {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+    margin-top: 2px !important;
+    margin-bottom: 6px !important;
+    padding: 0 !important;
+  }
 
   .acervo-scope {
-    background: none;
-    border: 0;
-    color: #000;
-    padding: 0;
+    display: block !important;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    color: #00534b !important;
+    font-size: 9.5pt !important;
+    font-weight: 700 !important;
+    letter-spacing: 0 !important;
+    white-space: nowrap !important;
+    text-align: center !important;
   }
 
-
+  /* Estrutura e layout da tabela */
   .acervo-table-shell,
   .table-scroll {
-    overflow: visible;
-    border: 0;
+    overflow: visible !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    height: auto !important;
+    min-height: 0 !important;
+    display: block !important;
   }
 
   .acervo-table {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .acervo-table thead { display: table-header-group; }
-  .acervo-table tfoot { display: table-footer-group; }
-
-  .acervo-table thead th,
-  .acervo-table tbody th,
-  .acervo-table tbody td,
-  .acervo-table tfoot th,
-  .acervo-table tfoot td {
-    height: auto;
-    padding: 6px;
-    border: 1px solid #aaa;
-    background: #fff !important;
-    color: #000 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    border-collapse: collapse !important;
+    border-spacing: 0 !important;
+    table-layout: auto !important;
+    border: 2px solid #00534b !important;
+    margin: 0 !important;
+    page-break-inside: avoid;
     break-inside: avoid;
   }
 
+  /* Todas as células possuem bordas sólidas garantidas */
+  .acervo-table th,
+  .acervo-table td {
+    border: 1.5px solid #00534b !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Cabeçalho da tabela (Bloco Header) */
+  .acervo-table thead {
+    display: table-header-group;
+    break-inside: avoid;
+  }
+
+  .acervo-table thead th {
+    height: auto !important;
+    padding: 8px 6px !important;
+    background-color: #00534b !important;
+    color: #ffffff !important;
+    font-size: 8.5pt !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+    border: 1.5px solid #00534b !important;
+    border-right: 1.5px solid rgba(255, 255, 255, 0.7) !important;
+    border-bottom: 2px solid #00534b !important;
+    break-inside: avoid;
+  }
+
+  .acervo-table thead th:first-child {
+    text-align: left !important;
+    padding-left: 10px !important;
+    width: 22%;
+    border-left: 2px solid #00534b !important;
+  }
+
+  .acervo-table thead th:last-child {
+    text-align: center !important;
+    background-color: #003831 !important;
+    border-right: 2px solid #00534b !important;
+    width: 10%;
+  }
+
+  /* Linhas de dados (Bloco Body) */
+  .acervo-table tbody tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .acervo-table tbody tr:nth-child(even) {
+    background-color: #f2f7f4 !important;
+  }
+
+  .acervo-table tbody tr:nth-child(odd) {
+    background-color: #ffffff !important;
+  }
+
+  /* Bloco de Rótulos de Período (Primeira Coluna) */
+  .acervo-table tbody th {
+    height: auto !important;
+    padding: 6px 6px 6px 10px !important;
+    font-size: 8.5pt !important;
+    font-weight: 700 !important;
+    color: #112720 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.02em !important;
+    text-align: left !important;
+    border: 1.5px solid #00534b !important;
+    border-right: 2px solid #00534b !important;
+    background: inherit !important;
+    break-inside: avoid;
+  }
+
+  /* Células de Dados da Matriz - Linhas verticais e horizontais sólidas */
+  .acervo-table tbody td {
+    height: auto !important;
+    padding: 6px !important;
+    font-size: 9pt !important;
+    font-weight: 600 !important;
+    font-variant-numeric: tabular-nums !important;
+    color: #112720 !important;
+    text-align: center !important;
+    border: 1.5px solid #00534b !important;
+    background: inherit !important;
+    break-inside: avoid;
+  }
+
+  .acervo-table tbody td.acervo-zero {
+    color: #718096 !important;
+    font-weight: 400 !important;
+  }
+
+  /* Bloco da Coluna TOTAL */
+  .acervo-table tbody td:last-child,
+  .acervo-table tbody td.acervo-total-col {
+    background-color: #dcefe6 !important;
+    font-weight: 800 !important;
+    color: #00534b !important;
+    border: 1.5px solid #00534b !important;
+    border-left: 2px solid #00534b !important;
+    border-right: 2px solid #00534b !important;
+    font-size: 9.5pt !important;
+  }
+
   .acervo-table tbody td.acervo-alerta {
-    border: 2px solid #000;
-    font-weight: 700;
+    background-color: #fecaca !important;
+    color: #991b1b !important;
+    font-weight: 800 !important;
+    border: 1.5px solid #00534b !important;
   }
 
   .acervo-table tbody td.acervo-alerta::after {
-    content: ' — alerta';
-    font-size: 0.65em;
-    text-transform: uppercase;
+    content: none !important;
   }
 
+  /* Bloco de Rodapé TOTAL (tfoot) */
+  .acervo-table tfoot {
+    display: table-footer-group;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .acervo-table tfoot tr {
+    background-color: #d5ebe0 !important;
+    color: #00534b !important;
+  }
+
+  .acervo-table tfoot th {
+    height: auto !important;
+    padding: 7px 6px 7px 10px !important;
+    font-size: 8.5pt !important;
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    text-align: left !important;
+    border: 1.5px solid #00534b !important;
+    border-top: 2px solid #00534b !important;
+    border-bottom: 2px solid #00534b !important;
+    border-right: 2px solid #00534b !important;
+    background-color: #d5ebe0 !important;
+    color: #00534b !important;
+    break-inside: avoid;
+  }
+
+  .acervo-table tfoot td {
+    height: auto !important;
+    padding: 7px 6px !important;
+    font-size: 9pt !important;
+    font-weight: 800 !important;
+    font-variant-numeric: tabular-nums !important;
+    text-align: center !important;
+    border: 1.5px solid #00534b !important;
+    border-top: 2px solid #00534b !important;
+    border-bottom: 2px solid #00534b !important;
+    background-color: #d5ebe0 !important;
+    color: #00534b !important;
+    break-inside: avoid;
+  }
+
+  /* Célula de Total Geral (Cruzamento de Total e Total) */
+  .acervo-table tfoot td:last-child,
+  .acervo-table tfoot td.acervo-total-col {
+    background-color: #bfe3d1 !important;
+    color: #00332d !important;
+    font-size: 10pt !important;
+    font-weight: 900 !important;
+    border: 1.5px solid #00534b !important;
+    border-left: 2px solid #00534b !important;
+    border-right: 2px solid #00534b !important;
+    border-top: 2px solid #00534b !important;
+    border-bottom: 2px solid #00534b !important;
+  }
+
+  /* Rodapé do painel */
   .acervo-panel-footer {
-    padding: 10px 0 0;
-    border-top: 0;
-    background: #fff;
-    color: #000;
   }
 }
 
