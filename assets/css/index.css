@@ -537,6 +537,24 @@ tbody tr:hover td { background: var(--table-row-hover); }
   .button-secondary.button-danger.btn-excluir { min-height: 44px; }
 }
 
+.pauta-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin-bottom: 14px;
+}
+
+.pauta-header h2 { margin-bottom: 0; }
+
+.preenchimento-rapido {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .table-toolbar {
   display: flex;
   align-items: center;
@@ -925,12 +943,16 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .nav-action { padding-inline: 10px; }
 
   .controls,
+  .pauta-header,
   .table-toolbar { align-items: stretch; flex-direction: column; }
 
   .controls input[type='number'],
   .controls button,
   #addRowBtn,
   #btnSalvar { width: 100%; }
+
+  .preenchimento-rapido { justify-content: stretch; }
+  .preenchimento-rapido button { flex: 1; }
 
   #spacer { display: none; }
   .card { padding: 16px 12px; }

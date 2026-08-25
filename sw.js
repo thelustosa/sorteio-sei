@@ -1,7 +1,7 @@
 // O GitHub Pages fixa cache curto nos cabeçalhos. Este cache versionado mantém
 // apenas assets estáticos do próprio projeto entre visitas; HTML e chamadas ao
 // Supabase continuam sempre na rede para não servir dados ou telas obsoletos.
-const CACHE_NAME = 'sorteio-sei-assets-20260824';
+const CACHE_NAME = 'sorteio-sei-assets-20260825';
 
 self.addEventListener('install', () => self.skipWaiting());
 
