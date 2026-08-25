@@ -6,7 +6,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '20260824-10';
+const ASSET_VERSION = '2b29df4a3b';
 const TEMPO_LIMITE_REDE = 20000;
 
 // O token fica somente na aba atual: navegar entre as páginas preserva a sessão,
@@ -335,18 +335,23 @@ function aviso(texto, tipo = 'sucesso') {
   regiao.appendChild(msg);
 }
 
-// O registro acontece só depois do carregamento e quando o navegador estiver
-// ocioso, para não disputar rede ou CPU com a primeira pintura e o formulário.
-function registrarCacheEstatico() {
-  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-  navigator.serviceWorker.register(`./sw.js?v=${ASSET_VERSION}`, { updateViaCache: 'none' })
+// Limpeza única: versões anteriores registravam um service worker que servia
+// assets do cache indefinidamente e acabava misturando CSS antigo com JS novo.
+// A versão dos assets agora é o hash do conteúdo, então o cache do navegador
+// basta. ponytail: remover este bloco depois que os usuários carregarem esta
+// versão ao menos uma vez (algumas semanas).
+function removerCacheAntigo() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.getRegistrations()
+    .then(registros => Promise.all(registros.map(registro => registro.unregister())))
     .catch(() => {});
+  if ('caches' in window) {
+    caches.keys()
+      .then(nomes => Promise.all(nomes
+        .filter(nome => nome.startsWith('sorteio-sei-assets-'))
+        .map(nome => caches.delete(nome))))
+      .catch(() => {});
+  }
 }
 
-window.addEventListener('load', () => {
-  if ('requestIdleCallback' in window) {
-    requestIdleCallback(registrarCacheEstatico, { timeout: 3000 });
-  } else {
-    setTimeout(registrarCacheEstatico, 1000);
-  }
-}, { once: true });
+window.addEventListener('load', removerCacheAntigo, { once: true });
