@@ -67,9 +67,10 @@ create unique index if not exists ux_processos_sorteados_distribuicao
 --   planilha -> importado do histórico da aba Acervo (dados/importar_planilha.py).
 --
 -- Colunas que só uma das origens preenche ficam nulas na outra: a planilha não
--- registra ordem. Em relator vai o nome do conselheiro nas duas origens — o
--- histórico da planilha e o sorteio gravam o mesmo vocabulário, que é também o
--- que as atas publicadas no SEI usam.
+-- registra ordem. Em relator vai a CADEIRA (CJ1..CJ5) nas duas origens: o
+-- sorteio grava a cadeira e a importação traduz o nome da planilha pela tabela
+-- cadeiras_cj antes de inserir. Quem é o conselheiro sai do de-para, não daqui
+-- (ver "CJ · Quem ocupa cada cadeira", abaixo).
 create table if not exists public.acervo_cj (
   id                bigint generated always as identity primary key,
   num_processo      text        not null,
@@ -386,6 +387,13 @@ create table if not exists public.cadeiras_cj (
   constraint cadeiras_cj_periodo_valido check (ate is null or ate >= desde),
   primary key (cadeira, desde)
 );
+
+-- Uma cadeira tem, no máximo, um período em aberto. A chave primária não
+-- impede duas linhas com `ate` nulo, e duas ocupações vigentes multiplicariam
+-- cada célula do painel pelo join do de-para — o painel passaria a contar o
+-- dobro sem nenhum erro aparecer.
+create unique index if not exists ux_cadeiras_cj_vigente
+  on public.cadeiras_cj (cadeira) where ate is null;
 
 -- Composição da Resolução Normativa nº 333/2026-CR, a que assina as atas de
 -- sorteio 010 a 014/2026.

@@ -84,22 +84,11 @@ btnCreg.addEventListener('click', () => {
   iniciarSorteador('CREG', ['CREG1', 'CREG2', 'CREG3', 'CREG4']);
 });
 
-// Quem ocupa cada cadeira da CJ. O que vai para o banco é a CADEIRA — ela é
+// As cadeiras da CJ vêm de CADEIRAS_CJ (supabase.js), compartilhado com as
+// telas de julgados e do acervo. O que vai para o banco é a CADEIRA — ela é
 // estável quando a composição da Câmara muda, e é assim que acervo_cj.relator
-// guarda. O nome existe aqui só para a tela: aparece no title de cada unidade,
-// para quem escolhe não precisar decorar o número da cadeira.
-//
-// Espelha a tabela cadeiras_cj do banco, que é a fonte da verdade. Um teste
-// falha se as duas divergirem — trocar a composição exige mexer nas duas, e é
-// para exigir mesmo: mudar só aqui deixaria o hover mentindo.
-const CADEIRAS_CJ = {
-  CJ1: 'Paulo Otoni Ribeiro',
-  CJ2: 'Deusdete Cardoso Belém',
-  CJ3: 'Dorivan de Souza Lima',
-  CJ4: 'Paulo Henrique Oliveira Marques',
-  CJ5: 'Lorena Patricia de Oliveira'
-};
-
+// guarda. O nome só aparece no title de cada unidade, para quem escolhe não
+// precisar decorar o número da cadeira.
 btnCj.addEventListener('click', () => {
   iniciarSorteador('CJ', Object.keys(CADEIRAS_CJ));
 });
@@ -144,14 +133,8 @@ function iniciarSorteador(modo, unidades) {
     pill.dataset.creg = unit;
     pill.setAttribute('aria-pressed', 'false');
     pill.textContent = unit;
-    // A cadeira sozinha não diz quem é. O nome vai no title (hover do mouse) e
-    // no aria-label, para que o leitor de tela também anuncie o conselheiro em
-    // vez de soletrar "CJ3".
-    const conselheiro = CADEIRAS_CJ[unit];
-    if (conselheiro) {
-      pill.title = conselheiro;
-      pill.setAttribute('aria-label', `${unit} — ${conselheiro}`);
-    }
+    // A cadeira sozinha não diz quem é: o nome vai no hover e no aria-label.
+    rotularCadeira(pill, unit);
     fragmentoPills.appendChild(pill);
   });
   pillsContainer.replaceChildren(fragmentoPills);

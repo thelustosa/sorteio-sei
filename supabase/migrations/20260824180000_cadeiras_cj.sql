@@ -30,6 +30,13 @@ comment on table public.cadeiras_cj is
   'nova, nunca como UPDATE — senão o histórico passa a apontar para a pessoa '
   'errada.';
 
+-- Uma cadeira tem, no máximo, um período em aberto. A chave primária não
+-- impede duas linhas com `ate` nulo, e duas ocupações vigentes multiplicariam
+-- cada célula do painel pelo join do de-para — o painel contaria o dobro sem
+-- nenhum erro aparecer.
+create unique index if not exists ux_cadeiras_cj_vigente
+  on public.cadeiras_cj (cadeira) where ate is null;
+
 -- Composição da Resolução Normativa nº 333/2026-CR, a que assina as atas de
 -- sorteio 010 a 014/2026. `desde` cobre todo o dado que existe hoje em
 -- produção, que é de 2026.

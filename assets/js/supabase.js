@@ -6,8 +6,31 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = 'b630d03142';
+const ASSET_VERSION = '489239a3b1';
 const TEMPO_LIMITE_REDE = 20000;
+
+// Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
+// teste compara as duas listas), e mora aqui — e não na página do sorteio —
+// porque as três telas mostram a cadeira e precisam do nome para o hover.
+// O que é gravado é sempre a CADEIRA; o nome existe só para apresentação.
+const CADEIRAS_CJ = {
+  CJ1: 'Paulo Otoni Ribeiro',
+  CJ2: 'Deusdete Cardoso Belém',
+  CJ3: 'Dorivan de Souza Lima',
+  CJ4: 'Paulo Henrique Oliveira Marques',
+  CJ5: 'Lorena Patricia de Oliveira'
+};
+
+// Rótulo de uma cadeira nas tabelas: mostra "CJ3" e revela o conselheiro no
+// hover e no leitor de tela. Valor que não é cadeira (histórico de composições
+// anteriores, que ficou pelo nome) passa intacto e sem title vazio.
+function rotularCadeira(el, valor) {
+  const nome = CADEIRAS_CJ[valor];
+  if (!nome) return el;
+  el.title = nome;
+  el.setAttribute('aria-label', `${valor} — ${nome}`);
+  return el;
+}
 
 // O token fica somente na aba atual: navegar entre as páginas preserva a sessão,
 // mas fechar a aba a encerra. Senhas nunca são armazenadas.
@@ -342,8 +365,14 @@ function aviso(texto, tipo = 'sucesso') {
 // versão ao menos uma vez (algumas semanas).
 function removerCacheAntigo() {
   if (!('serviceWorker' in navigator)) return;
+  // getRegistrations() devolve a ORIGEM inteira, não este projeto. Em
+  // usuario.github.io, sem o filtro de escopo, este código desregistraria o
+  // service worker de todos os outros GitHub Pages do mesmo usuário.
+  const escopo = new URL('./', location.href).href;
   navigator.serviceWorker.getRegistrations()
-    .then(registros => Promise.all(registros.map(registro => registro.unregister())))
+    .then(registros => Promise.all(registros
+      .filter(registro => registro.scope.startsWith(escopo))
+      .map(registro => registro.unregister())))
     .catch(() => {});
   if ('caches' in window) {
     caches.keys()
