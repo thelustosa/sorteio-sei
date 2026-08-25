@@ -24,6 +24,8 @@ const contadorPendentes = document.getElementById('contadorPendentes');
 const btnSalvar = document.getElementById('btnSalvar');
 const btnVoltar = document.getElementById('btnVoltar');
 const btnVoltarInicio = document.getElementById('btnVoltarInicio');
+const btnTodosManter = document.getElementById('btnTodosManter');
+const btnTodosJulgado = document.getElementById('btnTodosJulgado');
 const txtModo = document.getElementById('txtModo');
 const listaPautasTitulo = document.getElementById('listaPautasTitulo');
 
@@ -33,9 +35,15 @@ let pendentesNaTela = 0;
 
 btnVoltar.addEventListener('click', () => mostrarPautas(true));
 btnSalvar.addEventListener('click', salvar);
+btnTodosManter.addEventListener('click', () => preencherColuna('col-voto', 'Manter'));
+btnTodosJulgado.addEventListener('click', () => preencherColuna('col-status', 'Julgado'));
 tbody.addEventListener('change', event => {
   const select = event.target.closest('select');
   if (!select || !tbody.contains(select)) return;
+  registrarAlteracao(select);
+});
+
+function registrarAlteracao(select) {
   select.classList.toggle('placeholder-select', !select.value);
 
   const tr = select.closest('tr');
@@ -48,7 +56,19 @@ tbody.addEventListener('change', event => {
   tr.dataset.alterada = String([...tr.querySelectorAll('select')]
     .some(campo => campo.value !== (campo.dataset.valorInicial || '')));
   atualizarContador();
-});
+}
+
+// Depois de quase toda sessão o resultado repetido é "Manter" no voto e
+// "Julgado" no status, então a secretaria preenche a coluna de uma vez e
+// corrige só as exceções. Só toca no que está em branco: quem já escolheu
+// Anular numa linha não perde a escolha ao clicar no botão.
+function preencherColuna(coluna, valor) {
+  tbody.querySelectorAll(`.${coluna} select`).forEach(select => {
+    if (select.value) return;
+    select.value = valor;
+    registrarAlteracao(select);
+  });
+}
 
 function inicializarJulgados() {
   carregarPautas(true);
