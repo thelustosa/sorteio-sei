@@ -52,7 +52,7 @@ preenche uma linha por processo:
 | Nº Processo | `num_processo` |
 | Assunto (travado em "Auto de Infração") | `assunto` |
 | **Defesa** (Sim/Não) | `defesa` (boolean) |
-| — sorteado — conselheiro da CJ | `relator` |
+| — sorteado — cadeira CJ1..CJ5 | `relator` |
 | — sorteado — data de hoje | `data_distribuicao` |
 | ordem na tabela / hora do sorteio | `ordem`, `sorteado_em` |
 | | `origem = 'sorteio'` |
@@ -741,14 +741,29 @@ Revisto depois da carga de recuperação, em 21/08/2026.
   para Paulo Henrique, 28ª reunião pela Lorena. Está registrado assim de
   propósito — ver *A pauta confere o acervo* — mas se a troca teve um documento,
   ela vira uma redistribuição no acervo e o caso fecha.
-- **Cadeira × conselheiro.** Resolvido por ora do jeito mais simples: o sorteio
-  passou a gravar o **nome** do conselheiro, igual ao que as 194 distribuições
-  do acervo e as atas publicadas no SEI já usam. Antes ele gravava a cadeira
-  (`CJ1`..`CJ5`), e as duas convenções na mesma coluna quebrariam qualquer
-  relatório por relator — além de a ata gerada divergir da oficial, que nomeia a
-  pessoa. O que fica em aberto é o inverso: se a Câmara quiser a cadeira de
-  volta, ela precisa de uma tabela pequena ligando cadeira e conselheiro **por
-  período**, para que a troca de composição não reescreva o histórico.
+- **Cadeira × conselheiro — resolvido.** `acervo_cj.relator` guarda a **cadeira**
+  (`CJ1`..`CJ5`), e quem ocupa cada uma sai de [`cadeiras_cj`](sql/schema.sql),
+  uma tabela por período. As 345 linhas que traziam nome foram convertidas pela
+  migração `20260824180000`.
+
+  A cadeira é o valor canônico porque é estável: quando a composição da Câmara
+  mudar, o processo distribuído em 2026 continua tendo sido da CJ3 daquele
+  período, e o de-para resolve quem era. Guardar o nome na linha congelaria a
+  pessoa e faria a troca de composição reescrever a história — por isso
+  composição nova entra como **linha nova**, com `ate` fechando a anterior,
+  nunca como UPDATE.
+
+  Na tela a cadeira aparece com o nome no hover: nas pills de exclusão do
+  sorteio e nas colunas do painel do acervo, via `title` e `aria-label`. O
+  painel recebe cadeira e nome na mesma resposta de `resumo_acervo_cj`, então o
+  front não repete o de-para; o sorteio tem a lista em `index.js`, e um teste
+  falha se ela divergir da tabela.
+
+  **Fronteira conhecida:** a conversão alcança quem está no de-para. O histórico
+  de 2024 e 2025, hoje em `backup_cj`, tem conselheiros de composições
+  anteriores sem cadeira conhecida — eles seguem pelo nome, porque inventar o
+  número seria pior. Se alguém rodar o `restaurar_cj.sql`, o painel passa a
+  misturar cadeiras e nomes até que essas composições sejam informadas.
 - **CREG** continua em `processos_sorteados`. Fica para depois; a estrutura
   está pronta para ganhar `acervo_creg` e `julgados_creg` com a mesma lógica.
 

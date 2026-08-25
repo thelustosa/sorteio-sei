@@ -6,10 +6,10 @@
 // é fechada ao navegador e porque a definição de "não julgado" precisa morar em
 // um lugar só. Esta página pivota o resultado e desenha.
 //
-// As colunas vêm do dado, não do HTML: são os relatores que existem no acervo.
-// Enquanto o sorteio gravar cadeira (CJ1..CJ5) e o histórico trouxer nome de
-// conselheiro, é o banco que decide o que aparece — e quando existir o de-para
-// entre cadeira e nome, o painel acompanha sem mexer aqui.
+// As colunas vêm do dado, não do HTML: são as cadeiras (CJ1..CJ5) que existem no
+// acervo, e o nome de quem ocupa cada uma vem na mesma resposta, para o hover.
+// Trocar a composição da Câmara é mexer na tabela cadeiras_cj do banco; esta
+// página acompanha sem alteração.
 
 const acervoPanel = document.getElementById('acervoPanel');
 const acervoTabela = document.getElementById('acervoTable');
@@ -57,11 +57,25 @@ function desenhar(linhas) {
   const relatores = [...new Set(linhas.map(l => l.relator))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   const faixas = [...new Map(linhas.map(l => [l.ordem, l.faixa])).entries()].sort((a, b) => a[0] - b[0]);
   const valor = new Map(linhas.map(l => [`${l.ordem}|${l.relator}`, l.processos]));
+  // Quem ocupa cada cadeira vem na mesma resposta, da tabela cadeiras_cj: o
+  // front não repete o de-para, só apresenta.
+  const conselheiro = new Map(linhas.map(l => [l.relator, l.conselheiro]));
 
   const thead = document.createElement('thead');
   const cabecalho = document.createElement('tr');
   cabecalho.append(celula('Período', 'th'));
-  relatores.forEach(r => cabecalho.append(celula(r, 'th')));
+  relatores.forEach(r => {
+    const th = celula(r, 'th');
+    // A cadeira sozinha não diz quem é. O nome vai no hover do mouse e no
+    // aria-label, para o leitor de tela anunciar o conselheiro em vez de
+    // soletrar "CJ3" em cada célula da coluna.
+    const nome = conselheiro.get(r);
+    if (nome && nome !== r) {
+      th.title = nome;
+      th.setAttribute('aria-label', `${r} — ${nome}`);
+    }
+    cabecalho.append(th);
+  });
   cabecalho.append(celula('Total', 'th'));
   thead.append(cabecalho);
 

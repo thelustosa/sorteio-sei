@@ -31,6 +31,9 @@ PLANILHA_PADRAO = Path.home() / 'Downloads' / 'Câmara de Julgamento - REG.xlsx'
 PG = banco.Postgres('sorteio_sei_test', 55433)
 MIGRACAO = RAIZ / 'supabase' / 'migrations' / \
     '20260823165725_corrigir_integridade_creg_e_privilegios.sql'
+# Converte relator de nome para cadeira. Roda DEPOIS da planilha, porque e o
+# dado importado que ela tem de alcancar.
+MIGRACAO_CADEIRAS = RAIZ / 'supabase' / 'migrations' / '20260824180000_cadeiras_cj.sql'
 
 testes = []
 
@@ -931,26 +934,86 @@ def resumo_do_acervo_conta_processo_redistribuido_uma_vez(cur):
 
 
 @teste
-def sorteio_da_cj_usa_os_nomes_que_o_acervo_conhece(cur):
-    """O sorteio grava o nome do conselheiro, não a cadeira.
+def de_para_das_cadeiras_esta_completo(cur):
+    """Cinco cadeiras, cinco conselheiros, sem ambiguidade.
 
-    O acervo herdou 194 distribuições com o nome por extenso, e as atas do SEI
-    publicam o nome. Se o sorteio gravasse 'CJ3', a mesma coluna passaria a ter
-    dois vocabulários e nenhum relatório por relator fecharia.
+    Duas cadeiras com a mesma pessoa vigente, ou a mesma cadeira com dois
+    ocupantes ao mesmo tempo, quebrariam a tradução em silêncio.
+    """
+    cur.execute("""select cadeira, conselheiro from public.cadeiras_cj
+                    where ate is null order by cadeira""")
+    vigentes = cur.fetchall()
+    assert len(vigentes) == 5, vigentes
+    assert len({c for c, _ in vigentes}) == 5, 'cadeira repetida na mesma vigência'
+    assert len({n for _, n in vigentes}) == 5, 'conselheiro em duas cadeiras'
 
-    Este teste falha se alguém trocar a lista de conselheiros por um nome que o
-    acervo não conhece — uma troca de composição da Câmara precisa vir com a
-    decisão sobre o histórico, não escondida numa linha de JavaScript.
+
+@teste
+def sorteio_da_cj_grava_cadeira_e_o_front_sabe_o_nome(cur):
+    """O de-para do index.js espelha a tabela do banco.
+
+    O que vai para acervo_cj é a cadeira; o nome existe no front só para o
+    hover. Se as duas listas divergirem, a tela passa a anunciar o conselheiro
+    errado — e nada no banco perceberia, porque o nome não é gravado.
     """
     fonte = (RAIZ / 'assets' / 'js' / 'index.js').read_text(encoding='utf-8')
-    trecho = fonte[fonte.index('const CONSELHEIROS_CJ'):fonte.index('btnCj.addEventListener')]
-    sorteados = set(re.findall(r"'([^']+)'", trecho))
-    assert len(sorteados) == 5, sorted(sorteados)
-    assert not any(n.startswith('CJ') and n[2:].isdigit() for n in sorteados),         'o sorteio voltou a gravar cadeira'
+    trecho = fonte[fonte.index('const CADEIRAS_CJ'):fonte.index('btnCj.addEventListener')]
+    no_front = dict(re.findall(r"(CJ\d+):\s*'([^']+)'", trecho))
+    assert len(no_front) == 5, no_front
 
-    cur.execute("select distinct relator from public.acervo_cj")
-    conhecidos = {r for (r,) in cur.fetchall()}
-    assert sorteados <= conhecidos, sorted(sorteados - conhecidos)
+    cur.execute('select cadeira, conselheiro from public.cadeiras_cj where ate is null')
+    no_banco = dict(cur.fetchall())
+    assert no_front == no_banco, f'front={no_front} banco={no_banco}'
+
+
+@teste
+def conversao_troca_nome_por_cadeira_e_poupa_o_resto(cur):
+    """O UPDATE da migração 20260824180000, na fronteira que ele promete.
+
+    Quem está no de-para vira cadeira. Quem não está — conselheiro de
+    composição anterior, que o histórico de 2024 e 2025 tem — fica pelo nome:
+    inventar o número da cadeira dele seria pior do que não traduzir.
+    """
+    cur.execute("""insert into public.acervo_cj
+                     (num_processo, relator, data_distribuicao, defesa, origem) values
+                   ('900000000000090', 'Dorivan de Souza Lima',  date '2026-07-01', true, 'sorteio'),
+                   ('900000000000091', 'Paulo Otoni Ribeiro',    date '2026-07-01', false,'sorteio'),
+                   ('900000000000092', 'Conselheiro De Antes',   date '2026-07-01', true, 'planilha')""")
+
+    cur.execute("""update public.acervo_cj a
+                      set relator = c.cadeira
+                     from public.cadeiras_cj c
+                    where a.relator = c.conselheiro
+                      and a.data_distribuicao >= c.desde
+                      and (c.ate is null or a.data_distribuicao <= c.ate)
+                      and a.num_processo like '9000000000000%'""")
+
+    cur.execute("""select num_processo, relator from public.acervo_cj
+                    where num_processo in ('900000000000090','900000000000091','900000000000092')
+                    order by num_processo""")
+    assert cur.fetchall() == [('900000000000090', 'CJ3'),
+                              ('900000000000091', 'CJ1'),
+                              ('900000000000092', 'Conselheiro De Antes')], cur.fetchall()
+    cur.connection.rollback()
+
+
+@teste
+def painel_traduz_cadeira_e_deixa_o_resto_intacto(cur):
+    """Cadeira vem com o nome para o hover; sem de-para, o rótulo se repete.
+
+    O coalesce da função é o que evita hover vazio: uma coluna cujo relator não
+    é cadeira mostra o próprio valor, em vez de um title em branco.
+    """
+    autenticar(cur)
+    cur.execute('select distinct relator, conselheiro from public.resumo_acervo_cj()')
+    pares = dict(cur.fetchall())
+    assert pares, 'painel vazio'
+
+    cur.execute('select cadeira, conselheiro from public.cadeiras_cj where ate is null')
+    depara = dict(cur.fetchall())
+    for relator, conselheiro in pares.items():
+        esperado = depara.get(relator, relator)
+        assert conselheiro == esperado, f'{relator} -> {conselheiro}, esperado {esperado}'
 
 
 @teste

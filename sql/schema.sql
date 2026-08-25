@@ -369,6 +369,38 @@ $$;
 revoke all on function public.registrar_votos(jsonb) from public, anon, service_role;
 grant execute on function public.registrar_votos(jsonb) to authenticated;
 
+-- ── CJ · Quem ocupa cada cadeira ─────────────────────────────────────────────
+-- acervo_cj.relator guarda a CADEIRA (CJ1..CJ5), não o nome. A cadeira é
+-- estável: quando a composição da Câmara mudar, o processo distribuído em 2026
+-- continua tendo sido da CJ3 daquele período, e este de-para resolve quem era.
+-- Guardar o nome na linha congelaria a pessoa e faria a troca de composição
+-- reescrever a história.
+--
+-- Por isso a tabela é por PERÍODO: composição nova entra como linha nova, com
+-- `ate` fechando a anterior — nunca como UPDATE.
+create table if not exists public.cadeiras_cj (
+  cadeira     text not null check (cadeira ~ '^CJ[1-9][0-9]*$'),
+  conselheiro text not null check (length(trim(conselheiro)) > 0),
+  desde       date not null,
+  ate         date,
+  constraint cadeiras_cj_periodo_valido check (ate is null or ate >= desde),
+  primary key (cadeira, desde)
+);
+
+-- Composição da Resolução Normativa nº 333/2026-CR, a que assina as atas de
+-- sorteio 010 a 014/2026.
+insert into public.cadeiras_cj (cadeira, conselheiro, desde) values
+  ('CJ1', 'Paulo Otoni Ribeiro',             date '2026-01-01'),
+  ('CJ2', 'Deusdete Cardoso Belém',          date '2026-01-01'),
+  ('CJ3', 'Dorivan de Souza Lima',           date '2026-01-01'),
+  ('CJ4', 'Paulo Henrique Oliveira Marques', date '2026-01-01'),
+  ('CJ5', 'Lorena Patricia de Oliveira',     date '2026-01-01')
+on conflict (cadeira, desde) do update set conselheiro = excluded.conselheiro;
+
+-- Sem política de RLS: o navegador não lê esta tabela direto. Quem traduz
+-- cadeira em nome é a função do painel, que é SECURITY DEFINER.
+alter table public.cadeiras_cj enable row level security;
+
 -- ── CJ · Painel do acervo ────────────────────────────────────────────────────
 -- A matriz do acervo.html: processos parados por faixa de tempo e por relator.
 --
@@ -377,8 +409,10 @@ grant execute on function public.registrar_votos(jsonb) to authenticated;
 -- para ele contar no JavaScript. A agregação fica aqui: a porta continua
 -- estreita, o payload é de algumas dezenas de células, e a definição de "não
 -- julgado" mora em um lugar só, junto das outras regras.
-create or replace function public.resumo_acervo_cj()
-returns table (ordem int, faixa text, relator text, processos int)
+drop function if exists public.resumo_acervo_cj();
+
+create function public.resumo_acervo_cj()
+returns table (ordem int, faixa text, relator text, conselheiro text, processos int)
 language plpgsql
 stable
 security definer
@@ -424,12 +458,23 @@ begin
   -- precisar de lista fixa no HTML.
   relatores as (select distinct acervo_cj.relator from public.acervo_cj)
 
-  select f.ordem, f.faixa, r.relator, count(p.relator)::int
+  -- A tela mostra a cadeira e revela o conselheiro no hover. As duas saem da
+  -- mesma consulta para que o front não precise repetir o de-para.
+  select f.ordem,
+         f.faixa,
+         r.relator,
+         -- Cadeira sem ocupante conhecido mostra a própria cadeira: melhor um
+         -- rótulo honesto do que um hover vazio.
+         coalesce(max(c.conselheiro), r.relator),
+         count(p.relator)::int
     from faixas f
    cross join relatores r
     left join pendentes p
            on p.relator = r.relator
           and p.dias between f.de and f.ate
+    left join public.cadeiras_cj c
+           on c.cadeira = r.relator
+          and c.ate is null
    group by f.ordem, f.faixa, r.relator
    order by f.ordem, r.relator;
 end;
