@@ -27,6 +27,8 @@ const loginOnlyCard = document.querySelector('[data-login-only]');
 const detalheDialog = document.getElementById('detalheDialog');
 const detalheTitulo = document.getElementById('detalheTitulo');
 const detalheResumo = document.getElementById('detalheResumo');
+const detalheLoading = document.getElementById('detalheLoading');
+const detalheCorpo = document.getElementById('detalheCorpo');
 const detalheTabela = document.getElementById('detalheTable');
 const detalheErro = document.getElementById('detalheErro');
 const btnFecharDetalhe = document.getElementById('btnFecharDetalhe');
@@ -565,7 +567,11 @@ async function abrirDetalhe(celulaEl) {
   detalheResumo.textContent = 'Carregando…';
   detalheTabela.replaceChildren();
   detalheErro.hidden = true;
+  detalheCorpo.hidden = true;
+  detalheLoading.hidden = false;
+  detalheLoading.replaceChildren(criarIndicadorCarregamento('Carregando processos…'));
   btnExportarDetalhe.disabled = true;
+  // showModal antes da busca: o card aparece com o loading em vez de a tela
   // ficar parada sem resposta ao clique.
   if (!detalheDialog.open) detalheDialog.showModal();
 
@@ -582,12 +588,18 @@ async function abrirDetalhe(celulaEl) {
       detalheDialog.close();
       return;
     }
+    detalheLoading.hidden = true;
+    detalheLoading.replaceChildren();
+    detalheCorpo.hidden = true;
     detalheResumo.textContent = '';
     detalheErro.querySelector('p').textContent = `Não foi possível carregar os processos (${err.message}).`;
     detalheErro.hidden = false;
     return;
   }
 
+  detalheLoading.hidden = true;
+  detalheLoading.replaceChildren();
+  detalheCorpo.hidden = false;
   detalheAtual = { rotulo, processos: processos || [] };
   desenharDetalhe(detalheAtual.processos);
   btnExportarDetalhe.disabled = detalheAtual.processos.length === 0;
