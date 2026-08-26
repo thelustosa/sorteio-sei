@@ -24,7 +24,16 @@ const exportOptions = document.getElementById('exportOptions');
 const exportFeedback = document.getElementById('exportFeedback');
 const btnTentarNovamente = document.getElementById('btnTentarNovamente');
 const loginOnlyCard = document.querySelector('[data-login-only]');
+const detalheDialog = document.getElementById('detalheDialog');
+const detalheTitulo = document.getElementById('detalheTitulo');
+const detalheResumo = document.getElementById('detalheResumo');
+const detalheTabela = document.getElementById('detalheTable');
+const detalheErro = document.getElementById('detalheErro');
+const btnFecharDetalhe = document.getElementById('btnFecharDetalhe');
+const btnFecharDetalheRodape = document.getElementById('btnFecharDetalheRodape');
+const btnExportarDetalhe = document.getElementById('btnExportarDetalhe');
 let linhasAtuais = null;
+let detalheAtual = null;
 
 btnAtualizar.addEventListener('click', () => carregarAcervo());
 btnExportar.addEventListener('click', alternarMenuExportacao);
@@ -33,6 +42,16 @@ exportOptions.addEventListener('keydown', navegarMenuExportacao);
 document.addEventListener('click', fecharMenuAoClicarFora);
 document.addEventListener('keydown', fecharMenuComEscape);
 btnTentarNovamente.addEventListener('click', () => carregarAcervo());
+acervoTabela.addEventListener('click', abrirDetalheDaCelula);
+acervoTabela.addEventListener('keydown', abrirDetalheDoTeclado);
+btnFecharDetalhe.addEventListener('click', () => detalheDialog.close());
+btnFecharDetalheRodape.addEventListener('click', () => detalheDialog.close());
+btnExportarDetalhe.addEventListener('click', exportarDetalhe);
+// Clique no ::backdrop chega como clique no próprio dialog: fechar ali é o que
+// a pessoa espera de um card modal, e o <dialog> não faz isso sozinho.
+detalheDialog.addEventListener('click', evento => {
+  if (evento.target === detalheDialog) detalheDialog.close();
+});
 
 async function inicializarAcervo() {
   const carregado = await carregarAcervo({ carregamentoInicial: true });
@@ -49,6 +68,13 @@ async function inicializarAcervo() {
 
 function hojeBR() {
   return new Date().toLocaleDateString('pt-BR');
+}
+
+// aaaa-mm-dd → dd/mm/aaaa, sem passar por Date: o construtor lê data pura como
+// UTC e, em fuso negativo, devolveria o dia anterior.
+function dataBR(iso) {
+  const [ano, mes, dia] = String(iso).slice(0, 10).split('-');
+  return `${dia}/${mes}/${ano}`;
 }
 
 function dataArquivo() {
@@ -294,19 +320,73 @@ function criarZip(arquivos) {
   return new Blob([...locais, ...centrais, fim], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
+// As partes fixas do pacote OOXML. Ficam aqui porque as duas planilhas do
+// painel — a matriz e o detalhe de uma célula — usam os mesmos estilos: o mesmo
+// verde institucional, a mesma fonte, a mesma numeração.
+const EXCEL_TIPOS = '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>';
+const EXCEL_RELACOES = '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+const EXCEL_WORKBOOK_RELS = '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
+const EXCEL_ESTILOS = '<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0;-#,##0;&quot;—&quot;"/></numFmts><fonts count="11"><font><sz val="11"/><color rgb="FF112720"/><name val="Montserrat"/></font><font><b/><sz val="18"/><color rgb="FFFFFFFF"/><name val="Montserrat"/></font><font><sz val="10"/><color rgb="FFE6F2EF"/><name val="Montserrat"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Montserrat"/></font><font><b/><sz val="9"/><color rgb="FFFFFFFF"/><name val="Montserrat"/></font><font><b/><sz val="9"/><color rgb="FF112720"/><name val="Montserrat"/></font><font><b/><sz val="12"/><color rgb="FF112720"/><name val="Montserrat"/></font><font><b/><sz val="12"/><color rgb="FF00534B"/><name val="Montserrat"/></font><font><b/><sz val="12"/><color rgb="FF991B1B"/><name val="Montserrat"/></font><font><sz val="9"/><color rgb="FF718096"/><name val="Montserrat"/></font><font><b/><sz val="13"/><color rgb="FF00332D"/><name val="Montserrat"/></font></fonts><fills count="10"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00534B"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00453E"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE0F0E8"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFEE2E2"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE9F3EF"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFBFE3D1"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF8FBFA"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="4"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD7E2DE"/></left><right style="thin"><color rgb="FFD7E2DE"/></right><top style="thin"><color rgb="FFD7E2DE"/></top><bottom style="thin"><color rgb="FFD7E2DE"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF00534B"/></left><right style="thin"><color rgb="FF00534B"/></right><top style="thin"><color rgb="FF00534B"/></top><bottom style="thin"><color rgb="FF00534B"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF2F7668"/></left><right style="thin"><color rgb="FF2F7668"/></right><top style="thin"><color rgb="FF2F7668"/></top><bottom style="thin"><color rgb="FF2F7668"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="14"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="3" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf><xf numFmtId="0" fontId="4" fillId="3" borderId="3" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="5" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="164" fontId="6" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="164" fontId="7" fillId="5" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="164" fontId="8" fillId="6" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="5" fillId="7" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="164" fontId="7" fillId="7" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="164" fontId="10" fillId="8" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="9" fillId="9" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf><xf numFmtId="0" fontId="4" fillId="3" borderId="3" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles><dxfs count="0"/><tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/></styleSheet>';
+
+// Monta o .xlsx a partir de uma folha já pronta. O que muda entre as duas
+// exportações é só o XML da folha e o nome da aba.
+function pacoteExcel(folhaXml, nomeAba, areaImpressao) {
+  const workbook = `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets><sheet name="${escaparXml(nomeAba)}" sheetId="1" r:id="rId1"/></sheets>${areaImpressao}<calcPr calcId="191029" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>`;
+  return criarZip([
+    ['[Content_Types].xml', EXCEL_TIPOS], ['_rels/.rels', EXCEL_RELACOES],
+    ['xl/workbook.xml', workbook], ['xl/_rels/workbook.xml.rels', EXCEL_WORKBOOK_RELS],
+    ['xl/worksheets/sheet1.xml', folhaXml], ['xl/styles.xml', EXCEL_ESTILOS]
+  ]);
+}
+
 function criarExcel(linhas) {
-  const tipos = '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>';
-  const relacoes = '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
   const dados = dadosTabulares(linhas);
   const ultimaColuna = colunaExcel(dados[0].length - 1);
   const ultimaLinha = dados.length + 4;
-  const workbook = `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets><sheet name="Acervo" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">'Acervo'!$A$1:$${ultimaColuna}$${ultimaLinha}</definedName><definedName name="_xlnm.Print_Titles" localSheetId="0">'Acervo'!$4:$4</definedName></definedNames><calcPr calcId="191029" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>`;
-  const workbookRels = '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
-  const estilos = '<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0;-#,##0;&quot;—&quot;"/></numFmts><fonts count="11"><font><sz val="11"/><color rgb="FF112720"/><name val="Montserrat"/></font><font><b/><sz val="18"/><color rgb="FFFFFFFF"/><name val="Montserrat"/></font><font><sz val="10"/><color rgb="FFE6F2EF"/><name val="Montserrat"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Montserrat"/></font><font><b/><sz val="9"/><color rgb="FFFFFFFF"/><name val="Montserrat"/></font><font><b/><sz val="9"/><color rgb="FF112720"/><name val="Montserrat"/></font><font><b/><sz val="12"/><color rgb="FF112720"/><name val="Montserrat"/></font><font><b/><sz val="12"/><color rgb="FF00534B"/><name val="Montserrat"/></font><font><b/><sz val="12"/><color rgb="FF991B1B"/><name val="Montserrat"/></font><font><sz val="9"/><color rgb="FF718096"/><name val="Montserrat"/></font><font><b/><sz val="13"/><color rgb="FF00332D"/><name val="Montserrat"/></font></fonts><fills count="10"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00534B"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00453E"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE0F0E8"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFEE2E2"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE9F3EF"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFBFE3D1"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF8FBFA"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="4"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD7E2DE"/></left><right style="thin"><color rgb="FFD7E2DE"/></right><top style="thin"><color rgb="FFD7E2DE"/></top><bottom style="thin"><color rgb="FFD7E2DE"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF00534B"/></left><right style="thin"><color rgb="FF00534B"/></right><top style="thin"><color rgb="FF00534B"/></top><bottom style="thin"><color rgb="FF00534B"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF2F7668"/></left><right style="thin"><color rgb="FF2F7668"/></right><top style="thin"><color rgb="FF2F7668"/></top><bottom style="thin"><color rgb="FF2F7668"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="14"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="3" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf><xf numFmtId="0" fontId="4" fillId="3" borderId="3" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="5" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="164" fontId="6" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="164" fontId="7" fillId="5" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="164" fontId="8" fillId="6" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="5" fillId="7" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="164" fontId="7" fillId="7" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="164" fontId="10" fillId="8" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="9" fillId="9" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf><xf numFmtId="0" fontId="4" fillId="3" borderId="3" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles><dxfs count="0"/><tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/></styleSheet>';
-  return criarZip([
-    ['[Content_Types].xml', tipos], ['_rels/.rels', relacoes], ['xl/workbook.xml', workbook],
-    ['xl/_rels/workbook.xml.rels', workbookRels], ['xl/worksheets/sheet1.xml', planilhaXml(linhas)], ['xl/styles.xml', estilos]
-  ]);
+  const area = `<definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">'Acervo'!$A$1:$${ultimaColuna}$${ultimaLinha}</definedName><definedName name="_xlnm.Print_Titles" localSheetId="0">'Acervo'!$4:$4</definedName></definedNames>`;
+  return pacoteExcel(planilhaXml(linhas), 'Acervo', area);
+}
+
+// ── Detalhe de uma célula: a lista de processos daquele bloco ────────────────
+// Uma linha por processo, nas mesmas colunas que o card mostra na tela.
+function planilhaDetalheXml(processos, titulo) {
+  const colunas = ['Nº do Processo', 'Cadeira', 'Conselheiro', 'Distribuição', 'Dias parados'];
+  const texto = (col, linha, valor, estilo) =>
+    `<c r="${colunaExcel(col)}${linha}" s="${estilo}" t="inlineStr"><is><t>${escaparXml(valor)}</t></is></c>`;
+  const numero = (col, linha, valor, estilo) =>
+    `<c r="${colunaExcel(col)}${linha}" s="${estilo}"><v>${valor}</v></c>`;
+
+  const linhas = [
+    `<row r="1" ht="34" customHeight="1">${texto(0, 1, titulo, 1)}</row>`,
+    `<row r="2" ht="20" customHeight="1">${texto(0, 2, `${processos.length} processo(s) aguardando julgamento — posição de ${hojeBR()}`, 2)}</row>`,
+    `<row r="4" ht="22" customHeight="1">${colunas.map((c, n) => texto(n, 4, c, n === 0 ? 13 : 4)).join('')}</row>`
+  ];
+
+  processos.forEach((p, n) => {
+    const linha = 5 + n;
+    linhas.push(`<row r="${linha}" ht="18" customHeight="1">`
+      + texto(0, linha, p.num_processo, 5)
+      + texto(1, linha, p.relator, 5)
+      + texto(2, linha, p.conselheiro, 5)
+      + texto(3, linha, dataBR(p.data_distribuicao), 5)
+      + numero(4, linha, Number(p.dias) || 0, 6)
+      + '</row>');
+  });
+
+  return '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    + '<sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane ySplit="4" topLeftCell="A5" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
+    + '<cols><col min="1" max="1" width="22" customWidth="1"/><col min="2" max="2" width="10" customWidth="1"/>'
+    + '<col min="3" max="3" width="34" customWidth="1"/><col min="4" max="4" width="16" customWidth="1"/>'
+    + '<col min="5" max="5" width="14" customWidth="1"/></cols>'
+    + `<sheetData>${linhas.join('')}</sheetData>`
+    + '<mergeCells count="2"><mergeCell ref="A1:E1"/><mergeCell ref="A2:E2"/></mergeCells>'
+    + '</worksheet>';
+}
+
+function criarExcelDetalhe(processos, titulo) {
+  const ultimaLinha = processos.length + 4;
+  const area = `<definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">'Detalhe'!$A$1:$E$${ultimaLinha}</definedName><definedName name="_xlnm.Print_Titles" localSheetId="0">'Detalhe'!$4:$4</definedName></definedNames>`;
+  return pacoteExcel(planilhaDetalheXml(processos, titulo), 'Detalhe', area);
 }
 
 function celula(texto, tag = 'td', classe = '') {
@@ -317,6 +397,24 @@ function celula(texto, tag = 'td', classe = '') {
   // o valor da célula dependente do motor em vez do código.
   el.textContent = String(texto);
   return el;
+}
+
+// Bloco com número abre a lista daquele recorte. `ordem` e `relator` vazios são
+// o total: a função do banco entende os dois como "não filtre por isso", e é o
+// que faz o total da linha, o da coluna e o geral serem clicáveis pelo mesmo
+// caminho da célula.
+function tornarClicavel(celulaEl, { ordem = '', relator = '', rotulo }) {
+  celulaEl.dataset.ordem = ordem;
+  celulaEl.dataset.relator = relator;
+  celulaEl.dataset.rotulo = rotulo;
+  celulaEl.tabIndex = 0;
+  celulaEl.setAttribute('role', 'button');
+  // A célula de faixa crítica já anuncia o alerta. Substituir esse rótulo pelo
+  // da ação esconderia a urgência; os dois somam.
+  const alerta = celulaEl.getAttribute('aria-label');
+  celulaEl.setAttribute('aria-label',
+    alerta ? `${alerta}. ${rotulo}: ver os processos` : `${rotulo}: ver os processos`);
+  return celulaEl;
 }
 
 // A matriz vem em formato longo — (faixa, relator, processos) — e vira tabela
@@ -359,7 +457,9 @@ function desenhar(linhas) {
     relatores.forEach(r => {
       const n = valor.get(`${ordem}|${r}`) || 0;
       somaLinha += n;
-      tr.append(celula(n || '—', 'td', n ? 'acervo-detalhe' : 'acervo-zero'));
+      const td = celula(n || '—', 'td', n ? 'acervo-detalhe' : 'acervo-zero');
+      if (n) tornarClicavel(td, { ordem, relator: r, rotulo: `${faixa} · ${r}` });
+      tr.append(td);
     });
 
     // A partir de 46 dias ("Há 3 meses"), a célula Total é uma faixa visual
@@ -376,6 +476,7 @@ function desenhar(linhas) {
       totalLinha.setAttribute('aria-label', `Alerta: ${quantidade} nesta faixa de permanência`);
       totalLinha.title = `Alerta: ${quantidade} nesta faixa de permanência`;
     }
+    if (somaLinha) tornarClicavel(totalLinha, { ordem, rotulo: `${faixa} · todas as cadeiras` });
     tr.append(totalLinha);
     total += somaLinha;
     tbody.append(tr);
@@ -386,9 +487,13 @@ function desenhar(linhas) {
   trTotal.append(celula('Total', 'th', 'linha'));
   relatores.forEach(r => {
     const soma = faixas.reduce((acc, [ordem]) => acc + (valor.get(`${ordem}|${r}`) || 0), 0);
-    trTotal.append(celula(soma || '—', 'td', soma ? 'acervo-detalhe' : 'acervo-zero'));
+    const td = celula(soma || '—', 'td', soma ? 'acervo-detalhe' : 'acervo-zero');
+    if (soma) tornarClicavel(td, { relator: r, rotulo: `${r} · todo o período` });
+    trTotal.append(td);
   });
-  trTotal.append(celula(total || '—', 'td', `acervo-total-col${total ? ' acervo-detalhe' : ''}`));
+  const totalGeral = celula(total || '—', 'td', `acervo-total-col${total ? ' acervo-detalhe' : ''}`);
+  if (total) tornarClicavel(totalGeral, { rotulo: 'Todo o acervo aguardando julgamento' });
+  trTotal.append(totalGeral);
   rodape.append(trTotal);
 
   acervoTabela.replaceChildren(thead, tbody, rodape);
@@ -434,4 +539,91 @@ async function carregarAcervo({ carregamentoInicial = false } = {}) {
   acervoAtualizado.textContent = `Posição de ${hojeBR()}`;
   acervoVazio.hidden = total > 0;
   return true;
+}
+
+// ── Detalhe: o card com os processos de um bloco ─────────────────────────────
+// A tabela conta; o card lista. Quem faz a lista é processos_acervo_cj, com a
+// MESMA definição de pendente e as mesmas faixas do resumo — se as duas
+// divergirem, o card abre um número diferente do que o bloco mostrava.
+
+function abrirDetalheDaCelula(evento) {
+  const celulaEl = evento.target.closest('[data-rotulo]');
+  if (celulaEl && acervoTabela.contains(celulaEl)) abrirDetalhe(celulaEl);
+}
+
+function abrirDetalheDoTeclado(evento) {
+  if (evento.key !== 'Enter' && evento.key !== ' ') return;
+  const celulaEl = evento.target.closest('[data-rotulo]');
+  if (!celulaEl || !acervoTabela.contains(celulaEl)) return;
+  // Espaço rolaria a página sob o card que está prestes a abrir.
+  evento.preventDefault();
+  abrirDetalhe(celulaEl);
+}
+
+async function abrirDetalhe(celulaEl) {
+  const { ordem, relator, rotulo } = celulaEl.dataset;
+  detalheAtual = null;
+  detalheTitulo.textContent = rotulo;
+  detalheResumo.textContent = 'Carregando…';
+  detalheTabela.replaceChildren();
+  detalheErro.hidden = true;
+  btnExportarDetalhe.disabled = true;
+  // showModal antes da busca: o card aparece com "Carregando…" em vez de a tela
+  // ficar parada sem resposta ao clique.
+  if (!detalheDialog.open) detalheDialog.showModal();
+
+  let processos;
+  try {
+    processos = await api('rpc/processos_acervo_cj', {
+      method: 'POST',
+      body: JSON.stringify({ p_ordem: ordem ? Number(ordem) : null, p_relator: relator || null })
+    });
+  } catch (err) {
+    // Sessão expirada já recolocou a tela de login atrás do card; deixá-lo
+    // aberto por cima esconderia justamente o formulário.
+    if (err.status === 401) {
+      detalheDialog.close();
+      return;
+    }
+    detalheResumo.textContent = '';
+    detalheErro.querySelector('p').textContent = `Não foi possível carregar os processos (${err.message}).`;
+    detalheErro.hidden = false;
+    return;
+  }
+
+  detalheAtual = { rotulo, processos: processos || [] };
+  desenharDetalhe(detalheAtual.processos);
+  btnExportarDetalhe.disabled = detalheAtual.processos.length === 0;
+}
+
+function desenharDetalhe(processos) {
+  const quantidade = processos.length === 1 ? '1 processo' : `${processos.length} processos`;
+  detalheResumo.textContent = `${quantidade} · posição de ${hojeBR()}`;
+
+  const thead = document.createElement('thead');
+  const cabecalho = document.createElement('tr');
+  ['Nº do Processo', 'Cadeira', 'Distribuição', 'Dias parados']
+    .forEach(rotulo => cabecalho.append(celula(rotulo, 'th')));
+  thead.append(cabecalho);
+
+  const tbody = document.createElement('tbody');
+  processos.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.append(celula(p.num_processo, 'th', 'linha'));
+    const cadeira = celula(p.relator);
+    if (p.conselheiro && p.conselheiro !== p.relator) cadeira.title = p.conselheiro;
+    tr.append(cadeira);
+    tr.append(celula(dataBR(p.data_distribuicao)));
+    tr.append(celula(p.dias));
+    tbody.append(tr);
+  });
+
+  detalheTabela.replaceChildren(thead, tbody);
+}
+
+function exportarDetalhe() {
+  if (!detalheAtual || !detalheAtual.processos.length) return;
+  const nome = detalheAtual.rotulo.replace(/[^\wÀ-ÿ]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+  baixarArquivo(criarExcelDetalhe(detalheAtual.processos, detalheAtual.rotulo),
+    `acervo-cj-${nome}-${dataArquivo()}.xlsx`);
 }
