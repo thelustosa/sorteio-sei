@@ -1130,19 +1130,16 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   overscroll-behavior: contain;
   padding: 0 20px 20px;
 
-  /* Quando a lista é longa demais para caber, a borda inferior apaga o próprio
-     conteúdo em vez de fatiá-lo: uma linha cortada ao meio parece defeito, uma
-     linha que some parece continuação. A camada `local` acompanha a rolagem e
-     desfaz o esmaecimento ao chegar ao fim, sem JavaScript. */
-  mask-image:
-    linear-gradient(to top, transparent 0, #000 26px),
-    linear-gradient(#000, #000);
-  mask-size: 100% 100%, 100% calc(100% - 26px);
-  mask-position: bottom, top;
-  mask-repeat: no-repeat;
-  mask-attachment: scroll, local;
-  mask-composite: add;
-  -webkit-mask-composite: source-over;
+  /* Sinal de que a lista continua abaixo, e que some sozinho ao chegar ao fim.
+     São duas camadas: a `local` rola junto com o conteúdo e, no fim da lista,
+     cobre a `scroll`, que fica parada na borda. É `background` e não `mask`
+     porque só background-attachment aceita `local` — mask-attachment não existe
+     em CSS, e a versão anterior desta regra era descartada pelo navegador. */
+  background:
+    linear-gradient(to top, var(--surface-raised), rgb(255 255 255 / 0%))
+      bottom / 100% 24px no-repeat local,
+    linear-gradient(to top, rgb(17 39 32 / 26%), rgb(17 39 32 / 0%))
+      bottom / 100% 18px no-repeat scroll;
 }
 
 /* A regra global de table impõe min-width: 720px, para a tabela larga do
@@ -1155,6 +1152,9 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   border: none;
   border-radius: 0;
   border-collapse: collapse;
+  /* A regra global de table pinta fundo opaco, e ele cobria a sombra de
+     rolagem do contêiner — que existe justamente para aparecer atrás da lista. */
+  background: transparent;
   font-size: var(--text-sm);
 }
 
