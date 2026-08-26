@@ -655,6 +655,8 @@ test('acervo mantém o total vermelho desde Há 3 meses, inclusive quando zerado
   assert.equal(linhas[1].children[2].classList.contains('acervo-detalhe'), true,
     'o alerta também deve preservar o hover do futuro detalhamento');
   assert.match(linhas[1].children[2]['aria-label'], /Alerta: 2 processos/);
+  assert.doesNotMatch(linhas[1].children[2]['aria-label'], /ver os processos/,
+    'o alerta rotula a célula; a ação rotula o botão — juntos viram uma frase só');
   assert.equal(linhas[2].children[2].classList.contains('acervo-alerta'), true,
     'faixa crítica zerada deve permanecer vermelha');
   assert.equal(linhas[2].children[2].classList.contains('acervo-detalhe'), false,
@@ -867,8 +869,15 @@ const celulaDe = (page, linha, coluna) =>
 
 test('bloco com número abre o card; bloco zerado não', async () => {
   const page = await acervoComDetalhe();
-  assert.equal(celulaDe(page, 0, 1).dataset.rotulo, 'Até 15 dias · CJ1');
-  assert.equal(celulaDe(page, 0, 1).getAttribute('role'), 'button');
+  const bloco = celulaDe(page, 0, 1);
+  assert.equal(bloco.dataset.rotulo, 'Até 15 dias · CJ1');
+  // A célula continua célula: quem vira botão é um filho dela. Com role="button"
+  // no <td>, a linha deixa de ter células e o leitor de tela perde a contagem.
+  assert.equal(bloco.getAttribute('role'), null, 'o <td> não pode trocar de papel');
+  assert.equal(bloco.children.length, 1);
+  assert.equal(bloco.children[0].tagName, 'BUTTON');
+  assert.equal(bloco.children[0].textContent, '2', 'o botão carrega o número da célula');
+  assert.equal(bloco.children[0]['aria-label'], 'Até 15 dias · CJ1: ver os processos');
   assert.equal(celulaDe(page, 0, 2).dataset.rotulo, undefined,
     'travessão não representa processo nenhum para listar');
 });
@@ -904,6 +913,11 @@ test('o card lista os processos e habilita a exportação', async () => {
     ['202600029002222', 'CJ1', '14/08/2026', '10']
   ]);
   assert.equal(page.document.getElementById('btnExportarDetalhe').disabled, false);
+
+  const cadeira = linhas[0].children[1];
+  assert.equal(cadeira.title, 'Paulo Otoni Ribeiro');
+  assert.equal(cadeira['aria-label'], 'CJ1 — Paulo Otoni Ribeiro',
+    'só no title, o nome do conselheiro existe para o mouse e não para o leitor de tela');
 });
 
 test('o card fecha e a falha aparece dentro dele', async () => {
@@ -939,6 +953,57 @@ test('o Excel do card é um .xlsx válido com os processos', async () => {
   assert.match(texto, /xl\/worksheets\/sheet1\.xml/);
   assert.match(texto, /202600029001111/, 'o número do processo precisa estar na planilha');
   assert.match(texto, /29\/06\/2026/, 'a data vai formatada, não como serial');
+});
+
+test('resposta atrasada não sobrescreve o card aberto depois dela', async () => {
+  const pendentes = [];
+  const page = await acervoComDetalhe(() => new Promise(resolve => pendentes.push(resolve)));
+
+  const primeira = page.abrirDetalhe(celulaDe(page, 0, 1));  // Até 15 dias · CJ1
+  const segunda = page.abrirDetalhe(celulaDe(page, 0, 3));   // Até 15 dias · todas as cadeiras
+
+  pendentes[1]([]);                 // o segundo bloco responde primeiro
+  await segunda;
+  pendentes[0](processosFalsos);    // e o primeiro chega atrasado, depois dele
+  await primeira;
+
+  assert.match(page.document.getElementById('detalheResumo').textContent, /^0 processos/,
+    'a lista tem de ser a do bloco que está no título, não a da resposta que chegou por último');
+  assert.equal(page.document.getElementById('btnExportarDetalhe').disabled, true,
+    'exportar aqui geraria um arquivo de um recorte que a pessoa não está vendo');
+});
+
+test('falha ao exportar o card avisa dentro do próprio card', async () => {
+  const page = await acervoComDetalhe();
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  const criar = page.document.createElement.bind(page.document);
+  page.document.createElement = tag => {
+    if (tag === 'a') throw new Error('download bloqueado');
+    return criar(tag);
+  };
+  page.exportarDetalhe();
+
+  const erro = page.document.getElementById('detalheErro');
+  assert.equal(erro.hidden, false,
+    'falha silenciosa é indistinguível de um download que o navegador engoliu');
+  assert.match(erro.children[0].textContent, /Não foi possível gerar o arquivo.*download bloqueado/);
+});
+
+test('zero dia parado sai como 0 no Excel, não como o travessão do painel', async () => {
+  const page = await acervoComDetalhe();
+  const blob = page.criarExcelDetalhe([{ num_processo: '202600029003333', relator: 'CJ1',
+    conselheiro: 'Paulo Otoni Ribeiro', data_distribuicao: '2026-08-24', dias: 0 }], 'Até 15 dias · CJ1');
+  const xml = new TextDecoder().decode(new Uint8Array(await blob.arrayBuffer()));
+
+  // No painel o travessão significa "nenhum processo". Aqui o zero é um
+  // processo distribuído hoje: reusar aquele formato apagaria a linha.
+  const estilo = xml.match(/<c r="E5" s="(\d+)"><v>0<\/v><\/c>/)?.[1];
+  assert.ok(estilo, 'a célula de dias parados precisa existir na linha do processo');
+  const formatos = [...xml.match(/<cellXfs count="\d+">(.*?)<\/cellXfs>/)[1]
+    .matchAll(/<xf numFmtId="(\d+)"/g)].map(m => m[1]);
+  assert.equal(formatos[Number(estilo)], '3',
+    'o formato 164 desenha zero como travessão; dias parados precisa do #,##0');
 });
 
 test('o card abre em estado de loading antes da resposta da API', async () => {

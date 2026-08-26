@@ -866,12 +866,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   gap: 8px;
 }
 
-.acervo-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .export-menu { position: relative; }
 .export-menu-nav { flex: 0 0 auto; }
 
@@ -1050,15 +1044,42 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   text-align: center;
 }
 
+/* Bloco com número abre a lista daquele recorte. O cursor e o realce dizem que
+   é clicável. O alvo é um <button> dentro do <td>, porque a célula precisa
+   continuar sendo célula para o leitor de tela. */
 .acervo-table td.acervo-detalhe {
+  position: relative;
   transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
   cursor: pointer;
 }
 
-/* Bloco com número abre a lista daquele recorte. O cursor e o realce dizem que
-   é clicável; o foco visível existe porque a célula é alcançável por teclado. */
 .acervo-table td.acervo-detalhe:hover { box-shadow: inset 0 0 0 2px var(--accent); }
-.acervo-table td.acervo-detalhe:focus-visible {
+
+.acervo-celula-btn {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: center;
+}
+
+/* O ::after estende o clique ao retângulo inteiro da célula sem tirar o botão
+   do fluxo. Zerar o padding do <td> em vez disso obrigaria a repetir esse
+   padding no botão — e ele muda em dois breakpoints e no print, onde ainda
+   chega com !important. É também esse retângulo que recebe o anel de foco, para
+   o teclado enxergar a célula toda, como antes. */
+.acervo-celula-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.acervo-celula-btn:focus-visible { outline: none; }
+.acervo-celula-btn:focus-visible::after {
   outline: 3px solid var(--accent);
   outline-offset: -3px;
 }
@@ -1722,10 +1743,14 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .dashboard-page .green-bar .nav-action,
   .dashboard-page .green-bar .export-menu-nav { min-width: 0; width: 100%; }
   .dashboard-page .green-bar .export-menu-nav .nav-action { width: 100%; }
+  /* Centralizado numa célula de meia largura, o min-width de 240px do menu
+     estourava a viewport e o overflow-x: hidden do body cortava a borda. */
   .dashboard-page .export-options,
   .dashboard-page .export-feedback {
     right: auto;
     left: 50%;
+    min-width: 0;
+    max-width: calc(100vw - 24px);
     transform: translateX(-50%);
   }
 }
@@ -1767,8 +1792,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .green-bar,
   .page-footer,
   main > .card,
-  .acervo-header-actions,
-  .acervo-btn-action,
   .status-dot,
   .nav-icon,
   .empty-state-icon,
