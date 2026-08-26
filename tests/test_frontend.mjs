@@ -541,7 +541,6 @@ function acervoPage(api, { imprimir = () => {} } = {}) {
   detalheErro.hidden = true;
   detalheErro.appendChild(document.createElement('p'));
   document.add('btnFecharDetalhe', 'button');
-  document.add('btnFecharDetalheRodape', 'button');
   document.add('btnExportarDetalhe', 'button');
   document.getElementById('acervoPanel').hidden = true;
   document.getElementById('btnAtualizar').hidden = true;  // como no acervo.html
