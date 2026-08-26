@@ -30,7 +30,6 @@ const detalheResumo = document.getElementById('detalheResumo');
 const detalheTabela = document.getElementById('detalheTable');
 const detalheErro = document.getElementById('detalheErro');
 const btnFecharDetalhe = document.getElementById('btnFecharDetalhe');
-const btnFecharDetalheRodape = document.getElementById('btnFecharDetalheRodape');
 const btnExportarDetalhe = document.getElementById('btnExportarDetalhe');
 let linhasAtuais = null;
 let detalheAtual = null;
@@ -45,7 +44,6 @@ btnTentarNovamente.addEventListener('click', () => carregarAcervo());
 acervoTabela.addEventListener('click', abrirDetalheDaCelula);
 acervoTabela.addEventListener('keydown', abrirDetalheDoTeclado);
 btnFecharDetalhe.addEventListener('click', () => detalheDialog.close());
-btnFecharDetalheRodape.addEventListener('click', () => detalheDialog.close());
 btnExportarDetalhe.addEventListener('click', exportarDetalhe);
 // Clique no ::backdrop chega como clique no próprio dialog: fechar ali é o que
 // a pessoa espera de um card modal, e o <dialog> não faz isso sozinho.

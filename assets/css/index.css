@@ -1065,20 +1065,27 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 /* ── Card de detalhe ────────────────────────────────────────────────────────
    <dialog> nativo: o modo modal já traz Escape, foco preso e devolução do foco
-   ao fechar. Aqui fica só a aparência. */
+   ao fechar. Aqui fica só a aparência.
+
+   A altura é uma coluna de três faixas: cabeçalho fixo, lista rolável, e nada
+   embaixo. As duas ações moram no cabeçalho — um rodapé só para repetir o
+   fechar duplicaria o X e comeria altura da lista, que é o conteúdo. */
 .detalhe-dialog {
   width: min(46rem, calc(100vw - 2rem));
-  max-height: min(40rem, calc(100vh - 4rem));
+  /* Usa a altura que a janela oferece. O teto de 40rem cortava a lista numa
+     tela que tinha folga de sobra — a maior célula real tem 22 processos e
+     cabe inteira em qualquer monitor. */
+  max-height: min(52rem, calc(100vh - 4rem));
   padding: 0;
   border: none;
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: var(--surface-raised);
   color: var(--text);
   box-shadow: 0 24px 60px rgb(0 0 0 / 28%);
   overflow: hidden;
 }
 
-.detalhe-dialog[open] { display: flex; flex-direction: column; }
+.detalhe-dialog[open] { display: flex; flex-direction: column; min-height: 0; }
 
 .detalhe-dialog::backdrop {
   background: rgb(17 39 32 / 45%);
@@ -1088,75 +1095,145 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 .detalhe-header {
   display: flex;
-  align-items: flex-start;
+  flex: none;
+  align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 1.25rem 1.5rem;
+  gap: 16px;
+  padding: 18px 20px;
   background: var(--accent);
   color: var(--on-accent);
 }
 
-.detalhe-header h2 { margin: 0; font-size: 1.05rem; }
-.detalhe-resumo { margin: 0.35rem 0 0; font-size: 0.85rem; opacity: 0.9; }
+.detalhe-identidade { min-width: 0; }
+.detalhe-header h2 { margin: 0; font-size: var(--text-lg); line-height: 1.25; }
 
-.detalhe-fechar {
-  flex: none;
-  width: 2rem;
-  height: 2rem;
-  padding: 0;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: 8px;
-  background: rgb(255 255 255 / 12%);
-  color: inherit;
-  cursor: pointer;
+.detalhe-resumo {
+  margin: 4px 0 0;
+  font-size: var(--text-sm);
+  /* Tingido do próprio verde, não cinza: secundário sobre superfície colorida. */
+  color: var(--on-accent-muted);
 }
 
-.detalhe-fechar:hover { background: rgb(255 255 255 / 22%); }
-.detalhe-fechar svg { width: 1.1rem; height: 1.1rem; }
+.detalhe-acoes { display: flex; flex: none; gap: 8px; }
 
-.detalhe-corpo { flex: 1; min-height: 0; overflow: auto; padding: 0 1.5rem; }
+/* Só o ícone: o quadrado precisa do mesmo alvo de toque do botão com rótulo. */
+.detalhe-fechar { padding-inline: 9px; }
 
-.detalhe-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+@media (pointer: coarse) {
+  .detalhe-fechar { padding-inline: 14px; }
+}
+
+.detalhe-corpo {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 20px 20px;
+
+  /* Quando a lista é longa demais para caber, a borda inferior apaga o próprio
+     conteúdo em vez de fatiá-lo: uma linha cortada ao meio parece defeito, uma
+     linha que some parece continuação. A camada `local` acompanha a rolagem e
+     desfaz o esmaecimento ao chegar ao fim, sem JavaScript. */
+  mask-image:
+    linear-gradient(to top, transparent 0, #000 26px),
+    linear-gradient(#000, #000);
+  mask-size: 100% 100%, 100% calc(100% - 26px);
+  mask-position: bottom, top;
+  mask-repeat: no-repeat;
+  mask-attachment: scroll, local;
+  mask-composite: add;
+  -webkit-mask-composite: source-over;
+}
+
+/* A regra global de table impõe min-width: 720px, para a tabela larga do
+   dashboard. Dentro de um card de 46rem isso sobra pela direita e obriga a
+   arrastar de lado para ler quatro colunas curtas. */
+.detalhe-table {
+  width: 100%;
+  min-width: 0;
+  margin-top: 0;
+  border: none;
+  border-radius: 0;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
 
 .detalhe-table th,
 .detalhe-table td {
-  padding: 0.6rem 0.75rem;
+  padding: 10px 12px;
   text-align: left;
-  border-bottom: 1px solid #e2ebe7;
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
   white-space: nowrap;
 }
 
+/* Grudado no topo: rolando 22 processos, saber de que coluna é o número
+   importa mais do que os 34px que a linha ocupa. */
 .detalhe-table thead th {
   position: sticky;
   top: 0;
+  z-index: 1;
   background: var(--surface-raised);
-  font-size: 0.78rem;
+  padding-block: 14px 10px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted-strong);
 }
 
-.detalhe-table tbody th { font-variant-numeric: tabular-nums; font-weight: 600; }
-.detalhe-table tbody td:last-child { font-variant-numeric: tabular-nums; text-align: right; }
+.detalhe-table tbody tr:last-child th,
+.detalhe-table tbody tr:last-child td { border-bottom: none; }
 
-.detalhe-rodape {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.6rem;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid #e2ebe7;
-  background: var(--bg);
+.detalhe-table tbody th {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
-.detalhe-dialog .load-error { margin: 1rem 1.5rem 0; }
+/* Coluna numérica: o rótulo acompanha os números, senão o cabeçalho aponta
+   para um lado e o dado para o outro. */
+.detalhe-table th:last-child,
+.detalhe-table td:last-child { text-align: right; }
+
+.detalhe-table tbody td:last-child { font-variant-numeric: tabular-nums; }
+
+.detalhe-dialog .load-error { margin: 16px 20px 0; }
 
 @media (max-width: 480px) {
-  .detalhe-header { padding: 1rem; }
-  .detalhe-corpo { padding: 0 1rem; }
-  .detalhe-rodape { padding: 0.85rem 1rem; flex-direction: column-reverse; }
-  .detalhe-rodape button { width: 100%; justify-content: center; }
+  .detalhe-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  /* Empilhado, Exportar toma a largura que sobra e o X mantém o tamanho de um
+     ícone: esticar os dois faria o fechar parecer uma ação de mesmo peso. */
+  .detalhe-acoes { width: 100%; }
+  .detalhe-acoes #btnExportarDetalhe { flex: 1; }
+
+  .detalhe-corpo { padding: 0 12px 12px; }
+
+  /* Quatro colunas com rótulo por extenso não cabem em 375px, e a tabela
+     voltava a exigir arrasto lateral. Os títulos quebram em duas linhas — custa
+     uma linha de altura e devolve a largura inteira ao conteúdo. */
+  /* 4px de respiro lateral por célula: com oito bordas de célula, é o que
+     devolve os últimos pixels e faz as quatro colunas caberem sem arrasto. */
+  .detalhe-table th,
+  .detalhe-table td { padding: 10px 4px; }
+  .detalhe-table th:first-child,
+  .detalhe-table td:first-child { padding-left: 0; }
+  .detalhe-table th:last-child,
+  .detalhe-table td:last-child { padding-right: 0; }
+
+  .detalhe-table thead th {
+    white-space: normal;
+    line-height: 1.25;
+    letter-spacing: 0.02em;
+  }
+
+  .detalhe-table tbody th,
+  .detalhe-table tbody td { font-size: var(--text-xs); }
+}
 }
 
 .acervo-table tbody td.acervo-zero {
@@ -1605,9 +1682,12 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     grid-template-columns: repeat(2, minmax(0, 1fr));
     padding-block: 6px;
   }
-  .dashboard-page .nav-action,
-  .dashboard-page .export-menu-nav { min-width: 0; width: 100%; }
-  .dashboard-page .export-menu-nav .nav-action { width: 100%; }
+  /* Escopado à barra: .dashboard-page está no body, e sem o .green-bar esta
+     regra esticava também os .nav-action do card de detalhe, deixando o X do
+     tamanho do botão de exportar. */
+  .dashboard-page .green-bar .nav-action,
+  .dashboard-page .green-bar .export-menu-nav { min-width: 0; width: 100%; }
+  .dashboard-page .green-bar .export-menu-nav .nav-action { width: 100%; }
   .dashboard-page .export-options,
   .dashboard-page .export-feedback {
     right: auto;
