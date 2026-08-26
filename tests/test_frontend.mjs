@@ -143,6 +143,7 @@ function supabaseApp(fetch) {
 // O de-para das cadeiras mora no supabase.js, que toda página carrega antes do
 // seu próprio script. As telas o enxergam como global; aqui ele é injetado, e
 // vem do arquivo de verdade para que uma divergência apareça como falha.
+const { CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento } = supabaseApp(async () => {});
 
 function indexPage({ api = async () => null, aviso = () => {},
   supabaseUrl = 'url', supabaseKey = 'key', token = 'token' } = {}) {
@@ -535,6 +536,9 @@ function acervoPage(api, { imprimir = () => {} } = {}) {
   dialog.close = () => { dialog.open = false; };
   document.add('detalheTitulo', 'h2');
   document.add('detalheResumo', 'p');
+  const detalheLoading = document.add('detalheLoading', 'div');
+  detalheLoading.hidden = true;
+  const detalheCorpo = document.add('detalheCorpo', 'div');
   document.add('detalheTable', 'table');
   const detalheErro = document.add('detalheErro', 'div');
   detalheErro.hidden = true;
@@ -546,6 +550,7 @@ function acervoPage(api, { imprimir = () => {} } = {}) {
 
   const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento',
     `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, criarExcelDetalhe, dadosTabulares, abrirDetalhe, exportarDetalhe };`)(
+    document, { print: imprimir }, api, criarIndicadorCarregamento);
   return { document, loginOnlyCard, dialog, ...app };
 }
 
@@ -934,4 +939,28 @@ test('o Excel do card é um .xlsx válido com os processos', async () => {
   assert.match(texto, /xl\/worksheets\/sheet1\.xml/);
   assert.match(texto, /202600029001111/, 'o número do processo precisa estar na planilha');
   assert.match(texto, /29\/06\/2026/, 'a data vai formatada, não como serial');
+});
+
+test('o card abre em estado de loading antes da resposta da API', async () => {
+  let resolver;
+  const promessa = new Promise(resolve => { resolver = resolve; });
+  const page = await acervoComDetalhe(() => promessa);
+
+  const abertura = page.abrirDetalhe(celulaDe(page, 0, 1));
+  assert.equal(page.dialog.open, true, 'o modal precisa abrir imediatamente');
+  assert.equal(page.document.getElementById('detalheLoading').hidden, false,
+    'o indicador de loading do card deve estar visível');
+  assert.equal(page.document.getElementById('detalheCorpo').hidden, true,
+    'a tabela do card fica oculta durante o carregamento');
+  assert.equal(page.document.getElementById('detalheLoading').children.length, 1);
+  assert.equal(page.document.getElementById('detalheLoading').children[0].children[1].textContent,
+    'Carregando processos…');
+
+  resolver(processosFalsos);
+  await abertura;
+
+  assert.equal(page.document.getElementById('detalheLoading').hidden, true,
+    'o indicador de loading sai quando os dados chegam');
+  assert.equal(page.document.getElementById('detalheCorpo').hidden, false,
+    'o corpo com a tabela entra após o carregamento');
 });
