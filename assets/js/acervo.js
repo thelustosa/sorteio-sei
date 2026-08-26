@@ -35,6 +35,11 @@ const btnFecharDetalhe = document.getElementById('btnFecharDetalhe');
 const btnExportarDetalhe = document.getElementById('btnExportarDetalhe');
 let linhasAtuais = null;
 let detalheAtual = null;
+// Cada abertura invalida a anterior. Sem isso, fechar no Escape durante uma
+// busca lenta e clicar noutro bloco deixava a resposta atrasada chegar por
+// último e sobrescrever o card: título de um recorte, lista e exportação de
+// outro — sem nada na tela indicando a troca.
+let detalhePedido = 0;
 
 btnAtualizar.addEventListener('click', () => carregarAcervo());
 btnExportar.addEventListener('click', alternarMenuExportacao);
@@ -44,7 +49,6 @@ document.addEventListener('click', fecharMenuAoClicarFora);
 document.addEventListener('keydown', fecharMenuComEscape);
 btnTentarNovamente.addEventListener('click', () => carregarAcervo());
 acervoTabela.addEventListener('click', abrirDetalheDaCelula);
-acervoTabela.addEventListener('keydown', abrirDetalheDoTeclado);
 btnFecharDetalhe.addEventListener('click', () => detalheDialog.close());
 btnExportarDetalhe.addEventListener('click', exportarDetalhe);
 // Clique no ::backdrop chega como clique no próprio dialog: fechar ali é o que
@@ -112,7 +116,10 @@ function navegarMenuExportacao(evento) {
   if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(evento.key)) return;
   evento.preventDefault();
   const itens = [...exportOptions.querySelectorAll('[role="menuitem"]')];
-  const atual = itens.indexOf(document.activeElement);
+  // Nada focado ainda: ArrowDown entra pelo primeiro item e ArrowUp pelo
+  // último. Tratar os dois como -1 fazia o ArrowUp cair no penúltimo.
+  const foco = itens.indexOf(document.activeElement);
+  const atual = foco >= 0 ? foco : (evento.key === 'ArrowUp' ? 0 : -1);
   const destino = evento.key === 'Home' ? 0
     : evento.key === 'End' ? itens.length - 1
       : (atual + (evento.key === 'ArrowDown' ? 1 : -1) + itens.length) % itens.length;
@@ -326,7 +333,7 @@ function criarZip(arquivos) {
 const EXCEL_TIPOS = '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>';
 const EXCEL_RELACOES = '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
 const EXCEL_WORKBOOK_RELS = '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
-const EXCEL_ESTILOS = '<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0;-#,##0;&quot;—&quot;"/></numFmts><fonts count="11"><font><sz val="11"/><color rgb="FF112720"/><name val="Montserrat"/></font><font><b/><sz val="18"/><color rgb="FFFFFFFF"/><name val="Montserrat"/></font><font><sz val="10"/><color rgb="FFE6F2EF"/><name val="Montserrat"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Montserrat"/></font><font><b/><sz val="9"/><color rgb="FFFFFFFF"/><name val="Montserrat"/></font><font><b/><sz val="9"/><color rgb="FF112720"/><name val="Montserrat"/></font><font><b/><sz val="12"/><color rgb="FF112720"/><name val="Montserrat"/></font><font><b/><sz val="12"/><color rgb="FF00534B"/><name val="Montserrat"/></font><font><b/><sz val="12"/><color rgb="FF991B1B"/><name val="Montserrat"/></font><font><sz val="9"/><color rgb="FF718096"/><name val="Montserrat"/></font><font><b/><sz val="13"/><color rgb="FF00332D"/><name val="Montserrat"/></font></fonts><fills count="10"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00534B"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00453E"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE0F0E8"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFEE2E2"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE9F3EF"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFBFE3D1"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF8FBFA"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="4"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD7E2DE"/></left><right style="thin"><color rgb="FFD7E2DE"/></right><top style="thin"><color rgb="FFD7E2DE"/></top><bottom style="thin"><color rgb="FFD7E2DE"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF00534B"/></left><right style="thin"><color rgb="FF00534B"/></right><top style="thin"><color rgb="FF00534B"/></top><bottom style="thin"><color rgb="FF00534B"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF2F7668"/></left><right style="thin"><color rgb="FF2F7668"/></right><top style="thin"><color rgb="FF2F7668"/></top><bottom style="thin"><color rgb="FF2F7668"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="14"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="3" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf><xf numFmtId="0" fontId="4" fillId="3" borderId="3" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="5" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="164" fontId="6" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="164" fontId="7" fillId="5" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="164" fontId="8" fillId="6" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="5" fillId="7" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="164" fontId="7" fillId="7" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="164" fontId="10" fillId="8" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="9" fillId="9" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf><xf numFmtId="0" fontId="4" fillId="3" borderId="3" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles><dxfs count="0"/><tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/></styleSheet>';
+const EXCEL_ESTILOS = '<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0;-#,##0;&quot;—&quot;"/></numFmts><fonts count="11"><font><sz val="11"/><color rgb="FF112720"/><name val="Montserrat"/></font><font><b/><sz val="18"/><color rgb="FFFFFFFF"/><name val="Montserrat"/></font><font><sz val="10"/><color rgb="FFE6F2EF"/><name val="Montserrat"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Montserrat"/></font><font><b/><sz val="9"/><color rgb="FFFFFFFF"/><name val="Montserrat"/></font><font><b/><sz val="9"/><color rgb="FF112720"/><name val="Montserrat"/></font><font><b/><sz val="12"/><color rgb="FF112720"/><name val="Montserrat"/></font><font><b/><sz val="12"/><color rgb="FF00534B"/><name val="Montserrat"/></font><font><b/><sz val="12"/><color rgb="FF991B1B"/><name val="Montserrat"/></font><font><sz val="9"/><color rgb="FF718096"/><name val="Montserrat"/></font><font><b/><sz val="13"/><color rgb="FF00332D"/><name val="Montserrat"/></font></fonts><fills count="10"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00534B"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00453E"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE0F0E8"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFEE2E2"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE9F3EF"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFBFE3D1"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF8FBFA"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="4"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD7E2DE"/></left><right style="thin"><color rgb="FFD7E2DE"/></right><top style="thin"><color rgb="FFD7E2DE"/></top><bottom style="thin"><color rgb="FFD7E2DE"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF00534B"/></left><right style="thin"><color rgb="FF00534B"/></right><top style="thin"><color rgb="FF00534B"/></top><bottom style="thin"><color rgb="FF00534B"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF2F7668"/></left><right style="thin"><color rgb="FF2F7668"/></right><top style="thin"><color rgb="FF2F7668"/></top><bottom style="thin"><color rgb="FF2F7668"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="15"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="3" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf><xf numFmtId="0" fontId="4" fillId="3" borderId="3" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="5" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="164" fontId="6" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="164" fontId="7" fillId="5" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="164" fontId="8" fillId="6" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="5" fillId="7" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="164" fontId="7" fillId="7" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="164" fontId="10" fillId="8" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="9" fillId="9" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf><xf numFmtId="0" fontId="4" fillId="3" borderId="3" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="3" fontId="6" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles><dxfs count="0"/><tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/></styleSheet>';
 
 // Monta o .xlsx a partir de uma folha já pronta. O que muda entre as duas
 // exportações é só o XML da folha e o nome da aba.
@@ -369,7 +376,10 @@ function planilhaDetalheXml(processos, titulo) {
       + texto(1, linha, p.relator, 5)
       + texto(2, linha, p.conselheiro, 5)
       + texto(3, linha, dataBR(p.data_distribuicao), 5)
-      + numero(4, linha, Number(p.dias) || 0, 6)
+      // Estilo 14, não 6: o formato do painel desenha zero como travessão, que
+      // ali significa "nenhum processo". Aqui zero é o processo distribuído
+      // hoje — a tela mostra 0 e o arquivo tem que mostrar o mesmo.
+      + numero(4, linha, Number(p.dias) || 0, 14)
       + '</row>');
   });
 
@@ -407,13 +417,21 @@ function tornarClicavel(celulaEl, { ordem = '', relator = '', rotulo }) {
   celulaEl.dataset.ordem = ordem;
   celulaEl.dataset.relator = relator;
   celulaEl.dataset.rotulo = rotulo;
-  celulaEl.tabIndex = 0;
-  celulaEl.setAttribute('role', 'button');
-  // A célula de faixa crítica já anuncia o alerta. Substituir esse rótulo pelo
-  // da ação esconderia a urgência; os dois somam.
-  const alerta = celulaEl.getAttribute('aria-label');
-  celulaEl.setAttribute('aria-label',
-    alerta ? `${alerta}. ${rotulo}: ver os processos` : `${rotulo}: ver os processos`);
+
+  // Quem recebe o clique é um <button> dentro da célula, não a célula. Pôr
+  // role="button" no <td> troca o papel de "cell" pelo de botão, e um <tr>
+  // cujos filhos não são células deixa de ser tabela para o leitor de tela —
+  // some justamente a contagem que o painel existe para dizer. O <button>
+  // nativo ainda traz foco, Enter e Espaço sem handler nenhum.
+  const botao = document.createElement('button');
+  botao.type = 'button';
+  botao.className = 'acervo-celula-btn';
+  botao.textContent = celulaEl.textContent;
+  // O alerta da faixa crítica continua sendo rótulo da CÉLULA: separado assim,
+  // o leitor anuncia a urgência ao navegar a tabela e a ação ao chegar no
+  // botão, em vez de repetir as duas coisas numa frase só.
+  botao.setAttribute('aria-label', `${rotulo}: ver os processos`);
+  celulaEl.replaceChildren(botao);
   return celulaEl;
 }
 
@@ -551,17 +569,9 @@ function abrirDetalheDaCelula(evento) {
   if (celulaEl && acervoTabela.contains(celulaEl)) abrirDetalhe(celulaEl);
 }
 
-function abrirDetalheDoTeclado(evento) {
-  if (evento.key !== 'Enter' && evento.key !== ' ') return;
-  const celulaEl = evento.target.closest('[data-rotulo]');
-  if (!celulaEl || !acervoTabela.contains(celulaEl)) return;
-  // Espaço rolaria a página sob o card que está prestes a abrir.
-  evento.preventDefault();
-  abrirDetalhe(celulaEl);
-}
-
 async function abrirDetalhe(celulaEl) {
   const { ordem, relator, rotulo } = celulaEl.dataset;
+  const pedido = ++detalhePedido;
   detalheAtual = null;
   detalheTitulo.textContent = rotulo;
   detalheResumo.textContent = 'Carregando…';
@@ -582,6 +592,7 @@ async function abrirDetalhe(celulaEl) {
       body: JSON.stringify({ p_ordem: ordem ? Number(ordem) : null, p_relator: relator || null })
     });
   } catch (err) {
+    if (pedido !== detalhePedido) return;
     // Sessão expirada já recolocou a tela de login atrás do card; deixá-lo
     // aberto por cima esconderia justamente o formulário.
     if (err.status === 401) {
@@ -597,6 +608,7 @@ async function abrirDetalhe(celulaEl) {
     return;
   }
 
+  if (pedido !== detalhePedido) return;
   detalheLoading.hidden = true;
   detalheLoading.replaceChildren();
   detalheCorpo.hidden = false;
@@ -620,7 +632,12 @@ function desenharDetalhe(processos) {
     const tr = document.createElement('tr');
     tr.append(celula(p.num_processo, 'th', 'linha'));
     const cadeira = celula(p.relator);
-    if (p.conselheiro && p.conselheiro !== p.relator) cadeira.title = p.conselheiro;
+    // Mesmo par title/aria-label do painel: sem o rótulo, o leitor de tela
+    // soletra "CJ3" em cada linha e o nome do conselheiro só existe no mouse.
+    if (p.conselheiro && p.conselheiro !== p.relator) {
+      cadeira.title = p.conselheiro;
+      cadeira.setAttribute('aria-label', `${p.relator} — ${p.conselheiro}`);
+    }
     tr.append(cadeira);
     tr.append(celula(dataBR(p.data_distribuicao)));
     tr.append(celula(p.dias));
@@ -633,6 +650,14 @@ function desenharDetalhe(processos) {
 function exportarDetalhe() {
   if (!detalheAtual || !detalheAtual.processos.length) return;
   const nome = detalheAtual.rotulo.replace(/[^\wÀ-ÿ]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
-  baixarArquivo(criarExcelDetalhe(detalheAtual.processos, detalheAtual.rotulo),
-    `acervo-cj-${nome}-${dataArquivo()}.xlsx`);
+  // Reaproveita o alerta que o card já tem: sem aviso, uma falha ao montar o
+  // arquivo é indistinguível de um download que o navegador engoliu.
+  detalheErro.hidden = true;
+  try {
+    baixarArquivo(criarExcelDetalhe(detalheAtual.processos, detalheAtual.rotulo),
+      `acervo-cj-${nome}-${dataArquivo()}.xlsx`);
+  } catch (erro) {
+    detalheErro.querySelector('p').textContent = `Não foi possível gerar o arquivo (${erro.message}).`;
+    detalheErro.hidden = false;
+  }
 }

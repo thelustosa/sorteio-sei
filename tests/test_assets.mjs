@@ -67,5 +67,12 @@ assert.match(alertaImpresso, /print-color-adjust:\s*exact/,
 assert.match(css,
   /@media \(max-width: 480px\)[\s\S]*?\.dashboard-page \.nav-actions\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(2,/,
   'as quatro ações do dashboard precisam formar duas colunas em telas estreitas');
+assert.match(css,
+  /@media \(max-width: 480px\)[\s\S]*?\.dashboard-page \.export-options,[\s\S]*?max-width:\s*calc\(100vw - 24px\)/,
+  'centralizado numa célula de meia largura, o menu de exportação precisa caber na viewport');
+// O clicável do painel é um <button> dentro do <td>; o <td> mantém o padding
+// que muda por breakpoint, então quem estende o alvo ao retângulo é o ::after.
+assert.match(css, /\.acervo-celula-btn::after\s*\{[^}]*position:\s*absolute[^}]*inset:\s*0/,
+  'sem o ::after, só o texto da célula seria clicável');
 
 console.log('assets: minificação, lazy load e versão por hash coerentes ✓');
