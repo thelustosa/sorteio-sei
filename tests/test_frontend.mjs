@@ -136,14 +136,13 @@ function supabaseApp(fetch) {
   const location = { protocol: 'http:' };
   const sessionStorage = { getItem() { return null; }, setItem() {}, removeItem() {} };
   return new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'fetch',
-    `${source('supabase.js')}\nreturn { autenticar, CADEIRAS_CJ, rotularCadeira };`)(
+    `${source('supabase.js')}\nreturn { autenticar, CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento };`)(
     document, window, navigator, location, sessionStorage, fetch);
 }
 
 // O de-para das cadeiras mora no supabase.js, que toda página carrega antes do
 // seu próprio script. As telas o enxergam como global; aqui ele é injetado, e
 // vem do arquivo de verdade para que uma divergência apareça como falha.
-const { CADEIRAS_CJ, rotularCadeira } = supabaseApp(async () => {});
 
 function indexPage({ api = async () => null, aviso = () => {},
   supabaseUrl = 'url', supabaseKey = 'key', token = 'token' } = {}) {
@@ -545,9 +544,8 @@ function acervoPage(api, { imprimir = () => {} } = {}) {
   document.getElementById('acervoPanel').hidden = true;
   document.getElementById('btnAtualizar').hidden = true;  // como no acervo.html
 
-  const app = new Function('document', 'window', 'api',
+  const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento',
     `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, criarExcelDetalhe, dadosTabulares, abrirDetalhe, exportarDetalhe };`)(
-    document, { print: imprimir }, api);
   return { document, loginOnlyCard, dialog, ...app };
 }
 

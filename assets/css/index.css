@@ -1126,20 +1126,26 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 .detalhe-corpo {
   flex: 1;
   min-height: 0;
+  position: relative;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0 20px 20px;
+}
 
-  /* Sinal de que a lista continua abaixo, e que some sozinho ao chegar ao fim.
-     São duas camadas: a `local` rola junto com o conteúdo e, no fim da lista,
-     cobre a `scroll`, que fica parada na borda. É `background` e não `mask`
-     porque só background-attachment aceita `local` — mask-attachment não existe
-     em CSS, e a versão anterior desta regra era descartada pelo navegador. */
-  background:
-    linear-gradient(to top, var(--surface-raised), rgb(255 255 255 / 0%))
-      bottom / 100% 24px no-repeat local,
-    linear-gradient(to top, rgb(17 39 32 / 26%), rgb(17 39 32 / 0%))
-      bottom / 100% 18px no-repeat scroll;
+/* A camada fica acima das linhas em vez de atrás delas, suavizando o recorte
+   da rolagem sem deixar uma faixa clara em uma parte da tabela. */
+.detalhe-corpo::after {
+  content: '';
+  position: sticky;
+  z-index: 2;
+  display: block;
+  height: 22px;
+  margin-top: -22px;
+  bottom: 0;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgb(17 39 32 / 0%), rgb(17 39 32 / 8%));
+  box-shadow: 0 -10px 16px -11px rgb(17 39 32 / 48%);
 }
 
 /* A regra global de table impõe min-width: 720px, para a tabela larga do
@@ -1148,6 +1154,9 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 .detalhe-table {
   width: 100%;
   min-width: 0;
+  /* As quatro informações têm o mesmo peso de leitura no detalhe. Colunas
+     estáveis evitam que o conteúdo mais longo desloque os eixos visuais. */
+  table-layout: fixed;
   margin-top: 0;
   border: none;
   border-radius: 0;
@@ -1161,7 +1170,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 .detalhe-table th,
 .detalhe-table td {
   padding: 10px 12px;
-  text-align: left;
+  text-align: center;
   border: none;
   border-bottom: 1px solid var(--border-subtle);
   white-space: nowrap;
@@ -1189,14 +1198,36 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   font-weight: 600;
 }
 
-/* Coluna numérica: o rótulo acompanha os números, senão o cabeçalho aponta
-   para um lado e o dado para o outro. */
-.detalhe-table th:last-child,
-.detalhe-table td:last-child { text-align: right; }
-
 .detalhe-table tbody td:last-child { font-variant-numeric: tabular-nums; }
 
 .detalhe-dialog .load-error { margin: 16px 20px 0; }
+
+.detalhe-loading {
+  display: grid;
+  min-height: clamp(200px, 32vh, 280px);
+  padding: 36px 20px;
+  place-items: center;
+}
+
+.detalhe-loading .loading-state {
+  width: auto;
+  min-height: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  color: var(--text);
+  font-family: Montserrat, ui-sans-serif, sans-serif;
+  font-size: var(--text-base);
+  letter-spacing: -0.015em;
+  text-align: center;
+}
+
+.detalhe-loading .loading-spinner {
+  width: 40px;
+  height: 40px;
+  border-width: 3px;
+  box-shadow: 0 6px 16px rgba(17, 39, 32, 0.08);
+}
 
 @media (max-width: 480px) {
   .detalhe-header {
@@ -1212,6 +1243,10 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .detalhe-acoes #btnExportarDetalhe { flex: 1; }
 
   .detalhe-corpo { padding: 0 12px 12px; }
+
+  /* Nesta largura o identificador de 15 dígitos precisa decidir a própria
+     coluna; os conteúdos seguem centralizados no eixo que a tabela calcular. */
+  .detalhe-table { table-layout: auto; }
 
   /* Quatro colunas com rótulo por extenso não cabem em 375px, e a tabela
      voltava a exigir arrasto lateral. Os títulos quebram em duas linhas — custa
@@ -1233,7 +1268,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
   .detalhe-table tbody th,
   .detalhe-table tbody td { font-size: var(--text-xs); }
-}
 }
 
 .acervo-table tbody td.acervo-zero {
