@@ -58,6 +58,8 @@ class Node {
   matches(selector) {
     if (selector.startsWith('.')) return this.classList.contains(selector.slice(1));
     if (selector === '[data-login-only]') return Object.hasOwn(this.dataset, 'loginOnly');
+    if (selector === '[data-export-format]') return Object.hasOwn(this.dataset, 'exportFormat');
+    if (selector === '[role="menuitem"]') return this.role === 'menuitem';
     return this.tagName === selector.toUpperCase();
   }
   descendants() { return this.children.flatMap(child => [child, ...child.descendants()]); }
@@ -94,6 +96,7 @@ class Document {
     this.head = new Node(this, 'head');
     this.activeElement = null;
     this.downloads = [];
+    this.events = new Map();
   }
   add(id, tagName = 'div') {
     const element = new Node(this, tagName);
@@ -105,6 +108,10 @@ class Document {
   createElement(tagName) { return new Node(this, tagName); }
   createElementNS(_, tagName) { return this.createElement(tagName); }
   createDocumentFragment() { return new Fragment(this); }
+  addEventListener(type, listener) {
+    if (!this.events.has(type)) this.events.set(type, []);
+    this.events.get(type).push(listener);
+  }
   querySelector(selector) {
     if (selector === '#processTable tbody') return this.getElementById('processTableBody');
     if (selector === '#resultTable tbody') return this.getElementById('resultTableBody');
@@ -492,7 +499,7 @@ test('bootstrap mantém o loading geral até a inicialização assíncrona termi
     'o loading não pode sair enquanto dados e interface ainda estão sendo preparados');
 });
 
-function acervoPage(api) {
+function acervoPage(api, { imprimir = () => {} } = {}) {
   const document = new Document();
   const loginOnlyCard = document.createElement('div');
   loginOnlyCard.dataset.loginOnly = '';
@@ -503,14 +510,28 @@ function acervoPage(api) {
   erroDiv.appendChild(document.createElement('p'));
   document.add('acervoTable', 'table');
   document.add('btnAtualizar', 'button');
-  document.add('btnImprimir', 'button');
+  const exportMenu = document.add('exportMenu', 'div');
+  exportMenu.hidden = true;
+  const btnExportar = document.add('btnExportar', 'button');
+  const rotuloExportar = document.createElement('span');
+  rotuloExportar.className = 'export-label';
+  btnExportar.append(rotuloExportar);
+  const exportOptions = document.add('exportOptions', 'div');
+  exportOptions.hidden = true;
+  for (const formato of ['pdf', 'excel']) {
+    const opcao = document.createElement('button');
+    opcao.setAttribute('role', 'menuitem');
+    opcao.dataset.exportFormat = formato;
+    exportOptions.append(opcao);
+  }
+  document.add('exportFeedback', 'div');
   document.add('btnTentarNovamente', 'button');
   document.getElementById('acervoPanel').hidden = true;
   document.getElementById('btnAtualizar').hidden = true;  // como no acervo.html
 
   const app = new Function('document', 'window', 'api',
-    `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo };`)(
-    document, { print() {} }, api);
+    `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, dadosTabulares };`)(
+    document, { print: imprimir }, api);
   return { document, loginOnlyCard, ...app };
 }
 
@@ -574,6 +595,7 @@ test('acervo só revela o dashboard depois que os dados estão prontos', async (
   assert.equal(page.loginOnlyCard.hidden, true,
     'o loading geral deve sair junto com a entrada do dashboard completo');
   assert.equal(page.document.getElementById('btnAtualizar').hidden, false);
+  assert.equal(page.document.getElementById('exportMenu').hidden, false);
 });
 
 test('acervo não oferece Atualizar antes de o painel existir', async () => {
@@ -671,6 +693,106 @@ test('acervo não inventa hover quando a cadeira não tem de-para', async () => 
   const th = page.document.getElementById('acervoTable').children[0].children[0].children[1];
   assert.equal(th.textContent, 'CJ9');
   assert.equal(th.title, undefined, 'title repetindo o rótulo é ruído');
+});
+
+test('Exportar abre um menu acessível com PDF e Excel', async () => {
+  const page = acervoPage(async () => [
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', processos: 2 }
+  ]);
+  await page.inicializarAcervo();
+
+  const botao = page.document.getElementById('btnExportar');
+  const menu = page.document.getElementById('exportOptions');
+  assert.equal(botao.disabled, false);
+  botao.click();
+  assert.equal(menu.hidden, false);
+  assert.equal(botao['aria-expanded'], 'true');
+  assert.equal(page.document.activeElement, menu.children[0],
+    'o primeiro formato deve receber foco quando o menu abre');
+
+  menu.dispatch('click', { target: menu.children[0] });
+  assert.equal(menu.hidden, true);
+  assert.equal(page.document.activeElement, botao,
+    'o foco deve voltar ao botão depois que uma opção fecha o menu');
+});
+
+test('Excel representa a matriz atual em colunas e gera um XLSX real', async () => {
+  const linhas = [
+    { ordem: 1, faixa: 'Até & 15 dias', relator: 'CJ2', processos: 0 },
+    { ordem: 1, faixa: 'Até & 15 dias', relator: 'CJ1', processos: 3 },
+    { ordem: 4, faixa: 'Há 3 meses', relator: 'CJ2', processos: 4 },
+    { ordem: 4, faixa: 'Há 3 meses', relator: 'CJ1', processos: 1 }
+  ];
+  const page = acervoPage(async () => linhas);
+  await page.inicializarAcervo();
+
+  assert.deepEqual(page.dadosTabulares(linhas), [
+    ['Período', 'CJ1', 'CJ2', 'Total'],
+    ['Até & 15 dias', 3, 0, 3],
+    ['Há 3 meses', 1, 4, 5],
+    ['Total', 4, 4, 8]
+  ]);
+
+  const arquivo = page.criarExcel(linhas);
+  const bytes = new Uint8Array(await arquivo.arrayBuffer());
+  const texto = new TextDecoder().decode(bytes);
+  assert.deepEqual([...bytes.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04], 'XLSX precisa ser um pacote ZIP');
+  assert.equal(arquivo.type, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  assert.match(texto, /xl\/worksheets\/sheet1\.xml/);
+  assert.match(texto, /ATÉ &amp; 15 DIAS/, 'rótulo deve manter o conteúdo e seguir a caixa alta do dashboard');
+  assert.match(texto, /Acervo de processos/);
+  assert.match(texto, /Visão gerencial do tempo de permanência/);
+  assert.match(texto, /showGridLines="0"/);
+  assert.match(texto, /mergeCells count="4"/);
+  assert.ok(texto.indexOf('<autoFilter ') < texto.indexOf('<mergeCells '),
+    'autoFilter deve preceder mergeCells no schema OOXML aceito pelo Excel');
+  assert.match(texto, /orientation="landscape" fitToWidth="1"/);
+  assert.match(texto, /<c r="D5" s="7"><f>SUM\(B5:C5\)<\/f><v>3<\/v><\/c>/,
+    'total da faixa deve ser fórmula com o verde claro do dashboard');
+  assert.match(texto, /<c r="D6" s="8"><f>SUM\(B6:C6\)<\/f><v>5<\/v><\/c>/,
+    'faixa crítica deve preservar o alerta vermelho do dashboard');
+  assert.match(texto, /<c r="B7" s="10"><f>SUM\(B5:B6\)<\/f><v>4<\/v><\/c>/,
+    'rodapé deve ser auditável por fórmula');
+  for (const cor of ['FF00534B', 'FF00453E', 'FFE0F0E8', 'FFFEE2E2', 'FFE9F3EF', 'FFBFE3D1']) {
+    assert.match(texto, new RegExp(cor), `a paleta do dashboard precisa incluir ${cor}`);
+  }
+  assert.match(texto, /name val="Montserrat"/);
+});
+
+test('PDF usa o dashboard atual sem deixar mensagem de sucesso persistente', async () => {
+  let impresso = 0;
+  const page = acervoPage(async () => [
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', processos: 2 }
+  ], { imprimir: () => { impresso++; } });
+  await page.inicializarAcervo();
+
+  const geracao = page.exportar('pdf');
+  assert.equal(page.document.getElementById('btnExportar')['aria-busy'], 'true');
+  assert.equal(page.document.getElementById('btnExportar').querySelector('.export-label').textContent,
+    'Gerando PDF…');
+  assert.equal(page.document.getElementById('exportFeedback').textContent, '');
+  await geracao;
+
+  assert.equal(impresso, 1);
+  assert.equal(page.document.getElementById('exportFeedback').textContent, '');
+  assert.equal(page.document.getElementById('btnExportar').querySelector('.export-label').textContent,
+    'Exportar');
+  assert.equal(page.document.getElementById('btnExportar')['aria-busy'], undefined);
+});
+
+test('falha de exportação mostra uma mensagem clara e libera o botão', async () => {
+  const page = acervoPage(async () => [
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', processos: 2 }
+  ], { imprimir: () => { throw new Error('impressão bloqueada'); } });
+  await page.inicializarAcervo();
+  await page.exportar('pdf');
+
+  const feedback = page.document.getElementById('exportFeedback');
+  assert.match(feedback.textContent, /Não foi possível gerar o arquivo.*impressão bloqueada/);
+  assert.equal(feedback.dataset.state, 'error');
+  assert.equal(feedback.role, 'alert');
+  assert.equal(feedback['aria-live'], 'assertive');
+  assert.equal(page.document.getElementById('btnExportar').disabled, false);
 });
 
 test('sorteio da CJ mostra a cadeira e o conselheiro no hover', () => {
