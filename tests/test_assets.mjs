@@ -16,6 +16,10 @@ const versao = versaoGravada();
 assert.ok(versao, 'ASSET_VERSION não encontrada');
 assert.equal(versao, calcularVersao(),
   'assets mudaram sem versionar: rode node tools/versionar.mjs');
+const versaoMinificada = ler('assets/js/supabase.min.js')
+  .match(/ASSET_VERSION=["']([^"']+)["']/)?.[1];
+assert.equal(versaoMinificada, versao,
+  'supabase.min.js carrega páginas com uma versão antiga dos assets');
 
 for (const pagina of ['index.html', 'julgados.html', 'acervo.html', '404.html']) {
   const html = ler(pagina);
@@ -42,8 +46,12 @@ for (const [recurso, destino] of [
 
 const index = ler('index.html');
 const julgados = ler('julgados.html');
+const acervo = ler('acervo.html');
 assert.doesNotMatch(index, /<script[^>]+index\.min\.js/, 'index.js voltou ao carregamento inicial');
 assert.doesNotMatch(julgados, /<script[^>]+julgados\.min\.js/, 'julgados.js voltou ao carregamento inicial');
+assert.ok(acervo.indexOf('class="nav-actions"') < acervo.indexOf('id="btnExportar"')
+  && acervo.indexOf('id="btnExportar"') < acervo.indexOf('</nav>'),
+  'Exportar precisa permanecer junto das ações da barra superior');
 
 const css = ler('assets/css/index.css');
 // O seletor pode vir sozinho ou em lista, e a var pode trazer fallback — o que
@@ -56,5 +64,8 @@ assert.match(alertaImpresso, /color:\s*var\(--danger-panel-text[^)]*\)\s*!import
   'impressão do alerta deve preservar o texto vinho sobre o vermelho claro');
 assert.match(alertaImpresso, /print-color-adjust:\s*exact/,
   'impressão do alerta deve solicitar preservação exata das cores');
+assert.match(css,
+  /@media \(max-width: 480px\)[\s\S]*?\.dashboard-page \.nav-actions\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(2,/,
+  'as quatro ações do dashboard precisam formar duas colunas em telas estreitas');
 
 console.log('assets: minificação, lazy load e versão por hash coerentes ✓');

@@ -40,6 +40,8 @@ if (process.argv[1]?.endsWith('versionar.mjs')) {
 
   gravar('assets/js/supabase.js',
     ler('assets/js/supabase.js').replace(/ASSET_VERSION = '[^']*'/, `ASSET_VERSION = '${versao}'`));
+  gravar('assets/js/supabase.min.js',
+    ler('assets/js/supabase.min.js').replace(/ASSET_VERSION=["'][^"']*["']/, `ASSET_VERSION="${versao}"`));
 
   for (const pagina of PAGINAS) {
     gravar(pagina, ler(pagina).replace(/(\.min\.(?:css|js))\?v=[^"&]*/g, `$1?v=${versao}`));

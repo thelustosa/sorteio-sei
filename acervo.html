@@ -9,9 +9,9 @@
   <title>Acervo não julgado | Sorteio de Processos SEI</title>
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=489239a3b1" />
-  <script defer src="assets/js/supabase.min.js?v=489239a3b1"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=489239a3b1"></script>
+  <link rel="stylesheet" href="assets/css/index.min.css?v=3c8afed473" />
+  <script defer src="assets/js/supabase.min.js?v=3c8afed473"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=3c8afed473"></script>
 </head>
 
 <body class="dashboard-page" data-page="acervo">
@@ -42,6 +42,29 @@
           </svg>
           <span>Atualizar</span>
         </button>
+        <div id="exportMenu" class="export-menu export-menu-nav" data-sessao hidden>
+          <button id="btnExportar" class="nav-action nav-action-export" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="exportOptions" disabled>
+            <span class="export-spinner" aria-hidden="true"></span>
+            <svg class="nav-icon export-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10 2.5v10"></path><path d="m6.5 9 3.5 3.5L13.5 9"></path><path d="M4 13.5v3h12v-3"></path>
+            </svg>
+            <span class="export-label">Exportar</span>
+            <svg class="export-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m4 6 4 4 4-4"></path>
+            </svg>
+          </button>
+          <div id="exportOptions" class="export-options" role="menu" aria-label="Formatos de exportação" hidden>
+            <button type="button" role="menuitem" data-export-format="pdf">
+              <span>Dashboard em PDF</span>
+              <small>Indicadores e tabela visíveis</small>
+            </button>
+            <button type="button" role="menuitem" data-export-format="excel">
+              <span>Tabela em Excel</span>
+              <small>Dados organizados em colunas</small>
+            </button>
+          </div>
+          <div id="exportFeedback" class="export-feedback" role="status" aria-live="polite" aria-atomic="true"></div>
+        </div>
         <a class="nav-action" href="./index.html">
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M15.5 10h-11"></path><path d="m8.5 6-4 4 4 4"></path>
@@ -91,20 +114,6 @@
                 <path d="M4 7.5h16v12H4z"></path><path d="M3 4.5h18v3H3z"></path><path d="M9 12h6"></path>
               </svg>
               <span id="acervoTotal">Processos aguardando julgamento</span>
-            </div>
-            <div class="acervo-header-actions" aria-label="Ações do painel">
-              <button id="btnImprimir" class="acervo-btn-action" type="button">
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M5.5 7V3.5h9V7"></path><path d="M5.5 14.5H4A1.5 1.5 0 0 1 2.5 13V9A1.5 1.5 0 0 1 4 7.5h12A1.5 1.5 0 0 1 17.5 9v4A1.5 1.5 0 0 1 16 14.5h-1.5"></path><path d="M5.5 12h9v4.5h-9z"></path>
-                </svg>
-                <span>Imprimir</span>
-              </button>
-              <button id="btnExportar" class="acervo-btn-action acervo-btn-export" type="button" aria-label="Exportar dados (em breve)" title="Exportação disponível em breve" disabled>
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M10 2.5v10"></path><path d="m6.5 9 3.5 3.5L13.5 9"></path><path d="M4 13.5v3h12v-3"></path>
-                </svg>
-                <span>Exportar</span>
-              </button>
             </div>
           </div>
         </div>
