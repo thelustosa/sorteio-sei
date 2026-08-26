@@ -1052,6 +1052,111 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 .acervo-table td.acervo-detalhe {
   transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  cursor: pointer;
+}
+
+/* Bloco com número abre a lista daquele recorte. O cursor e o realce dizem que
+   é clicável; o foco visível existe porque a célula é alcançável por teclado. */
+.acervo-table td.acervo-detalhe:hover { box-shadow: inset 0 0 0 2px var(--accent); }
+.acervo-table td.acervo-detalhe:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+/* ── Card de detalhe ────────────────────────────────────────────────────────
+   <dialog> nativo: o modo modal já traz Escape, foco preso e devolução do foco
+   ao fechar. Aqui fica só a aparência. */
+.detalhe-dialog {
+  width: min(46rem, calc(100vw - 2rem));
+  max-height: min(40rem, calc(100vh - 4rem));
+  padding: 0;
+  border: none;
+  border-radius: 14px;
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 28%);
+  overflow: hidden;
+}
+
+.detalhe-dialog[open] { display: flex; flex-direction: column; }
+
+.detalhe-dialog::backdrop {
+  background: rgb(17 39 32 / 45%);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.detalhe-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.detalhe-header h2 { margin: 0; font-size: 1.05rem; }
+.detalhe-resumo { margin: 0.35rem 0 0; font-size: 0.85rem; opacity: 0.9; }
+
+.detalhe-fechar {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 12%);
+  color: inherit;
+  cursor: pointer;
+}
+
+.detalhe-fechar:hover { background: rgb(255 255 255 / 22%); }
+.detalhe-fechar svg { width: 1.1rem; height: 1.1rem; }
+
+.detalhe-corpo { flex: 1; min-height: 0; overflow: auto; padding: 0 1.5rem; }
+
+.detalhe-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+
+.detalhe-table th,
+.detalhe-table td {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #e2ebe7;
+  white-space: nowrap;
+}
+
+.detalhe-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-raised);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-strong);
+}
+
+.detalhe-table tbody th { font-variant-numeric: tabular-nums; font-weight: 600; }
+.detalhe-table tbody td:last-child { font-variant-numeric: tabular-nums; text-align: right; }
+
+.detalhe-rodape {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e2ebe7;
+  background: var(--bg);
+}
+
+.detalhe-dialog .load-error { margin: 1rem 1.5rem 0; }
+
+@media (max-width: 480px) {
+  .detalhe-header { padding: 1rem; }
+  .detalhe-corpo { padding: 0 1rem; }
+  .detalhe-rodape { padding: 0.85rem 1rem; flex-direction: column-reverse; }
+  .detalhe-rodape button { width: 100%; justify-content: center; }
 }
 
 .acervo-table tbody td.acervo-zero {
@@ -1516,6 +1621,10 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 }
 
 @media print {
+  /* O PDF do dashboard é a tabela, não o card. Se alguém exportar com o card
+     aberto, ele sairia por cima de tudo. */
+  .detalhe-dialog { display: none !important; }
+
   @page {
     size: landscape;
     margin: 10mm 15mm;
@@ -1877,6 +1986,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
   .acervo-panel { animation: none; }
   .acervo-table td.acervo-detalhe { transition: none; }
+  .detalhe-dialog::backdrop { backdrop-filter: none; -webkit-backdrop-filter: none; }
   .export-spinner { animation: none; }
 
   .nav-action:active,

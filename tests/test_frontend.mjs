@@ -49,6 +49,7 @@ class Node {
   replaceChildren(...nodes) { this.children = []; this.append(...nodes); }
   remove() { this.parentNode?.children.splice(this.parentNode.children.indexOf(this), 1); }
   setAttribute(name, value) { this[name] = String(value); }
+  getAttribute(name) { return this[name] ?? null; }
   removeAttribute(name) { delete this[name]; }
   getBoundingClientRect() { return { width: 100 }; }
   scrollIntoView() {}
@@ -526,13 +527,29 @@ function acervoPage(api, { imprimir = () => {} } = {}) {
   }
   document.add('exportFeedback', 'div');
   document.add('btnTentarNovamente', 'button');
+
+  // O card de detalhe. <dialog> nativo no navegador; aqui o mínimo que o código
+  // usa — showModal/close/open — para o teste exercitar a lógica, não a API.
+  const dialog = document.add('detalheDialog', 'dialog');
+  dialog.open = false;
+  dialog.showModal = () => { dialog.open = true; };
+  dialog.close = () => { dialog.open = false; };
+  document.add('detalheTitulo', 'h2');
+  document.add('detalheResumo', 'p');
+  document.add('detalheTable', 'table');
+  const detalheErro = document.add('detalheErro', 'div');
+  detalheErro.hidden = true;
+  detalheErro.appendChild(document.createElement('p'));
+  document.add('btnFecharDetalhe', 'button');
+  document.add('btnFecharDetalheRodape', 'button');
+  document.add('btnExportarDetalhe', 'button');
   document.getElementById('acervoPanel').hidden = true;
   document.getElementById('btnAtualizar').hidden = true;  // como no acervo.html
 
   const app = new Function('document', 'window', 'api',
-    `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, dadosTabulares };`)(
+    `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, criarExcelDetalhe, dadosTabulares, abrirDetalhe, exportarDetalhe };`)(
     document, { print: imprimir }, api);
-  return { document, loginOnlyCard, ...app };
+  return { document, loginOnlyCard, dialog, ...app };
 }
 
 const celulas = linha => linha.children.map(c => c.textContent);
@@ -809,4 +826,115 @@ test('sorteio da CJ mostra a cadeira e o conselheiro no hover', () => {
   assert.equal(pills[4].title, 'Lorena Patricia de Oliveira');
   assert.equal(pills[0]['aria-label'], 'CJ1 — Paulo Otoni Ribeiro',
     'o leitor de tela precisa anunciar a pessoa, não soletrar a cadeira');
+});
+
+// ── Card de detalhe ──────────────────────────────────────────────────────────
+// Clicar num bloco com número abre a lista daquele recorte. O que o teste fixa
+// é o contrato com o banco: quais filtros o card pede em cada tipo de célula.
+
+const matriz = [
+  { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 2 },
+  { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ5', conselheiro: 'Lorena Patricia de Oliveira', processos: 0 },
+  { ordem: 4, faixa: 'Há 3 meses', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 1 },
+  { ordem: 4, faixa: 'Há 3 meses', relator: 'CJ5', conselheiro: 'Lorena Patricia de Oliveira', processos: 0 }
+];
+
+const processosFalsos = [
+  { num_processo: '202600029001111', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro',
+    data_distribuicao: '2026-06-29', dias: 56 },
+  { num_processo: '202600029002222', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro',
+    data_distribuicao: '2026-08-14', dias: 10 }
+];
+
+async function acervoComDetalhe(aoPedirDetalhe) {
+  const pedidos = [];
+  const page = acervoPage(async (caminho, opcoes) => {
+    if (caminho.includes('processos_acervo_cj')) {
+      pedidos.push(JSON.parse(opcoes.body));
+      return aoPedirDetalhe ? aoPedirDetalhe() : processosFalsos;
+    }
+    return matriz;
+  });
+  await page.inicializarAcervo();
+  await wait();
+  return { ...page, pedidos };
+}
+
+const celulaDe = (page, linha, coluna) =>
+  page.document.getElementById('acervoTable').children[1].children[linha].children[coluna];
+
+test('bloco com número abre o card; bloco zerado não', async () => {
+  const page = await acervoComDetalhe();
+  assert.equal(celulaDe(page, 0, 1).dataset.rotulo, 'Até 15 dias · CJ1');
+  assert.equal(celulaDe(page, 0, 1).getAttribute('role'), 'button');
+  assert.equal(celulaDe(page, 0, 2).dataset.rotulo, undefined,
+    'travessão não representa processo nenhum para listar');
+});
+
+test('cada tipo de célula pede o recorte certo ao banco', async () => {
+  const page = await acervoComDetalhe();
+  const tabela = page.document.getElementById('acervoTable');
+
+  await page.abrirDetalhe(celulaDe(page, 0, 1));                       // célula
+  await page.abrirDetalhe(celulaDe(page, 0, 3));                       // total da linha
+  await page.abrirDetalhe(tabela.children[2].children[0].children[1]); // total da coluna
+  await page.abrirDetalhe(tabela.children[2].children[0].children[3]); // total geral
+
+  assert.deepEqual(page.pedidos, [
+    { p_ordem: 1, p_relator: 'CJ1' },
+    { p_ordem: 1, p_relator: null },
+    { p_ordem: null, p_relator: 'CJ1' },
+    { p_ordem: null, p_relator: null }
+  ], 'nulo é "não filtre por isso" — é o que faz os totais serem clicáveis');
+});
+
+test('o card lista os processos e habilita a exportação', async () => {
+  const page = await acervoComDetalhe();
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  assert.equal(page.dialog.open, true, 'o card precisa abrir em modo modal');
+  assert.equal(page.document.getElementById('detalheTitulo').textContent, 'Até 15 dias · CJ1');
+  assert.match(page.document.getElementById('detalheResumo').textContent, /^2 processos/);
+
+  const linhas = page.document.getElementById('detalheTable').children[1].children;
+  assert.deepEqual(linhas.map(tr => tr.children.map(c => c.textContent)), [
+    ['202600029001111', 'CJ1', '29/06/2026', '56'],
+    ['202600029002222', 'CJ1', '14/08/2026', '10']
+  ]);
+  assert.equal(page.document.getElementById('btnExportarDetalhe').disabled, false);
+});
+
+test('o card fecha e a falha aparece dentro dele', async () => {
+  const page = await acervoComDetalhe(() => { throw new Error('rede fora'); });
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  assert.equal(page.dialog.open, true, 'fechar o card esconderia a mensagem de erro');
+  const erro = page.document.getElementById('detalheErro');
+  assert.equal(erro.hidden, false);
+  assert.match(erro.children[0].textContent, /rede fora/);
+  assert.equal(page.document.getElementById('btnExportarDetalhe').disabled, true,
+    'não há o que exportar quando a lista não chegou');
+});
+
+test('sessão expirada fecha o card em vez de cobrir o login', async () => {
+  const page = await acervoComDetalhe(() => {
+    throw Object.assign(new Error('sessão expirada'), { status: 401 });
+  });
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  assert.equal(page.dialog.open, false,
+    'o card por cima esconderia justamente o formulário de login');
+});
+
+test('o Excel do card é um .xlsx válido com os processos', async () => {
+  const page = await acervoComDetalhe();
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+  const blob = page.criarExcelDetalhe(processosFalsos, 'Até 15 dias · CJ1');
+
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  assert.deepEqual([...bytes.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04], 'assinatura ZIP');
+  const texto = new TextDecoder().decode(bytes);
+  assert.match(texto, /xl\/worksheets\/sheet1\.xml/);
+  assert.match(texto, /202600029001111/, 'o número do processo precisa estar na planilha');
+  assert.match(texto, /29\/06\/2026/, 'a data vai formatada, não como serial');
 });
