@@ -1202,33 +1202,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 .detalhe-dialog .load-error { margin: 16px 20px 0; }
 
-.detalhe-loading {
-  display: grid;
-  min-height: clamp(200px, 32vh, 280px);
-  padding: 36px 20px;
-  place-items: center;
-}
-
-.detalhe-loading .loading-state {
-  width: auto;
-  min-height: 0;
-  flex-direction: column;
-  justify-content: center;
-  gap: 16px;
-  color: var(--text);
-  font-family: Montserrat, ui-sans-serif, sans-serif;
-  font-size: var(--text-base);
-  letter-spacing: -0.015em;
-  text-align: center;
-}
-
-.detalhe-loading .loading-spinner {
-  width: 40px;
-  height: 40px;
-  border-width: 3px;
-  box-shadow: 0 6px 16px rgba(17, 39, 32, 0.08);
-}
-
 @media (max-width: 480px) {
   .detalhe-header {
     align-items: flex-start;
