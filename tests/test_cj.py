@@ -1103,8 +1103,27 @@ def detalhe_do_painel_confere_com_a_contagem(cur):
     São duas funções com a mesma definição de pendente e as mesmas faixas. Se
     uma mudar sem a outra, o painel diz 22 e o card abre 21 — e nada mais no
     sistema perceberia.
+
+    Sem a planilha (CI), acervo_cj está vazio e a comparação viraria 0 == 0: o
+    teste semeia faixas e cadeiras diferentes, mais um julgado e um
+    redistribuído, que são justamente os pontos onde as duas podem divergir.
     """
     autenticar(cur)
+    cur.execute("delete from public.julgados_cj")
+    cur.execute("delete from public.acervo_cj")
+    cur.execute("""insert into public.acervo_cj
+                     (num_processo, relator, data_distribuicao, defesa, origem) values
+                   ('202600029000011', 'CJ1', current_date - 5,   true, 'sorteio'),
+                   ('202600029000012', 'CJ1', current_date - 200, true, 'sorteio'),
+                   ('202600029000013', 'CJ2', current_date - 900, true, 'sorteio'),
+                   ('202600029000014', 'CJ2', current_date - 40,  true, 'sorteio'),
+                   ('202600029000015', 'CJ3', current_date - 60,  true, 'sorteio'),
+                   ('202600029000016', 'CJ1', current_date - 300, true, 'sorteio'),
+                   ('202600029000016', 'CJ3', current_date - 3,   true, 'sorteio')""")
+    # julgado sai das duas
+    cur.execute("""insert into public.julgados_cj (num_processo, data_sessao, pauta)
+                   values ('202600029000015', current_date - 10, 1)""")
+
     cur.execute('select sum(processos)::int from public.resumo_acervo_cj()')
     do_painel = cur.fetchone()[0]
     cur.execute('select count(*) from public.processos_acervo_cj()')
@@ -1118,6 +1137,8 @@ def detalhe_do_painel_confere_com_a_contagem(cur):
         cur.execute('select count(*) from public.processos_acervo_cj(%s, %s)', (ordem, relator))
         achado = cur.fetchone()[0]
         assert achado == esperado, f'faixa {ordem} / {relator}: painel={esperado} detalhe={achado}'
+    assert do_painel == 5, f'semeadura não exercita as duas funções: {do_painel}'
+    cur.connection.rollback()
 
 
 @teste
