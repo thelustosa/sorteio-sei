@@ -225,8 +225,8 @@ function planilhaXml(linhas) {
   const ordensPorFaixa = new Map(linhas.map(linha => [linha.faixa, Number(linha.ordem)]));
   const totalGeral = dados.at(-1).at(-1);
   const resumo = totalGeral === 1
-    ? `1 processo aguardando julgamento • Posição de ${hojeBR()}`
-    : `${totalGeral} processos aguardando julgamento • Posição de ${hojeBR()}`;
+    ? `1 processo aguardando julgamento • Atualizado em: ${hojeBR()}`
+    : `${totalGeral} processos aguardando julgamento • Atualizado em: ${hojeBR()}`;
   const texto = (referencia, valor, estilo) => `<c r="${referencia}" t="inlineStr" s="${estilo}"><is><t>${escaparXml(valor)}</t></is></c>`;
   const numero = (referencia, valor, estilo, formula = '') => `<c r="${referencia}" s="${estilo}">${formula ? `<f>${formula}</f>` : ''}<v>${valor}</v></c>`;
 
@@ -270,7 +270,7 @@ function planilhaXml(linhas) {
   // A ordem dos elementos filhos de worksheet faz parte do schema OOXML.
   // O Excel é mais estrito que o LibreOffice: autoFilter precisa vir antes de
   // mergeCells, caso contrário ele oferece reparar a pasta e pode abri-la vazia.
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><tabColor rgb="FF00534B"/><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane ySplit="4" topLeftCell="A5" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A5" sqref="A5"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="20"/><cols><col min="1" max="1" width="30" customWidth="1"/>${colunasIntermediarias}<col min="${dados[0].length}" max="${dados[0].length}" width="14" customWidth="1"/></cols><sheetData><row r="1" ht="34" customHeight="1">${texto('A1', 'Acervo de processos', 1)}</row><row r="2" ht="26" customHeight="1">${texto('A2', 'Visão gerencial do tempo de permanência dos processos distribuídos à Câmara de Julgamento.', 2)}</row><row r="3" ht="28" customHeight="1">${texto('A3', resumo, 3)}</row><row r="4" ht="32" customHeight="1">${cabecalho}</row>${corpo}<row r="${linhaTotal}" ht="36" customHeight="1">${totais}</row><row r="${linhaAtualizacao}" ht="26" customHeight="1">${texto(`A${linhaAtualizacao}`, `Posição de ${hojeBR()}`, 12)}</row></sheetData><autoFilter ref="A4:${ultimaColuna}${filtroFinal}"/><mergeCells count="4"><mergeCell ref="A1:${ultimaColuna}1"/><mergeCell ref="A2:${ultimaColuna}2"/><mergeCell ref="A3:${ultimaColuna}3"/><mergeCell ref="A${linhaAtualizacao}:${ultimaColuna}${linhaAtualizacao}"/></mergeCells><pageMargins left="0.3" right="0.3" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="1" horizontalDpi="300" verticalDpi="300"/></worksheet>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><tabColor rgb="FF00534B"/><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane ySplit="4" topLeftCell="A5" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A5" sqref="A5"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="20"/><cols><col min="1" max="1" width="30" customWidth="1"/>${colunasIntermediarias}<col min="${dados[0].length}" max="${dados[0].length}" width="14" customWidth="1"/></cols><sheetData><row r="1" ht="34" customHeight="1">${texto('A1', 'Acervo de processos', 1)}</row><row r="2" ht="26" customHeight="1">${texto('A2', 'Visão gerencial do tempo de permanência dos processos distribuídos à Câmara de Julgamento.', 2)}</row><row r="3" ht="28" customHeight="1">${texto('A3', resumo, 3)}</row><row r="4" ht="32" customHeight="1">${cabecalho}</row>${corpo}<row r="${linhaTotal}" ht="36" customHeight="1">${totais}</row><row r="${linhaAtualizacao}" ht="26" customHeight="1">${texto(`A${linhaAtualizacao}`, `Atualizado em: ${hojeBR()}`, 12)}</row></sheetData><autoFilter ref="A4:${ultimaColuna}${filtroFinal}"/><mergeCells count="4"><mergeCell ref="A1:${ultimaColuna}1"/><mergeCell ref="A2:${ultimaColuna}2"/><mergeCell ref="A3:${ultimaColuna}3"/><mergeCell ref="A${linhaAtualizacao}:${ultimaColuna}${linhaAtualizacao}"/></mergeCells><pageMargins left="0.3" right="0.3" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="1" horizontalDpi="300" verticalDpi="300"/></worksheet>`;
 }
 
 function crc32(bytes) {
@@ -356,7 +356,7 @@ function planilhaDetalheXml(processos, titulo) {
 
   const linhas = [
     `<row r="1" ht="34" customHeight="1">${texto(0, 1, titulo, 1)}</row>`,
-    `<row r="2" ht="20" customHeight="1">${texto(0, 2, `${processos.length} processo(s) aguardando julgamento — posição de ${hojeBR()}`, 2)}</row>`,
+    `<row r="2" ht="20" customHeight="1">${texto(0, 2, `${processos.length} processo(s) aguardando julgamento — Atualizado em: ${hojeBR()}`, 2)}</row>`,
     `<row r="4" ht="22" customHeight="1">${colunas.map((c, n) => texto(n, 4, c, n === 0 ? 13 : 4)).join('')}</row>`
   ];
 
@@ -534,7 +534,7 @@ async function carregarAcervo({ carregamentoInicial = false } = {}) {
   acervoTotal.textContent = total === 1
     ? '1 processo aguardando julgamento'
     : `${total} processos aguardando julgamento`;
-  acervoAtualizado.textContent = `Posição de ${hojeBR()}`;
+  acervoAtualizado.textContent = `Atualizado em: ${hojeBR()}`;
   acervoVazio.hidden = total > 0;
   return true;
 }
@@ -566,7 +566,6 @@ async function abrirDetalhe(celulaEl) {
   detalheTabela.replaceChildren();
   detalheErro.hidden = true;
   btnExportarDetalhe.disabled = true;
-  // showModal antes da busca: o card aparece com "Carregando…" em vez de a tela
   // ficar parada sem resposta ao clique.
   if (!detalheDialog.open) detalheDialog.showModal();
 
@@ -596,11 +595,11 @@ async function abrirDetalhe(celulaEl) {
 
 function desenharDetalhe(processos) {
   const quantidade = processos.length === 1 ? '1 processo' : `${processos.length} processos`;
-  detalheResumo.textContent = `${quantidade} · posição de ${hojeBR()}`;
+  detalheResumo.textContent = `${quantidade} · Atualizado em: ${hojeBR()}`;
 
   const thead = document.createElement('thead');
   const cabecalho = document.createElement('tr');
-  ['Nº do Processo', 'Cadeira', 'Distribuição', 'Dias parados']
+  ['Nº do Processo', 'Relator', 'Distribuição', 'Dias parados']
     .forEach(rotulo => cabecalho.append(celula(rotulo, 'th')));
   thead.append(cabecalho);
 

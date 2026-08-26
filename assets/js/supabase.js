@@ -6,7 +6,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '9cfa96167c';
+const ASSET_VERSION = 'a79b39d6cf';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -357,30 +357,3 @@ function aviso(texto, tipo = 'sucesso') {
   msg.append(icone, conteudo, fechar);
   regiao.appendChild(msg);
 }
-
-// Limpeza única: versões anteriores registravam um service worker que servia
-// assets do cache indefinidamente e acabava misturando CSS antigo com JS novo.
-// A versão dos assets agora é o hash do conteúdo, então o cache do navegador
-// basta. ponytail: remover este bloco depois que os usuários carregarem esta
-// versão ao menos uma vez (algumas semanas).
-function removerCacheAntigo() {
-  if (!('serviceWorker' in navigator)) return;
-  // getRegistrations() devolve a ORIGEM inteira, não este projeto. Em
-  // usuario.github.io, sem o filtro de escopo, este código desregistraria o
-  // service worker de todos os outros GitHub Pages do mesmo usuário.
-  const escopo = new URL('./', location.href).href;
-  navigator.serviceWorker.getRegistrations()
-    .then(registros => Promise.all(registros
-      .filter(registro => registro.scope.startsWith(escopo))
-      .map(registro => registro.unregister())))
-    .catch(() => {});
-  if ('caches' in window) {
-    caches.keys()
-      .then(nomes => Promise.all(nomes
-        .filter(nome => nome.startsWith('sorteio-sei-assets-'))
-        .map(nome => caches.delete(nome))))
-      .catch(() => {});
-  }
-}
-
-window.addEventListener('load', removerCacheAntigo, { once: true });
