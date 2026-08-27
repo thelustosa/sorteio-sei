@@ -49,6 +49,7 @@ class Node {
   replaceChildren(...nodes) { this.children = []; this.append(...nodes); }
   remove() { this.parentNode?.children.splice(this.parentNode.children.indexOf(this), 1); }
   setAttribute(name, value) { this[name] = String(value); }
+  getAttribute(name) { return this[name] ?? null; }
   removeAttribute(name) { delete this[name]; }
   getBoundingClientRect() { return { width: 100 }; }
   scrollIntoView() {}
@@ -57,6 +58,9 @@ class Node {
   closest(selector) { return this.matches(selector) ? this : this.parentNode?.closest(selector) || null; }
   matches(selector) {
     if (selector.startsWith('.')) return this.classList.contains(selector.slice(1));
+    if (selector === '[data-login-only]') return Object.hasOwn(this.dataset, 'loginOnly');
+    if (selector === '[data-export-format]') return Object.hasOwn(this.dataset, 'exportFormat');
+    if (selector === '[role="menuitem"]') return this.role === 'menuitem';
     return this.tagName === selector.toUpperCase();
   }
   descendants() { return this.children.flatMap(child => [child, ...child.descendants()]); }
@@ -93,6 +97,7 @@ class Document {
     this.head = new Node(this, 'head');
     this.activeElement = null;
     this.downloads = [];
+    this.events = new Map();
   }
   add(id, tagName = 'div') {
     const element = new Node(this, tagName);
@@ -104,6 +109,10 @@ class Document {
   createElement(tagName) { return new Node(this, tagName); }
   createElementNS(_, tagName) { return this.createElement(tagName); }
   createDocumentFragment() { return new Fragment(this); }
+  addEventListener(type, listener) {
+    if (!this.events.has(type)) this.events.set(type, []);
+    this.events.get(type).push(listener);
+  }
   querySelector(selector) {
     if (selector === '#processTable tbody') return this.getElementById('processTableBody');
     if (selector === '#resultTable tbody') return this.getElementById('resultTableBody');
@@ -127,9 +136,14 @@ function supabaseApp(fetch) {
   const location = { protocol: 'http:' };
   const sessionStorage = { getItem() { return null; }, setItem() {}, removeItem() {} };
   return new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'fetch',
-    `${source('supabase.js')}\nreturn { autenticar };`)(
+    `${source('supabase.js')}\nreturn { autenticar, CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento };`)(
     document, window, navigator, location, sessionStorage, fetch);
 }
+
+// O de-para das cadeiras mora no supabase.js, que toda página carrega antes do
+// seu próprio script. As telas o enxergam como global; aqui ele é injetado, e
+// vem do arquivo de verdade para que uma divergência apareça como falha.
+const { CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento } = supabaseApp(async () => {});
 
 function indexPage({ api = async () => null, aviso = () => {},
   supabaseUrl = 'url', supabaseKey = 'key', token = 'token' } = {}) {
@@ -150,11 +164,12 @@ function indexPage({ api = async () => null, aviso = () => {},
 
   const app = new Function('document', 'window', 'crypto', 'URL', 'Blob', 'setTimeout', 'requestAnimationFrame',
     'SUPABASE_URL', 'SUPABASE_KEY', 'accessToken', 'api', 'criarIndicadorCarregamento', 'alternarBotaoCarregando', 'aviso',
+    'CADEIRAS_CJ', 'rotularCadeira',
     `${source('index.js')}\nreturn { inicializarSorteio };`)(
     document, { matchMedia: () => ({ matches: true }) }, { getRandomValues: values => values.fill(0) },
     { createObjectURL: () => 'blob:test', revokeObjectURL() {} }, Blob, () => 0,
     callback => callback(), supabaseUrl, supabaseKey, token, api,
-    () => document.createElement('div'), () => {}, aviso);
+    () => document.createElement('div'), () => {}, aviso, CADEIRAS_CJ, rotularCadeira);
   return { document, tbody, ...app };
 }
 
@@ -177,12 +192,13 @@ function julgadosPage(registrar) {
   const add = (id, tag) => document.add(id, tag);
   ['listaPautas', 'pautasContainer', 'semPendencia', 'pautasIntro', 'detalhePauta',
     'tituloPauta', 'contadorPendentes', 'btnSalvar', 'btnVoltar', 'txtModo',
-    'listaPautasTitulo', 'btnTodosManter', 'btnTodosJulgado'].forEach(id => add(id, id.startsWith('btn') ? 'button' : 'div'));
+    'listaPautasTitulo', 'btnVoltarInicio', 'btnTodosManter', 'btnTodosJulgado'].forEach(id => add(id, id.startsWith('btn') ? 'button' : 'div'));
   const tbody = add('julgadosTableBody', 'tbody');
 
   const app = new Function('document', 'api', 'aviso', 'alternarBotaoCarregando', 'criarIndicadorCarregamento',
+    'rotularCadeira',
     `${source('julgados.js')}\nreturn { abrirPauta, salvar, inicializarJulgados, pendentesPorPauta };`)(
-    document, registrar, () => {}, () => {}, () => document.createElement('div'));
+    document, registrar, () => {}, () => {}, () => document.createElement('div'), rotularCadeira);
   return { document, tbody, ...app };
 }
 
@@ -362,6 +378,25 @@ test('envia apenas o julgamento que foi alterado', async () => {
   assert.deepEqual(enviado, [{ id: 2, voto: '', status: 'Julgado' }]);
 });
 
+test('julgados revela o conselheiro no hover da cadeira', () => {
+  // A coluna mostra "CJ1"; sem o de-para a secretaria teria de decorar o
+  // número da cadeira. Relator fora do de-para (composição anterior, que ficou
+  // pelo nome) não pode ganhar title vazio.
+  const page = julgadosPage(async () => []);
+  page.pendentesPorPauta.set('1|2026-08-21', [
+    { id: 1, num_processo: '123', relator: 'CJ1', voto: '', status: '' },
+    { id: 2, num_processo: '456', relator: 'Conselheiro De Antes', voto: '', status: '' }
+  ]);
+  page.abrirPauta('1|2026-08-21');
+
+  const relator = linha => page.tbody.children[linha].children[1];
+  assert.equal(relator(0).textContent, 'CJ1');
+  assert.equal(relator(0).title, 'Paulo Otoni Ribeiro');
+  assert.equal(relator(0)['aria-label'], 'CJ1 — Paulo Otoni Ribeiro');
+  assert.equal(relator(1).textContent, 'Conselheiro De Antes');
+  assert.equal(relator(1).title, undefined, 'title repetindo o rótulo é ruído');
+});
+
 test('preenche em massa só o que está em branco e marca a linha para salvar', async () => {
   let enviado;
   const page = julgadosPage(async (path, options) => {
@@ -427,4 +462,570 @@ test('move o foco para a lista após o login', async () => {
   await wait();
 
   assert.equal(page.document.activeElement, page.document.getElementById('listaPautasTitulo'));
+});
+
+// ── Painel do acervo ─────────────────────────────────────────────────────────
+// As colunas do painel saem do dado, não do HTML: quem decide quais relatores
+// aparecem é a função resumo_acervo_cj. Estes testes fixam esse contrato e os
+// três estados da tela — matriz, vazio e falha.
+
+function bootstrapPage(inicializar) {
+  const document = new Document();
+  document.body.dataset.page = 'acervo';
+  const sessionLoading = document.add('sessionLoading', 'div');
+  sessionLoading.hidden = true;
+  let aoEntrar;
+
+  new Function('document', 'window', 'ASSET_VERSION', 'carregarScript',
+    'criarIndicadorCarregamento', 'ligarLogin', source('bootstrap.js'))(
+    document, { inicializarAcervo: inicializar }, 'teste', async () => {},
+    texto => { const estado = document.createElement('div'); estado.textContent = texto; return estado; },
+    callback => { aoEntrar = callback; });
+
+  return { sessionLoading, iniciar: () => aoEntrar() };
+}
+
+test('bootstrap mantém o loading geral até a inicialização assíncrona terminar', async () => {
+  let concluir;
+  const page = bootstrapPage(() => new Promise(resolve => { concluir = resolve; }));
+  const carregamento = page.iniciar();
+  await wait();
+
+  assert.equal(page.sessionLoading.hidden, false);
+  assert.equal(page.sessionLoading.children.length, 1);
+
+  concluir();
+  await carregamento;
+  assert.equal(page.sessionLoading.hidden, true,
+    'o loading não pode sair enquanto dados e interface ainda estão sendo preparados');
+});
+
+function acervoPage(api, { imprimir = () => {} } = {}) {
+  const document = new Document();
+  const loginOnlyCard = document.createElement('div');
+  loginOnlyCard.dataset.loginOnly = '';
+  document.body.append(loginOnlyCard);
+  ['acervoPanel', 'acervoVazio', 'acervoTotal', 'acervoAtualizado']
+    .forEach(id => document.add(id, 'div'));
+  const erroDiv = document.add('acervoErro', 'div');
+  erroDiv.appendChild(document.createElement('p'));
+  document.add('acervoTable', 'table');
+  document.add('btnAtualizar', 'button');
+  const exportMenu = document.add('exportMenu', 'div');
+  exportMenu.hidden = true;
+  const btnExportar = document.add('btnExportar', 'button');
+  const rotuloExportar = document.createElement('span');
+  rotuloExportar.className = 'export-label';
+  btnExportar.append(rotuloExportar);
+  const exportOptions = document.add('exportOptions', 'div');
+  exportOptions.hidden = true;
+  for (const formato of ['pdf', 'excel']) {
+    const opcao = document.createElement('button');
+    opcao.setAttribute('role', 'menuitem');
+    opcao.dataset.exportFormat = formato;
+    exportOptions.append(opcao);
+  }
+  document.add('exportFeedback', 'div');
+  document.add('btnTentarNovamente', 'button');
+
+  // O card de detalhe. <dialog> nativo no navegador; aqui o mínimo que o código
+  // usa — showModal/close/open — para o teste exercitar a lógica, não a API.
+  const dialog = document.add('detalheDialog', 'dialog');
+  dialog.open = false;
+  dialog.showModal = () => { dialog.open = true; };
+  dialog.close = () => { dialog.open = false; };
+  document.add('detalheTitulo', 'h2');
+  document.add('detalheResumo', 'p');
+  const detalheLoading = document.add('detalheLoading', 'div');
+  detalheLoading.hidden = true;
+  const detalheCorpo = document.add('detalheCorpo', 'div');
+  document.add('detalheTable', 'table');
+  const detalheErro = document.add('detalheErro', 'div');
+  detalheErro.hidden = true;
+  detalheErro.appendChild(document.createElement('p'));
+  document.add('btnFecharDetalhe', 'button');
+  document.add('btnExportarDetalhe', 'button');
+  document.getElementById('acervoPanel').hidden = true;
+  document.getElementById('btnAtualizar').hidden = true;  // como no acervo.html
+
+  const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento',
+    `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, criarExcelDetalhe, dadosTabulares, abrirDetalhe, exportarDetalhe };`)(
+    document, { print: imprimir }, api, criarIndicadorCarregamento);
+  return { document, loginOnlyCard, dialog, ...app };
+}
+
+const celulas = linha => linha.children.map(c => c.textContent);
+
+test('acervo monta as colunas a partir dos relatores que o banco devolve', async () => {
+  const page = acervoPage(async () => [
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ3', conselheiro: 'Dorivan de Souza Lima', processos: 3 },
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 22 },
+    { ordem: 2, faixa: 'Até 30 dias', relator: 'CJ3', conselheiro: 'Dorivan de Souza Lima', processos: 1 },
+    { ordem: 2, faixa: 'Até 30 dias', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 0 }
+  ]);
+  page.inicializarAcervo();
+  await wait();
+
+  const tabela = page.document.getElementById('acervoTable');
+  const [thead, tbody, tfoot] = tabela.children;
+
+  assert.deepEqual(celulas(thead.children[0]),
+    ['Período', 'CJ1', 'CJ3', 'Total'],
+    'o cabeçalho não veio das cadeiras do banco');
+
+  assert.deepEqual(celulas(tbody.children[0]), ['Até 15 dias', '22', '3', '25']);
+  // Zero vira travessão: coluna de "0" repetido esconde o número que importa.
+  assert.deepEqual(celulas(tbody.children[1]), ['Até 30 dias', '—', '1', '1']);
+  assert.deepEqual(celulas(tfoot.children[0]), ['Total', '22', '4', '26']);
+  assert.equal(tbody.children[0].children[1].classList.contains('acervo-detalhe'), true,
+    'célula numérica precisa expor o estado individual de hover');
+  // Na linha "Até 30 dias" o travessão é a CJ1 (zero), primeira coluna de dado.
+  assert.equal(tbody.children[1].children[1].classList.contains('acervo-detalhe'), false,
+    'travessão não representa uma lista de processos para detalhar');
+  assert.equal(tfoot.children[0].children[3].classList.contains('acervo-detalhe'), true,
+    'o total geral também precisa expor o estado de hover');
+  assert.equal(page.document.getElementById('acervoTotal').textContent,
+    '26 processos aguardando julgamento');
+  assert.equal(page.loginOnlyCard.hidden, true,
+    'o cartão de autenticação precisa sair do layout depois do login');
+  assert.equal(page.document.getElementById('btnAtualizar')['aria-busy'], undefined,
+    'o botão não pode permanecer ocupado depois da resposta');
+  assert.equal(page.document.getElementById('acervoPanel')['aria-busy'], undefined,
+    'o painel não pode permanecer ocupado depois da resposta');
+});
+
+test('acervo só revela o dashboard depois que os dados estão prontos', async () => {
+  let responder;
+  const page = acervoPage(() => new Promise(resolve => { responder = resolve; }));
+  const inicializacao = page.inicializarAcervo();
+  await wait();
+
+  assert.equal(page.document.getElementById('acervoPanel').hidden, true,
+    'cabeçalho e rodapé do dashboard não devem aparecer sem os dados');
+  assert.equal(page.loginOnlyCard.hidden, false,
+    'o contêiner do loading geral precisa permanecer visível');
+
+  responder([
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'Dorivan de Souza Lima', processos: 1 }
+  ]);
+  await inicializacao;
+
+  assert.equal(page.document.getElementById('acervoPanel').hidden, false);
+  assert.equal(page.loginOnlyCard.hidden, true,
+    'o loading geral deve sair junto com a entrada do dashboard completo');
+  assert.equal(page.document.getElementById('btnAtualizar').hidden, false);
+  assert.equal(page.document.getElementById('exportMenu').hidden, false);
+});
+
+test('acervo não oferece Atualizar antes de o painel existir', async () => {
+  // Revelado cedo demais, o botão redesenha uma tabela ainda escondida: o
+  // clique "funciona", nada muda na tela e a mensagem de erro continua lá.
+  const page = acervoPage(async () => { throw new Error('rede fora'); });
+
+  await assert.rejects(page.inicializarAcervo(), /rede fora/);
+  assert.equal(page.document.getElementById('btnAtualizar').hidden, true);
+});
+
+test('falha inicial permanece no carregamento geral sem revelar painel incompleto', async () => {
+  const page = acervoPage(async () => { throw new Error('rede fora'); });
+
+  await assert.rejects(page.inicializarAcervo(), /rede fora/);
+  assert.equal(page.document.getElementById('acervoPanel').hidden, true);
+  assert.equal(page.loginOnlyCard.hidden, false);
+  assert.equal(page.document.getElementById('btnAtualizar').disabled, false,
+    'o botão de atualizar precisa voltar ao estado normal depois da falha');
+});
+
+test('acervo mantém o total vermelho desde Há 3 meses, inclusive quando zerado', async () => {
+  const page = acervoPage(async () => [
+    { ordem: 3, faixa: 'Até 45 dias', relator: 'Dorivan de Souza Lima', processos: 1 },
+    { ordem: 4, faixa: 'Há 3 meses', relator: 'Dorivan de Souza Lima', processos: 2 },
+    { ordem: 5, faixa: 'Entre 3 e 6 meses', relator: 'Dorivan de Souza Lima', processos: 0 }
+  ]);
+  page.inicializarAcervo();
+  await wait();
+
+  const linhas = page.document.getElementById('acervoTable').children[1].children;
+  assert.equal(linhas[0].children[2].classList.contains('acervo-alerta'), false,
+    'a faixa anterior a Há 3 meses deve manter o total verde');
+  assert.equal(linhas[1].children[1].classList.contains('acervo-alerta'), false,
+    'a célula do relator deve continuar branca');
+  assert.equal(linhas[1].children[2].classList.contains('acervo-alerta'), true,
+    'o total de Há 3 meses deve iniciar o vermelho permanente');
+  assert.equal(linhas[1].children[2].classList.contains('acervo-detalhe'), true,
+    'o alerta também deve preservar o hover do futuro detalhamento');
+  assert.match(linhas[1].children[2]['aria-label'], /Alerta: 2 processos/);
+  assert.doesNotMatch(linhas[1].children[2]['aria-label'], /ver os processos/,
+    'o alerta rotula a célula; a ação rotula o botão — juntos viram uma frase só');
+  assert.equal(linhas[2].children[2].classList.contains('acervo-alerta'), true,
+    'faixa crítica zerada deve permanecer vermelha');
+  assert.equal(linhas[2].children[2].classList.contains('acervo-detalhe'), false,
+    'faixa zerada não deve sugerir detalhamento disponível');
+  assert.equal(linhas[2].children[2]['aria-label'], undefined,
+    'faixa zerada não deve anunciar uma ocorrência inexistente');
+});
+
+test('acervo não anuncia falha de conexão quando a sessão expirou', async () => {
+  const page = acervoPage(async () => {
+    throw Object.assign(new Error('sessão expirada'), { status: 401 });
+  });
+  page.inicializarAcervo();
+  await wait();
+
+  assert.equal(page.document.getElementById('acervoErro').hidden, true,
+    'a tela de login já explica o que houve; dois diagnósticos se contradizem');
+});
+
+test('acervo avisa quando não há processo parado', async () => {
+  const page = acervoPage(async () => [
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ3', conselheiro: 'Dorivan de Souza Lima', processos: 0 }
+  ]);
+  page.inicializarAcervo();
+  await wait();
+
+  assert.equal(page.document.getElementById('acervoVazio').hidden, false);
+  assert.equal(page.document.getElementById('acervoTotal').textContent,
+    '0 processos aguardando julgamento');
+});
+
+test('acervo revela o conselheiro no hover da coluna', async () => {
+  const page = acervoPage(async () => [
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 2 },
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ5', conselheiro: 'Lorena Patricia de Oliveira', processos: 1 }
+  ]);
+  await page.inicializarAcervo();
+  await wait();
+
+  const [th1, th5] = page.document.getElementById('acervoTable')
+    .children[0].children[0].children.slice(1, 3);
+  assert.equal(th1.textContent, 'CJ1');
+  assert.equal(th1.title, 'Paulo Otoni Ribeiro', 'a cadeira sozinha não diz quem é');
+  assert.equal(th1['aria-label'], 'CJ1 — Paulo Otoni Ribeiro');
+  assert.equal(th5.title, 'Lorena Patricia de Oliveira');
+});
+
+test('acervo não inventa hover quando a cadeira não tem de-para', async () => {
+  const page = acervoPage(async () => [
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ9', conselheiro: 'CJ9', processos: 1 }
+  ]);
+  await page.inicializarAcervo();
+  await wait();
+
+  const th = page.document.getElementById('acervoTable').children[0].children[0].children[1];
+  assert.equal(th.textContent, 'CJ9');
+  assert.equal(th.title, undefined, 'title repetindo o rótulo é ruído');
+});
+
+test('Exportar abre um menu acessível com PDF e Excel', async () => {
+  const page = acervoPage(async () => [
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', processos: 2 }
+  ]);
+  await page.inicializarAcervo();
+
+  const botao = page.document.getElementById('btnExportar');
+  const menu = page.document.getElementById('exportOptions');
+  assert.equal(botao.disabled, false);
+  botao.click();
+  assert.equal(menu.hidden, false);
+  assert.equal(botao['aria-expanded'], 'true');
+  assert.equal(page.document.activeElement, menu.children[0],
+    'o primeiro formato deve receber foco quando o menu abre');
+
+  menu.dispatch('click', { target: menu.children[0] });
+  assert.equal(menu.hidden, true);
+  assert.equal(page.document.activeElement, botao,
+    'o foco deve voltar ao botão depois que uma opção fecha o menu');
+});
+
+test('Excel representa a matriz atual em colunas e gera um XLSX real', async () => {
+  const linhas = [
+    { ordem: 1, faixa: 'Até & 15 dias', relator: 'CJ2', processos: 0 },
+    { ordem: 1, faixa: 'Até & 15 dias', relator: 'CJ1', processos: 3 },
+    { ordem: 4, faixa: 'Há 3 meses', relator: 'CJ2', processos: 4 },
+    { ordem: 4, faixa: 'Há 3 meses', relator: 'CJ1', processos: 1 }
+  ];
+  const page = acervoPage(async () => linhas);
+  await page.inicializarAcervo();
+
+  assert.deepEqual(page.dadosTabulares(linhas), [
+    ['Período', 'CJ1', 'CJ2', 'Total'],
+    ['Até & 15 dias', 3, 0, 3],
+    ['Há 3 meses', 1, 4, 5],
+    ['Total', 4, 4, 8]
+  ]);
+
+  const arquivo = page.criarExcel(linhas);
+  const bytes = new Uint8Array(await arquivo.arrayBuffer());
+  const texto = new TextDecoder().decode(bytes);
+  assert.deepEqual([...bytes.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04], 'XLSX precisa ser um pacote ZIP');
+  assert.equal(arquivo.type, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  assert.match(texto, /xl\/worksheets\/sheet1\.xml/);
+  assert.match(texto, /ATÉ &amp; 15 DIAS/, 'rótulo deve manter o conteúdo e seguir a caixa alta do dashboard');
+  assert.match(texto, /Acervo de processos/);
+  assert.match(texto, /Visão gerencial do tempo de permanência/);
+  assert.match(texto, /showGridLines="0"/);
+  assert.match(texto, /mergeCells count="4"/);
+  assert.ok(texto.indexOf('<autoFilter ') < texto.indexOf('<mergeCells '),
+    'autoFilter deve preceder mergeCells no schema OOXML aceito pelo Excel');
+  assert.match(texto, /orientation="landscape" fitToWidth="1"/);
+  assert.match(texto, /<c r="D5" s="7"><f>SUM\(B5:C5\)<\/f><v>3<\/v><\/c>/,
+    'total da faixa deve ser fórmula com o verde claro do dashboard');
+  assert.match(texto, /<c r="D6" s="8"><f>SUM\(B6:C6\)<\/f><v>5<\/v><\/c>/,
+    'faixa crítica deve preservar o alerta vermelho do dashboard');
+  assert.match(texto, /<c r="B7" s="10"><f>SUM\(B5:B6\)<\/f><v>4<\/v><\/c>/,
+    'rodapé deve ser auditável por fórmula');
+  for (const cor of ['FF00534B', 'FF00453E', 'FFE0F0E8', 'FFFEE2E2', 'FFE9F3EF', 'FFBFE3D1']) {
+    assert.match(texto, new RegExp(cor), `a paleta do dashboard precisa incluir ${cor}`);
+  }
+  assert.match(texto, /name val="Montserrat"/);
+});
+
+test('PDF usa o dashboard atual sem deixar mensagem de sucesso persistente', async () => {
+  let impresso = 0;
+  const page = acervoPage(async () => [
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', processos: 2 }
+  ], { imprimir: () => { impresso++; } });
+  await page.inicializarAcervo();
+
+  const geracao = page.exportar('pdf');
+  assert.equal(page.document.getElementById('btnExportar')['aria-busy'], 'true');
+  assert.equal(page.document.getElementById('btnExportar').querySelector('.export-label').textContent,
+    'Gerando PDF…');
+  assert.equal(page.document.getElementById('exportFeedback').textContent, '');
+  await geracao;
+
+  assert.equal(impresso, 1);
+  assert.equal(page.document.getElementById('exportFeedback').textContent, '');
+  assert.equal(page.document.getElementById('btnExportar').querySelector('.export-label').textContent,
+    'Exportar');
+  assert.equal(page.document.getElementById('btnExportar')['aria-busy'], undefined);
+});
+
+test('falha de exportação mostra uma mensagem clara e libera o botão', async () => {
+  const page = acervoPage(async () => [
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', processos: 2 }
+  ], { imprimir: () => { throw new Error('impressão bloqueada'); } });
+  await page.inicializarAcervo();
+  await page.exportar('pdf');
+
+  const feedback = page.document.getElementById('exportFeedback');
+  assert.match(feedback.textContent, /Não foi possível gerar o arquivo.*impressão bloqueada/);
+  assert.equal(feedback.dataset.state, 'error');
+  assert.equal(feedback.role, 'alert');
+  assert.equal(feedback['aria-live'], 'assertive');
+  assert.equal(page.document.getElementById('btnExportar').disabled, false);
+});
+
+test('sorteio da CJ mostra a cadeira e o conselheiro no hover', () => {
+  const { document } = indexPage();
+  document.getElementById('btnCj').dispatch('click');
+
+  const pills = document.getElementById('pillsContainer').children;
+  assert.deepEqual(pills.map(p => p.textContent), ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'],
+    'o sorteio precisa gravar a cadeira, que é o que acervo_cj guarda');
+  assert.equal(pills[0].title, 'Paulo Otoni Ribeiro');
+  assert.equal(pills[1].title, 'Deusdete Cardoso Belém');
+  assert.equal(pills[2].title, 'Dorivan de Souza Lima');
+  assert.equal(pills[3].title, 'Paulo Henrique Oliveira Marques');
+  assert.equal(pills[4].title, 'Lorena Patricia de Oliveira');
+  assert.equal(pills[0]['aria-label'], 'CJ1 — Paulo Otoni Ribeiro',
+    'o leitor de tela precisa anunciar a pessoa, não soletrar a cadeira');
+});
+
+// ── Card de detalhe ──────────────────────────────────────────────────────────
+// Clicar num bloco com número abre a lista daquele recorte. O que o teste fixa
+// é o contrato com o banco: quais filtros o card pede em cada tipo de célula.
+
+const matriz = [
+  { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 2 },
+  { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ5', conselheiro: 'Lorena Patricia de Oliveira', processos: 0 },
+  { ordem: 4, faixa: 'Há 3 meses', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 1 },
+  { ordem: 4, faixa: 'Há 3 meses', relator: 'CJ5', conselheiro: 'Lorena Patricia de Oliveira', processos: 0 }
+];
+
+const processosFalsos = [
+  { num_processo: '202600029001111', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro',
+    data_distribuicao: '2026-06-29', dias: 56 },
+  { num_processo: '202600029002222', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro',
+    data_distribuicao: '2026-08-14', dias: 10 }
+];
+
+async function acervoComDetalhe(aoPedirDetalhe) {
+  const pedidos = [];
+  const page = acervoPage(async (caminho, opcoes) => {
+    if (caminho.includes('processos_acervo_cj')) {
+      pedidos.push(JSON.parse(opcoes.body));
+      return aoPedirDetalhe ? aoPedirDetalhe() : processosFalsos;
+    }
+    return matriz;
+  });
+  await page.inicializarAcervo();
+  await wait();
+  return { ...page, pedidos };
+}
+
+const celulaDe = (page, linha, coluna) =>
+  page.document.getElementById('acervoTable').children[1].children[linha].children[coluna];
+
+test('bloco com número abre o card; bloco zerado não', async () => {
+  const page = await acervoComDetalhe();
+  const bloco = celulaDe(page, 0, 1);
+  assert.equal(bloco.dataset.rotulo, 'Até 15 dias · CJ1');
+  // A célula continua célula: quem vira botão é um filho dela. Com role="button"
+  // no <td>, a linha deixa de ter células e o leitor de tela perde a contagem.
+  assert.equal(bloco.getAttribute('role'), null, 'o <td> não pode trocar de papel');
+  assert.equal(bloco.children.length, 1);
+  assert.equal(bloco.children[0].tagName, 'BUTTON');
+  assert.equal(bloco.children[0].textContent, '2', 'o botão carrega o número da célula');
+  assert.equal(bloco.children[0]['aria-label'], 'Até 15 dias · CJ1: ver os processos');
+  assert.equal(celulaDe(page, 0, 2).dataset.rotulo, undefined,
+    'travessão não representa processo nenhum para listar');
+});
+
+test('cada tipo de célula pede o recorte certo ao banco', async () => {
+  const page = await acervoComDetalhe();
+  const tabela = page.document.getElementById('acervoTable');
+
+  await page.abrirDetalhe(celulaDe(page, 0, 1));                       // célula
+  await page.abrirDetalhe(celulaDe(page, 0, 3));                       // total da linha
+  await page.abrirDetalhe(tabela.children[2].children[0].children[1]); // total da coluna
+  await page.abrirDetalhe(tabela.children[2].children[0].children[3]); // total geral
+
+  assert.deepEqual(page.pedidos, [
+    { p_ordem: 1, p_relator: 'CJ1' },
+    { p_ordem: 1, p_relator: null },
+    { p_ordem: null, p_relator: 'CJ1' },
+    { p_ordem: null, p_relator: null }
+  ], 'nulo é "não filtre por isso" — é o que faz os totais serem clicáveis');
+});
+
+test('o card lista os processos e habilita a exportação', async () => {
+  const page = await acervoComDetalhe();
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  assert.equal(page.dialog.open, true, 'o card precisa abrir em modo modal');
+  assert.equal(page.document.getElementById('detalheTitulo').textContent, 'Até 15 dias · CJ1');
+  assert.match(page.document.getElementById('detalheResumo').textContent, /^2 processos/);
+
+  const linhas = page.document.getElementById('detalheTable').children[1].children;
+  assert.deepEqual(linhas.map(tr => tr.children.map(c => c.textContent)), [
+    ['202600029001111', 'CJ1', '29/06/2026', '56'],
+    ['202600029002222', 'CJ1', '14/08/2026', '10']
+  ]);
+  assert.equal(page.document.getElementById('btnExportarDetalhe').disabled, false);
+
+  const cadeira = linhas[0].children[1];
+  assert.equal(cadeira.title, 'Paulo Otoni Ribeiro');
+  assert.equal(cadeira['aria-label'], 'CJ1 — Paulo Otoni Ribeiro',
+    'só no title, o nome do conselheiro existe para o mouse e não para o leitor de tela');
+});
+
+test('o card fecha e a falha aparece dentro dele', async () => {
+  const page = await acervoComDetalhe(() => { throw new Error('rede fora'); });
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  assert.equal(page.dialog.open, true, 'fechar o card esconderia a mensagem de erro');
+  const erro = page.document.getElementById('detalheErro');
+  assert.equal(erro.hidden, false);
+  assert.match(erro.children[0].textContent, /rede fora/);
+  assert.equal(page.document.getElementById('btnExportarDetalhe').disabled, true,
+    'não há o que exportar quando a lista não chegou');
+});
+
+test('sessão expirada fecha o card em vez de cobrir o login', async () => {
+  const page = await acervoComDetalhe(() => {
+    throw Object.assign(new Error('sessão expirada'), { status: 401 });
+  });
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  assert.equal(page.dialog.open, false,
+    'o card por cima esconderia justamente o formulário de login');
+});
+
+test('o Excel do card é um .xlsx válido com os processos', async () => {
+  const page = await acervoComDetalhe();
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+  const blob = page.criarExcelDetalhe(processosFalsos, 'Até 15 dias · CJ1');
+
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  assert.deepEqual([...bytes.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04], 'assinatura ZIP');
+  const texto = new TextDecoder().decode(bytes);
+  assert.match(texto, /xl\/worksheets\/sheet1\.xml/);
+  assert.match(texto, /202600029001111/, 'o número do processo precisa estar na planilha');
+  assert.match(texto, /29\/06\/2026/, 'a data vai formatada, não como serial');
+});
+
+test('resposta atrasada não sobrescreve o card aberto depois dela', async () => {
+  const pendentes = [];
+  const page = await acervoComDetalhe(() => new Promise(resolve => pendentes.push(resolve)));
+
+  const primeira = page.abrirDetalhe(celulaDe(page, 0, 1));  // Até 15 dias · CJ1
+  const segunda = page.abrirDetalhe(celulaDe(page, 0, 3));   // Até 15 dias · todas as cadeiras
+
+  pendentes[1]([]);                 // o segundo bloco responde primeiro
+  await segunda;
+  pendentes[0](processosFalsos);    // e o primeiro chega atrasado, depois dele
+  await primeira;
+
+  assert.match(page.document.getElementById('detalheResumo').textContent, /^0 processos/,
+    'a lista tem de ser a do bloco que está no título, não a da resposta que chegou por último');
+  assert.equal(page.document.getElementById('btnExportarDetalhe').disabled, true,
+    'exportar aqui geraria um arquivo de um recorte que a pessoa não está vendo');
+});
+
+test('falha ao exportar o card avisa dentro do próprio card', async () => {
+  const page = await acervoComDetalhe();
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  const criar = page.document.createElement.bind(page.document);
+  page.document.createElement = tag => {
+    if (tag === 'a') throw new Error('download bloqueado');
+    return criar(tag);
+  };
+  page.exportarDetalhe();
+
+  const erro = page.document.getElementById('detalheErro');
+  assert.equal(erro.hidden, false,
+    'falha silenciosa é indistinguível de um download que o navegador engoliu');
+  assert.match(erro.children[0].textContent, /Não foi possível gerar o arquivo.*download bloqueado/);
+});
+
+test('zero dia parado sai como 0 no Excel, não como o travessão do painel', async () => {
+  const page = await acervoComDetalhe();
+  const blob = page.criarExcelDetalhe([{ num_processo: '202600029003333', relator: 'CJ1',
+    conselheiro: 'Paulo Otoni Ribeiro', data_distribuicao: '2026-08-24', dias: 0 }], 'Até 15 dias · CJ1');
+  const xml = new TextDecoder().decode(new Uint8Array(await blob.arrayBuffer()));
+
+  // No painel o travessão significa "nenhum processo". Aqui o zero é um
+  // processo distribuído hoje: reusar aquele formato apagaria a linha.
+  const estilo = xml.match(/<c r="E5" s="(\d+)"><v>0<\/v><\/c>/)?.[1];
+  assert.ok(estilo, 'a célula de dias parados precisa existir na linha do processo');
+  const formatos = [...xml.match(/<cellXfs count="\d+">(.*?)<\/cellXfs>/)[1]
+    .matchAll(/<xf numFmtId="(\d+)"/g)].map(m => m[1]);
+  assert.equal(formatos[Number(estilo)], '3',
+    'o formato 164 desenha zero como travessão; dias parados precisa do #,##0');
+});
+
+test('o card abre em estado de loading antes da resposta da API', async () => {
+  let resolver;
+  const promessa = new Promise(resolve => { resolver = resolve; });
+  const page = await acervoComDetalhe(() => promessa);
+
+  const abertura = page.abrirDetalhe(celulaDe(page, 0, 1));
+  assert.equal(page.dialog.open, true, 'o modal precisa abrir imediatamente');
+  assert.equal(page.document.getElementById('detalheLoading').hidden, false,
+    'o indicador de loading do card deve estar visível');
+  assert.equal(page.document.getElementById('detalheCorpo').hidden, true,
+    'a tabela do card fica oculta durante o carregamento');
+  assert.equal(page.document.getElementById('detalheLoading').children.length, 1);
+  assert.equal(page.document.getElementById('detalheLoading').children[0].children[1].textContent,
+    'Carregando processos…');
+
+  resolver(processosFalsos);
+  await abertura;
+
+  assert.equal(page.document.getElementById('detalheLoading').hidden, true,
+    'o indicador de loading sai quando os dados chegam');
+  assert.equal(page.document.getElementById('detalheCorpo').hidden, false,
+    'o corpo com a tabela entra após o carregamento');
 });

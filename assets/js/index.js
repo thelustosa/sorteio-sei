@@ -84,8 +84,13 @@ btnCreg.addEventListener('click', () => {
   iniciarSorteador('CREG', ['CREG1', 'CREG2', 'CREG3', 'CREG4']);
 });
 
+// As cadeiras da CJ vêm de CADEIRAS_CJ (supabase.js), compartilhado com as
+// telas de julgados e do acervo. O que vai para o banco é a CADEIRA — ela é
+// estável quando a composição da Câmara muda, e é assim que acervo_cj.relator
+// guarda. O nome só aparece no title de cada unidade, para quem escolhe não
+// precisar decorar o número da cadeira.
 btnCj.addEventListener('click', () => {
-  iniciarSorteador('CJ', ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5']);
+  iniciarSorteador('CJ', Object.keys(CADEIRAS_CJ));
 });
 
 btnVoltar.addEventListener('click', () => {
@@ -128,6 +133,8 @@ function iniciarSorteador(modo, unidades) {
     pill.dataset.creg = unit;
     pill.setAttribute('aria-pressed', 'false');
     pill.textContent = unit;
+    // A cadeira sozinha não diz quem é: o nome vai no hover e no aria-label.
+    rotularCadeira(pill, unit);
     fragmentoPills.appendChild(pill);
   });
   pillsContainer.replaceChildren(fragmentoPills);
@@ -413,6 +420,7 @@ function sortearProcessos() {
       const badge = document.createElement('div');
       badge.className = 'unidade-badge';
       badge.textContent = `${p}: ${totalProcessosUnidade} ${totalProcessosUnidade === 1 ? 'processo' : 'processos'}`;
+      if (CADEIRAS_CJ[p]) badge.title = CADEIRAS_CJ[p];
       
       countWrapper.appendChild(badge);
     });
@@ -605,8 +613,8 @@ function dataISO(dataBR) {
 }
 
 // Uma linha por processo, no formato da tabela de cada modo. A unidade sorteada
-// (CJ1..CJ5) é o relator do processo no acervo da Câmara — é ela que os julgados
-// usam depois para saber quem levou o processo à sessão.
+// é o relator do processo no acervo da Câmara — é ele que os julgados usam
+// depois para saber quem levou o processo à sessão.
 function linhasParaBanco(sorteio) {
   if (sorteio.modo === 'CJ') {
     return sorteio.processos.map(p => ({

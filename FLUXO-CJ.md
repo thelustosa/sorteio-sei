@@ -741,12 +741,29 @@ Revisto depois da carga de recuperação, em 21/08/2026.
   para Paulo Henrique, 28ª reunião pela Lorena. Está registrado assim de
   propósito — ver *A pauta confere o acervo* — mas se a troca teve um documento,
   ela vira uma redistribuição no acervo e o caso fecha.
-- **Cadeira × conselheiro.** As 194 distribuições que o acervo tem hoje vieram
-  da planilha e das atas, e todas trazem o **nome** do conselheiro em `relator`;
-  o que o sorteio gravar daqui em diante traz a **cadeira** (`CJ1`..`CJ5`). Não
-  existe de-para entre os dois, então relatório que cruze as duas origens não
-  fecha. Resolver isso é uma tabela pequena ligando cadeira e conselheiro por
-  período. É a única coisa entre a CJ e o fluxo rodando inteiro pelo sistema.
+- **Cadeira × conselheiro — resolvido.** `acervo_cj.relator` guarda a **cadeira**
+  (`CJ1`..`CJ5`), e quem ocupa cada uma sai de [`cadeiras_cj`](sql/schema.sql),
+  uma tabela por período. As 345 linhas que traziam nome foram convertidas pela
+  migração `20260824180000`.
+
+  A cadeira é o valor canônico porque é estável: quando a composição da Câmara
+  mudar, o processo distribuído em 2026 continua tendo sido da CJ3 daquele
+  período, e o de-para resolve quem era. Guardar o nome na linha congelaria a
+  pessoa e faria a troca de composição reescrever a história — por isso
+  composição nova entra como **linha nova**, com `ate` fechando a anterior,
+  nunca como UPDATE.
+
+  Na tela a cadeira aparece com o nome no hover: nas pills de exclusão do
+  sorteio e nas colunas do painel do acervo, via `title` e `aria-label`. O
+  painel recebe cadeira e nome na mesma resposta de `resumo_acervo_cj`, então o
+  front não repete o de-para; o sorteio tem a lista em `index.js`, e um teste
+  falha se ela divergir da tabela.
+
+  **Fronteira conhecida:** a conversão alcança quem está no de-para. O histórico
+  de 2024 e 2025, hoje em `backup_cj`, tem conselheiros de composições
+  anteriores sem cadeira conhecida — eles seguem pelo nome, porque inventar o
+  número seria pior. Se alguém rodar o `restaurar_cj.sql`, o painel passa a
+  misturar cadeiras e nomes até que essas composições sejam informadas.
 - **CREG** continua em `processos_sorteados`. Fica para depois; a estrutura
   está pronta para ganhar `acervo_creg` e `julgados_creg` com a mesma lógica.
 

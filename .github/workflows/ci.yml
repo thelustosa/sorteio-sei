@@ -38,7 +38,7 @@ jobs:
       - name: Validar JavaScript
         shell: bash
         run: |
-          for arquivo in assets/js/*.js sw.js tests/*.mjs; do
+          for arquivo in assets/js/*.js tools/*.mjs tests/*.mjs; do
             node --check "$arquivo"
           done
           for teste in tests/test_*.mjs; do
@@ -52,11 +52,12 @@ jobs:
             python "$teste"
           done
 
-      - name: Conferir arquivos minificados
+      - name: Conferir versão e arquivos minificados
         shell: bash
         run: |
+          node tools/versionar.mjs
           npx --yes esbuild@0.28.2 assets/css/index.css --minify --outfile=assets/css/index.min.css
-          for arquivo in supabase bootstrap index julgados; do
+          for arquivo in supabase bootstrap index julgados acervo; do
             npx --yes esbuild@0.28.2 "assets/js/$arquivo.js" --minify-syntax --minify-whitespace --outfile="assets/js/$arquivo.min.js"
           done
-          git diff --exit-code -- assets/css/index.min.css assets/js/*.min.js
+          git diff --exit-code -- assets/css/index.min.css assets/js/*.min.js assets/js/supabase.js ./*.html

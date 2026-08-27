@@ -31,6 +31,11 @@ PLANILHA_PADRAO = Path.home() / 'Downloads' / 'Câmara de Julgamento - REG.xlsx'
 PG = banco.Postgres('sorteio_sei_test', 55433)
 MIGRACAO = RAIZ / 'supabase' / 'migrations' / \
     '20260823165725_corrigir_integridade_creg_e_privilegios.sql'
+# Converte relator de nome para cadeira. Rodada em preparar_banco DEPOIS da
+# planilha, porque e o dado importado que ela tem de alcancar.
+MIGRACAO_CADEIRAS = RAIZ / 'supabase' / 'migrations' / '20260824180000_cadeiras_cj.sql'
+MIGRACAO_HARDENING = RAIZ / 'supabase' / 'migrations' / \
+    '20260827104200_restringir_cadeiras_e_ping.sql'
 
 testes = []
 
@@ -42,6 +47,16 @@ def teste(fn):
 
 def rodar_arquivo(caminho):
     PG.rodar_arquivo(caminho)
+
+
+def comando_da_migracao(tabela):
+    """O UPDATE de nome para cadeira, extraído do arquivo da migração.
+
+    Serve para que o teste exercite o comando que roda de verdade em produção,
+    em vez de uma cópia que continuaria verde depois de a migração quebrar.
+    """
+    fonte = MIGRACAO_CADEIRAS.read_text(encoding='utf-8')
+    return re.search(rf'update public\.{tabela}\b.*?;', fonte, re.S).group(0)
 
 
 # ── Planilha ─────────────────────────────────────────────────────────────────
@@ -163,6 +178,7 @@ def rls_da_cada_tabela_o_minimo(cur):
         'acervo_cj': {'INSERT'},
         'julgados_cj': {'SELECT'},
         'pautas_cj': set(),
+        'cadeiras_cj': set(),
     }
     for tabela, comandos in esperado.items():
         assert uma(cur, 'select relrowsecurity from pg_class where oid = %s::regclass',
@@ -193,7 +209,7 @@ def privilegios_sql_repetem_o_minimo_da_rls(cur):
                      from information_schema.role_table_grants
                     where table_schema = 'public'
                       and table_name in ('processos_sorteados', 'acervo_cj',
-                                         'julgados_cj', 'pautas_cj')
+                                         'julgados_cj', 'pautas_cj', 'cadeiras_cj')
                       and grantee in ('anon', 'authenticated')""")
     obtido = {}
     for papel, tabela, privilegio in cur.fetchall():
@@ -225,6 +241,25 @@ def gatilho_roda_com_privilegio_proprio(cur):
 
 
 @teste
+def ping_tem_search_path_fixo_e_privilegio_minimo(cur):
+    cur.execute("""select proconfig,
+                          has_function_privilege('anon', oid, 'execute'),
+                          has_function_privilege('authenticated', oid, 'execute'),
+                          has_function_privilege('service_role', oid, 'execute')
+                     from pg_proc
+                    where oid = 'public.ping()'::regprocedure""")
+    config, pode_anonimo, pode_autenticado, pode_servico = cur.fetchone()
+    assert config and any(c.startswith('search_path=') for c in config)
+    assert pode_anonimo is True and pode_autenticado is True
+    assert pode_servico is False
+
+    assert uma(cur, """select count(*) from pg_proc p
+                        join pg_namespace n on n.oid = p.pronamespace
+                          where n.nspname = 'public'
+                            and p.proname = 'painel_cj_nao_julgados'""") == 0
+
+
+@teste
 def tabela_antiga_recusa_cj(cur):
     """processos_sorteados é só do CREG: processo da Câmara não entra ali."""
     try:
@@ -248,7 +283,9 @@ def importacao_do_acervo(cur):
     """Toda distribuição da aba Acervo está no banco, com os valores certos."""
     assert uma(cur, "select count(*) from acervo_cj where origem = 'planilha'") == len(PLANILHA.acervo)
 
-    esperado = {(l['num_processo'], l['data_distribuicao'], l['relator']): l['defesa']
+    cadeira = como_cadeira(cur)
+    esperado = {(l['num_processo'], l['data_distribuicao'],
+                 cadeira(l['relator'], l['data_distribuicao'])): l['defesa']
                 for l in PLANILHA.acervo}
     cur.execute("""select num_processo, data_distribuicao, relator, defesa
                      from acervo_cj where origem = 'planilha'""")
@@ -264,10 +301,15 @@ def importacao_dos_julgados(cur):
     cur.execute("""select num_processo, data_sessao, pauta, voto, status,
                           defesa, relator, data_distribuicao from julgados_cj""")
     banco = {(n, s): (p, v, st, d, r, dd) for n, s, p, v, st, d, r, dd in cur.fetchall()}
+    cadeira = como_cadeira(cur)
     for l in PLANILHA.julgados:
         chave = (l['num_processo'], l['data_sessao'])
-        assert banco[chave] == (l['pauta'], l['voto'], l['status'],
-                                l['defesa'], l['relator'], l['data_distribuicao']), chave
+        # Em julgados_cj a migração decide pela data da SESSÃO, não pela da
+        # distribuição — e o histórico tem linha com distribuição posterior à
+        # sessão, onde os dois critérios divergem.
+        assert banco[chave] == (l['pauta'], l['voto'], l['status'], l['defesa'],
+                                cadeira(l['relator'], l['data_sessao']),
+                                l['data_distribuicao']), chave
 
 
 @teste
@@ -628,6 +670,7 @@ def regras_do_banco_reproduzem_as_formulas(cur):
     origem para os três campos: a distribuição vigente na data da sessão. Toda
     divergência abaixo tem que ser de processo com mais de uma distribuição.
     """
+    cadeira = como_cadeira(cur)
     cur.execute('delete from julgados_cj')
     psycopg2.extras.execute_values(cur, """
         insert into julgados_cj (num_processo, data_sessao, pauta, voto, status)
@@ -655,8 +698,11 @@ def regras_do_banco_reproduzem_as_formulas(cur):
         assert dias == (l['data_sessao'] - ddist).days, chave
         assert ddist != l['data_distribuicao'] or dias == dias_planilha, chave
 
+        # O relator da planilha é o nome; o do banco, a cadeira em que a
+        # migração o converteu. Comparar sem traduzir acusaria as 3.144 linhas.
         for campo, obtido in (('relator', rel), ('defesa', dfs), ('data_distribuicao', ddist)):
-            if l[campo] != obtido:
+            esperado_planilha = cadeira(l[campo], ddist) if campo == 'relator' else l[campo]
+            if esperado_planilha != obtido:
                 achados[campo].append((chave, l[campo], obtido))
 
     # Segunda divergência esperada: a aba Julgados tem 1.122 linhas com Defesa
@@ -847,6 +893,343 @@ def registrar_votos_e_a_unica_porta_de_escrita(cur):
 
 
 # ── Testes: nada quebrou no que já existia ───────────────────────────────────
+
+# ── Painel do acervo ─────────────────────────────────────────────────────────
+
+def como_cadeira(cur):
+    """Traduz nome de conselheiro para cadeira, como a migração faz.
+
+    A suíte roda a migração das cadeiras depois de importar a planilha, para
+    exercitá-la em CI. Os testes de fidelidade comparam o banco com a planilha,
+    que traz o NOME — então o esperado precisa passar pelo mesmo de-para.
+
+    E pela mesma REGRA: a conversão só alcança o que está dentro da vigência da
+    cadeira. Uma linha de 2024 é de outra composição e fica pelo nome; traduzir
+    sem olhar a data acusaria divergência justamente onde o banco acertou.
+    """
+    cur.execute('select conselheiro, cadeira, desde, ate from public.cadeiras_cj')
+    periodos = cur.fetchall()
+
+    def traduzir(relator, data):
+        for conselheiro, cadeira, desde, ate in periodos:
+            if conselheiro == relator and data >= desde and (ate is None or data <= ate):
+                return cadeira
+        return relator
+    return traduzir
+
+
+def autenticar(cur, email='secretaria@goias.gov.br'):
+    cur.execute("select set_config('request.jwt.claims', %s, true)",
+                (json.dumps({'email': email, 'role': 'authenticated',
+                             'sub': '00000000-0000-0000-0000-000000000001'}),))
+
+
+@teste
+def resumo_do_acervo_exige_sessao(cur):
+    """A função lê acervo_cj, que é fechada ao navegador.
+
+    Sem a checagem, ela seria um endpoint /rest/v1/rpc que devolve o acervo
+    inteiro agregado para quem tiver só a chave publicável.
+    """
+    cur.execute("select set_config('request.jwt.claims', '', true)")
+    try:
+        cur.execute('select * from public.resumo_acervo_cj()')
+        raise AssertionError('respondeu sem sessão autenticada')
+    except psycopg2.errors.InvalidAuthorizationSpecification:
+        pass
+    cur.connection.rollback()
+
+
+@teste
+def resumo_do_acervo_so_e_executavel_por_authenticated(cur):
+    """EXECUTE é concedido a PUBLIC por padrão; sem o revoke, anon chamaria."""
+    cur.execute("""select coalesce(string_agg(grantee, ',' order by grantee), '')
+                     from information_schema.role_routine_grants
+                    where routine_schema = 'public'
+                      and routine_name = 'resumo_acervo_cj'
+                      and grantee in ('anon', 'authenticated', 'service_role', 'PUBLIC')""")
+    concedido = cur.fetchone()[0]
+    assert concedido == 'authenticated', concedido
+
+
+@teste
+def resumo_do_acervo_conta_o_que_nao_foi_julgado(cur):
+    """Processo julgado sai do painel; o que nunca foi a sessão fica."""
+    autenticar(cur)
+    cur.execute("delete from public.julgados_cj")
+    cur.execute("delete from public.acervo_cj")
+    cur.execute("""insert into public.acervo_cj
+                     (num_processo, relator, data_distribuicao, defesa, origem) values
+                   ('202600029000001', 'Fulano', current_date - 5,   true, 'sorteio'),
+                   ('202600029000002', 'Fulano', current_date - 200, true, 'sorteio'),
+                   ('202600029000003', 'Sicrano', current_date - 900, true, 'sorteio')""")
+    # o 3 foi julgado: sai do painel
+    cur.execute("""insert into public.julgados_cj (num_processo, data_sessao, pauta)
+                   values ('202600029000003', current_date - 10, 1)""")
+
+    cur.execute('select ordem, faixa, relator, processos from public.resumo_acervo_cj()')
+    linhas = cur.fetchall()
+
+    # a grade é sempre completa: 8 faixas x 2 relatores, com zero onde não há nada
+    assert len(linhas) == 16, len(linhas)
+    assert {r for _, _, r, _ in linhas} == {'Fulano', 'Sicrano'}
+    assert sum(n for _, _, _, n in linhas) == 2, 'o julgado deveria ter saído'
+
+    por_celula = {(f, r): n for _, f, r, n in linhas}
+    assert por_celula[('Até 15 dias', 'Fulano')] == 1
+    assert por_celula[('Entre 6 meses e 1 ano', 'Fulano')] == 1
+    assert por_celula[('Há 2 anos', 'Sicrano')] == 0, 'julgado ainda contando'
+    cur.connection.rollback()
+
+
+@teste
+def resumo_do_acervo_conta_processo_redistribuido_uma_vez(cur):
+    """Duas distribuições, um processo: conta na cadeira mais recente."""
+    autenticar(cur)
+    cur.execute("delete from public.julgados_cj")
+    cur.execute("delete from public.acervo_cj")
+    cur.execute("""insert into public.acervo_cj
+                     (num_processo, relator, data_distribuicao, defesa, origem) values
+                   ('202600029000004', 'Antigo', current_date - 300, true, 'sorteio'),
+                   ('202600029000004', 'Atual',  current_date - 3,   true, 'sorteio')""")
+
+    cur.execute('select faixa, relator, processos from public.resumo_acervo_cj()'
+                ' where processos > 0')
+    assert cur.fetchall() == [('Até 15 dias', 'Atual', 1)], 'contou a distribuição antiga'
+    cur.connection.rollback()
+
+
+@teste
+def de_para_das_cadeiras_esta_completo(cur):
+    """Cinco cadeiras, cinco conselheiros, sem ambiguidade.
+
+    Duas cadeiras com a mesma pessoa vigente, ou a mesma cadeira com dois
+    ocupantes ao mesmo tempo, quebrariam a tradução em silêncio.
+    """
+    cur.execute("""select cadeira, conselheiro from public.cadeiras_cj
+                    where ate is null order by cadeira""")
+    vigentes = cur.fetchall()
+    assert len(vigentes) == 5, vigentes
+    assert len({c for c, _ in vigentes}) == 5, 'cadeira repetida na mesma vigência'
+    assert len({n for _, n in vigentes}) == 5, 'conselheiro em duas cadeiras'
+
+
+@teste
+def sorteio_da_cj_grava_cadeira_e_o_front_sabe_o_nome(cur):
+    """O de-para do supabase.js espelha a tabela do banco.
+
+    O que vai para acervo_cj é a cadeira; o nome existe no front só para o
+    hover. Se as duas listas divergirem, a tela passa a anunciar o conselheiro
+    errado — e nada no banco perceberia, porque o nome não é gravado.
+    """
+    fonte = (RAIZ / 'assets' / 'js' / 'supabase.js').read_text(encoding='utf-8')
+    trecho = fonte[fonte.index('const CADEIRAS_CJ'):]
+    no_front = dict(re.findall(r"(CJ\d+):\s*'([^']+)'", trecho[:trecho.index('};')]))
+    assert len(no_front) == 5, no_front
+
+    cur.execute('select cadeira, conselheiro from public.cadeiras_cj where ate is null')
+    no_banco = dict(cur.fetchall())
+    assert no_front == no_banco, f'front={no_front} banco={no_banco}'
+
+
+@teste
+def conversao_troca_nome_por_cadeira_e_poupa_o_resto(cur):
+    """O UPDATE da migração 20260824180000, na fronteira que ele promete.
+
+    Quem está no de-para vira cadeira. Quem não está — conselheiro de
+    composição anterior, que o histórico de 2024 e 2025 tem — fica pelo nome:
+    inventar o número da cadeira dele seria pior do que não traduzir.
+
+    O comando é LIDO do arquivo da migração, não copiado para cá: uma cópia
+    continuaria passando depois de a migração ser alterada ou quebrada.
+    """
+    cur.execute("""insert into public.acervo_cj
+                     (num_processo, relator, data_distribuicao, defesa, origem) values
+                   ('900000000000090', 'Dorivan de Souza Lima',  date '2026-07-01', true, 'sorteio'),
+                   ('900000000000091', 'Paulo Otoni Ribeiro',    date '2026-07-01', false,'sorteio'),
+                   ('900000000000092', 'Conselheiro De Antes',   date '2026-07-01', true, 'planilha')""")
+
+    cur.execute(comando_da_migracao('acervo_cj'))
+
+    cur.execute("""select num_processo, relator from public.acervo_cj
+                    where num_processo in ('900000000000090','900000000000091','900000000000092')
+                    order by num_processo""")
+    convertidos = cur.fetchall()
+    assert convertidos == [('900000000000090', 'CJ3'),
+                           ('900000000000091', 'CJ1'),
+                           ('900000000000092', 'Conselheiro De Antes')], convertidos
+    cur.connection.rollback()
+
+
+@teste
+def reimportar_a_planilha_nao_duplica_o_relator(cur):
+    """Rodar o SQL da importação duas vezes não cria uma segunda coluna.
+
+    A planilha traz o NOME do conselheiro; o banco guarda a CADEIRA. Se a
+    tradução ficasse para um UPDATE depois do insert, a segunda importação
+    gravaria a linha pelo nome — que não colide com a da cadeira, porque a
+    restrição inclui relator — e o painel passaria a ter duas colunas para a
+    mesma pessoa. O SQL vem do importador de verdade, não de uma cópia.
+    """
+    import importar_planilha as imp
+
+    colunas = ['num_processo', 'relator', 'data_distribuicao', 'defesa', 'origem']
+    linhas = [
+        {'num_processo': '900000000000093', 'relator': 'Dorivan de Souza Lima',
+         'data_distribuicao': date(2026, 7, 1), 'defesa': True, 'origem': 'planilha'},
+        # Composição anterior: sem cadeira no de-para, fica pelo nome.
+        {'num_processo': '900000000000094', 'relator': 'Conselheiro De Antes',
+         'data_distribuicao': date(2026, 7, 1), 'defesa': None, 'origem': 'planilha'},
+    ]
+    sql = imp.gerar_sql('acervo_cj', colunas, linhas, 'acervo_cj_distribuicao_unica',
+                        'teste', 'data_distribuicao')
+    cur.execute(sql)
+    cur.execute(sql)
+
+    cur.execute("""select num_processo, relator from public.acervo_cj
+                    where num_processo in ('900000000000093', '900000000000094')
+                    order by num_processo, relator""")
+    gravado = cur.fetchall()
+    assert gravado == [('900000000000093', 'CJ3'),
+                       ('900000000000094', 'Conselheiro De Antes')], gravado
+    cur.connection.rollback()
+
+
+@teste
+def cadeira_nao_aceita_dois_ocupantes_vigentes(cur):
+    """Duas linhas com `ate` nulo dobrariam cada célula do painel.
+
+    A chave primária é (cadeira, desde) e não impede isso: o de-para entra no
+    FROM da mesma consulta que conta os processos, então uma cadeira com dois
+    períodos abertos multiplicaria o count por dois — sem erro nenhum na tela.
+    """
+    try:
+        cur.execute("""insert into public.cadeiras_cj (cadeira, conselheiro, desde)
+                       values ('CJ3', 'Outro Conselheiro', date '2027-01-01')""")
+        raise AssertionError('aceitou dois ocupantes vigentes na mesma cadeira')
+    except psycopg2.errors.UniqueViolation:
+        pass
+    cur.connection.rollback()
+
+    # Fechar o período anterior é o caminho previsto, e continua permitido.
+    cur.execute("update public.cadeiras_cj set ate = date '2026-12-31' where cadeira = 'CJ3'")
+    cur.execute("""insert into public.cadeiras_cj (cadeira, conselheiro, desde)
+                   values ('CJ3', 'Outro Conselheiro', date '2027-01-01')""")
+    cur.connection.rollback()
+
+
+@teste
+def detalhe_do_painel_confere_com_a_contagem(cur):
+    """A lista que o card abre tem exatamente o número que o bloco mostrava.
+
+    São duas funções com a mesma definição de pendente e as mesmas faixas. Se
+    uma mudar sem a outra, o painel diz 22 e o card abre 21 — e nada mais no
+    sistema perceberia.
+
+    Sem a planilha (CI), acervo_cj está vazio e a comparação viraria 0 == 0: o
+    teste semeia faixas e cadeiras diferentes, mais um julgado e um
+    redistribuído, que são justamente os pontos onde as duas podem divergir.
+    """
+    autenticar(cur)
+    cur.execute("delete from public.julgados_cj")
+    cur.execute("delete from public.acervo_cj")
+    cur.execute("""insert into public.acervo_cj
+                     (num_processo, relator, data_distribuicao, defesa, origem) values
+                   ('202600029000011', 'CJ1', current_date - 5,   true, 'sorteio'),
+                   ('202600029000012', 'CJ1', current_date - 200, true, 'sorteio'),
+                   ('202600029000013', 'CJ2', current_date - 900, true, 'sorteio'),
+                   ('202600029000014', 'CJ2', current_date - 40,  true, 'sorteio'),
+                   ('202600029000015', 'CJ3', current_date - 60,  true, 'sorteio'),
+                   ('202600029000016', 'CJ1', current_date - 300, true, 'sorteio'),
+                   ('202600029000016', 'CJ3', current_date - 3,   true, 'sorteio')""")
+    # julgado sai das duas
+    cur.execute("""insert into public.julgados_cj (num_processo, data_sessao, pauta)
+                   values ('202600029000015', current_date - 10, 1)""")
+
+    cur.execute('select sum(processos)::int from public.resumo_acervo_cj()')
+    do_painel = cur.fetchone()[0]
+    cur.execute('select count(*) from public.processos_acervo_cj()')
+    do_detalhe = cur.fetchone()[0]
+    assert do_painel == do_detalhe, f'painel={do_painel} detalhe={do_detalhe}'
+
+    # e célula a célula, não só no total
+    cur.execute('select ordem, relator, processos from public.resumo_acervo_cj()'
+                ' where processos > 0')
+    for ordem, relator, esperado in cur.fetchall():
+        cur.execute('select count(*) from public.processos_acervo_cj(%s, %s)', (ordem, relator))
+        achado = cur.fetchone()[0]
+        assert achado == esperado, f'faixa {ordem} / {relator}: painel={esperado} detalhe={achado}'
+    assert do_painel == 5, f'semeadura não exercita as duas funções: {do_painel}'
+    cur.connection.rollback()
+
+
+@teste
+def detalhe_do_painel_exige_sessao(cur):
+    """Ela lê acervo_cj processo a processo — sem a guarda, seria um vazamento."""
+    cur.execute("select set_config('request.jwt.claims', '', true)")
+    try:
+        cur.execute('select * from public.processos_acervo_cj()')
+        raise AssertionError('respondeu sem sessão autenticada')
+    except psycopg2.errors.InvalidAuthorizationSpecification:
+        pass
+    cur.connection.rollback()
+
+
+@teste
+def detalhe_do_painel_so_e_executavel_por_authenticated(cur):
+    cur.execute("""select coalesce(string_agg(distinct grantee, ',' order by grantee), '')
+                     from information_schema.role_routine_grants
+                    where routine_schema = 'public'
+                      and routine_name = 'processos_acervo_cj'
+                      and grantee in ('anon', 'authenticated', 'service_role', 'PUBLIC')""")
+    assert cur.fetchone()[0] == 'authenticated'
+
+
+@teste
+def detalhe_lista_o_processo_uma_vez_so(cur):
+    """Redistribuído aparece uma vez, na cadeira e na data mais recentes."""
+    autenticar(cur)
+    cur.execute("delete from public.julgados_cj")
+    cur.execute("delete from public.acervo_cj")
+    cur.execute("""insert into public.acervo_cj
+                     (num_processo, relator, data_distribuicao, defesa, origem) values
+                   ('900000000000070', 'CJ1', current_date - 300, true, 'sorteio'),
+                   ('900000000000070', 'CJ3', current_date - 5,   true, 'sorteio')""")
+    cur.execute('select num_processo, relator, dias from public.processos_acervo_cj()')
+    assert cur.fetchall() == [('900000000000070', 'CJ3', 5)], 'contou a distribuição antiga'
+    cur.connection.rollback()
+
+
+@teste
+def painel_traduz_cadeira_e_deixa_o_resto_intacto(cur):
+    """Cadeira vem com o nome para o hover; sem de-para, o rótulo se repete.
+
+    O coalesce da função é o que evita hover vazio: uma coluna cujo relator não
+    é cadeira mostra o próprio valor, em vez de um title em branco. Sem a
+    planilha (CI), acervo_cj está vazio — o próprio teste tem que semear os
+    dois casos, senão "painel vazio" nem chega a exercitar o coalesce.
+    """
+    autenticar(cur)
+    cur.execute("delete from public.julgados_cj")
+    cur.execute("delete from public.acervo_cj")
+    cur.execute("""insert into public.acervo_cj
+                     (num_processo, relator, data_distribuicao, defesa, origem) values
+                   ('202600029000005', 'CJ2',                    current_date - 5, true, 'sorteio'),
+                   ('202600029000006', 'Conselheiro Sem Cadeira', current_date - 5, true, 'sorteio')""")
+
+    cur.execute('select distinct relator, conselheiro from public.resumo_acervo_cj()')
+    pares = dict(cur.fetchall())
+    assert pares, 'painel vazio'
+
+    cur.execute('select cadeira, conselheiro from public.cadeiras_cj where ate is null')
+    depara = dict(cur.fetchall())
+    for relator, conselheiro in pares.items():
+        esperado = depara.get(relator, relator)
+        assert conselheiro == esperado, f'{relator} -> {conselheiro}, esperado {esperado}'
+    assert pares['CJ2'] != 'CJ2', 'CJ2 deveria mostrar o conselheiro, não a própria cadeira'
+    assert pares['Conselheiro Sem Cadeira'] == 'Conselheiro Sem Cadeira', 'sem de-para deveria repetir o rótulo'
+    cur.connection.rollback()
+
 
 @teste
 def creg_continua_gravando_na_tabela_antiga(cur):
@@ -1104,6 +1487,13 @@ def preparar_banco(planilha):
                         str(planilha)], check=True, capture_output=True)
         rodar_arquivo(RAIZ / 'dados' / 'acervo_cj.sql')
         rodar_arquivo(RAIZ / 'dados' / 'julgados_cj.sql')
+
+    # Depois da planilha, e sempre: é a única forma de o arquivo da migração ser
+    # de fato executado em CI. Ele tem de ser repetível — rodar sobre um banco
+    # que já veio do schema.sql, com o dado já em cadeira, não pode falhar nem
+    # converter nada duas vezes.
+    rodar_arquivo(MIGRACAO_CADEIRAS)
+    rodar_arquivo(MIGRACAO_HARDENING)
 
 
 def main(argv):
