@@ -990,7 +990,7 @@ test('falha ao exportar o card avisa dentro do próprio card', async () => {
   assert.match(erro.children[0].textContent, /Não foi possível gerar o arquivo.*download bloqueado/);
 });
 
-test('zero dia parado sai como 0 no Excel, não como o travessão do painel', async () => {
+test('zero dias passados sai como 0 no Excel, não como o travessão do painel', async () => {
   const page = await acervoComDetalhe();
   const blob = page.criarExcelDetalhe([{ num_processo: '202600029003333', relator: 'CJ1',
     conselheiro: 'Paulo Otoni Ribeiro', data_distribuicao: '2026-08-24', dias: 0 }], 'Até 15 dias · CJ1');
@@ -999,11 +999,11 @@ test('zero dia parado sai como 0 no Excel, não como o travessão do painel', as
   // No painel o travessão significa "nenhum processo". Aqui o zero é um
   // processo distribuído hoje: reusar aquele formato apagaria a linha.
   const estilo = xml.match(/<c r="E5" s="(\d+)"><v>0<\/v><\/c>/)?.[1];
-  assert.ok(estilo, 'a célula de dias parados precisa existir na linha do processo');
+  assert.ok(estilo, 'a célula de dias passados precisa existir na linha do processo');
   const formatos = [...xml.match(/<cellXfs count="\d+">(.*?)<\/cellXfs>/)[1]
     .matchAll(/<xf numFmtId="(\d+)"/g)].map(m => m[1]);
   assert.equal(formatos[Number(estilo)], '3',
-    'o formato 164 desenha zero como travessão; dias parados precisa do #,##0');
+    'o formato 164 desenha zero como travessão; dias passados precisa do #,##0');
 });
 
 test('o card abre em estado de loading antes da resposta da API', async () => {
