@@ -21,10 +21,16 @@ create table if not exists public.processos_sorteados (
   ordem             int         not null,
   num_processo      text        not null,
   assunto           text        not null,
+  interessado       text,
   data_distribuicao date        not null,
   recurso           text        not null,
   unidade           text        not null
 );
+
+-- Campo livre digitado pela secretaria; sorteios anteriores não o têm, então a
+-- coluna nasce anulável em vez de inventar valor para o histórico.
+alter table public.processos_sorteados
+  add column if not exists interessado text;
 
 -- Criar em duas etapas mantém a proteção para novas linhas enquanto uma base
 -- antiga é conferida; a validação abaixo exige que nenhum legado inválido reste.
