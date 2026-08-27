@@ -67,10 +67,10 @@ create unique index if not exists ux_processos_sorteados_distribuicao
 --   planilha -> importado do histórico da aba Acervo (dados/importar_planilha.py).
 --
 -- Colunas que só uma das origens preenche ficam nulas na outra: a planilha não
--- registra ordem. O relator recebe o nome do conselheiro
--- (planilha) ou a cadeira sorteada CJ1..CJ5 (sorteador) — enquanto não existir
--- de-para entre cadeira e nome, é o mesmo campo "quem ficou com o processo"
--- nas duas origens.
+-- registra ordem. Em relator vai a CADEIRA (CJ1..CJ5) nas duas origens: o
+-- sorteio grava a cadeira e a importação traduz o nome da planilha pela tabela
+-- cadeiras_cj antes de inserir. Quem é o conselheiro sai do de-para, não daqui
+-- (ver "CJ · Quem ocupa cada cadeira", abaixo).
 create table if not exists public.acervo_cj (
   id                bigint generated always as identity primary key,
   num_processo      text        not null,
@@ -370,6 +370,209 @@ $$;
 revoke all on function public.registrar_votos(jsonb) from public, anon, service_role;
 grant execute on function public.registrar_votos(jsonb) to authenticated;
 
+-- ── CJ · Quem ocupa cada cadeira ─────────────────────────────────────────────
+-- acervo_cj.relator guarda a CADEIRA (CJ1..CJ5), não o nome. A cadeira é
+-- estável: quando a composição da Câmara mudar, o processo distribuído em 2026
+-- continua tendo sido da CJ3 daquele período, e este de-para resolve quem era.
+-- Guardar o nome na linha congelaria a pessoa e faria a troca de composição
+-- reescrever a história.
+--
+-- Por isso a tabela é por PERÍODO: composição nova entra como linha nova, com
+-- `ate` fechando a anterior — nunca como UPDATE.
+create table if not exists public.cadeiras_cj (
+  cadeira     text not null check (cadeira ~ '^CJ[1-9][0-9]*$'),
+  conselheiro text not null check (length(trim(conselheiro)) > 0),
+  desde       date not null,
+  ate         date,
+  constraint cadeiras_cj_periodo_valido check (ate is null or ate >= desde),
+  primary key (cadeira, desde)
+);
+
+-- Uma cadeira tem, no máximo, um período em aberto. A chave primária não
+-- impede duas linhas com `ate` nulo, e duas ocupações vigentes multiplicariam
+-- cada célula do painel pelo join do de-para — o painel passaria a contar o
+-- dobro sem nenhum erro aparecer.
+create unique index if not exists ux_cadeiras_cj_vigente
+  on public.cadeiras_cj (cadeira) where ate is null;
+
+-- Composição da Resolução Normativa nº 333/2026-CR, a que assina as atas de
+-- sorteio 010 a 014/2026.
+insert into public.cadeiras_cj (cadeira, conselheiro, desde) values
+  ('CJ1', 'Paulo Otoni Ribeiro',             date '2026-01-01'),
+  ('CJ2', 'Deusdete Cardoso Belém',          date '2026-01-01'),
+  ('CJ3', 'Dorivan de Souza Lima',           date '2026-01-01'),
+  ('CJ4', 'Paulo Henrique Oliveira Marques', date '2026-01-01'),
+  ('CJ5', 'Lorena Patricia de Oliveira',     date '2026-01-01')
+on conflict (cadeira, desde) do update set conselheiro = excluded.conselheiro;
+
+-- Sem política de RLS: o navegador não lê esta tabela direto. Quem traduz
+-- cadeira em nome é a função do painel, que é SECURITY DEFINER.
+alter table public.cadeiras_cj enable row level security;
+
+-- Supabase concede privilégios amplos às tabelas novas. A RLS sem política já
+-- bloqueia linhas, mas os grants também devem expressar que esta tabela é
+-- exclusivamente interna às RPCs SECURITY DEFINER.
+revoke all privileges on table public.cadeiras_cj from anon, authenticated;
+
+-- ── CJ · Painel do acervo ────────────────────────────────────────────────────
+-- A matriz do acervo.html: processos parados por faixa de tempo e por relator.
+--
+-- O navegador não lê acervo_cj — a tabela só tem política de INSERT. Abrir
+-- SELECT nela só para montar o painel entregaria o acervo inteiro ao cliente
+-- para ele contar no JavaScript. A agregação fica aqui: a porta continua
+-- estreita, o payload é de algumas dezenas de células, e a definição de "não
+-- julgado" mora em um lugar só, junto das outras regras.
+-- RPC provisória usada pela primeira versão do painel. Não é mais consumida e
+-- mantê-la publicada ampliaria a superfície da API sem necessidade.
+drop function if exists public.painel_cj_nao_julgados();
+drop function if exists public.resumo_acervo_cj();
+
+create function public.resumo_acervo_cj()
+returns table (ordem int, faixa text, relator text, conselheiro text, processos int)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if (select auth.uid()) is null then
+    raise exception 'autenticação exigida' using errcode = '28000';
+  end if;
+
+  return query
+  with faixas(ordem, faixa, de, ate) as (values
+      (1, 'Até 15 dias',            0,  15),
+      (2, 'Até 30 dias',           16,  30),
+      (3, 'Até 45 dias',           31,  45),
+      (4, 'Há 3 meses',            46,  90),
+      (5, 'Entre 3 e 6 meses',     91, 180),
+      (6, 'Entre 6 meses e 1 ano',181, 365),
+      (7, 'Há mais de 1 ano',     366, 730),
+      (8, 'Há 2 anos',            731, 2147483647)
+  ),
+
+  -- Uma linha por PROCESSO, não por distribuição: um processo redistribuído
+  -- conta uma vez só, na cadeira e na data da distribuição mais recente.
+  --
+  -- "Não julgado" = não aparece em julgados_cj. Quem foi à mesa e voltou sem
+  -- decisão (Retornou, Vista, Retirado) sai do painel — tem fila própria, que é
+  -- a tela de registro. Para contá-los aqui, acrescente
+  -- `and j.status = 'Julgado'` ao not exists.
+  pendentes as (
+    select distinct on (a.num_processo)
+           a.relator,
+           (current_date - a.data_distribuicao) as dias
+      from public.acervo_cj a
+     where not exists (select 1 from public.julgados_cj j
+                        where j.num_processo = a.num_processo)
+     order by a.num_processo, a.data_distribuicao desc, a.id desc
+  ),
+
+  -- Todo relator do acervo vira coluna, mesmo sem processo parado: coluna que
+  -- aparece e some conforme o dado muda faz a tabela dançar de um dia para o
+  -- outro. É também o que faz o painel seguir a composição da Câmara sem
+  -- precisar de lista fixa no HTML.
+  relatores as (select distinct acervo_cj.relator from public.acervo_cj)
+
+  -- A tela mostra a cadeira e revela o conselheiro no hover. As duas saem da
+  -- mesma consulta para que o front não precise repetir o de-para.
+  select f.ordem,
+         f.faixa,
+         r.relator,
+         -- Cadeira sem ocupante conhecido mostra a própria cadeira: melhor um
+         -- rótulo honesto do que um hover vazio.
+         coalesce(max(c.conselheiro), r.relator),
+         count(p.relator)::int
+    from faixas f
+   cross join relatores r
+    left join pendentes p
+           on p.relator = r.relator
+          and p.dias between f.de and f.ate
+    left join public.cadeiras_cj c
+           on c.cadeira = r.relator
+          and c.ate is null
+   group by f.ordem, f.faixa, r.relator
+   order by f.ordem, r.relator;
+end;
+$$;
+
+revoke all on function public.resumo_acervo_cj() from public, anon, service_role;
+grant execute on function public.resumo_acervo_cj() to authenticated;
+
+-- ── CJ · Detalhe de uma célula do painel ─────────────────────────────────────
+-- O painel conta; esta função lista. Sem ela, ver "22" e querer saber quais são
+-- exigiria abrir acervo_cj para o navegador, e a tabela é fechada de propósito.
+--
+-- Os dois parâmetros são opcionais, e é isso que faz qualquer número da tabela
+-- ser clicável com uma consulta só:
+--
+--   (ordem, relator) -> a célula                 CJ1 em "Até 15 dias"
+--   (ordem, null)    -> o total da linha         a faixa inteira
+--   (null, relator)  -> o total da coluna        a cadeira inteira
+--   (null, null)     -> o total geral            o acervo pendente
+--
+-- A definição de pendente e as faixas são as MESMAS de resumo_acervo_cj. Se as
+-- duas divergirem, o card abre um número diferente do que o bloco mostrava —
+-- há um teste comparando célula a célula justamente por isso.
+create or replace function public.processos_acervo_cj(
+  p_ordem   int  default null,
+  p_relator text default null
+)
+returns table (
+  num_processo      text,
+  relator           text,
+  conselheiro       text,
+  data_distribuicao date,
+  dias              int
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if (select auth.uid()) is null then
+    raise exception 'autenticação exigida' using errcode = '28000';
+  end if;
+
+  return query
+  with faixas(ordem, de, ate) as (values
+      (1,   0,  15), (2,  16,  30), (3,  31,  45), (4,  46,  90),
+      (5,  91, 180), (6, 181, 365), (7, 366, 730), (8, 731, 2147483647)
+  ),
+  -- Uma linha por processo, na distribuição mais recente: um processo
+  -- redistribuído aparece uma vez, na cadeira de quem está com ele agora.
+  pendentes as (
+    select distinct on (a.num_processo)
+           a.num_processo,
+           a.relator,
+           a.data_distribuicao,
+           (current_date - a.data_distribuicao) as dias
+      from public.acervo_cj a
+     where not exists (select 1 from public.julgados_cj j
+                        where j.num_processo = a.num_processo)
+     order by a.num_processo, a.data_distribuicao desc, a.id desc
+  )
+  select p.num_processo,
+         p.relator,
+         coalesce(c.conselheiro, p.relator),
+         p.data_distribuicao,
+         p.dias
+    from pendentes p
+    join faixas f on p.dias between f.de and f.ate
+    left join public.cadeiras_cj c
+           on c.cadeira = p.relator
+          and c.ate is null
+   where (p_ordem   is null or f.ordem   = p_ordem)
+     and (p_relator is null or p.relator = p_relator)
+   -- Mais parado primeiro: é a ordem em que a lista costuma ser lida.
+   order by p.data_distribuicao, p.num_processo;
+end;
+$$;
+
+revoke all on function public.processos_acervo_cj(int, text) from public, anon, service_role;
+grant execute on function public.processos_acervo_cj(int, text) to authenticated;
+
 -- ── Segurança (RLS) ──────────────────────────────────────────────────────────
 -- Duas camadas de proteção, iguais para as três tabelas:
 --
@@ -442,6 +645,6 @@ as $$
   select 'pong'
 $$;
 
-revoke all on function public.ping() from public;
+revoke all on function public.ping() from public, service_role;
 grant execute on function public.ping() to anon, authenticated;
 

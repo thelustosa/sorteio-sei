@@ -3,7 +3,8 @@
 // execução no caminho crítico sem mudar o fluxo do sistema.
 const PAGINAS = {
   sorteio: { arquivo: 'index.min.js', iniciar: 'inicializarSorteio', texto: 'Preparando o sorteio…' },
-  julgados: { arquivo: 'julgados.min.js', iniciar: 'inicializarJulgados', texto: 'Preparando as pautas…' }
+  julgados: { arquivo: 'julgados.min.js', iniciar: 'inicializarJulgados', texto: 'Preparando as pautas…' },
+  acervo: { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' }
 };
 
 const paginaAtual = PAGINAS[document.body.dataset.page];
@@ -17,7 +18,9 @@ async function carregarPaginaAutenticada() {
 
   try {
     await carregarScript(`assets/js/${paginaAtual.arquivo}?v=${ASSET_VERSION}`);
-    window[paginaAtual.iniciar]();
+    // A inicialização também pode buscar dados. O loading geral só sai depois
+    // que a superfície inteira estiver pronta para ser revelada.
+    await window[paginaAtual.iniciar]();
     sessionLoading.hidden = true;
     sessionLoading.replaceChildren();
   } catch (_) {

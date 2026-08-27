@@ -1,0 +1,6 @@
+# O versionamento por hash (tools/versionar.mjs) lê os arquivos como bytes: se
+# o Windows guarda CRLF no working tree e o runner do Actions faz checkout com
+# LF, o mesmo conteúdo gera hashes diferentes e o CI acusa "assets mudaram sem
+# versionar" mesmo sem nenhuma mudança real. Fixar LF para texto elimina essa
+# divergência entre plataformas.
+* text=auto eol=lf

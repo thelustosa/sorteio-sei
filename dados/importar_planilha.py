@@ -8,7 +8,9 @@ SQL Editor do Supabase — o acervo primeiro, senão os julgados não encontram 
 processo para se ligar.
 
 Os arquivos são idempotentes (ON CONFLICT DO NOTHING): rodar de novo não
-duplica nada. Eles NÃO entram no git (ver .gitignore): carregam nome de
+duplica nada — inclusive depois da conversão para cadeira, porque o relator já
+sai daqui traduzido pela tabela cadeiras_cj, que precisa existir antes (ela vem
+no schema.sql). Eles NÃO entram no git (ver .gitignore): carregam nome de
 interessado pessoa física e o repositório é público.
 
 Da aba Julgados são lidos os VALORES já calculados pelas fórmulas, não as
@@ -31,6 +33,15 @@ VOTOS = ['Manter', 'Anular', 'Vista']
 STATUS = ['Julgado', 'Retornou', 'Retirado', 'Vista']
 
 LOTE = 500  # linhas por comando INSERT
+
+# Tipo de cada coluna, usado só na primeira linha de cada VALUES. Sem ele, uma
+# coluna inteiramente nula num lote (pauta, voto, data_distribuicao…) chegaria
+# como text e o INSERT quebraria contra a coluna int/date correspondente.
+TIPOS = {
+    'num_processo': 'text', 'relator': 'text', 'data_distribuicao': 'date',
+    'defesa': 'boolean', 'origem': 'text', 'data_sessao': 'date',
+    'pauta': 'int', 'voto': 'text', 'status': 'text',
+}
 
 
 def texto(v):
@@ -143,15 +154,43 @@ def deduplicar(linhas, chave):
     return unicas, repetidas
 
 
-def gerar_sql(tabela, colunas, linhas, restricao, cabecalho):
+def gerar_sql(tabela, colunas, linhas, restricao, cabecalho, data_ref):
+    """SQL de importação, com o relator já traduzido de nome para cadeira.
+
+    A planilha registra o NOME do conselheiro; o banco guarda a CADEIRA. A
+    tradução acontece aqui, contra cadeiras_cj, e ANTES do ON CONFLICT: se
+    ficasse para um UPDATE depois do insert, reimportar criaria uma segunda
+    linha por distribuição — a do nome, que não colide com a da cadeira — e o
+    painel passaria a ter duas colunas para a mesma pessoa.
+
+    `data_ref` é a data que escolhe o período do de-para: a composição da
+    Câmara muda com o tempo, e o relator de 2024 não é quem ocupa a cadeira
+    hoje. Nome fora do de-para fica como está (o coalesce) — é o histórico de
+    composições anteriores, e inventar cadeira para ele seria pior do que não
+    traduzir.
+    """
     partes = [f'-- {cabecalho}\n-- Gerado por dados/importar_planilha.py — não editar à mão.\n']
+    lista = ', '.join(colunas)
+    projecao = ', '.join(
+        'coalesce(c.cadeira, v.relator)' if c == 'relator' else f'v.{c}' for c in colunas
+    )
     for i in range(0, len(linhas), LOTE):
         lote = linhas[i:i + LOTE]
-        valores = ',\n  '.join(
-            '(' + ', '.join(literal(l.get(c)) for c in colunas) + ')' for l in lote
+        valores = ',\n    '.join(
+            '(' + ', '.join(
+                literal(l.get(c)) + (f'::{TIPOS[c]}' if n == 0 else '') for c in colunas
+            ) + ')'
+            for n, l in enumerate(lote)
         )
         partes.append(
-            f"insert into public.{tabela} ({', '.join(colunas)}) values\n  {valores}\n"
+            f'insert into public.{tabela} ({lista})\n'
+            f'select {projecao}\n'
+            f'  from (values\n    {valores}\n'
+            f'  ) as v ({lista})\n'
+            f'  left join public.cadeiras_cj c\n'
+            f'         on c.conselheiro = v.relator\n'
+            f'        and v.{data_ref} >= c.desde\n'
+            f'        and (c.ate is null or v.{data_ref} <= c.ate)\n'
             f'on conflict on constraint {restricao} do nothing;\n'
         )
     return '\n'.join(partes)
@@ -181,6 +220,7 @@ def main(argv):
         ['num_processo', 'relator', 'data_distribuicao', 'defesa', 'origem'],
         acervo, 'acervo_cj_distribuicao_unica',
         f'Acervo da Câmara de Julgamento — {len(acervo)} distribuições ({planilha.name}).',
+        'data_distribuicao',
     ), encoding='utf-8')
 
     (saida / 'julgados_cj.sql').write_text(gerar_sql(
@@ -189,6 +229,10 @@ def main(argv):
          'defesa', 'relator', 'data_distribuicao'],
         julgados, 'julgados_cj_sessao_unica',
         f'Julgados da Câmara de Julgamento — {len(julgados)} sessões ({planilha.name}).',
+        # O julgado guarda o relator do momento do julgamento: quem escolhe o
+        # período é a data da SESSÃO, não a da distribuição — que é nula em
+        # parte do histórico e deixaria essas linhas sem tradução.
+        'data_sessao',
     ), encoding='utf-8')
 
     print(f'acervo_cj.sql   {len(acervo):5d} linhas  ({repet_a} cópias exatas descartadas)')

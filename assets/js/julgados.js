@@ -23,6 +23,7 @@ const tbody = document.querySelector('#julgadosTable tbody');
 const contadorPendentes = document.getElementById('contadorPendentes');
 const btnSalvar = document.getElementById('btnSalvar');
 const btnVoltar = document.getElementById('btnVoltar');
+const btnVoltarInicio = document.getElementById('btnVoltarInicio');
 const btnTodosManter = document.getElementById('btnTodosManter');
 const btnTodosJulgado = document.getElementById('btnTodosJulgado');
 const txtModo = document.getElementById('txtModo');
@@ -117,6 +118,7 @@ async function carregarPautas(moverFoco = false) {
 function mostrarPautas(moverFoco = false) {
   detalhePauta.hidden = true;
   btnVoltar.hidden = true;
+  btnVoltarInicio.hidden = false;
   txtModo.textContent = 'Pautas pendentes';
   listaPautas.hidden = false;
 
@@ -200,6 +202,7 @@ function abrirPauta(chave) {
   listaPautas.hidden = true;
   detalhePauta.hidden = false;
   btnVoltar.hidden = false;
+  btnVoltarInicio.hidden = true;
   txtModo.textContent = numero === 'null'
     ? `Sessão de ${dataBR(data)}`
     : `Sessão de ${dataBR(data)} — ${numero}ª reunião`;
@@ -217,9 +220,12 @@ function abrirPauta(chave) {
     const proc = document.createElement('td');
     proc.textContent = j.num_processo;
 
+    // relator é a CADEIRA (CJ1..CJ5). Sem o de-para a coluna mostraria só
+    // "CJ3": o nome vai no hover e no aria-label, como nas outras telas.
     const relator = document.createElement('td');
     relator.className = 'small';
     relator.textContent = j.relator || '— fora do acervo —';
+    rotularCadeira(relator, j.relator);
 
     const tdVoto = document.createElement('td');
     tdVoto.className = 'col-voto';

@@ -6,8 +6,31 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '20260825';
+const ASSET_VERSION = '7c463188fa';
 const TEMPO_LIMITE_REDE = 20000;
+
+// Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
+// teste compara as duas listas), e mora aqui — e não na página do sorteio —
+// porque as três telas mostram a cadeira e precisam do nome para o hover.
+// O que é gravado é sempre a CADEIRA; o nome existe só para apresentação.
+const CADEIRAS_CJ = {
+  CJ1: 'Paulo Otoni Ribeiro',
+  CJ2: 'Deusdete Cardoso Belém',
+  CJ3: 'Dorivan de Souza Lima',
+  CJ4: 'Paulo Henrique Oliveira Marques',
+  CJ5: 'Lorena Patricia de Oliveira'
+};
+
+// Rótulo de uma cadeira nas tabelas: mostra "CJ3" e revela o conselheiro no
+// hover e no leitor de tela. Valor que não é cadeira (histórico de composições
+// anteriores, que ficou pelo nome) passa intacto e sem title vazio.
+function rotularCadeira(el, valor) {
+  const nome = CADEIRAS_CJ[valor];
+  if (!nome) return el;
+  el.title = nome;
+  el.setAttribute('aria-label', `${valor} — ${nome}`);
+  return el;
+}
 
 // O token fica somente na aba atual: navegar entre as páginas preserva a sessão,
 // mas fechar a aba a encerra. Senhas nunca são armazenadas.
@@ -201,6 +224,7 @@ function ligarLogin(aoEntrar) {
   const loginErro = document.getElementById('loginErro');
   const btnEntrar = document.getElementById('btnEntrar');
   const btnSair = document.getElementById('btnSair');
+  const loginOnlyCard = loginScreen.closest('[data-login-only]');
 
   loginForm.addEventListener('submit', async e => {
     e.preventDefault();
@@ -238,6 +262,7 @@ function ligarLogin(aoEntrar) {
   exigirLogin = mensagem => {
     encerrarSessao();
     conteudoDaSessao.forEach(el => { el.hidden = true; });
+    if (loginOnlyCard) loginOnlyCard.hidden = false;
     loginScreen.hidden = false;
     btnSair.hidden = true;
     loginErro.textContent = mensagem;
@@ -332,19 +357,3 @@ function aviso(texto, tipo = 'sucesso') {
   msg.append(icone, conteudo, fechar);
   regiao.appendChild(msg);
 }
-
-// O registro acontece só depois do carregamento e quando o navegador estiver
-// ocioso, para não disputar rede ou CPU com a primeira pintura e o formulário.
-function registrarCacheEstatico() {
-  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-  navigator.serviceWorker.register(`./sw.js?v=${ASSET_VERSION}`, { updateViaCache: 'none' })
-    .catch(() => {});
-}
-
-window.addEventListener('load', () => {
-  if ('requestIdleCallback' in window) {
-    requestIdleCallback(registrarCacheEstatico, { timeout: 3000 });
-  } else {
-    setTimeout(registrarCacheEstatico, 1000);
-  }
-}, { once: true });
