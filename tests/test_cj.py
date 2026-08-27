@@ -179,6 +179,10 @@ def rls_da_cada_tabela_o_minimo(cur):
         'julgados_cj': {'SELECT'},
         'pautas_cj': set(),
         'cadeiras_cj': set(),
+        # O Conselho Regulador tem o mesmo desenho, e por isso os mesmos limites.
+        'acervo_creg': {'INSERT'},
+        'julgados_creg': {'SELECT'},
+        'pautas_creg': set(),
     }
     for tabela, comandos in esperado.items():
         assert uma(cur, 'select relrowsecurity from pg_class where oid = %s::regclass',
@@ -204,12 +208,16 @@ def privilegios_sql_repetem_o_minimo_da_rls(cur):
         ('authenticated', 'processos_sorteados'): {'INSERT'},
         ('authenticated', 'acervo_cj'): {'INSERT'},
         ('authenticated', 'julgados_cj'): {'SELECT'},
+        ('authenticated', 'acervo_creg'): {'INSERT'},
+        ('authenticated', 'julgados_creg'): {'SELECT'},
     }
     cur.execute("""select grantee, table_name, privilege_type
                      from information_schema.role_table_grants
                     where table_schema = 'public'
                       and table_name in ('processos_sorteados', 'acervo_cj',
-                                         'julgados_cj', 'pautas_cj', 'cadeiras_cj')
+                                         'julgados_cj', 'pautas_cj', 'cadeiras_cj',
+                                         'acervo_creg', 'julgados_creg',
+                                         'pautas_creg')
                       and grantee in ('anon', 'authenticated')""")
     obtido = {}
     for papel, tabela, privilegio in cur.fetchall():
@@ -223,6 +231,7 @@ def privilegios_sql_repetem_o_minimo_da_rls(cur):
     assert set(cur.fetchall()) == {
         ('authenticated', 'processos_sorteados_id_seq', 'USAGE'),
         ('authenticated', 'acervo_cj_id_seq', 'USAGE'),
+        ('authenticated', 'acervo_creg_id_seq', 'USAGE'),
     }
 
 
@@ -1232,13 +1241,17 @@ def painel_traduz_cadeira_e_deixa_o_resto_intacto(cur):
 
 
 @teste
-def creg_continua_gravando_na_tabela_antiga(cur):
-    """O sorteio do Conselho Regulador não foi tocado."""
-    cur.execute("""insert into processos_sorteados
-                   (modo, data_hora, ordem, num_processo, assunto,
-                    data_distribuicao, recurso, unidade)
-                   values ('CREG', now(), 9, '202600029000999',
-                           'Requerimento', current_date, 'Não se aplica', 'CREG3')
+def creg_grava_no_proprio_acervo(cur):
+    """Desde 27/08/2026 o sorteio do Conselho vai para acervo_creg.
+
+    processos_sorteados continua no schema como legado (ver o comentário lá),
+    mas nada escreve nela: o front aponta para o acervo, e é de lá que os
+    julgados do CREG saem.
+    """
+    cur.execute("""insert into acervo_creg
+                   (num_processo, unidade, data_distribuicao, assunto, recurso)
+                   values ('202600029000999', 'CREG3', current_date,
+                           'Requerimento', 'Não se aplica')
                    returning unidade""")
     assert cur.fetchone()[0] == 'CREG3'
     cur.connection.rollback()
@@ -1270,15 +1283,23 @@ def rotulos_da_pagina_batem_com_os_do_banco(cur):
     pagina = (RAIZ / 'assets' / 'js' / 'julgados.js').read_text(encoding='utf-8')
     schema = (RAIZ / 'sql' / 'schema.sql').read_text(encoding='utf-8')
 
+    # São duas funções de registro no schema, uma por colegiado, e as duas
+    # trazem as mesmas palavras. O recorte pelo corpo da função é o que garante
+    # que a página da Câmara está sendo medida contra a lista da Câmara.
+    corpo = re.search(r'function public\.registrar_votos\(itens jsonb\).*?\n\$\$;',
+                      schema, re.S)
+    assert corpo, 'registrar_votos não encontrada no schema'
+    corpo = corpo.group(0)
+
     def rotulos(fonte, padrao):
-        achado = re.search(padrao, fonte)
+        achado = re.search(padrao, fonte, re.S)
         assert achado, padrao
         return re.findall(r"'([^']+)'", achado.group(1))
 
     assert rotulos(pagina, r'const VOTOS = \[([^\]]+)\]') == \
-           rotulos(schema, r"'voto', ''\)\s*not in \(([^)]+)\)")
+           rotulos(corpo, r"'voto', ''\), ''\)\s*not in \(([^)]+)\)")
     assert rotulos(pagina, r'const STATUS = \[([^\]]+)\]') == \
-           rotulos(schema, r"'status', ''\)\s*not in \(([^)]+)\)")
+           rotulos(corpo, r"'status', ''\), ''\)\s*not in \(([^)]+)\)")
 
 
 @teste
@@ -1292,11 +1313,11 @@ def colunas_que_o_index_js_envia_existem(cur):
 
     cur.execute("""select table_name, column_name from information_schema.columns
                     where table_schema = 'public'
-                      and table_name in ('acervo_cj', 'processos_sorteados')""")
+                      and table_name in ('acervo_cj', 'acervo_creg')""")
     existentes = {c for _, c in cur.fetchall()}
     assert enviadas and enviadas <= existentes, sorted(enviadas - existentes)
 
-    assert "TABELAS = { CJ: 'acervo_cj', CREG: 'processos_sorteados' }" in fonte
+    assert "TABELAS = { CJ: 'acervo_cj', CREG: 'acervo_creg' }" in fonte
 
     # Na CJ a 6ª coluna é Defesa, não Recurso: defesa sai no ramo do CJ (o
     # primeiro) e recurso só no do CREG, uma vez em cada.
@@ -1457,7 +1478,14 @@ def preparar_upgrade_da_migracao():
         grant all on public.processos_sorteados, public.acervo_cj,
                      public.julgados_cj, public.pautas_cj
           to anon, authenticated;
-        grant all on all sequences in schema public to anon, authenticated;
+        -- Nomeadas uma a uma, e não "all sequences in schema public": as
+        -- sequências do Conselho Regulador nasceram depois desta migração e
+        -- não podem entrar no estado que ela encontra.
+        grant all on sequence public.processos_sorteados_id_seq,
+                              public.acervo_cj_id_seq,
+                              public.julgados_cj_id_seq,
+                              public.pautas_cj_id_seq
+          to anon, authenticated;
         grant execute on function public.julgados_cj_derivar_do_acervo()
           to public, anon, authenticated;
         grant execute on function public.auth_email() to public, anon, authenticated;

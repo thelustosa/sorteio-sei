@@ -39,7 +39,7 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 - **Defesa no lugar de Recurso** (CJ): na Câmara de Julgamento a 6ª coluna registra se o autuado apresentou **Defesa** (Sim/Não) — é esse o dado que os julgados herdam do acervo. Recurso é conceito do Conselho Regulador e só aparece no modo CREG.
 - **Exportação da Ata em Word**: geração automática da ata de distribuição em formato Word (`.doc`), nomeada dinamicamente (`Sorteio_CREG_18.08.2026.doc`). A ata traz as mesmas colunas da tela — ordem, processo, assunto, recurso (ou defesa, na CJ) e unidade sorteada — para que quem lê o documento consiga conferir a repartição por assunto sem abrir o sistema.
 - **Registro de Julgamentos**: página própria onde a secretaria abre uma pauta e preenche o voto e o status de cada processo julgado. Os processos chegam sozinhos das pautas publicadas pela AGR, e cada preenchimento guarda quem fez e quando.
-- **Registro no Banco de Dados**: ao final do sorteio, os dados que antes iam para as planilhas são gravados no banco (Supabase/PostgreSQL), uma linha por processo — a Câmara de Julgamento no seu acervo (`acervo_cj`), o Conselho Regulador em `processos_sorteados`. Enquanto o banco não estiver configurado — ou se o envio falhar — o sistema oferece um botão para baixar o sorteio completo em `.json`, sem depender de downloads automáticos bloqueados pelo navegador.
+- **Registro no Banco de Dados**: ao final do sorteio, os dados que antes iam para as planilhas são gravados no banco (Supabase/PostgreSQL), uma linha por processo, cada colegiado no seu acervo (`acervo_cj` e `acervo_creg`). Enquanto o banco não estiver configurado — ou se o envio falhar — o sistema oferece um botão para baixar o sorteio completo em `.json`, sem depender de downloads automáticos bloqueados pelo navegador.
 
 ---
 
@@ -75,24 +75,28 @@ endereço não existe. Todo o resto está agrupado por natureza.
 │   ├── fonts/              Montserrat em .woff2 e a licença OFL
 │   └── img/                logotipos, favicon e as capturas de tela do README
 │
-├── sql/                    tudo que roda no SQL Editor do Supabase
-│   ├── schema.sql          tabelas, gatilho, função de registro e RLS
-│   ├── verificacao_cj.sql  conferência de consistência — só lê
-│   ├── rederivar_cj.sql    religa ao acervo os julgados que entraram sem ele
-│   ├── backup_cj.sql       copia as tabelas da CJ para o schema backup_cj
-│   └── restaurar_cj.sql    a volta do backup
+├── sql/                      tudo que roda no SQL Editor do Supabase
+│   ├── schema.sql            tabelas, gatilho, função de registro e RLS
+│   ├── verificacao_cj.sql    conferência de consistência da CJ — só lê
+│   ├── verificacao_creg.sql  a mesma conferência para o CREG — só lê
+│   ├── rederivar_cj.sql      religa ao acervo os julgados que entraram sem ele
+│   ├── rederivar_creg.sql    o mesmo, para o Conselho Regulador
+│   ├── backup_cj.sql         copia as tabelas da CJ para o schema backup_cj
+│   └── restaurar_cj.sql      a volta do backup
 │
 ├── supabase/migrations/    histórico aplicado ao projeto hospedado
 ├── sincronizacao/          job que lê as pautas da AGR (roda no GitHub Actions)
-├── dados/                  conversão da planilha histórica em SQL
+├── dados/                  conversão das planilhas e das atas de sorteio em SQL
 ├── documentos/             Termo de Entrega oficial do projeto
 ├── tools/versionar.mjs     grava nos assets a versão derivada do conteúdo
 └── tests/                  suítes automatizadas e dependências de teste
 ```
 
-Documentação: este README, mais o [`FLUXO-CJ.md`](FLUXO-CJ.md) — o fluxo completo
-da Câmara de Julgamento, do sorteio ao julgamento registrado, com as regras, as
-tabelas, a API e o tratamento de falhas.
+Documentação: este README, mais um documento por colegiado —
+[`FLUXO-CJ.md`](FLUXO-CJ.md), o fluxo completo da Câmara de Julgamento, do
+sorteio ao julgamento registrado, com as regras, as tabelas, a API e o
+tratamento de falhas; e [`FLUXO-CREG.md`](FLUXO-CREG.md), o do Conselho
+Regulador, que cobre só o que difere e aponta para o primeiro no resto.
 
 O GitHub Pages define um cache curto para os arquivos publicados e não permite
 configurar cabeçalhos por repositório. Por isso os assets entram com `?v=`, e
@@ -118,15 +122,16 @@ node tools/versionar.mjs
 
 Crie um projeto gratuito no [Supabase](https://supabase.com), rode o [schema.sql](sql/schema.sql) no SQL Editor e preencha as constantes `SUPABASE_URL` e `SUPABASE_KEY` no [supabase.js](assets/js/supabase.js). O `sql/schema.sql` cria as tabelas, o gatilho, a função de registro de votos e as políticas de segurança — e pode ser reaplicado sem duplicar registros. Ele também garante o marco fixo da sincronização em 18/06/2026.
 
-Antes de reaplicá-lo numa base CREG já populada, rode
-[`sql/verificacao_cj.sql`](sql/verificacao_cj.sql). Se houver “Distribuição CREG
+Antes de reaplicá-lo numa base já populada, rode
+[`sql/verificacao_cj.sql`](sql/verificacao_cj.sql) e
+[`sql/verificacao_creg.sql`](sql/verificacao_creg.sql). Se houver “Distribuição
 repetida”, decida qual registro conservar: o índice único do schema falha com
 segurança, sem apagar ou escolher dados automaticamente.
 
-Sorteios CREG aceitam somente número SEI com 15 dígitos e a constraint fica
-validada. Se uma base antiga ainda tiver número fora do padrão, corrija-o pela
-fonte oficial antes de reaplicar o schema; a validação falha sem completar ou
-apagar números por inferência.
+Os dois acervos aceitam somente número SEI com 15 dígitos, e a unidade do CREG
+tem de ser `CREG1`, `CREG2`… Se uma base antiga tiver número fora do padrão,
+corrija-o pela fonte oficial antes de reaplicar o schema; a validação falha sem
+completar ou apagar números por inferência.
 
 Depois, em **Authentication → Users**, cadastre quem vai usar o sistema; e em **Authentication → Providers → Email**, mantenha **desativado** o "Enable sign ups", senão qualquer visitante criaria a própria conta.
 
@@ -173,7 +178,8 @@ Ordem de execução no SQL Editor do Supabase:
 
 Os dois passos são idempotentes: rodar de novo não duplica nada. No banco em produção o histórico já foi carregado e depois arquivado — ver abaixo.
 
-O Conselho Regulador continua em `processos_sorteados` até ganhar o mesmo par de tabelas (`acervo_creg` e `julgados_creg`).
+O Conselho Regulador ganhou o mesmo par de tabelas em 27/08/2026 — ver a seção
+abaixo.
 
 ### Registro do voto e do status
 
@@ -203,7 +209,7 @@ listagem da AGR → reuniões ainda não processadas → baixa o PDF
   → registra o documento em pautas_cj
 ```
 
-Onde isso roda: **GitHub Actions**, não no site. O site é estático no Pages e o navegador nem conseguiria consultar `goias.gov.br`, que não libera CORS. O job roda toda sexta de manhã (as sessões são às quintas) e pode ser disparado à mão em **Actions → Sincronizar Julgados CJ → Run workflow**, com a opção `simular` para ver o resultado sem gravar nada. O log de cada rodada fica na aba Actions, o que mantém a sincronização tão auditável quanto o resto do projeto.
+Onde isso roda: **GitHub Actions**, não no site. O site é estático no Pages e o navegador nem conseguiria consultar `goias.gov.br`, que não libera CORS. O job roda toda sexta de manhã e sincroniza os dois colegiados na mesma passagem — a Câmara reúne às quintas e o Conselho não tem dia fixo. Pode ser disparado à mão em **Actions → Sincronizar Julgados → Run workflow**, com a opção `simular` para ver o resultado sem gravar nada e a opção de limitar a um colegiado. O log de cada rodada fica na aba Actions, o que mantém a sincronização tão auditável quanto o resto do projeto.
 
 Para funcionar, cadastre em **Settings → Secrets and variables → Actions** o segredo `SUPABASE_DB_URL` com a connection string do banco.
 
@@ -218,6 +224,66 @@ Como o parser identifica um processo: número SEI de **15 dígitos precedido de 
 Nada disso reimplementa a regra Acervo → Julgados: quem preenche relator, defesa e data de distribuição continua sendo o gatilho do banco. Processo que aparece na pauta e não está no acervo é gravado assim mesmo, sem inventar dado, e sai listado em `pautas_cj.processos_sem_acervo` para a secretaria completar o acervo.
 
 Rodar duas vezes não duplica nada: `pautas_cj.url` barra o documento repetido e a chave `(num_processo, data_sessao)` de `julgados_cj` barra o processo repetido. O marco de início é fixo e a rodada automática consulta todos os anos desde ele, então um PDF que falhou volta mesmo após a virada do ano; uma versão corrigida com URL nova também é processada.
+
+## Conselho Regulador: acervo e julgados
+
+> O que difere da Câmara, com as fórmulas traduzidas uma a uma, está em
+> **[FLUXO-CREG.md](FLUXO-CREG.md)**.
+
+Até 27/08/2026 o sorteio do CREG gravava em `processos_sorteados` — uma tabela
+sem acervo e sem julgados, medida provisória enquanto o Conselho não tinha o
+desenho da Câmara. Agora tem:
+
+- **`acervo_creg`** — uma linha por **distribuição** de um processo a uma unidade
+  (`CREG1`..`CREG4`). É aqui que o sorteio do CREG grava, e quem ocupa cada
+  unidade sai de `cadeiras_creg`.
+- **`julgados_creg`** — uma linha por processo levado a uma **sessão do
+  Conselho**, ligada ao acervo por `acervo_id`.
+- **`pautas_creg`** — um registro por documento de pauta já processado.
+
+Não há equivalente a `cadeiras_cj`: os responsáveis por CREG1..CREG4 pediram
+para não ter os nomes vinculados aos processos, então o painel do Conselho
+mostra a unidade e nada além dela.
+
+O vocabulário muda, a estrutura não. Na Câmara a coluna de decisão é a **defesa**
+(houve ou não); no Conselho é o **recurso**, com cinco valores. A Câmara só julga
+auto de infração; o Conselho tem onze assuntos. E o Conselho acompanha três
+números que a Câmara não tem, todos calculados pelo banco: **`meta_45`** (o
+processo chegou à mesa em até 45 dias), **`dias_dist_cr_cj`** (quanto levou entre
+sair da CJ e ser distribuído no CREG) e **`em_relacao_cj`** (o Conselho decidiu
+diferente da Câmara).
+
+O gatilho é o mesmo da CJ: informe o processo e a data da sessão, e o banco
+localiza a distribuição vigente **naquela data** para preencher unidade, assunto,
+recurso e data de distribuição. Isso corrige um defeito da planilha, cujo
+`INDEX/MATCH` pegava a primeira ocorrência na ordem dos arquivos e podia apontar
+para o gabinete errado quando o processo fora redistribuído.
+
+A sincronização com a AGR usa o mesmo parser, sem alteração — muda a página
+(`pautas-das-sessoes-do-conselho-regulador-{ano}`), o filtro por comissão some
+(os títulos do Conselho não nomeiam o colegiado) e uma sessão sem processo passa
+a ser registrada com zero em vez de virar erro: o Conselho convoca sessão
+especial, e a de 03/07/2026 não levou nenhum processo.
+
+Ordem de execução no SQL Editor:
+
+1. `sql/schema.sql` — tabelas, gatilho, RPCs, políticas e o marco de 30/06/2026;
+2. `python dados/importar_creg.py "<pasta das planilhas>"` — lê `CREG1..4.xlsx`,
+   `Conselho Regulador.xlsx` e `Conselho Regulador 2025.2.xlsx` e gera
+   `dados/acervo_creg.sql` e `dados/julgados_creg.sql`, que ficam fora do Git;
+3. `python dados/importar_atas_creg.py <atas.pdf…>` — lê as atas de sorteio
+   publicadas no SEI e gera `dados/acervo_creg_atas.sql`. É o que mantém o
+   acervo em dia enquanto o Conselho sortear fora do sistema: a ata sai antes de
+   a planilha de gabinete ser atualizada;
+4. `dados/acervo_creg.sql`, `dados/acervo_creg_atas.sql` e só então
+   `dados/julgados_creg.sql` — o acervo inteiro antes dos julgados;
+5. `sql/verificacao_creg.sql` — nenhum ERRO deve aparecer.
+
+Tudo é idempotente: rodar de novo não duplica nada.
+
+**Ainda falta a interface.** As funções `resumo_acervo_creg`,
+`processos_acervo_creg` e `registrar_votos_creg` estão prontas e não têm
+consumidor — `acervo.html` e `julgados.html` atendem só a Câmara.
 
 ### Backup e restauração
 
