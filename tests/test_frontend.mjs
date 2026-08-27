@@ -161,7 +161,7 @@ function indexPage({ api = async () => null, aviso = () => {},
   const tbody = add('processTableBody', 'tbody');
   add('resultTableBody', 'tbody');
   ['numRows', 'createRows', 'sortear', 'addRowBtn', 'btnCreg', 'btnCj', 'btnVoltar',
-    'modeSelector', 'sorteadorContent', 'thRecurso', 'pillsContainer', 'txtModo',
+    'modeSelector', 'sorteadorContent', 'thRecurso', 'thInteressado', 'pillsContainer', 'txtModo',
     'processEntry', 'processSetupHint', 'processFormMessage', 'resultadoSorteio',
     'sortControls', 'resumoContagem', 'resultadoStatus', 'thUnidadeResult',
     'modeSelectorTitle', 'resultadoSorteioTitle', 'baixarBackup'].forEach(id => add(id, id.includes('Btn') || id.startsWith('btn') || id === 'createRows' || id === 'sortear' || id === 'baixarBackup' ? 'button' : 'div'));
@@ -310,6 +310,36 @@ test('bloqueia Voltar enquanto a persistência ainda pode responder', async () =
   await wait();
   assert.equal(voltar.disabled, false);
   assert.equal(document.getElementById('baixarBackup').hidden, false);
+});
+
+test('interessado do CREG chega ao banco; a CJ não tem a coluna', async () => {
+  let corpo;
+  const page = indexPage({ api: async (_tabela, opcoes) => { corpo = JSON.parse(opcoes.body); } });
+  const { document, tbody } = page;
+  await preencherCreg(page, '202600029000405');
+  tbody.children[0].querySelector('.col-interessado input').value = '  Saneago  ';
+  document.getElementById('sortear').dispatch('click');
+  await wait();
+
+  assert.equal(corpo[0].interessado, 'Saneago');
+
+  const cj = indexPage();
+  cj.document.getElementById('btnCj').dispatch('click');
+  cj.document.getElementById('numRows').value = '1';
+  cj.document.getElementById('createRows').dispatch('click');
+  await wait();
+  assert.equal(cj.tbody.children[0].querySelector('.col-interessado input'), null);
+  assert.equal(cj.document.getElementById('thInteressado').hidden, true);
+});
+
+test('interessado em branco vai como nulo, e não como texto vazio', async () => {
+  let corpo;
+  const page = indexPage({ api: async (_tabela, opcoes) => { corpo = JSON.parse(opcoes.body); } });
+  await preencherCreg(page, '202600029000406');
+  page.document.getElementById('sortear').dispatch('click');
+  await wait();
+
+  assert.equal(corpo[0].interessado, null);
 });
 
 test('CREG recusa processo sem 15 dígitos antes do sorteio', async () => {
