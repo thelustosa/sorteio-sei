@@ -36,6 +36,8 @@ MIGRACAO = RAIZ / 'supabase' / 'migrations' / \
 MIGRACAO_CADEIRAS = RAIZ / 'supabase' / 'migrations' / '20260824180000_cadeiras_cj.sql'
 MIGRACAO_HARDENING = RAIZ / 'supabase' / 'migrations' / \
     '20260827104200_restringir_cadeiras_e_ping.sql'
+MIGRACAO_INTERESSADO = RAIZ / 'supabase' / 'migrations' / \
+    '20260827160000_interessado_creg.sql'
 
 testes = []
 
@@ -1494,6 +1496,7 @@ def preparar_banco(planilha):
     # converter nada duas vezes.
     rodar_arquivo(MIGRACAO_CADEIRAS)
     rodar_arquivo(MIGRACAO_HARDENING)
+    rodar_arquivo(MIGRACAO_INTERESSADO)
 
 
 def main(argv):

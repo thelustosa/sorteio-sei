@@ -534,6 +534,9 @@ async function carregarAcervo({ carregamentoInicial = false } = {}) {
     if (carregamentoInicial) throw err;
     acervoTabela.replaceChildren();
     linhasAtuais = null;
+    // O total é do acervo que acabou de sair da tela: mantê-lo anunciaria N
+    // processos acima de uma tabela vazia.
+    acervoTotal.textContent = '';
     acervoAtualizado.textContent = 'Atualização indisponível';
     acervoErro.querySelector('p').textContent = `Não foi possível carregar o acervo (${err.message}).`;
     acervoErro.hidden = false;

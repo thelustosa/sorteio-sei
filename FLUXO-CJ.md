@@ -770,10 +770,14 @@ Revisto depois da carga de recuperação, em 21/08/2026.
 
 ### Decidido e encerrado
 
-- **O interessado saiu do sistema** em 20/08/2026. Deixou de ser usado, e não
-  havia motivo para guardar nome de pessoa num registro que ninguém consultava:
-  some da tela dos dois modos, das três tabelas, da página de julgados e das
-  atas em Word. O `schema.sql` derruba a coluna de quem já existia.
+- **O interessado saiu da Câmara de Julgamento** em 20/08/2026. Deixou de ser
+  usado, e não havia motivo para guardar nome de pessoa num registro que
+  ninguém consultava: some da tela da CJ, de `acervo_cj`, de `julgados_cj`, da
+  página de julgados e das atas em Word — o `schema.sql` derruba a coluna de
+  quem já existia. **No Conselho Regulador ele voltou** em 27/08/2026, agora
+  como campo livre digitado na tela do sorteio: fica em
+  `processos_sorteados.interessado` (anulável, porque os sorteios antigos não
+  têm o dado) e na ata do CREG.
 - **Edição concorrente** não é preocupação: a secretaria é pequena e, se duas
   pessoas abrirem a mesma pauta, vale quem salvar por último.
 
