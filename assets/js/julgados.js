@@ -96,10 +96,6 @@ async function carregarPautas(moverFoco = false) {
       + '&or=(voto.is.null,status.is.null)'
       + '&order=data_sessao.desc,num_processo.asc');
   } catch (err) {
-    // Sessão expirada já foi tratada em api(), que recolocou a tela de login.
-    // Sem esta saída, a página dizia "verifique sua conexão" logo abaixo de
-    // "sua sessão expirou" — dois diagnósticos contraditórios ao mesmo tempo.
-    if (err.status === 401) return;
     mostrarErroDeCarregamento();
     aviso(`Não foi possível carregar os julgados (${err.message}).`, 'erro');
     return;
