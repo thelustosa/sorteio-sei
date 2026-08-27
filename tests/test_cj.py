@@ -34,6 +34,8 @@ MIGRACAO = RAIZ / 'supabase' / 'migrations' / \
 # Converte relator de nome para cadeira. Rodada em preparar_banco DEPOIS da
 # planilha, porque e o dado importado que ela tem de alcancar.
 MIGRACAO_CADEIRAS = RAIZ / 'supabase' / 'migrations' / '20260824180000_cadeiras_cj.sql'
+MIGRACAO_HARDENING = RAIZ / 'supabase' / 'migrations' / \
+    '20260827104200_restringir_cadeiras_e_ping.sql'
 
 testes = []
 
@@ -176,6 +178,7 @@ def rls_da_cada_tabela_o_minimo(cur):
         'acervo_cj': {'INSERT'},
         'julgados_cj': {'SELECT'},
         'pautas_cj': set(),
+        'cadeiras_cj': set(),
     }
     for tabela, comandos in esperado.items():
         assert uma(cur, 'select relrowsecurity from pg_class where oid = %s::regclass',
@@ -206,7 +209,7 @@ def privilegios_sql_repetem_o_minimo_da_rls(cur):
                      from information_schema.role_table_grants
                     where table_schema = 'public'
                       and table_name in ('processos_sorteados', 'acervo_cj',
-                                         'julgados_cj', 'pautas_cj')
+                                         'julgados_cj', 'pautas_cj', 'cadeiras_cj')
                       and grantee in ('anon', 'authenticated')""")
     obtido = {}
     for papel, tabela, privilegio in cur.fetchall():
@@ -235,6 +238,25 @@ def gatilho_roda_com_privilegio_proprio(cur):
     assert secdef is True
     assert config and any(c.startswith('search_path=') for c in config)
     assert pode_anonimo is False and pode_autenticado is False
+
+
+@teste
+def ping_tem_search_path_fixo_e_privilegio_minimo(cur):
+    cur.execute("""select proconfig,
+                          has_function_privilege('anon', oid, 'execute'),
+                          has_function_privilege('authenticated', oid, 'execute'),
+                          has_function_privilege('service_role', oid, 'execute')
+                     from pg_proc
+                    where oid = 'public.ping()'::regprocedure""")
+    config, pode_anonimo, pode_autenticado, pode_servico = cur.fetchone()
+    assert config and any(c.startswith('search_path=') for c in config)
+    assert pode_anonimo is True and pode_autenticado is True
+    assert pode_servico is False
+
+    assert uma(cur, """select count(*) from pg_proc p
+                        join pg_namespace n on n.oid = p.pronamespace
+                          where n.nspname = 'public'
+                            and p.proname = 'painel_cj_nao_julgados'""") == 0
 
 
 @teste
@@ -1471,6 +1493,7 @@ def preparar_banco(planilha):
     # que já veio do schema.sql, com o dado já em cadeira, não pode falhar nem
     # converter nada duas vezes.
     rodar_arquivo(MIGRACAO_CADEIRAS)
+    rodar_arquivo(MIGRACAO_HARDENING)
 
 
 def main(argv):

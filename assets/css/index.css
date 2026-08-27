@@ -1147,26 +1147,10 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 .detalhe-corpo {
   flex: 1;
   min-height: 0;
-  position: relative;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0 20px 20px;
-}
-
-/* A camada fica acima das linhas em vez de atrás delas, suavizando o recorte
-   da rolagem sem deixar uma faixa clara em uma parte da tabela. */
-.detalhe-corpo::after {
-  content: '';
-  position: sticky;
-  z-index: 2;
-  display: block;
-  height: 22px;
-  margin-top: -22px;
-  bottom: 0;
-  pointer-events: none;
-  background: linear-gradient(to bottom, rgb(17 39 32 / 0%), rgb(17 39 32 / 8%));
-  box-shadow: 0 -10px 16px -11px rgb(17 39 32 / 48%);
 }
 
 /* A regra global de table impõe min-width: 720px, para a tabela larga do
