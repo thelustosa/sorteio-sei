@@ -297,12 +297,12 @@ alter table public.julgados_cj
   add column if not exists atualizado_em  timestamptz,
   add column if not exists atualizado_por text;
 
--- O interessado saiu do sistema em 20/08/2026: deixou de ser usado e não vale a
--- pena guardar nome de pessoa num registro que ninguém consulta. Em banco novo
--- as tabelas acima já nascem sem ele; aqui a coluna cai de quem já existia.
-alter table public.processos_sorteados drop column if exists interessado;
-alter table public.acervo_cj           drop column if exists interessado;
-alter table public.julgados_cj         drop column if exists interessado;
+-- O interessado saiu da Câmara de Julgamento em 20/08/2026: lá ninguém o
+-- consultava e não valia a pena guardar nome de pessoa. No Conselho Regulador
+-- ele voltou em 27/08/2026, digitado na tela do sorteio — por isso
+-- processos_sorteados não entra nesta limpeza (a coluna é criada acima).
+alter table public.acervo_cj   drop column if exists interessado;
+alter table public.julgados_cj drop column if exists interessado;
 
 -- Os pendentes são poucos no meio de milhares de julgados: índice parcial, do
 -- tamanho da fila de trabalho e não da tabela.

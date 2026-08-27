@@ -71,7 +71,9 @@ function preencherColuna(coluna, valor) {
 }
 
 function inicializarJulgados() {
-  carregarPautas(true);
+  // Devolve a promessa: quem chama espera o carregamento terminar antes de
+  // tirar o indicador da tela.
+  return carregarPautas(true);
 }
 
 function dataBR(iso) {
@@ -151,6 +153,10 @@ function mostrarPautas(moverFoco = false) {
 }
 
 function mostrarErroDeCarregamento() {
+  // A falha não pode prender a pessoa nesta página: o único caminho de volta ao
+  // sorteio é este botão, e ele só é revelado em mostrarPautas().
+  btnVoltarInicio.hidden = false;
+
   const estado = document.createElement('div');
   estado.className = 'load-error';
   estado.setAttribute('role', 'alert');
