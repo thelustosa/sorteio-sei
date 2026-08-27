@@ -409,6 +409,11 @@ on conflict (cadeira, desde) do update set conselheiro = excluded.conselheiro;
 -- cadeira em nome é a função do painel, que é SECURITY DEFINER.
 alter table public.cadeiras_cj enable row level security;
 
+-- Supabase concede privilégios amplos às tabelas novas. A RLS sem política já
+-- bloqueia linhas, mas os grants também devem expressar que esta tabela é
+-- exclusivamente interna às RPCs SECURITY DEFINER.
+revoke all privileges on table public.cadeiras_cj from anon, authenticated;
+
 -- ── CJ · Painel do acervo ────────────────────────────────────────────────────
 -- A matriz do acervo.html: processos parados por faixa de tempo e por relator.
 --
@@ -417,6 +422,9 @@ alter table public.cadeiras_cj enable row level security;
 -- para ele contar no JavaScript. A agregação fica aqui: a porta continua
 -- estreita, o payload é de algumas dezenas de células, e a definição de "não
 -- julgado" mora em um lugar só, junto das outras regras.
+-- RPC provisória usada pela primeira versão do painel. Não é mais consumida e
+-- mantê-la publicada ampliaria a superfície da API sem necessidade.
+drop function if exists public.painel_cj_nao_julgados();
 drop function if exists public.resumo_acervo_cj();
 
 create function public.resumo_acervo_cj()
@@ -637,6 +645,6 @@ as $$
   select 'pong'
 $$;
 
-revoke all on function public.ping() from public;
+revoke all on function public.ping() from public, service_role;
 grant execute on function public.ping() to anon, authenticated;
 
