@@ -357,7 +357,7 @@ function criarExcel(linhas) {
 // ── Detalhe de uma célula: a lista de processos daquele bloco ────────────────
 // Uma linha por processo, nas mesmas colunas que o card mostra na tela.
 function planilhaDetalheXml(processos, titulo) {
-  const colunas = ['Nº do Processo', 'Cadeira', 'Conselheiro', 'Distribuição', 'Dias parados'];
+  const colunas = ['Nº do Processo', 'Cadeira', 'Conselheiro', 'Distribuição', 'Dias passados'];
   const texto = (col, linha, valor, estilo) =>
     `<c r="${colunaExcel(col)}${linha}" s="${estilo}" t="inlineStr"><is><t>${escaparXml(valor)}</t></is></c>`;
   const numero = (col, linha, valor, estilo) =>
@@ -623,7 +623,7 @@ function desenharDetalhe(processos) {
 
   const thead = document.createElement('thead');
   const cabecalho = document.createElement('tr');
-  ['Nº do Processo', 'Relator', 'Distribuição', 'Dias parados']
+  ['Nº do Processo', 'Relator', 'Distribuição', 'Dias passados']
     .forEach(rotulo => cabecalho.append(celula(rotulo, 'th')));
   thead.append(cabecalho);
 
