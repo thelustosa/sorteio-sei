@@ -579,15 +579,16 @@ Postgres, e as regras moram no banco.
 | importar pautas | conexão direta ao Postgres | GitHub Actions |
 
 Toda chamada do navegador passa por `api()` em [`supabase.js`](assets/js/supabase.js), que
-centraliza autenticação, tratamento de erro e o retorno à tela de login quando a
-sessão expira.
+centraliza autenticação, renovação da sessão e tratamento de erro.
 
 ### Sessão
 
-O token de acesso vive em `sessionStorage`, para navegar entre as duas páginas
-sem pedir login de novo. Expira em cerca de uma hora; quando isso acontece,
-qualquer chamada devolve 401 e o `api()` recoloca a tela de login com a mensagem
-certa. Senha nunca é armazenada.
+Os tokens de acesso e renovação vivem em `sessionStorage`, para navegar entre as
+páginas sem pedir login de novo. Quando o token de acesso vence, `api()` renova
+o par e repete a chamada uma vez. A interface e o trabalho em andamento
+permanecem abertos mesmo se a renovação falhar. O botão **Sair** revoga a sessão
+atual no Supabase e apaga os tokens locais; fechar a aba também descarta o
+`sessionStorage`. Senha nunca é armazenada.
 
 ### Segurança: cada tabela recebe o mínimo
 
@@ -710,7 +711,7 @@ Chaves e índices que sustentam as regras:
 |---|---|
 | Supabase fora do ar durante o sorteio | oferece o botão para baixar o `.json`; nenhum sorteio se perde |
 | sorteio repetido (mesmo processo, dia e cadeira) | banco recusa; mensagem clara e botão de backup aparece |
-| sessão expirada | tela de login volta com a mensagem; após entrar novamente, o botão de backup aparece |
+| token de acesso expirado | renova a sessão e repete a chamada; se não conseguir, mantém a tela aberta, mostra o erro e preserva o backup |
 | site da AGR fora do ar | o job falha inteiro e tenta de novo na próxima rodada |
 | um PDF indisponível ou inválido | só aquele documento falha; os outros seguem, e ele **não** é marcado como processado |
 | PDF sem processos | vira erro do documento; não marca como processado |

@@ -494,7 +494,6 @@ function sortearProcessos() {
     .catch(err => {
       backupPendente = sorteio;
       baixarBackupBtn.hidden = false;
-      if (err.status === 401) btnVoltar.hidden = true;
       aviso(err.status === 409
         ? `Nada foi gravado: ${err.message}. O backup .json está pronto para baixar — confira o sorteio anterior antes de repetir.`
         : `Falha ao gravar no banco (${err.message}). O backup .json está pronto para baixar.`, 'erro');
@@ -650,8 +649,7 @@ async function salvar(sorteio) {
 
   const linhas = linhasParaBanco(sorteio);
 
-  // Passa por api() para que sessão expirada devolva a tela de login aqui
-  // também, e não só na página de julgados.
+  // Passa por api() para que um token vencido seja renovado antes da gravação.
   try {
     await api(tabela, {
       method: 'POST',
