@@ -410,7 +410,7 @@ def campos_derivados_saem_do_acervo(cur):
 @teste
 def julgado_sincronizado_nasce_sem_voto_e_sem_status(cur):
     """A pauta é convocação: voto e status só existem depois da sessão, e são
-    preenchidos à mão na página julgados.html."""
+    preenchidos à mão na página julgados-cj.html."""
     preparar(cur, sessao=date(2026, 6, 30))
     with fonte_com([23]):
         sincronizar.sincronizar(cur.connection, ano=2026, hoje=date(2026, 7, 5))

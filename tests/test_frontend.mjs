@@ -763,7 +763,7 @@ function acervoPage(api, { imprimir = () => {} } = {}) {
   document.add('btnFecharDetalhe', 'button');
   document.add('btnExportarDetalhe', 'button');
   document.getElementById('acervoPanel').hidden = true;
-  document.getElementById('btnAtualizar').hidden = true;  // como no acervo.html
+  document.getElementById('btnAtualizar').hidden = true;  // como no acervo-cj.html
 
   const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento',
     `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, criarExcelDetalhe, dadosTabulares, abrirDetalhe, exportarDetalhe };`)(

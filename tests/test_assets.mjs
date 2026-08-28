@@ -21,7 +21,7 @@ const versaoMinificada = ler('assets/js/supabase.min.js')
 assert.equal(versaoMinificada, versao,
   'supabase.min.js carrega páginas com uma versão antiga dos assets');
 
-for (const pagina of ['index.html', 'julgados.html', 'acervo.html', '404.html']) {
+for (const pagina of ['index.html', 'julgados-cj.html', 'julgados-creg.html', 'acervo-cj.html', 'acervo-creg.html', '404.html']) {
   const html = ler(pagina);
   const assets = [...html.matchAll(/(?:href|src)="(assets\/(?:css|js)\/[^"?]+\.min\.(?:css|js))\?v=([^"&]+)"/g)];
   assert.ok(assets.length > 0, `${pagina}: nenhum asset minificado versionado`);
@@ -45,13 +45,19 @@ for (const [recurso, destino] of [
 }
 
 const index = ler('index.html');
-const julgados = ler('julgados.html');
-const acervo = ler('acervo.html');
+const julgadosCj = ler('julgados-cj.html');
+const julgadosCreg = ler('julgados-creg.html');
+const acervoCj = ler('acervo-cj.html');
+const acervoCreg = ler('acervo-creg.html');
 assert.doesNotMatch(index, /<script[^>]+index\.min\.js/, 'index.js voltou ao carregamento inicial');
-assert.doesNotMatch(julgados, /<script[^>]+julgados\.min\.js/, 'julgados.js voltou ao carregamento inicial');
-assert.ok(acervo.indexOf('class="nav-actions"') < acervo.indexOf('id="btnExportar"')
-  && acervo.indexOf('id="btnExportar"') < acervo.indexOf('</nav>'),
-  'Exportar precisa permanecer junto das ações da barra superior');
+assert.doesNotMatch(julgadosCj, /<script[^>]+julgados\.min\.js/, 'julgados.js voltou ao carregamento inicial');
+assert.doesNotMatch(julgadosCreg, /<script[^>]+julgados-creg\.min\.js/, 'julgados-creg.js voltou ao carregamento inicial');
+assert.ok(acervoCj.indexOf('class="nav-actions"') < acervoCj.indexOf('id="btnExportar"')
+  && acervoCj.indexOf('id="btnExportar"') < acervoCj.indexOf('</nav>'),
+  'Exportar precisa permanecer junto das ações da barra superior (Câmara)');
+assert.ok(acervoCreg.indexOf('class="nav-actions"') < acervoCreg.indexOf('id="btnExportar"')
+  && acervoCreg.indexOf('id="btnExportar"') < acervoCreg.indexOf('</nav>'),
+  'Exportar precisa permanecer junto das ações da barra superior (Conselho)');
 
 const css = ler('assets/css/index.css');
 // O seletor pode vir sozinho ou em lista, e a var pode trazer fallback — o que

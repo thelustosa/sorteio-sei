@@ -175,7 +175,7 @@ select 16, 'AVISO',
 union all
 select 17, 'INFO',
        'Julgados aguardando voto ou status',
-       'é a fila de trabalho da página julgados.html',
+       'é a fila de trabalho da página julgados-cj.html',
        (select count(*) from public.julgados_cj where voto is null or status is null)
 
 union all

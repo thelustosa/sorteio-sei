@@ -744,8 +744,9 @@ def a_pagina_do_creg_le_a_tabela_do_creg(cur):
 
     # O index oferece as duas telas.
     index = (RAIZ / 'index.html').read_text(encoding='utf-8')
-    assert './julgados-creg.html' in index and './julgados.html' in index
+    assert './julgados-creg.html' in index and './julgados-cj.html' in index
     assert (RAIZ / 'julgados-creg.html').is_file()
+    assert (RAIZ / 'julgados-cj.html').is_file()
 
 
 @teste
@@ -773,19 +774,20 @@ def o_painel_serve_os_dois_colegiados_pelo_mesmo_script(cur):
     assert "parametro: 'p_unidade'" in painel
 
     # Cada página declara o seu colegiado.
-    cj = (RAIZ / 'acervo.html').read_text(encoding='utf-8')
+    cj = (RAIZ / 'acervo-cj.html').read_text(encoding='utf-8')
     creg = (RAIZ / 'acervo-creg.html').read_text(encoding='utf-8')
     assert 'data-colegiado="cj"' in cj
     assert 'data-colegiado="creg"' in creg
+    assert 'data-page="acervo-cj"' in cj
     assert 'data-page="acervo-creg"' in creg
 
     # E o bootstrap conhece as duas, carregando o mesmo script.
     boot = (RAIZ / 'assets' / 'js' / 'bootstrap.js').read_text(encoding='utf-8')
-    assert "'acervo-creg':" in boot and boot.count("'acervo.min.js'") == 2
+    assert "'acervo-creg':" in boot and "'acervo-cj':" in boot and "'acervo.min.js'" in boot
 
     # O índice abre as duas: o botão do Conselho deixou de ser inerte.
     index = (RAIZ / 'index.html').read_text(encoding='utf-8')
-    assert './acervo-creg.html' in index
+    assert './acervo-creg.html' in index and './acervo-cj.html' in index
     assert 'btnAcervoCreg' in index and 'aria-disabled="true">Conselho' not in index
 
 

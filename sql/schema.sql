@@ -298,7 +298,7 @@ create trigger julgados_cj_derivar
 -- ── CJ · Registro do voto e do status pela secretaria ────────────────────────
 -- A pauta é convocação: chega do site da AGR sem voto e sem status, porque as
 -- duas coisas só existem depois da sessão. Quem preenche é a secretaria, na
--- página julgados.html.
+-- página julgados-cj.html.
 --
 -- Isso abre, pela primeira vez, LEITURA para o navegador — só dela, e só desta
 -- tabela. A escrita continua fechada: não existe política de UPDATE em
@@ -440,7 +440,7 @@ alter table public.cadeiras_cj enable row level security;
 revoke all privileges on table public.cadeiras_cj from anon, authenticated;
 
 -- ── CJ · Painel do acervo ────────────────────────────────────────────────────
--- A matriz do acervo.html: processos parados por faixa de tempo e por relator.
+-- A matriz do acervo-cj.html: processos parados por faixa de tempo e por relator.
 --
 -- O navegador não lê acervo_cj — a tabela só tem política de INSERT. Abrir
 -- SELECT nela só para montar o painel entregaria o acervo inteiro ao cliente
@@ -629,7 +629,7 @@ create policy "usuario autenticado pode inserir"
   on public.acervo_cj for insert to authenticated with check (true);
 
 -- julgados_cj é a única tabela que o navegador lê, e ele só lê: a página
--- julgados.html precisa listar os pendentes. Gravar voto e status é feito pela
+-- julgados-cj.html precisa listar os pendentes. Gravar voto e status é feito pela
 -- função registrar_votos, não por UPDATE direto. Inserir julgado é trabalho do
 -- job de sincronização, que se conecta direto ao banco.
 drop policy if exists "usuario autenticado pode inserir" on public.julgados_cj;
