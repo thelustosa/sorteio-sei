@@ -92,6 +92,8 @@
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
+html.has-session #loginScreen { display: none !important; }
+@view-transition { navigation: auto; }
 html { min-width: 320px; }
 
 body {
@@ -701,6 +703,21 @@ tbody tr:hover td { background: var(--table-row-hover); }
   font-size: var(--text-lg);
   letter-spacing: -0.015em;
   text-align: center;
+}
+
+.session-loading .loading-state,
+.detalhe-loading .loading-state,
+#pautasContainer .loading-state {
+  animation: spinner-fade-in 180ms ease-out 150ms backwards;
+}
+
+#modeSelector:not([hidden]),
+#sorteadorContent:not([hidden]),
+#resultadoSorteio:not([hidden]),
+#listaPautas:not([hidden]),
+#detalhePauta:not([hidden]),
+#detalheCorpo:not([hidden]) {
+  animation: view-fade-in 180ms ease-out;
 }
 
 .session-loading .loading-spinner {
@@ -1472,6 +1489,14 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 .toast-dismiss:hover { background: var(--accent-soft); }
 
 @keyframes loading-spin { to { transform: rotate(360deg); } }
+@keyframes spinner-fade-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes view-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 @keyframes toast-enter { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes dashboard-reveal {
   from { opacity: 0.72; clip-path: inset(0 0 7% 0); transform: translateY(12px); }
@@ -2140,6 +2165,15 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   html { scroll-behavior: auto; }
   .loading-spinner { animation: none; }
   .toast { animation: none; }
+  .session-loading .loading-state,
+  .detalhe-loading .loading-state,
+  #pautasContainer .loading-state { animation: none; }
+  #modeSelector:not([hidden]),
+  #sorteadorContent:not([hidden]),
+  #resultadoSorteio:not([hidden]),
+  #listaPautas:not([hidden]),
+  #detalhePauta:not([hidden]),
+  #detalheCorpo:not([hidden]) { animation: none; }
   .nav-action,
   .button-primary,
   .button-secondary,
