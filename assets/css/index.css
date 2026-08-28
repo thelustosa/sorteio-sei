@@ -437,17 +437,11 @@ select {
 }
 
 input::placeholder { color: var(--muted-strong); opacity: 1; }
-/* Os campos de escolha usam o tom secundário em todos os estados. O hover e
-   o foco não podem escurecer o rótulo, que mudaria de peso sem indicar ação. */
-select,
-select:hover,
-select:focus { color: var(--muted-strong); }
-select option,
-select option:hover,
-select option:checked {
-  background: var(--surface-raised);
-  color: var(--muted-strong);
-}
+select option { background: var(--surface-raised); color: var(--text); }
+/* Só o rótulo sem escolha permanece secundário; hover e foco não o escurecem. */
+select.placeholder-select,
+select.placeholder-select:hover,
+select.placeholder-select:focus { color: var(--muted-strong); }
 
 select.fixed-field:disabled {
   appearance: none;
