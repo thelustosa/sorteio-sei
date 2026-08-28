@@ -4,6 +4,7 @@
 const PAGINAS = {
   sorteio: { arquivo: 'index.min.js', iniciar: 'inicializarSorteio', texto: 'Preparando o sorteio…' },
   julgados: { arquivo: 'julgados.min.js', iniciar: 'inicializarJulgados', texto: 'Preparando as pautas…' },
+  'julgados-creg': { arquivo: 'julgados-creg.min.js', iniciar: 'inicializarJulgadosCreg', texto: 'Preparando as sessões…' },
   acervo: { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' }
 };
 

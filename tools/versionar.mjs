@@ -16,9 +16,11 @@ export const FONTES = [
   'assets/js/bootstrap.js',
   'assets/js/index.js',
   'assets/js/julgados.js',
+  'assets/js/julgados-creg.js',
   'assets/js/acervo.js'
 ];
-export const PAGINAS = ['index.html', 'julgados.html', 'acervo.html', '404.html'];
+export const PAGINAS = ['index.html', 'julgados.html', 'julgados-creg.html',
+                        'acervo.html', '404.html'];
 
 const ler = caminho => readFileSync(join(RAIZ, caminho), 'utf8');
 // Zera a própria versão antes de hashear, senão o valor gravado mudaria o hash

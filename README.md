@@ -60,7 +60,8 @@ endereço não existe. Todo o resto está agrupado por natureza.
 
 ```text
 ├── index.html              sorteio de processos (entrada do site)
-├── julgados.html           registro do voto e do status
+├── julgados.html           registro do voto e do status (Câmara)
+├── julgados-creg.html      registro do voto e do status (Conselho)
 ├── 404.html                página de endereço inexistente
 │
 ├── assets/
@@ -69,7 +70,8 @@ endereço não existe. Todo o resto está agrupado por natureza.
 │   ├── js/
 │   │   ├── bootstrap.js    carrega cada área somente depois da autenticação
 │   │   ├── index.js        fonte da lógica do sorteio e da ata
-│   │   ├── julgados.js     fonte do registro de julgamentos
+│   │   ├── julgados.js     fonte do registro de julgamentos da Câmara
+│   │   ├── julgados-creg.js  o mesmo, para o Conselho Regulador
 │   │   ├── supabase.js     configuração, login e chamadas — usado pelas duas páginas
 │   │   └── *.min.js        versões otimizadas servidas pelo site
 │   ├── fonts/              Montserrat em .woff2 e a licença OFL
@@ -112,6 +114,7 @@ npx --yes esbuild@0.28.2 assets/js/supabase.js --minify-syntax --minify-whitespa
 npx --yes esbuild@0.28.2 assets/js/bootstrap.js --minify-syntax --minify-whitespace --outfile=assets/js/bootstrap.min.js
 npx --yes esbuild@0.28.2 assets/js/index.js --minify-syntax --minify-whitespace --outfile=assets/js/index.min.js
 npx --yes esbuild@0.28.2 assets/js/julgados.js --minify-syntax --minify-whitespace --outfile=assets/js/julgados.min.js
+npx --yes esbuild@0.28.2 assets/js/julgados-creg.js --minify-syntax --minify-whitespace --outfile=assets/js/julgados-creg.min.js
 npx --yes esbuild@0.28.2 assets/js/acervo.js --minify-syntax --minify-whitespace --outfile=assets/js/acervo.min.js
 node tools/versionar.mjs
 ```
@@ -285,9 +288,10 @@ Ordem de execução no SQL Editor:
 
 Tudo é idempotente: rodar de novo não duplica nada.
 
-**Ainda falta a interface.** As funções `resumo_acervo_creg`,
-`processos_acervo_creg` e `registrar_votos_creg` estão prontas e não têm
-consumidor — `acervo.html` e `julgados.html` atendem só a Câmara.
+O registro de voto e status do Conselho tem tela própria,
+[julgados-creg.html](julgados-creg.html), no mesmo desenho da Câmara. **Falta
+ainda o painel do acervo**: `resumo_acervo_creg` e `processos_acervo_creg` estão
+prontas e sem consumidor — `acervo.html` atende só a Câmara.
 
 ### Backup e restauração
 

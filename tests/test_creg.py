@@ -32,6 +32,15 @@ PG = banco.Postgres('sorteio_sei_creg_test', 55435)
 
 testes = []
 
+# Padrões usados por rotulos_da_pagina_batem_com_os_do_banco. Em constante, e
+# não inline, porque são regex com aspas e barras que sujariam o teste.
+FUNCAO_CREG = r'function public\.registrar_votos_creg\(itens jsonb\).*?\n\$\$;'
+LISTA_VOTOS = r'const VOTOS = \[([^\]]+)\]'
+LISTA_STATUS = r'const STATUS = \[([^\]]+)\]'
+ACEITOS_VOTO = r"'voto', ''\), ''\) not in\s*\(([^)]+)\)"
+ACEITOS_STATUS = r"'status', ''\), ''\) not in\s*\(([^)]+)\)"
+
+
 
 def teste(fn):
     testes.append(fn)
@@ -685,6 +694,56 @@ def assuntos_do_sorteio_e_da_importacao_sao_a_mesma_lista(cur):
     assert do_front == imp.ASSUNTOS, (
         f'só no front: {sorted(set(do_front) - set(imp.ASSUNTOS))}; '
         f'só na importação: {sorted(set(imp.ASSUNTOS) - set(do_front))}')
+
+
+@teste
+def rotulos_da_pagina_batem_com_os_do_banco(cur):
+    """julgados-creg.js e registrar_votos_creg têm de aceitar a mesma lista.
+
+    Se divergirem, a secretaria escolhe um rótulo no seletor e o banco recusa na
+    hora de salvar — falha que só apareceria em produção, depois de uma sessão
+    inteira preenchida.
+    """
+    import re
+    pagina = (RAIZ / 'assets' / 'js' / 'julgados-creg.js').read_text(encoding='utf-8')
+    schema = (RAIZ / 'sql' / 'schema.sql').read_text(encoding='utf-8')
+
+    corpo = re.search(FUNCAO_CREG, schema, re.S)
+    assert corpo, 'registrar_votos_creg não encontrada no schema'
+    corpo = corpo.group(0)
+
+    def rotulos(fonte, padrao):
+        achado = re.search(padrao, fonte, re.S)
+        assert achado, padrao
+        return re.findall(r"'([^']+)'", achado.group(1))
+
+    assert rotulos(pagina, LISTA_VOTOS) == rotulos(corpo, ACEITOS_VOTO)
+    assert rotulos(pagina, LISTA_STATUS) == rotulos(corpo, ACEITOS_STATUS)
+
+
+@teste
+def a_pagina_do_creg_le_a_tabela_do_creg(cur):
+    """Cada colegiado tem a sua tela, e elas não podem trocar de fonte."""
+    creg = (RAIZ / 'assets' / 'js' / 'julgados-creg.js').read_text(encoding='utf-8')
+    cj = (RAIZ / 'assets' / 'js' / 'julgados.js').read_text(encoding='utf-8')
+
+    assert 'julgados_creg?select=' in creg and 'julgados_cj?select=' not in creg
+    assert 'rpc/registrar_votos_creg' in creg
+    assert 'julgados_cj?select=' in cj and 'julgados_creg' not in cj
+
+    # A coluna do Conselho é a unidade, e sem de-para de nomes: rotularCadeira
+    # é da Câmara e não pode ter vindo junto na cópia.
+    assert 'j.unidade' in creg and 'rotularCadeira' not in creg
+
+    # E o bootstrap sabe carregar a página nova.
+    boot = (RAIZ / 'assets' / 'js' / 'bootstrap.js').read_text(encoding='utf-8')
+    assert "'julgados-creg':" in boot and 'inicializarJulgadosCreg' in boot
+    assert 'function inicializarJulgadosCreg' in creg
+
+    # O index oferece as duas telas.
+    index = (RAIZ / 'index.html').read_text(encoding='utf-8')
+    assert './julgados-creg.html' in index and './julgados.html' in index
+    assert (RAIZ / 'julgados-creg.html').is_file()
 
 
 def main(argv):
