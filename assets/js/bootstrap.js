@@ -3,8 +3,20 @@
 // execução no caminho crítico sem mudar o fluxo do sistema.
 const PAGINAS = {
   sorteio: { arquivo: 'index.min.js', iniciar: 'inicializarSorteio', texto: 'Preparando o sorteio…' },
-  julgados: { arquivo: 'julgados.min.js', iniciar: 'inicializarJulgados', texto: 'Preparando as pautas…' },
-  'julgados-creg': { arquivo: 'julgados-creg.min.js', iniciar: 'inicializarJulgadosCreg', texto: 'Preparando as sessões…' },
+  julgados: {
+    arquivo: 'julgados.min.js',
+    iniciar: 'inicializarJulgados',
+    texto: 'Preparando as pautas…',
+    carregamentoLocal: true
+  },
+  // A tela do Conselho é gêmea da da Câmara e mostra o mesmo indicador dentro
+  // da própria lista, então carrega pelo mesmo caminho.
+  'julgados-creg': {
+    arquivo: 'julgados-creg.min.js',
+    iniciar: 'inicializarJulgadosCreg',
+    texto: 'Preparando as sessões…',
+    carregamentoLocal: true
+  },
   acervo: { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' }
 };
 
@@ -14,18 +26,30 @@ const sessionLoading = document.getElementById('sessionLoading');
 async function carregarPaginaAutenticada() {
   if (!paginaAtual) return;
 
-  sessionLoading.hidden = false;
-  sessionLoading.replaceChildren(criarIndicadorCarregamento(paginaAtual.texto));
+  if (!paginaAtual.carregamentoLocal) {
+    sessionLoading.hidden = false;
+    sessionLoading.replaceChildren(criarIndicadorCarregamento(paginaAtual.texto));
+  }
 
   try {
     await carregarScript(`assets/js/${paginaAtual.arquivo}?v=${ASSET_VERSION}`);
-    // A inicialização também pode buscar dados. O loading geral só sai depois
-    // que a superfície inteira estiver pronta para ser revelada.
-    await window[paginaAtual.iniciar]();
+    // Julgados já apresenta o andamento dentro da própria lista. A chamada
+    // monta esse indicador de forma síncrona antes de devolver a promessa;
+    // então o loading geral pode sair sem deixar um quadro vazio ou competir
+    // com o indicador menor.
+    const inicializacao = window[paginaAtual.iniciar]();
+    if (paginaAtual.carregamentoLocal) {
+      sessionLoading.hidden = true;
+      sessionLoading.replaceChildren();
+    }
+    await inicializacao;
     sessionLoading.hidden = true;
     sessionLoading.replaceChildren();
   } catch (err) {
     console.error(err);
+    // Se o carregamento local falhar, o erro volta ao contêiner geral para não
+    // depender do estado parcial que a página conseguiu montar.
+    sessionLoading.hidden = false;
     const estado = document.createElement('div');
     estado.className = 'load-error';
     estado.setAttribute('role', 'alert');
