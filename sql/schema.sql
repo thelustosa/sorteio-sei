@@ -17,16 +17,17 @@
 -- CREG a coluna é RECURSO e quem recebe é a UNIDADE (CREG1..CREG4). O CREG
 -- ainda calcula META 45 e a divergência em relação à CJ, que a Câmara não tem.
 
--- ── CREG: a tabela do sorteio antigo, aposentada ─────────────────────
+-- ── CREG: a tabela do sorteio antigo ────────────────────────────────────────
 -- Até 27/08/2026 o sorteio do Conselho Regulador gravava aqui — uma tabela sem
 -- acervo e sem julgados, medida provisória enquanto o CREG não tinha o desenho
--- da Câmara. Agora tem: index.js grava em acervo_creg, e daqui não sai nem entra
--- mais nada.
+-- da Câmara. Agora tem: index.js grava em acervo_creg.
 --
--- Ela CONTINUA no schema, e de propósito. Estava vazia no dia da migração, mas
--- derrubá-la deixaria sem objeto a migração 20260823165725, que é justamente
--- quem validou a restrição de 15 dígitos sobre o legado. Apagar tabela é decisão
--- de quem opera o banco, não efeito colateral de rodar um schema.
+-- Ela CONTINUA no schema, e não está vazia: guarda os 81 processos sorteados em
+-- 27/08/2026, o último sorteio feito antes da virada. Esses registros foram
+-- copiados para acervo_creg (migração 20260828…), e ficam aqui como o que a
+-- tela gravou na época. Apagar tabela é decisão de quem opera o banco, não
+-- efeito colateral de rodar um schema — e esta ainda é o objeto da migração
+-- 20260823165725, que validou a restrição de 15 dígitos sobre o legado.
 create table if not exists public.processos_sorteados (
   id                bigint generated always as identity primary key,
   criado_em         timestamptz not null default now(),
@@ -35,10 +36,16 @@ create table if not exists public.processos_sorteados (
   ordem             int         not null,
   num_processo      text        not null,
   assunto           text        not null,
+  interessado       text,
   data_distribuicao date        not null,
   recurso           text        not null,
   unidade           text        not null
 );
+
+-- Campo livre digitado pela secretaria; sorteios anteriores não o têm, então a
+-- coluna nasce anulável em vez de inventar valor para o histórico.
+alter table public.processos_sorteados
+  add column if not exists interessado text;
 
 -- Criar em duas etapas mantinha a proteção para novas linhas enquanto uma base
 -- antiga era conferida; a validação abaixo exige que nenhum legado inválido reste.
@@ -301,12 +308,12 @@ alter table public.julgados_cj
   add column if not exists atualizado_em  timestamptz,
   add column if not exists atualizado_por text;
 
--- O interessado saiu do sistema em 20/08/2026: deixou de ser usado e não vale a
--- pena guardar nome de pessoa num registro que ninguém consulta. Em banco novo
--- as tabelas acima já nascem sem ele; aqui a coluna cai de quem já existia.
-alter table public.processos_sorteados drop column if exists interessado;
-alter table public.acervo_cj           drop column if exists interessado;
-alter table public.julgados_cj         drop column if exists interessado;
+-- O interessado saiu da Câmara de Julgamento em 20/08/2026: lá ninguém o
+-- consultava e não valia a pena guardar nome de pessoa. No Conselho Regulador
+-- ele voltou em 27/08/2026, digitado na tela do sorteio — por isso
+-- processos_sorteados não entra nesta limpeza (a coluna é criada acima).
+alter table public.acervo_cj   drop column if exists interessado;
+alter table public.julgados_cj drop column if exists interessado;
 
 -- Os pendentes são poucos no meio de milhares de julgados: índice parcial, do
 -- tamanho da fila de trabalho e não da tabela.
@@ -678,6 +685,14 @@ create table if not exists public.acervo_creg (
   data_distribuicao date        not null,
   assunto           text,
   recurso           text,
+
+  -- Campo livre digitado na tela do sorteio, e SÓ por ela. O interessado saiu
+  -- da Câmara em 20/08/2026 e voltou para o Conselho em 27/08 — aqui a
+  -- secretaria o usa para reconhecer o processo na ata. A importação das
+  -- planilhas e das atas não o preenche: no histórico ele é nome de pessoa
+  -- física em volume, e este repositório é público.
+  interessado       text,
+
   ordem             int,
   sorteado_em       timestamptz,
   origem            text        not null default 'sorteio'
@@ -689,6 +704,9 @@ create table if not exists public.acervo_creg (
   constraint acervo_creg_distribuicao_unica
     unique (num_processo, data_distribuicao, unidade)
 );
+
+-- Para o banco que já tinha acervo_creg antes de o interessado voltar.
+alter table public.acervo_creg add column if not exists interessado text;
 
 -- ── CREG · Julgados ──────────────────────────────────────────────────────────
 -- Uma linha por processo levado a uma sessão do Conselho. É a aba "Página

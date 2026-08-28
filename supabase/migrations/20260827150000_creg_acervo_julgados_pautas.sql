@@ -43,6 +43,14 @@ create table if not exists public.acervo_creg (
   data_distribuicao date        not null,
   assunto           text,
   recurso           text,
+
+  -- Campo livre digitado na tela do sorteio, e SÓ por ela. O interessado saiu
+  -- da Câmara em 20/08/2026 e voltou para o Conselho em 27/08 — aqui a
+  -- secretaria o usa para reconhecer o processo na ata. A importação das
+  -- planilhas e das atas não o preenche: no histórico ele é nome de pessoa
+  -- física em volume, e este repositório é público.
+  interessado       text,
+
   ordem             int,
   sorteado_em       timestamptz,
   origem            text        not null default 'sorteio'
@@ -54,6 +62,9 @@ create table if not exists public.acervo_creg (
   constraint acervo_creg_distribuicao_unica
     unique (num_processo, data_distribuicao, unidade)
 );
+
+-- Para o banco que já tinha acervo_creg antes de o interessado voltar.
+alter table public.acervo_creg add column if not exists interessado text;
 
 -- ── CREG · Julgados ──────────────────────────────────────────────────────────
 -- Uma linha por processo levado a uma sessão do Conselho. É a aba "Página

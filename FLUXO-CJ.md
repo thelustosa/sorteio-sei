@@ -581,15 +581,16 @@ Postgres, e as regras moram no banco.
 | importar pautas | conexão direta ao Postgres | GitHub Actions |
 
 Toda chamada do navegador passa por `api()` em [`supabase.js`](assets/js/supabase.js), que
-centraliza autenticação, tratamento de erro e o retorno à tela de login quando a
-sessão expira.
+centraliza autenticação, renovação da sessão e tratamento de erro.
 
 ### Sessão
 
-O token de acesso vive em `sessionStorage`, para navegar entre as duas páginas
-sem pedir login de novo. Expira em cerca de uma hora; quando isso acontece,
-qualquer chamada devolve 401 e o `api()` recoloca a tela de login com a mensagem
-certa. Senha nunca é armazenada.
+Os tokens de acesso e renovação vivem em `sessionStorage`, para navegar entre as
+páginas sem pedir login de novo. Quando o token de acesso vence, `api()` renova
+o par e repete a chamada uma vez. A interface e o trabalho em andamento
+permanecem abertos mesmo se a renovação falhar. O botão **Sair** revoga a sessão
+atual no Supabase e apaga os tokens locais; fechar a aba também descarta o
+`sessionStorage`. Senha nunca é armazenada.
 
 ### Segurança: cada tabela recebe o mínimo
 
@@ -714,7 +715,7 @@ Chaves e índices que sustentam as regras:
 |---|---|
 | Supabase fora do ar durante o sorteio | oferece o botão para baixar o `.json`; nenhum sorteio se perde |
 | sorteio repetido (mesmo processo, dia e cadeira) | banco recusa; mensagem clara e botão de backup aparece |
-| sessão expirada | tela de login volta com a mensagem; após entrar novamente, o botão de backup aparece |
+| token de acesso expirado | renova a sessão e repete a chamada; se não conseguir, mantém a tela aberta, mostra o erro e preserva o backup |
 | site da AGR fora do ar | o job falha inteiro e tenta de novo na próxima rodada |
 | um PDF indisponível ou inválido | só aquele documento falha; os outros seguem, e ele **não** é marcado como processado |
 | PDF sem processos | vira erro do documento; não marca como processado |
@@ -774,10 +775,14 @@ Revisto depois da carga de recuperação, em 21/08/2026.
 
 ### Decidido e encerrado
 
-- **O interessado saiu do sistema** em 20/08/2026. Deixou de ser usado, e não
-  havia motivo para guardar nome de pessoa num registro que ninguém consultava:
-  some da tela dos dois modos, das três tabelas, da página de julgados e das
-  atas em Word. O `schema.sql` derruba a coluna de quem já existia.
+- **O interessado saiu da Câmara de Julgamento** em 20/08/2026. Deixou de ser
+  usado, e não havia motivo para guardar nome de pessoa num registro que
+  ninguém consultava: some da tela da CJ, de `acervo_cj`, de `julgados_cj`, da
+  página de julgados e das atas em Word — o `schema.sql` derruba a coluna de
+  quem já existia. **No Conselho Regulador ele voltou** em 27/08/2026, agora
+  como campo livre digitado na tela do sorteio: fica em
+  `processos_sorteados.interessado` (anulável, porque os sorteios antigos não
+  têm o dado) e na ata do CREG.
 - **Edição concorrente** não é preocupação: a secretaria é pequena e, se duas
   pessoas abrirem a mesma pauta, vale quem salvar por último.
 

@@ -639,6 +639,54 @@ def acervo_aceita_a_origem_ata(cur):
     raise AssertionError('aceitou origem desconhecida')
 
 
+@teste
+def sorteio_grava_o_interessado_no_acervo(cur):
+    """O interessado voltou para o Conselho em 27/08/2026, digitado na tela.
+
+    Saiu da Câmara em 20/08 porque lá ninguém o consultava; aqui a secretaria o
+    usa para reconhecer o processo na ata. Só o sorteio o preenche — a
+    importação das planilhas e das atas deixa nulo, porque no histórico é nome
+    de pessoa física em volume e o repositório é público.
+    """
+    limpar(cur)
+    cur.execute("""insert into acervo_creg
+                   (num_processo, unidade, data_distribuicao, assunto, recurso,
+                    interessado, ordem, sorteado_em, origem)
+                   values ('202600029003001', 'CREG2', current_date,
+                           'Quadro de Horários', 'Não se aplica',
+                           'EMPRESA X LTDA', 3, now(), 'sorteio')
+                   returning interessado, assunto""")
+    assert cur.fetchone() == ('EMPRESA X LTDA', 'Quadro de Horários')
+
+    # E continua opcional: ata e planilha não o trazem.
+    distribuir(cur, '202600029003002', 'CREG2', date.today())
+    assert uma(cur, """select interessado from acervo_creg
+                        where num_processo = '202600029003002'""") is None
+
+
+@teste
+def assuntos_do_sorteio_e_da_importacao_sao_a_mesma_lista(cur):
+    """Se divergirem, o mesmo assunto vira duas categorias no relatório.
+
+    A secretaria escolhe o rótulo em assuntosCreg (index.js); a importação
+    reconhece o dela em ASSUNTOS (importar_creg.py) e deixa passar como veio
+    tudo que não bate. Um item só existente de um lado passaria despercebido
+    até alguém agrupar por assunto e ver a categoria repetida.
+    """
+    sys.path.insert(0, str(RAIZ / 'dados'))
+    import importar_creg as imp
+    import re
+
+    fonte = (RAIZ / 'assets' / 'js' / 'index.js').read_text(encoding='utf-8')
+    achado = re.search(r'const assuntosCreg = \[([^\]]+)\]', fonte)
+    assert achado, 'assuntosCreg não encontrado em index.js'
+    do_front = re.findall(r"'([^']+)'", achado.group(1))
+
+    assert do_front == imp.ASSUNTOS, (
+        f'só no front: {sorted(set(do_front) - set(imp.ASSUNTOS))}; '
+        f'só na importação: {sorted(set(imp.ASSUNTOS) - set(do_front))}')
+
+
 def main(argv):
     PG.subir()
     try:

@@ -80,9 +80,16 @@ STATUS = {
 # "Auto de Infração". Aqui a comparação ignora caixa e acento e devolve a forma
 # canônica; o que não estiver na lista ("Revisão de Metodologia", "POP") passa
 # como veio — inventar categoria seria pior do que ter uma a mais.
+#
+# A lista tem de acompanhar assuntosCreg, em assets/js/index.js: é ela que a
+# secretaria vê no sorteio, e um rótulo só existente de um lado viraria duas
+# categorias no relatório. "Quadro de Horários" entrou em 27/08/2026, e o
+# histórico já trazia "Quadro de Horário" (singular) em 3 linhas — que a
+# comparação sem caixa nem acento NÃO alcança, por serem palavras diferentes.
 ASSUNTOS = ['Auto de Infração', 'Chamamento Público', 'Gratuidade',
             'Manifestação', 'Minuta', 'Nota Técnica', 'Ouvidoria',
-            'Requerimento', 'Plano de Racionamento', 'Reajuste', 'Outros']
+            'Requerimento', 'Plano de Racionamento', 'Quadro de Horários',
+            'Reajuste', 'Outros']
 
 # A planilha escrevia "n/a" onde a fórmula não achava nada. No banco isso é
 # ausência de dado, não um valor.

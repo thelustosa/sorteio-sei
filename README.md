@@ -245,6 +245,10 @@ Não há equivalente a `cadeiras_cj`: os responsáveis por CREG1..CREG4 pediram
 para não ter os nomes vinculados aos processos, então o painel do Conselho
 mostra a unidade e nada além dela.
 
+O **interessado** existe em `acervo_creg` e é preenchido só pelo sorteio,
+digitado na tela. A importação das planilhas e das atas não o traz: no
+histórico é nome de pessoa física em volume, e este repositório é público.
+
 O vocabulário muda, a estrutura não. Na Câmara a coluna de decisão é a **defesa**
 (houve ou não); no Conselho é o **recurso**, com cinco valores. A Câmara só julga
 auto de infração; o Conselho tem onze assuntos. E o Conselho acompanha três

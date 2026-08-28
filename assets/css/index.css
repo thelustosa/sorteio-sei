@@ -530,16 +530,14 @@ tbody tr:hover td { background: var(--table-row-hover); }
      .table-scroll em vez de truncar o assunto do processo. */
   #processTable { min-width: 1040px; }
 
-  #processTable th:nth-child(1),
-  #processTable td:nth-child(1) { width: 7%; }   /* Ordem */
-  #processTable th:nth-child(2),
-  #processTable td:nth-child(2) { width: 26%; }  /* Nº Processo */
-  #processTable th:nth-child(3),
-  #processTable td:nth-child(3) { width: 28%; }  /* Assunto */
-  #processTable th:nth-child(4),
-  #processTable td:nth-child(4) { width: 26%; }  /* Defesa / Recurso */
-  #processTable th:nth-child(5),
-  #processTable td:nth-child(5) { width: 13%; }  /* Ações */
+  /* Largura por classe, e não por posição: a coluna Interessado só existe no
+     CREG e a numeração das colunas muda entre os dois colegiados. */
+  #processTable .num { width: 6%; }
+  #processTable .col-processo { width: 22%; }
+  #processTable .col-interessado { width: 20%; }
+  #processTable .col-assunto { width: 22%; }
+  #processTable .col-decisao { width: 20%; }
+  #processTable .acoes { width: 10%; }
 }
 
 #processTable input,
