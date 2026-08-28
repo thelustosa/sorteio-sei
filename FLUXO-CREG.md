@@ -262,8 +262,14 @@ não de uma migração.
 recusa rótulo fora da lista, anota quem preencheu, e não encosta no histórico da
 planilha — linha que já veio com voto e status é imutável por ali.
 
-> Ainda **não existe página** de registro para o CREG. `julgados.html` é da
-> Câmara. A função e a tabela estão prontas; falta a tela.
+A tela é **[julgados-creg.html](julgados-creg.html)**, gêmea da `julgados.html`
+da Câmara: lista as sessões com pendência, abre uma e mostra os processos com os
+seletores de voto e status. Duas diferenças, e ambas vêm de decisões já tomadas:
+a coluna mostra a **unidade** e para aí (não há de-para de nomes), e um rótulo do
+histórico que saiu da lista — "Parcialmente Deferido", "Suspender" — aparece
+marcado como *registro anterior* em vez de vir em branco, senão a primeira
+gravação apagaria uma decisão que já existia. Salvar com ele ainda posto é
+barrado na tela, com a linha nomeada, porque o banco recusaria a lista inteira.
 
 ---
 
@@ -379,8 +385,6 @@ Todos os passos são idempotentes.
 
 ## 8. O que ainda não está resolvido
 
-- **Página de registro do voto do CREG.** A função e a tabela existem;
-  `julgados.html` atende só a Câmara.
 - **Painel do acervo do CREG na tela.** `acervo.html` chama
   `resumo_acervo_cj`; as RPCs do Conselho estão prontas e não têm consumidor.
 - **O CREG1 não recebe distribuição desde 17/06/2026** e é a unidade com a
