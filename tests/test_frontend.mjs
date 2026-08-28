@@ -653,16 +653,19 @@ test('move o foco para a lista após o login', async () => {
 // aparecem é a função resumo_acervo_cj. Estes testes fixam esse contrato e os
 // três estados da tela — matriz, vazio e falha.
 
-function bootstrapPage(inicializar, pagina = 'acervo') {
+function bootstrapPage(inicializar, pagina = 'acervo-cj') {
   const document = new Document();
   document.body.dataset.page = pagina;
   const sessionLoading = document.add('sessionLoading', 'div');
   sessionLoading.hidden = true;
   let aoEntrar;
+  // As chaves são os data-page do <body>, os mesmos de PAGINAS no bootstrap.js.
   const inicializadores = {
     sorteio: 'inicializarSorteio',
-    julgados: 'inicializarJulgados',
-    acervo: 'inicializarAcervo'
+    'julgados-cj': 'inicializarJulgados',
+    'julgados-creg': 'inicializarJulgadosCreg',
+    'acervo-cj': 'inicializarAcervo',
+    'acervo-creg': 'inicializarAcervo'
   };
 
   new Function('document', 'window', 'ASSET_VERSION', 'carregarScript',
@@ -691,7 +694,7 @@ test('bootstrap mantém o loading geral até a inicialização assíncrona termi
 
 test('julgados prioriza o loading menor enquanto busca as pautas', async () => {
   let concluir;
-  const page = bootstrapPage(() => new Promise(resolve => { concluir = resolve; }), 'julgados');
+  const page = bootstrapPage(() => new Promise(resolve => { concluir = resolve; }), 'julgados-cj');
   const carregamento = page.iniciar();
   await wait();
 
@@ -707,7 +710,7 @@ test('julgados recupera o loading geral para apresentar falha de inicialização
   const originalConsoleError = console.error;
   console.error = () => {};
   try {
-    const page = bootstrapPage(async () => { throw new Error('indisponível'); }, 'julgados');
+    const page = bootstrapPage(async () => { throw new Error('indisponível'); }, 'julgados-cj');
     await page.iniciar();
 
     assert.equal(page.sessionLoading.hidden, false);
@@ -764,7 +767,7 @@ function acervoPage(api, { imprimir = () => {}, colegiado = 'cj' } = {}) {
   document.add('btnFecharDetalhe', 'button');
   document.add('btnExportarDetalhe', 'button');
   document.getElementById('acervoPanel').hidden = true;
-  document.getElementById('btnAtualizar').hidden = true;  // como no acervo.html
+  document.getElementById('btnAtualizar').hidden = true;  // como no acervo-cj.html
 
   const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento',
     `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, criarExcelDetalhe, dadosTabulares, abrirDetalhe, exportarDetalhe };`)(
