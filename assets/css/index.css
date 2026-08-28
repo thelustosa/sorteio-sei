@@ -437,8 +437,17 @@ select {
 }
 
 input::placeholder { color: var(--muted-strong); opacity: 1; }
-select option { background: var(--surface-raised); color: var(--text); }
-select.placeholder-select { color: var(--muted-strong); }
+/* Os campos de escolha usam o tom secundário em todos os estados. O hover e
+   o foco não podem escurecer o rótulo, que mudaria de peso sem indicar ação. */
+select,
+select:hover,
+select:focus { color: var(--muted-strong); }
+select option,
+select option:hover,
+select option:checked {
+  background: var(--surface-raised);
+  color: var(--muted-strong);
+}
 
 select.fixed-field:disabled {
   appearance: none;
@@ -604,6 +613,10 @@ tbody tr:hover td { background: var(--table-row-hover); }
   color: var(--muted);
   font-size: var(--text-sm);
 }
+
+/* No sorteio, esta barra contém somente a ação de adicionar: mantém a ação
+   junto à borda direita sem alterar as barras que também exibem um contador. */
+#addRowBtn { margin-inline-start: auto; }
 
 #resultadoSorteio { margin-top: 0; padding-top: 0; border: 0; }
 .resultado-header {
