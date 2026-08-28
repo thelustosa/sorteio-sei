@@ -23,21 +23,31 @@ async function carregarPaginaAutenticada() {
     await window[paginaAtual.iniciar]();
     sessionLoading.hidden = true;
     sessionLoading.replaceChildren();
-  } catch (_) {
+  } catch (err) {
+    console.error(err);
     const estado = document.createElement('div');
     estado.className = 'load-error';
     estado.setAttribute('role', 'alert');
 
+    // Sessão vencida não se resolve tentando de novo: sem dizer o que houve, o
+    // botão de retentativa vira um laço que sempre termina no mesmo 401.
+    const sessaoVencida = err.status === 401;
     const texto = document.createElement('p');
-    texto.textContent = 'Não foi possível preparar esta página. Verifique sua conexão e tente novamente.';
+    texto.textContent = sessaoVencida
+      ? 'Sua sessão não é mais válida. Use Sair e entre novamente.'
+      : `Não foi possível preparar esta página (${err.message}). Verifique sua conexão e tente novamente.`;
 
-    const tentarNovamente = document.createElement('button');
-    tentarNovamente.type = 'button';
-    tentarNovamente.className = 'button-secondary';
-    tentarNovamente.textContent = 'Tentar novamente';
-    tentarNovamente.addEventListener('click', carregarPaginaAutenticada, { once: true });
+    estado.appendChild(texto);
 
-    estado.append(texto, tentarNovamente);
+    if (!sessaoVencida) {
+      const tentarNovamente = document.createElement('button');
+      tentarNovamente.type = 'button';
+      tentarNovamente.className = 'button-secondary';
+      tentarNovamente.textContent = 'Tentar novamente';
+      tentarNovamente.addEventListener('click', carregarPaginaAutenticada, { once: true });
+      estado.appendChild(tentarNovamente);
+    }
+
     sessionLoading.replaceChildren(estado);
   }
 }

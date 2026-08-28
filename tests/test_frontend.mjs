@@ -129,15 +129,24 @@ class Document {
 const wait = () => new Promise(resolve => setImmediate(resolve));
 const source = file => readFileSync(new URL(`../assets/js/${file}`, import.meta.url), 'utf8');
 
-function supabaseApp(fetch) {
+function supabaseApp(fetch, itensIniciais = {}) {
   const document = new Document();
   const window = { addEventListener() {} };
   const navigator = {};
   const location = { protocol: 'http:' };
-  const sessionStorage = { getItem() { return null; }, setItem() {}, removeItem() {} };
-  return new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'fetch',
-    `${source('supabase.js')}\nreturn { autenticar, CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento };`)(
-    document, window, navigator, location, sessionStorage, fetch);
+  const storage = new Map(Object.entries(itensIniciais));
+  const sessionStorage = {
+    getItem(chave) { return storage.get(chave) ?? null; },
+    setItem(chave, valor) { storage.set(chave, String(valor)); },
+    removeItem(chave) { storage.delete(chave); }
+  };
+  const app = new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'fetch',
+    `${source('supabase.js')}\nreturn {
+      autenticar, salvarSessao, restaurarSessao, encerrarSessao, revogarSessaoAtual, sair, api,
+      CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento,
+      estadoSessao: () => ({ accessToken, refreshToken })
+    };`)(document, window, navigator, location, sessionStorage, fetch);
+  return { ...app, storage };
 }
 
 // O de-para das cadeiras mora no supabase.js, que toda página carrega antes do
@@ -152,7 +161,7 @@ function indexPage({ api = async () => null, aviso = () => {},
   const tbody = add('processTableBody', 'tbody');
   add('resultTableBody', 'tbody');
   ['numRows', 'createRows', 'sortear', 'addRowBtn', 'btnCreg', 'btnCj', 'btnVoltar',
-    'modeSelector', 'sorteadorContent', 'thRecurso', 'pillsContainer', 'txtModo',
+    'modeSelector', 'sorteadorContent', 'thRecurso', 'thInteressado', 'pillsContainer', 'txtModo',
     'processEntry', 'processSetupHint', 'processFormMessage', 'resultadoSorteio',
     'sortControls', 'resumoContagem', 'resultadoStatus', 'thUnidadeResult',
     'modeSelectorTitle', 'resultadoSorteioTitle', 'baixarBackup'].forEach(id => add(id, id.includes('Btn') || id.startsWith('btn') || id === 'createRows' || id === 'sortear' || id === 'baixarBackup' ? 'button' : 'div'));
@@ -263,12 +272,10 @@ test('sem banco configurado também exige clique para baixar o backup', async ()
   assert.match(avisos.at(-1)[0], /pronto para baixar/i);
 });
 
-test('mantém o backup acessível depois de reautenticar por erro 401', async () => {
-  let page;
-  page = indexPage({
+test('erro 401 não desmonta o sorteio nem força logout', async () => {
+  const page = indexPage({
     api: async () => {
-      page.document.getElementById('sorteadorContent').hidden = true;
-      throw Object.assign(new Error('sessão expirada'), { status: 401 });
+      throw Object.assign(new Error('não foi possível renovar a sessão'), { status: 401 });
     }
   });
   const { document } = page;
@@ -276,15 +283,10 @@ test('mantém o backup acessível depois de reautenticar por erro 401', async ()
   document.getElementById('sortear').dispatch('click');
   await wait();
 
-  assert.equal(document.getElementById('sorteadorContent').hidden, true);
-  assert.equal(document.getElementById('btnVoltar').hidden, true);
-  page.inicializarSorteio();
-
   assert.equal(document.getElementById('sorteadorContent').hidden, false);
   assert.equal(document.getElementById('resultadoSorteio').hidden, false);
   assert.equal(document.getElementById('baixarBackup').hidden, false);
   assert.equal(document.getElementById('btnVoltar').hidden, false);
-  assert.equal(document.activeElement, document.getElementById('baixarBackup'));
   document.getElementById('baixarBackup').click();
   assert.equal(document.downloads[1], document.downloads[0].replace(/\.doc$/, '.json'));
 });
@@ -310,6 +312,36 @@ test('bloqueia Voltar enquanto a persistência ainda pode responder', async () =
   assert.equal(document.getElementById('baixarBackup').hidden, false);
 });
 
+test('interessado do CREG chega ao banco; a CJ não tem a coluna', async () => {
+  let corpo;
+  const page = indexPage({ api: async (_tabela, opcoes) => { corpo = JSON.parse(opcoes.body); } });
+  const { document, tbody } = page;
+  await preencherCreg(page, '202600029000405');
+  tbody.children[0].querySelector('.col-interessado input').value = '  Saneago  ';
+  document.getElementById('sortear').dispatch('click');
+  await wait();
+
+  assert.equal(corpo[0].interessado, 'Saneago');
+
+  const cj = indexPage();
+  cj.document.getElementById('btnCj').dispatch('click');
+  cj.document.getElementById('numRows').value = '1';
+  cj.document.getElementById('createRows').dispatch('click');
+  await wait();
+  assert.equal(cj.tbody.children[0].querySelector('.col-interessado input'), null);
+  assert.equal(cj.document.getElementById('thInteressado').hidden, true);
+});
+
+test('interessado em branco vai como nulo, e não como texto vazio', async () => {
+  let corpo;
+  const page = indexPage({ api: async (_tabela, opcoes) => { corpo = JSON.parse(opcoes.body); } });
+  await preencherCreg(page, '202600029000406');
+  page.document.getElementById('sortear').dispatch('click');
+  await wait();
+
+  assert.equal(corpo[0].interessado, null);
+});
+
 test('CREG recusa processo sem 15 dígitos antes do sorteio', async () => {
   const { document, tbody } = indexPage();
   document.getElementById('btnCreg').dispatch('click');
@@ -328,18 +360,145 @@ test('CREG recusa processo sem 15 dígitos antes do sorteio', async () => {
   assert.equal(document.activeElement, row.querySelector('.col-processo input'));
 });
 
-test('autenticação envia credenciais ao endpoint esperado e devolve o token', async () => {
+test('autenticação envia credenciais e devolve o par de tokens', async () => {
   let requisicao;
   const app = supabaseApp(async (url, options) => {
     requisicao = { url, options };
-    return { ok: true, status: 200, json: async () => ({ access_token: 'token-de-teste' }) };
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ access_token: 'access-de-teste', refresh_token: 'refresh-de-teste' })
+    };
   });
 
-  assert.equal(await app.autenticar('servidora@example.org', 'senha'), 'token-de-teste');
+  assert.deepEqual(await app.autenticar('servidora@example.org', 'senha'), {
+    access_token: 'access-de-teste', refresh_token: 'refresh-de-teste'
+  });
   assert.match(requisicao.url, /\/auth\/v1\/token\?grant_type=password$/);
   assert.deepEqual(JSON.parse(requisicao.options.body), {
     email: 'servidora@example.org', password: 'senha'
   });
+});
+
+test('401 renova a sessão, conserva a tela e repete a chamada', async () => {
+  const requisicoes = [];
+  const app = supabaseApp(async (url, options) => {
+    requisicoes.push({ url, options });
+    if (url.includes('grant_type=refresh_token')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: 'access-novo', refresh_token: 'refresh-novo' })
+      };
+    }
+    if (options.headers.Authorization === 'Bearer access-antigo') {
+      return { ok: false, status: 401 };
+    }
+    return { ok: true, status: 200, json: async () => ([{ id: 1 }]) };
+  });
+  app.salvarSessao({ access_token: 'access-antigo', refresh_token: 'refresh-antigo' });
+
+  assert.deepEqual(await app.api('dados'), [{ id: 1 }]);
+  assert.equal(requisicoes.length, 3);
+  assert.match(requisicoes[1].url, /\/auth\/v1\/token\?grant_type=refresh_token$/);
+  assert.deepEqual(JSON.parse(requisicoes[1].options.body), { refresh_token: 'refresh-antigo' });
+  assert.equal(requisicoes[2].options.headers.Authorization, 'Bearer access-novo');
+  assert.deepEqual(app.estadoSessao(), {
+    accessToken: 'access-novo', refreshToken: 'refresh-novo'
+  });
+  assert.equal(app.storage.get('sorteio-sei.access-token'), 'access-novo');
+  assert.equal(app.storage.get('sorteio-sei.refresh-token'), 'refresh-novo');
+});
+
+test('chamadas simultâneas compartilham uma única renovação', async () => {
+  let renovacoes = 0;
+  const app = supabaseApp(async (url, options) => {
+    if (url.includes('grant_type=refresh_token')) {
+      renovacoes++;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: 'access-novo', refresh_token: 'refresh-novo' })
+      };
+    }
+    if (options.headers.Authorization === 'Bearer access-antigo') {
+      return { ok: false, status: 401 };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true }) };
+  });
+  app.salvarSessao({ access_token: 'access-antigo', refresh_token: 'refresh-antigo' });
+
+  const respostas = await Promise.all([app.api('um'), app.api('dois')]);
+
+  assert.deepEqual(respostas, [{ ok: true }, { ok: true }]);
+  assert.equal(renovacoes, 1, 'refresh token rotacionado não pode ser reutilizado em paralelo');
+});
+
+test('falha ao renovar não apaga a sessão automaticamente', async () => {
+  const app = supabaseApp(async (url) => {
+    if (url.includes('grant_type=refresh_token')) {
+      return { ok: false, status: 400, json: async () => ({ message: 'refresh inválido' }) };
+    }
+    return { ok: false, status: 401 };
+  });
+  app.salvarSessao({ access_token: 'access-antigo', refresh_token: 'refresh-antigo' });
+
+  await assert.rejects(() => app.api('dados'), { status: 401 });
+  assert.deepEqual(app.estadoSessao(), {
+    accessToken: 'access-antigo', refreshToken: 'refresh-antigo'
+  });
+  assert.equal(app.storage.get('sorteio-sei.access-token'), 'access-antigo');
+  assert.equal(app.storage.get('sorteio-sei.refresh-token'), 'refresh-antigo');
+});
+
+test('saída manual apaga os dois tokens da sessão', () => {
+  const app = supabaseApp(async () => {});
+  app.salvarSessao({ access_token: 'access', refresh_token: 'refresh' });
+
+  app.encerrarSessao();
+
+  assert.deepEqual(app.estadoSessao(), { accessToken: '', refreshToken: '' });
+  assert.equal(app.storage.has('sorteio-sei.access-token'), false);
+  assert.equal(app.storage.has('sorteio-sei.refresh-token'), false);
+});
+
+test('saída manual revoga a sessão atual antes de apagar os tokens locais', async () => {
+  let requisicao;
+  let concluirLogout;
+  const resposta = new Promise(resolve => { concluirLogout = resolve; });
+  const app = supabaseApp(async (url, options) => {
+    requisicao = { url, options };
+    return resposta;
+  });
+  app.salvarSessao({ access_token: 'access-atual', refresh_token: 'refresh-atual' });
+
+  const logout = app.sair();
+
+  assert.equal(app.estadoSessao().accessToken, 'access-atual',
+    'os tokens precisam existir até o servidor receber a revogação');
+  assert.match(requisicao.url, /\/auth\/v1\/logout\?scope=local$/);
+  assert.equal(requisicao.options.method, 'POST');
+  assert.equal(requisicao.options.headers.Authorization, 'Bearer access-atual');
+  assert.ok(requisicao.options.headers.apikey);
+
+  concluirLogout({ ok: true, status: 204 });
+  await logout;
+
+  assert.deepEqual(app.estadoSessao(), { accessToken: '', refreshToken: '' });
+  assert.equal(app.storage.has('sorteio-sei.access-token'), false);
+  assert.equal(app.storage.has('sorteio-sei.refresh-token'), false);
+});
+
+test('falha de rede no logout ainda apaga os tokens locais', async () => {
+  const app = supabaseApp(async () => {
+    throw new Error('sem rede');
+  });
+  app.salvarSessao({ access_token: 'access', refresh_token: 'refresh' });
+
+  await assert.rejects(() => app.sair(), /sem rede/);
+
+  assert.deepEqual(app.estadoSessao(), { accessToken: '', refreshToken: '' });
+  assert.equal(app.storage.size, 0);
 });
 
 test('autenticação traduz credencial inválida sem expor resposta técnica', async () => {
@@ -665,15 +824,14 @@ test('acervo mantém o total vermelho desde Há 3 meses, inclusive quando zerado
     'faixa zerada não deve anunciar uma ocorrência inexistente');
 });
 
-test('acervo não anuncia falha de conexão quando a sessão expirou', async () => {
+test('acervo propaga falha inicial sem forçar logout', async () => {
   const page = acervoPage(async () => {
     throw Object.assign(new Error('sessão expirada'), { status: 401 });
   });
-  page.inicializarAcervo();
-  await wait();
+  await assert.rejects(() => page.inicializarAcervo(), { status: 401 });
 
   assert.equal(page.document.getElementById('acervoErro').hidden, true,
-    'a tela de login já explica o que houve; dois diagnósticos se contradizem');
+    'o loading geral é quem apresenta a falha inicial sem desmontar a sessão');
 });
 
 test('acervo avisa quando não há processo parado', async () => {
@@ -932,14 +1090,15 @@ test('o card fecha e a falha aparece dentro dele', async () => {
     'não há o que exportar quando a lista não chegou');
 });
 
-test('sessão expirada fecha o card em vez de cobrir o login', async () => {
+test('falha de sessão mantém o card e mostra o erro sem deslogar', async () => {
   const page = await acervoComDetalhe(() => {
     throw Object.assign(new Error('sessão expirada'), { status: 401 });
   });
   await page.abrirDetalhe(celulaDe(page, 0, 1));
 
-  assert.equal(page.dialog.open, false,
-    'o card por cima esconderia justamente o formulário de login');
+  assert.equal(page.dialog.open, true);
+  assert.equal(page.document.getElementById('detalheErro').hidden, false);
+  assert.match(page.document.getElementById('detalheErro').children[0].textContent, /sessão expirada/);
 });
 
 test('o Excel do card é um .xlsx válido com os processos', async () => {

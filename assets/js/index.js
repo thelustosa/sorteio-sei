@@ -1,4 +1,4 @@
-const assuntosCreg = ['Auto de Infração', 'Chamamento Público', 'Gratuidade', 'Manifestação', 'Minuta', 'Nota Técnica', 'Ouvidoria', 'Requerimento', 'Plano de Racionamento', 'Reajuste', 'Outros'];
+const assuntosCreg = ['Auto de Infração', 'Chamamento Público', 'Gratuidade', 'Manifestação', 'Minuta', 'Nota Técnica', 'Ouvidoria', 'Requerimento', 'Plano de Racionamento', 'Quadro de Horários', 'Reajuste', 'Outros'];
 const assuntosCj = ['Auto de Infração'];
 const recursos = ['Com recurso', 'Sem recurso', 'Não se aplica', 'Pedido de revisão'];
 // Na Câmara de Julgamento a mesma coluna registra outra coisa: se o autuado
@@ -46,6 +46,7 @@ const btnVoltar = document.getElementById('btnVoltar');
 const modeSelector = document.getElementById('modeSelector');
 const sorteadorContent = document.getElementById('sorteadorContent');
 const thRecurso = document.getElementById('thRecurso');
+const thInteressado = document.getElementById('thInteressado');
 const pillsContainer = document.getElementById('pillsContainer');
 const txtModo = document.getElementById('txtModo');
 const processEntry = document.getElementById('processEntry');
@@ -123,6 +124,8 @@ function iniciarSorteador(modo, unidades) {
   txtModo.textContent = modo === 'CREG' ? 'Conselho Regulador (CREG)' : 'Câmara de Julgamento (CJ)';
 
   thRecurso.textContent = modo === 'CREG' ? 'Recurso' : 'Defesa';
+  // Interessado é campo livre do Conselho Regulador; a CJ não o coleta.
+  thInteressado.hidden = modo !== 'CREG';
   sortearBtn.textContent = `Sortear ${modo} e Exportar`;
 
   const fragmentoPills = document.createDocumentFragment();
@@ -178,6 +181,7 @@ function recalculaOrdem() {
     const ordem = idx + 1;
     r.querySelector('.num').textContent = ordem;
     r.querySelector('.col-processo input').setAttribute('aria-label', `Número do processo, linha ${ordem}`);
+    r.querySelector('.col-interessado input')?.setAttribute('aria-label', `Interessado, linha ${ordem}`);
     r.querySelector('.col-assunto select').setAttribute('aria-label', `Assunto, linha ${ordem}`);
     r.querySelector('.col-decisao select').setAttribute('aria-label', `${modoSorteio === 'CJ' ? 'Defesa' : 'Recurso'}, linha ${ordem}`);
     r.querySelector('.btn-excluir').setAttribute('aria-label', `Excluir linha ${ordem}`);
@@ -192,6 +196,11 @@ function createRowElement(index) {
   tdProc.dataset.label = 'Nº Processo';
   const inpProc = document.createElement('input'); inpProc.type = 'text'; inpProc.placeholder = 'Digite o nº do processo'; inpProc.setAttribute('aria-label', `Número do processo, linha ${index}`);
   tdProc.appendChild(inpProc);
+  const tdInt = document.createElement('td');
+  tdInt.className = 'col-interessado';
+  tdInt.dataset.label = 'Interessado';
+  const inpInt = document.createElement('input'); inpInt.type = 'text'; inpInt.placeholder = 'Digite o interessado'; inpInt.setAttribute('aria-label', `Interessado, linha ${index}`);
+  tdInt.appendChild(inpInt);
   const tdAss = document.createElement('td');
   tdAss.className = 'col-assunto';
   tdAss.dataset.label = 'Assunto';
@@ -231,7 +240,10 @@ function createRowElement(index) {
   btnDel.title = 'Excluir esta linha';
   tdDel.appendChild(btnDel);
 
-  tr.append(tdOrdem, tdProc, tdAss, tdRec, tdDel);
+  // Só o CREG tem interessado: na CJ a célula nem é criada, para a linha não
+  // carregar um campo que ninguém preenche nem grava.
+  if (modoSorteio === 'CREG') tr.append(tdOrdem, tdProc, tdInt, tdAss, tdRec, tdDel);
+  else tr.append(tdOrdem, tdProc, tdAss, tdRec, tdDel);
   return tr;
 }
 
@@ -494,7 +506,6 @@ function sortearProcessos() {
     .catch(err => {
       backupPendente = sorteio;
       baixarBackupBtn.hidden = false;
-      if (err.status === 401) btnVoltar.hidden = true;
       aviso(err.status === 409
         ? `Nada foi gravado: ${err.message}. O backup .json está pronto para baixar — confira o sorteio anterior antes de repetir.`
         : `Falha ao gravar no banco (${err.message}). O backup .json está pronto para baixar.`, 'erro');
@@ -535,7 +546,10 @@ function coletarDados(rows, dataDistribuicao) {
 
     const escolha = r.querySelector('.col-decisao select').value.trim();
     if (modoSorteio === 'CJ') processo.defesa = escolha;
-    else processo.recurso = escolha;
+    else {
+      processo.recurso = escolha;
+      processo.interessado = r.querySelector('.col-interessado input').value.trim();
+    }
 
     return processo;
   });
@@ -573,13 +587,17 @@ function exportarWord(sorteio) {
   // A ata repete as mesmas colunas que a secretaria preencheu: sem o assunto e a
   // decisão, quem lê o documento não consegue conferir a repartição por assunto
   // que o rodapé do sistema promete.
-  const colunas = ['Ordem', 'Nº Processo', 'Assunto', colunaDecisao, colunaNome];
+  const colunas = sorteio.modo === 'CREG'
+    ? ['Ordem', 'Nº Processo', 'Interessado', 'Assunto', colunaDecisao, colunaNome]
+    : ['Ordem', 'Nº Processo', 'Assunto', colunaDecisao, colunaNome];
 
   let tableHtml = '<table border="1" style="border-collapse:collapse;width:100%"><tr>'
     + colunas.map(c => `<th>${escaparHtml(c)}</th>`).join('')
     + '</tr>';
   dados.forEach(d => {
-    const celulas = [d.ordem, d.numProcesso, d.assunto, decisaoDe(d), d.unidade];
+    const celulas = sorteio.modo === 'CREG'
+      ? [d.ordem, d.numProcesso, d.interessado, d.assunto, decisaoDe(d), d.unidade]
+      : [d.ordem, d.numProcesso, d.assunto, decisaoDe(d), d.unidade];
     tableHtml += '<tr>' + celulas.map(c => `<td>${escaparHtml(c ?? '')}</td>`).join('') + '</tr>';
   });
   tableHtml += '</table>';
@@ -634,6 +652,7 @@ function linhasParaBanco(sorteio) {
     ordem: p.ordem,
     num_processo: p.numProcesso,
     assunto: p.assunto,
+    interessado: p.interessado || null,
     data_distribuicao: dataISO(p.dataDistribuicao),
     recurso: p.recurso,
     unidade: p.unidade
@@ -650,8 +669,7 @@ async function salvar(sorteio) {
 
   const linhas = linhasParaBanco(sorteio);
 
-  // Passa por api() para que sessão expirada devolva a tela de login aqui
-  // também, e não só na página de julgados.
+  // Passa por api() para que um token vencido seja renovado antes da gravação.
   try {
     await api(tabela, {
       method: 'POST',
