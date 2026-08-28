@@ -37,8 +37,8 @@ testes = []
 FUNCAO_CREG = r'function public\.registrar_votos_creg\(itens jsonb\).*?\n\$\$;'
 LISTA_VOTOS = r'const VOTOS = \[([^\]]+)\]'
 LISTA_STATUS = r'const STATUS = \[([^\]]+)\]'
-ACEITOS_VOTO = r"'voto', ''\), ''\) not in\s*\(([^)]+)\)"
-ACEITOS_STATUS = r"'status', ''\), ''\) not in\s*\(([^)]+)\)"
+ACEITOS_VOTO = r"'voto', ''\)\s*not in\s*\(([^)]+)\)"
+ACEITOS_STATUS = r"'status', ''\)\s*not in\s*\(([^)]+)\)"
 
 
 
@@ -354,9 +354,11 @@ def registrar_votos_recusa_rotulo_fora_da_lista(cur):
     # local à transação: cada tentativa recomeça com ela.
     cur.connection.commit()
 
+    # Só rótulo PREENCHIDO e fora da lista. Campo ausente é legítimo e tem
+    # teste próprio (registrar_votos_aceita_preenchimento_parcial).
     for voto, status in [('Aprovado', 'Julgado'),      # grafia antiga
                          ('Manter', 'Sobrestada'),     # status inexistente
-                         ('Manter', None)]:
+                         ('Retornou', 'Julgado')]:     # voto que é da Câmara
         autenticado(cur)
         try:
             cur.execute("""select registrar_votos_creg(
@@ -803,6 +805,39 @@ def o_painel_do_creg_nao_tem_onde_mostrar_nome(cur):
     assert 'conselheiro' not in colunas
     # E devolve o assunto, que é o que o Conselho mostra no lugar.
     assert 'assunto' in colunas
+
+
+@teste
+def registrar_votos_aceita_preenchimento_parcial(cur):
+    """Processo retirado de pauta tem status e não tem voto.
+
+    A tela promete "preencha o voto OU o status", e campo vazio é ausência de
+    decisão — não rótulo inválido. Recusá-lo derrubaria a lista inteira e
+    deixaria a secretaria sem como registrar o que de fato aconteceu na sessão.
+    """
+    limpar(cur)
+    autenticado(cur)
+    so_status = julgar(cur, '202600029000501', date(2026, 8, 19))
+    so_voto = julgar(cur, '202600029000502', date(2026, 8, 19))
+
+    cur.execute("""select registrar_votos_creg(jsonb_build_array(
+                     jsonb_build_object('id', %s::text, 'voto', '', 'status', 'Retirado'),
+                     jsonb_build_object('id', %s::text, 'voto', 'Manter', 'status', '')))""",
+                (so_status, so_voto))
+    assert cur.fetchone()[0] == 2
+
+    assert campos(cur, so_status, 'voto', 'status') == (None, 'Retirado')
+    assert campos(cur, so_voto, 'voto', 'status') == ('Manter', None)
+
+    # E o rótulo PREENCHIDO fora da lista continua recusado.
+    try:
+        cur.execute("""select registrar_votos_creg(jsonb_build_array(
+                         jsonb_build_object('id', %s::text, 'voto', 'Aprovado',
+                                            'status', 'Julgado')))""", (so_voto,))
+    except psycopg2.errors.RaiseException:
+        cur.connection.rollback()
+        return
+    raise AssertionError('aceitou a grafia antiga "Aprovado"')
 
 
 def main(argv):
