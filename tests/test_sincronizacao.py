@@ -47,6 +47,9 @@ PAUTA_022 = ('PAUTA DE REUNIÃO - 22\n'
              'Referência: Processo nº 202600029000051 SEI 92300000')
 PDF_024 = (FIXTURES / 'pauta-024-09.07.2026.pdf').read_bytes()
 LISTAGEM_HTML = (FIXTURES / 'pautas-2026.html').read_bytes()
+# A página do Conselho Regulador é outra, e os títulos dela não nomeiam o
+# colegiado: "Pauta da 015ª Sessão Ordinária".
+LISTAGEM_CREG_HTML = (FIXTURES / 'pautas-creg-2026.html').read_bytes()
 
 testes = []
 online = False
@@ -88,7 +91,9 @@ class AGRFalsa:
             if url not in self.pdfs:
                 raise agr.ErroAGR(f'404 em {url}')
             return self.pdfs[url]
-        return LISTAGEM_HTML
+        # Cada colegiado tem a sua página, e o endereço é o que diz qual delas
+        # o código pediu.
+        return LISTAGEM_CREG_HTML if 'conselho-regulador' in url else LISTAGEM_HTML
 
 
 def url_da(numero):
@@ -518,7 +523,7 @@ def pauta_falha_continua_elegivel_apos_virada_do_ano(cur):
     anos_consultados = []
     listar_original = agr.listar_pautas
 
-    def listar(ano):
+    def listar(ano, *_):
         anos_consultados.append(ano)
         return [antiga] if ano == 2026 else []
 
@@ -548,7 +553,7 @@ def banco_vazio_consulta_apenas_o_ano_corrente(cur):
     anos_consultados = []
     listar_original = agr.listar_pautas
     try:
-        agr.listar_pautas = lambda ano: anos_consultados.append(ano) or []
+        agr.listar_pautas = lambda ano, *_: anos_consultados.append(ano) or []
         resultado = sincronizar.sincronizar(cur.connection, hoje=date(2026, 8, 23))
     finally:
         agr.listar_pautas = listar_original
@@ -564,7 +569,7 @@ def banco_legado_sem_marco_preserva_consulta_do_ano_corrente(cur):
     anos_consultados = []
     listar_original = agr.listar_pautas
     try:
-        agr.listar_pautas = lambda ano: anos_consultados.append(ano) or []
+        agr.listar_pautas = lambda ano, *_: anos_consultados.append(ano) or []
         sincronizar.sincronizar(cur.connection, hoje=date(2026, 8, 23))
     finally:
         agr.listar_pautas = listar_original
@@ -579,7 +584,7 @@ def desde_expande_a_consulta_mesmo_sem_marco(cur):
     anos_consultados = []
     listar_original = agr.listar_pautas
     try:
-        agr.listar_pautas = lambda ano: anos_consultados.append(ano) or []
+        agr.listar_pautas = lambda ano, *_: anos_consultados.append(ano) or []
         sincronizar.sincronizar(cur.connection, desde=date(2024, 1, 1),
                                 hoje=date(2026, 8, 23))
     finally:
@@ -612,11 +617,11 @@ def pauta_corrigida_com_url_nova_na_mesma_data_e_processada(cur):
 
     listar_original = agr.listar_pautas
     try:
-        agr.listar_pautas = lambda ano: [original]
+        agr.listar_pautas = lambda ano, *_: [original]
         with AGRFalsa(pdfs={original.url: pdf_falso(PAUTA_022)}):
             primeira = sincronizar.sincronizar(cur.connection, ano=2026, hoje=date(2026, 7, 1))
 
-        agr.listar_pautas = lambda ano: [corrigida]
+        agr.listar_pautas = lambda ano, *_: [corrigida]
         with AGRFalsa(pdfs={corrigida.url: pdf_falso(texto_corrigido)}):
             segunda = sincronizar.sincronizar(cur.connection, ano=2026, hoje=date(2026, 7, 1))
     finally:
@@ -629,16 +634,25 @@ def pauta_corrigida_com_url_nova_na_mesma_data_e_processada(cur):
 
 
 @teste
-def documento_sem_processo_vira_erro_e_nao_e_marcado(cur):
+def documento_sem_processo_e_registrado_com_zero(cur):
+    """Sessão sem processo existe: o Conselho Regulador convoca sessão especial.
+
+    Antes isso virava erro e a pauta voltava à fila em toda execução. Agora ela
+    é registrada com zero — vista, sem nada a importar — e a única linha do PDF
+    com 15 dígitos, a do rodapé `Referência`, continua fora.
+    """
     preparar(cur, sessao=date(2026, 6, 30))
     vazio = pdf_falso('PAUTA DE REUNIAO - 23\nData: 02/07/2026\n'
                       'Referencia: Processo no 202600029000051')
     with AGRFalsa(pdfs={url_da(23): vazio}):
         r = sincronizar.sincronizar(cur.connection, ano=2026, hoje=date(2026, 7, 5))
 
-    assert r['documentos_processados'] == 0 and r['documentos_com_erro'] == 1
-    assert 'ErroPauta' in r['erros'][0]['erro']
-    assert uma(cur, 'select count(*) from pautas_cj') == 0
+    assert r['documentos_processados'] == 1 and r['documentos_com_erro'] == 0
+    assert r['processos_encontrados'] == 0 and r['processos_importados'] == 0
+    assert uma(cur, """select count(*) from julgados_cj
+                        where data_sessao = date '2026-07-02'""") == 0
+    assert uma(cur, "select processos_encontrados from pautas_cj"
+                    " where url like 'https://%'") == 0
 
 
 @teste
@@ -717,6 +731,95 @@ def o_site_da_agr_continua_no_formato_esperado():
 
 
 # ── Runner ───────────────────────────────────────────────────────────────────
+
+# ── Conselho Regulador ────────────────────────────────────────────
+
+@teste
+def listagem_do_creg_dispensa_o_filtro_por_comissao():
+    """Na página do Conselho, filtrar por título devolveria zero.
+
+    Os títulos lá são "Pauta da 015ª Sessão Ordinária" — sem o nome do
+    colegiado. É por isso que COLEGIADOS['CREG'] passa comissao=None: a página
+    inteira já é dele.
+    """
+    col = sincronizar.COLEGIADOS['CREG']
+    with AGRFalsa():
+        pautas = agr.listar_pautas(2026, col['comissao'], col['listagem'])
+
+    assert len(pautas) == 15
+    assert sorted(p.numero for p in pautas) == list(range(1, 16))
+    assert len({p.url for p in pautas}) == len(pautas)
+    assert all('conselho-regulador' not in p.titulo.lower() for p in pautas)
+
+    with AGRFalsa():
+        try:
+            agr.listar_pautas(2026, 'C\u00e2mara de Julgamento', col['listagem'])
+        except agr.ErroAGR:
+            return
+    raise AssertionError('o filtro da C\u00e2mara n\u00e3o deveria achar nada nessa p\u00e1gina')
+
+
+@teste
+def sincronizar_creg_grava_nas_tabelas_do_creg(cur):
+    """Mesmo fluxo, outro par de tabelas — e as da Câmara ficam intactas."""
+    cur.execute('delete from julgados_creg; delete from acervo_creg;'
+                ' delete from pautas_creg')
+    cur.execute("""insert into acervo_creg
+                   (num_processo, unidade, data_distribuicao, assunto, origem)
+                   values ('202600029000801', 'CREG2', date '2026-06-01',
+                           'Auto de Infra\u00e7\u00e3o', 'planilha')""")
+    cur.execute("""insert into pautas_creg (url, titulo, numero, data_sessao, sha256)
+                   values ('marco:inicio-da-serie', 'In\u00edcio da s\u00e9rie', 0,
+                           date '2026-08-04', 'marco')""")
+    cur.connection.commit()
+
+    cj_antes = uma(cur, 'select count(*) from julgados_cj')
+    pdf = pdf_falso('PAUTA - 15\nData: 19/08/2026\n'
+                    'Processo no 202600029000801 - Interessado: X\n'
+                    'Refer\u00eancia: Processo no 202600029000105')
+
+    with AGRFalsa():
+        url15 = next(p.url for p in agr.listar_pautas(
+            2026, None, agr.LISTAGEM_CREG) if p.numero == 15)
+    with AGRFalsa(pdfs={url15: pdf}) as falsa:
+        r = sincronizar.sincronizar(cur.connection, colegiado='CREG',
+                                    ano=2026, hoje=date(2026, 8, 25))
+
+    # A listagem consultada foi a do Conselho, e a da Câmara não foi tocada.
+    listagens = [u for u in falsa.baixados if not u.endswith('.pdf')]
+    assert listagens and all('conselho-regulador' in u for u in listagens), listagens
+
+    assert r['colegiado'] == 'CREG'
+    assert r['documentos_processados'] == 1 and r['processos_importados'] == 1
+
+    # O gatilho do CREG resolveu a unidade a partir do acervo do CREG.
+    assert uma(cur, """select unidade, pauta, dias_dt from julgados_creg
+                        where num_processo = '202600029000801'""") == ('CREG2', 15, 79)
+    assert uma(cur, 'select count(*) from julgados_cj') == cj_antes
+
+
+@teste
+def creg_e_cj_nao_disputam_a_mesma_fila(cur):
+    """Sincronizar um colegiado não consome as pautas pendentes do outro."""
+    cur.execute('delete from pautas_creg')
+    cur.execute("""insert into pautas_creg (url, titulo, numero, data_sessao, sha256)
+                   values ('marco:inicio-da-serie', 'In\u00edcio da s\u00e9rie', 0,
+                           date '2026-08-04', 'marco')""")
+    preparar(cur, sessao=date(2026, 6, 30))
+
+    with AGRFalsa():
+        cj = sincronizar.sincronizar(cur.connection, ano=2026, hoje=date(2026, 8, 25),
+                                     simular=True)
+        creg = sincronizar.sincronizar(cur.connection, colegiado='CREG',
+                                       ano=2026, hoje=date(2026, 8, 25), simular=True)
+
+    assert 'pautas-das-reunioes' in cj['fonte']
+    assert 'conselho-regulador' in creg['fonte']
+    assert cj['documentos_novos'] and creg['documentos_novos']
+    # Os dois olham listagens diferentes: nenhuma URL aparece nas duas filas.
+    assert not ({d['url'] for d in cj['documentos']}
+                & {d['url'] for d in creg['documentos']})
+
 
 def main(argv):
     global online

@@ -17,7 +17,14 @@ from dataclasses import dataclass
 from datetime import date
 
 # Única referência ao ano: trocar de 2026 para 2027 não exige mexer no código.
+#
+# Cada colegiado tem a sua página. A da Câmara de Julgamento reúne as reuniões
+# de mais de uma comissão e por isso precisa do filtro por título; a do Conselho
+# Regulador só publica sessões do próprio Conselho, e os títulos lá não trazem o
+# nome do colegiado ("Pauta da 015ª Sessão Ordinária") — filtrar por ele
+# devolveria zero.
 LISTAGEM = 'https://goias.gov.br/agr/pautas-das-reunioes-{ano}/'
+LISTAGEM_CREG = 'https://goias.gov.br/agr/pautas-das-sessoes-do-conselho-regulador-{ano}/'
 HOSTS_PERMITIDOS = frozenset({'goias.gov.br', 'www.goias.gov.br'})
 TIMEOUT = 30
 AGENTE = 'sorteio-sei/1.0 (+https://github.com/thelustosa/sorteio-sei)'
@@ -76,20 +83,24 @@ def _baixar(url):
         raise ErroAGR(f'não foi possível baixar {url}: {e}') from e
 
 
-def listar_pautas(ano, comissao='Câmara de Julgamento'):
+def listar_pautas(ano, comissao='Câmara de Julgamento', listagem=LISTAGEM):
     """Pautas da comissão publicadas na página do ano, da mais recente para trás.
 
     A data vem da própria listagem (`– 25/06/2026 às 09:00 horas`), que é a
     fonte mais direta. O PDF traz a mesma data num campo `Data:` e o
     sincronizador confere as duas antes de gravar.
+
+    `comissao=None` aceita todo item da página. É o caso do Conselho Regulador,
+    que tem página própria: lá o filtro não separa nada e os títulos sequer
+    nomeiam o colegiado.
     """
-    pagina = _baixar(LISTAGEM.format(ano=ano)).decode('utf-8', 'replace')
-    alvo = _sem_acento(comissao)
+    pagina = _baixar(listagem.format(ano=ano)).decode('utf-8', 'replace')
+    alvo = _sem_acento(comissao) if comissao else None
 
     pautas = []
     for m in ITEM.finditer(pagina):
         titulo = html.unescape(m.group('titulo')).strip()
-        if alvo not in _sem_acento(titulo):
+        if alvo is not None and alvo not in _sem_acento(titulo):
             continue
 
         numero = NUMERO.search(titulo)
@@ -104,8 +115,8 @@ def listar_pautas(ano, comissao='Câmara de Julgamento'):
         ))
 
     if not pautas:
-        raise ErroAGR(f'nenhuma pauta de {comissao} encontrada em {ano} — '
-                      'o HTML da AGR pode ter mudado')
+        raise ErroAGR(f'nenhuma pauta de {comissao or "colegiado"} encontrada em '
+                      f'{ano} — o HTML da AGR pode ter mudado')
     return pautas
 
 

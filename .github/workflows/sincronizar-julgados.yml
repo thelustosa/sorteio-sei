@@ -1,4 +1,4 @@
-# SINCRONIZAR JULGADOS CJ
+# SINCRONIZAR JULGADOS
 #
 # Este é o "endpoint" da sincronização. O site é estático (GitHub Pages) e não
 # tem servidor: o navegador nem conseguiria consultar goias.gov.br, que não
@@ -6,21 +6,36 @@
 # cada rodada guardado na aba Actions, o que casa com a proposta de auditoria
 # do projeto.
 #
-# Roda sozinho toda sexta de manhã (as sessões da Câmara são às quintas) e
-# pode ser disparado à mão em Actions → Sincronizar Julgados CJ → Run workflow,
-# onde dá para marcar "simular" para ver o resultado sem gravar nada.
+# Roda os DOIS colegiados na mesma passagem, um de cada vez. A Câmara de
+# Julgamento reúne às quintas e o Conselho Regulador não tem dia fixo (em 2026
+# houve sessão em quarta, quinta e sexta), então a rodada semanal de sexta
+# cobre a semana inteira dos dois. Cada colegiado tem a sua página na AGR e o
+# seu par de tabelas — ver COLEGIADOS em sincronizacao/sincronizar.py.
+#
+# Pode ser disparado à mão em Actions → Sincronizar Julgados → Run workflow,
+# onde dá para marcar "simular" para ver o resultado sem gravar nada e limitar
+# a um colegiado.
 #
 # Antes do primeiro uso, cadastre em Settings → Secrets and variables →
 # Actions o segredo SUPABASE_DB_URL com a connection string do banco
 # (Project Settings → Database → Connection string → URI).
 
-name: Sincronizar Julgados CJ
+name: Sincronizar Julgados
 
 on:
   schedule:
     - cron: '0 12 * * 5'   # sexta, 09:00 em Goiás (12:00 UTC)
   workflow_dispatch:
     inputs:
+      colegiado:
+        # 'ambos' em vez de uma opção vazia: o GitHub valida a lista de um
+        # choice ao carregar o arquivo, e uma entrada em branco arriscaria
+        # invalidar o workflow inteiro — que então some da aba Actions sem erro
+        # visível, levando o agendamento junto.
+        description: 'Qual colegiado sincronizar'
+        type: choice
+        options: ['ambos', 'CJ', 'CREG']
+        default: 'ambos'
       simular:
         description: 'Simular (não grava nada no banco)'
         type: boolean
@@ -35,7 +50,7 @@ on:
         default: ''
 
 concurrency:
-  group: sincronizar-julgados-cj   # duas rodadas ao mesmo tempo não ajudam
+  group: sincronizar-julgados   # duas rodadas ao mesmo tempo não ajudam
   cancel-in-progress: false
 
 permissions:
@@ -44,7 +59,7 @@ permissions:
 jobs:
   sincronizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -59,10 +74,15 @@ jobs:
 
       # Os parâmetros entram por variável de ambiente, nunca interpolados no
       # texto do comando: o que vem do formulário é dado, não shell.
+      #
+      # Um colegiado que falhe não impede o outro de rodar — são bancos
+      # separados e fontes separadas —, mas o job termina vermelho se qualquer
+      # um falhar.
       - name: Sincronizar
         shell: bash
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          COLEGIADO: ${{ inputs.colegiado }}
           SIMULAR: ${{ inputs.simular }}
           ANO: ${{ inputs.ano }}
           DESDE: ${{ inputs.desde }}
@@ -71,16 +91,31 @@ jobs:
           if [ "$SIMULAR" = "true" ]; then args+=(--simular); fi
           if [ -n "$ANO" ];   then args+=(--ano "$ANO"); fi
           if [ -n "$DESDE" ]; then args+=(--desde "$DESDE"); fi
-          python sincronizacao/sincronizar.py "${args[@]}" | tee resumo.json
+
+          case "${COLEGIADO:-ambos}" in
+            CJ|CREG) alvos="$COLEGIADO" ;;
+            *)       alvos='CJ CREG' ;;
+          esac
+
+          falhou=0
+          for colegiado in $alvos; do
+            echo "::group::$colegiado"
+            python sincronizacao/sincronizar.py --colegiado "$colegiado" \
+              "${args[@]}" | tee "resumo-$colegiado.json" || falhou=1
+            echo '::endgroup::'
+          done
+          exit $falhou
 
       - name: Resumo
         if: always()
         shell: bash
         run: |
-          [ -s resumo.json ] || exit 0
-          {
-            echo '### Sincronização de Julgados CJ'
-            echo '```json'
-            cat resumo.json
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          for arquivo in resumo-*.json; do
+            [ -s "$arquivo" ] || continue
+            {
+              echo "### Sincronização — ${arquivo#resumo-}"
+              echo '```json'
+              cat "$arquivo"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done

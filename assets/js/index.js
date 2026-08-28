@@ -520,11 +520,10 @@ function sortearProcessos() {
 }
 
 // ── Persistência (Supabase / PostgREST) ──────────────────────────────────────
-// A Câmara de Julgamento grava no próprio acervo — de lá saem os julgados
-// (ver schema.sql). O Conselho Regulador segue na tabela antiga enquanto não
-// ganha acervo_creg/julgados_creg. Sem Supabase configurado, o sorteio vira um
-// botão para baixar um .json de backup.
-const TABELAS = { CJ: 'acervo_cj', CREG: 'processos_sorteados' };
+// Cada colegiado grava no próprio acervo, e de lá saem os julgados (ver
+// schema.sql). Sem Supabase configurado, o sorteio vira um botão para baixar um
+// .json de backup.
+const TABELAS = { CJ: 'acervo_cj', CREG: 'acervo_creg' };
 
 // A coluna de decisão é Defesa na Câmara de Julgamento e Recurso no Conselho
 // Regulador — coisas diferentes, então cada modo guarda a sua com o próprio nome.
@@ -631,8 +630,11 @@ function dataISO(dataBR) {
 }
 
 // Uma linha por processo, no formato da tabela de cada modo. A unidade sorteada
-// é o relator do processo no acervo da Câmara — é ele que os julgados usam
-// depois para saber quem levou o processo à sessão.
+// é quem fica com o processo no acervo — é ela que os julgados usam depois para
+// saber quem levou o processo à sessão. Os dois acervos têm o mesmo desenho e
+// mudam de vocabulário: na Câmara a coluna é `relator` e guarda a decisão sobre
+// a DEFESA (booleana); no Conselho é `unidade` e guarda o RECURSO (texto, com
+// mais de dois valores).
 function linhasParaBanco(sorteio) {
   if (sorteio.modo === 'CJ') {
     return sorteio.processos.map(p => ({
@@ -647,15 +649,16 @@ function linhasParaBanco(sorteio) {
   }
 
   return sorteio.processos.map(p => ({
-    modo: sorteio.modo,
-    data_hora: sorteio.dataHora,
-    ordem: p.ordem,
     num_processo: p.numProcesso,
-    assunto: p.assunto,
-    interessado: p.interessado || null,
+    unidade: p.unidade,
     data_distribuicao: dataISO(p.dataDistribuicao),
     recurso: p.recurso,
-    unidade: p.unidade
+    assunto: p.assunto,
+    // Campo livre da secretaria, só no Conselho. Vazio vira null e não string
+    // vazia: no banco a ausência do dado é null, e "" seria um valor.
+    interessado: p.interessado || null,
+    ordem: p.ordem,
+    sorteado_em: sorteio.dataHora
   }));
 }
 

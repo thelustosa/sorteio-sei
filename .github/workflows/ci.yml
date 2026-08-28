@@ -57,7 +57,7 @@ jobs:
         run: |
           node tools/versionar.mjs
           npx --yes esbuild@0.28.2 assets/css/index.css --minify --outfile=assets/css/index.min.css
-          for arquivo in supabase bootstrap index julgados acervo; do
+          for arquivo in supabase bootstrap index julgados julgados-creg acervo; do
             npx --yes esbuild@0.28.2 "assets/js/$arquivo.js" --minify-syntax --minify-whitespace --outfile="assets/js/$arquivo.min.js"
           done
           git diff --exit-code -- assets/css/index.min.css assets/js/*.min.js assets/js/supabase.js ./*.html

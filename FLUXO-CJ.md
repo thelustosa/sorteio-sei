@@ -5,7 +5,8 @@ julgamento registrado. Este documento é a referência de manutenção: o que ca
 peça faz, por que foi feita assim, e onde estão as regras.
 
 O Conselho Regulador (CREG) não está aqui — continua na tabela
-`processos_sorteados` até ganhar o mesmo par de tabelas.
+`processos_sorteados` até 27/08/2026, quando ganhou o mesmo par de tabelas —
+ver [FLUXO-CREG.md](FLUXO-CREG.md).
 
 > **Reinício em 19/08/2026.** A série de julgados recomeçou nessa data: o
 > histórico importado da planilha saiu das tabelas de produção e ficou guardado
@@ -124,7 +125,8 @@ tem a vantagem de deixar o log de cada rodada na aba Actions, coerente com a
 proposta de auditoria do projeto.
 
 Dispara sozinho toda sexta de manhã (as sessões são às quintas) ou à mão em
-**Actions → Sincronizar Julgados CJ → Run workflow**, com opção de simular.
+**Actions → Sincronizar Julgados → Run workflow**, com opção de simular. A
+mesma rodada sincroniza o Conselho Regulador.
 
 ### Como um processo é identificado no PDF
 
@@ -594,7 +596,9 @@ atual no Supabase e apaga os tokens locais; fechar a aba também descarta o
 
 | tabela | o navegador pode |
 |---|---|
-| `processos_sorteados` | INSERT |
+| `processos_sorteados` | INSERT (legado: nada escreve nela desde 27/08/2026) |
+| `acervo_creg` | INSERT |
+| `julgados_creg` | SELECT |
 | `acervo_cj` | INSERT |
 | `julgados_cj` | **SELECT** |
 | `pautas_cj` | nada |
@@ -673,8 +677,8 @@ Chaves e índices que sustentam as regras:
 
 | objeto | para quê |
 |---|---|
-| `ux_processos_sorteados_distribuicao (modo, num_processo, data_distribuicao, unidade)` | o mesmo sorteio CREG não é gravado duas vezes |
-| `processos_sorteados_num_processo_15_digitos` (validada) | todo sorteio CREG exige 15 dígitos |
+| `acervo_creg_distribuicao_unica (num_processo, data_distribuicao, unidade)` | o mesmo sorteio CREG não é gravado duas vezes |
+| `ux_processos_sorteados_distribuicao` e `processos_sorteados_num_processo_15_digitos` | legado da tabela aposentada, mantidos com ela |
 | `acervo_cj_distribuicao_unica (num_processo, data_distribuicao, relator)` | sorteio/importação repetidos não duplicam; é o índice da busca do processo |
 | `julgados_cj_sessao_unica (num_processo, data_sessao)` | um processo não é julgado duas vezes na mesma sessão |
 | `pautas_cj.url` único | o mesmo PDF não é processado duas vezes |
@@ -765,8 +769,9 @@ Revisto depois da carga de recuperação, em 21/08/2026.
   anteriores sem cadeira conhecida — eles seguem pelo nome, porque inventar o
   número seria pior. Se alguém rodar o `restaurar_cj.sql`, o painel passa a
   misturar cadeiras e nomes até que essas composições sejam informadas.
-- **CREG** continua em `processos_sorteados`. Fica para depois; a estrutura
-  está pronta para ganhar `acervo_creg` e `julgados_creg` com a mesma lógica.
+- ~~**CREG** continua em `processos_sorteados`.~~ Resolvido em 27/08/2026: o
+  Conselho ganhou `acervo_creg`, `julgados_creg` e `pautas_creg`, e o sorteio
+  passou a gravar no acervo. Ver [FLUXO-CREG.md](FLUXO-CREG.md).
 
 ### Decidido e encerrado
 

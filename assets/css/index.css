@@ -75,7 +75,10 @@
   --table-zero-text: rgba(17, 39, 32, 0.38);
   --table-total-bg: #e0f0e8;
   --table-total-hover-bg: #cfe5dc;
-  --dashboard-panel-max-height: 720px;
+  /* Teto do painel em telas altas. 720px cortava a tabela por 5px quando as
+     oito faixas vêm no tamanho cheio — e cortar 5px custa uma barra de rolagem
+     num painel cujo propósito é ser lido de uma vez. */
+  --dashboard-panel-max-height: 780px;
   --radius-card: 12px;
   --radius-control: 8px;
   --radius-pill: 999px;
@@ -1092,6 +1095,15 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 .acervo-celula-btn {
   display: block;
   width: 100%;
+  /* Zera o min-height de 44px que `button, input, select` dá a todo controle.
+     Aqui o alvo de toque é a CÉLULA, não o botão: o ::after abaixo estende o
+     clique ao retângulo inteiro do <td>, e a célula não desce de 44px em
+     breakpoint nenhum (48px na base, 42+14 de padding no painel apertado).
+     Herdar o mínimo fazia o conteúdo mandar na altura da linha — em tabela,
+     `height` no <td> é piso, não teto — e inflava cada linha em 6px, o
+     suficiente para o painel, que é dimensionado para caber inteiro na tela,
+     passar a rolar. */
+  min-height: 0;
   padding: 0;
   border: 0;
   background: none;
@@ -1693,7 +1705,13 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 @media (min-width: 881px) and (max-height: 840px) {
   .dashboard-page .page-header-wrapper { padding-block: 8px; }
-  .dashboard-page .page-header-wrapper p.lead { display: none; }
+  /* Nas telas mais baixas o painel tem de caber inteiro, e é o texto
+     descritivo que sai primeiro — o título de cada bloco continua dizendo o que
+     ele é. O subtítulo do painel entra na mesma regra que a lead do cabeçalho:
+     com 90 caracteres ele ocupa duas linhas, e são elas que empurram a tabela
+     para fora da tela. */
+  .dashboard-page .page-header-wrapper p.lead,
+  .dashboard-page .acervo-subtitle { display: none; }
   .dashboard-page .dashboard-main { padding-top: 12px; padding-bottom: 12px; }
   .dashboard-page .acervo-header-main { padding-block: 10px; }
   .dashboard-page .acervo-table thead th { padding-block: 4px; }
