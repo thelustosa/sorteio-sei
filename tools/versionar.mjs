@@ -20,7 +20,7 @@ export const FONTES = [
   'assets/js/acervo.js'
 ];
 export const PAGINAS = ['index.html', 'julgados.html', 'julgados-creg.html',
-                        'acervo.html', '404.html'];
+                        'acervo.html', 'acervo-creg.html', '404.html'];
 
 const ler = caminho => readFileSync(join(RAIZ, caminho), 'utf8');
 // Zera a própria versão antes de hashear, senão o valor gravado mudaria o hash

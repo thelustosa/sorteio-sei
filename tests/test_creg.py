@@ -746,6 +746,65 @@ def a_pagina_do_creg_le_a_tabela_do_creg(cur):
     assert (RAIZ / 'julgados-creg.html').is_file()
 
 
+@teste
+def o_painel_serve_os_dois_colegiados_pelo_mesmo_script(cur):
+    """acervo.js atende CJ e CREG; quem escolhe é o data-colegiado do <body>.
+
+    Duplicar o arquivo custaria 39 KB de exportação de Excel e PDF mantidos em
+    dobro. O risco da parametrização é o oposto: uma página apontar para o par
+    de funções do outro colegiado e ninguém notar até o painel abrir vazio.
+    """
+    painel = (RAIZ / 'assets' / 'js' / 'acervo.js').read_text(encoding='utf-8')
+
+    # As duas configurações existem e cada uma usa o seu par de funções.
+    for rpc in ['resumo_acervo_cj', 'processos_acervo_cj',
+                'resumo_acervo_creg', 'processos_acervo_creg']:
+        assert rpc in painel, rpc
+    # E nenhuma delas ficou fixa no código fora da tabela de colegiados.
+    corpo = painel[painel.index('const COL ='):]
+    for rpc in ['rpc/resumo_acervo_cj', 'rpc/processos_acervo_cj',
+                'rpc/resumo_acervo_creg', 'rpc/processos_acervo_creg']:
+        assert rpc not in corpo, f'{rpc} fixo fora de COLEGIADOS'
+
+    # O parâmetro da função muda de nome entre os dois, e é o que o banco espera.
+    assert "parametro: 'p_relator'" in painel
+    assert "parametro: 'p_unidade'" in painel
+
+    # Cada página declara o seu colegiado.
+    cj = (RAIZ / 'acervo.html').read_text(encoding='utf-8')
+    creg = (RAIZ / 'acervo-creg.html').read_text(encoding='utf-8')
+    assert 'data-colegiado="cj"' in cj
+    assert 'data-colegiado="creg"' in creg
+    assert 'data-page="acervo-creg"' in creg
+
+    # E o bootstrap conhece as duas, carregando o mesmo script.
+    boot = (RAIZ / 'assets' / 'js' / 'bootstrap.js').read_text(encoding='utf-8')
+    assert "'acervo-creg':" in boot and boot.count("'acervo.min.js'") == 2
+
+    # O índice abre as duas: o botão do Conselho deixou de ser inerte.
+    index = (RAIZ / 'index.html').read_text(encoding='utf-8')
+    assert './acervo-creg.html' in index
+    assert 'btnAcervoCreg' in index and 'aria-disabled="true">Conselho' not in index
+
+
+@teste
+def o_painel_do_creg_nao_tem_onde_mostrar_nome(cur):
+    """A RPC do Conselho não devolve conselheiro, e a página não inventa um.
+
+    resumo_acervo_creg tem quatro colunas — ordem, faixa, unidade, processos.
+    Se alguém reintroduzir o de-para, este teste e o do painel caem juntos.
+    """
+    autenticado(cur)
+    cur.execute('select * from resumo_acervo_creg() limit 1')
+    assert 'conselheiro' not in [d.name for d in cur.description]
+
+    cur.execute('select * from processos_acervo_creg() limit 1')
+    colunas = [d.name for d in cur.description]
+    assert 'conselheiro' not in colunas
+    # E devolve o assunto, que é o que o Conselho mostra no lugar.
+    assert 'assunto' in colunas
+
+
 def main(argv):
     PG.subir()
     try:

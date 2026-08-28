@@ -17,7 +17,10 @@ const PAGINAS = {
     texto: 'Preparando as sessões…',
     carregamentoLocal: true
   },
-  acervo: { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' }
+  acervo: { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' },
+  // Mesmo script para os dois colegiados: quem escolhe o par de funções do
+  // banco é o data-colegiado do <body> (ver COLEGIADOS em acervo.js).
+  'acervo-creg': { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' }
 };
 
 const paginaAtual = PAGINAS[document.body.dataset.page];
