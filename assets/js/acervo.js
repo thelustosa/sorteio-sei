@@ -6,10 +6,43 @@
 // é fechada ao navegador e porque a definição de "não julgado" precisa morar em
 // um lugar só. Esta página pivota o resultado e desenha.
 //
-// As colunas vêm do dado, não do HTML: são as cadeiras (CJ1..CJ5) que existem no
-// acervo, e o nome de quem ocupa cada uma vem na mesma resposta, para o hover.
-// Trocar a composição da Câmara é mexer na tabela cadeiras_cj do banco; esta
-// página acompanha sem alteração.
+// As colunas vêm do dado, não do HTML: são as cadeiras ou unidades que existem
+// no acervo. Trocar a composição da Câmara é mexer na tabela cadeiras_cj do
+// banco; esta página acompanha sem alteração.
+//
+// A mesma página serve os dois colegiados. O que muda entre eles cabe na tabela
+// abaixo, e é pouco: o par de funções do banco, o nome do campo que identifica
+// quem recebeu o processo, e duas colunas do detalhe. Duplicar o arquivo
+// custaria 39 KB de exportação de Excel e PDF mantidos em dobro.
+const COLEGIADOS = {
+  cj: {
+    nome: 'Câmara de Julgamento',
+    resumo: 'rpc/resumo_acervo_cj',
+    processos: 'rpc/processos_acervo_cj',
+    parametro: 'p_relator',
+    campo: 'relator',
+    coluna: 'Relator',
+    grupo: 'todas as cadeiras',
+    arquivo: 'acervo-cj',
+    // A Câmara traduz a cadeira no nome do conselheiro, que vem na mesma
+    // resposta. O Conselho não tem de-para — decisão das unidades — e no lugar
+    // mostra o assunto, que nele é variado (12 tipos, contra um só na Câmara).
+    segundaColuna: { rotulo: 'Conselheiro', campo: 'conselheiro', naTela: false }
+  },
+  creg: {
+    nome: 'Conselho Regulador',
+    resumo: 'rpc/resumo_acervo_creg',
+    processos: 'rpc/processos_acervo_creg',
+    parametro: 'p_unidade',
+    campo: 'unidade',
+    coluna: 'Unidade',
+    grupo: 'todas as unidades',
+    arquivo: 'acervo-creg',
+    segundaColuna: { rotulo: 'Assunto', campo: 'assunto', naTela: true }
+  }
+};
+
+const COL = COLEGIADOS[document.body.dataset.colegiado] || COLEGIADOS.cj;
 
 const acervoPanel = document.getElementById('acervoPanel');
 const acervoTabela = document.getElementById('acervoTable');
@@ -210,9 +243,9 @@ function colunaExcel(indice) {
 }
 
 function dadosTabulares(linhas) {
-  const relatores = [...new Set(linhas.map(l => l.relator))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const relatores = [...new Set(linhas.map(l => l[COL.campo]))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   const faixas = [...new Map(linhas.map(l => [l.ordem, l.faixa])).entries()].sort((a, b) => a[0] - b[0]);
-  const valor = new Map(linhas.map(l => [`${l.ordem}|${l.relator}`, Number(l.processos) || 0]));
+  const valor = new Map(linhas.map(l => [`${l.ordem}|${l[COL.campo]}`, Number(l.processos) || 0]));
   const cabecalho = ['Período', ...relatores, 'Total'];
   const corpo = faixas.map(([ordem, faixa]) => {
     const numeros = relatores.map(relator => valor.get(`${ordem}|${relator}`) || 0);
@@ -279,7 +312,7 @@ function planilhaXml(linhas) {
   // A ordem dos elementos filhos de worksheet faz parte do schema OOXML.
   // O Excel é mais estrito que o LibreOffice: autoFilter precisa vir antes de
   // mergeCells, caso contrário ele oferece reparar a pasta e pode abri-la vazia.
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><tabColor rgb="FF00534B"/><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane ySplit="4" topLeftCell="A5" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A5" sqref="A5"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="20"/><cols><col min="1" max="1" width="30" customWidth="1"/>${colunasIntermediarias}<col min="${dados[0].length}" max="${dados[0].length}" width="14" customWidth="1"/></cols><sheetData><row r="1" ht="34" customHeight="1">${texto('A1', 'Acervo de processos', 1)}</row><row r="2" ht="26" customHeight="1">${texto('A2', 'Visão gerencial do tempo de permanência dos processos distribuídos à Câmara de Julgamento.', 2)}</row><row r="3" ht="28" customHeight="1">${texto('A3', resumo, 3)}</row><row r="4" ht="32" customHeight="1">${cabecalho}</row>${corpo}<row r="${linhaTotal}" ht="36" customHeight="1">${totais}</row><row r="${linhaAtualizacao}" ht="26" customHeight="1">${texto(`A${linhaAtualizacao}`, `Atualizado em: ${hojeBR()}`, 12)}</row></sheetData><autoFilter ref="A4:${ultimaColuna}${filtroFinal}"/><mergeCells count="4"><mergeCell ref="A1:${ultimaColuna}1"/><mergeCell ref="A2:${ultimaColuna}2"/><mergeCell ref="A3:${ultimaColuna}3"/><mergeCell ref="A${linhaAtualizacao}:${ultimaColuna}${linhaAtualizacao}"/></mergeCells><pageMargins left="0.3" right="0.3" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="1" horizontalDpi="300" verticalDpi="300"/></worksheet>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><tabColor rgb="FF00534B"/><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane ySplit="4" topLeftCell="A5" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A5" sqref="A5"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="20"/><cols><col min="1" max="1" width="30" customWidth="1"/>${colunasIntermediarias}<col min="${dados[0].length}" max="${dados[0].length}" width="14" customWidth="1"/></cols><sheetData><row r="1" ht="34" customHeight="1">${texto('A1', 'Acervo de processos', 1)}</row><row r="2" ht="26" customHeight="1">${texto('A2', `Visão gerencial do tempo de permanência dos processos distribuídos à ${COL.nome}.`, 2)}</row><row r="3" ht="28" customHeight="1">${texto('A3', resumo, 3)}</row><row r="4" ht="32" customHeight="1">${cabecalho}</row>${corpo}<row r="${linhaTotal}" ht="36" customHeight="1">${totais}</row><row r="${linhaAtualizacao}" ht="26" customHeight="1">${texto(`A${linhaAtualizacao}`, `Atualizado em: ${hojeBR()}`, 12)}</row></sheetData><autoFilter ref="A4:${ultimaColuna}${filtroFinal}"/><mergeCells count="4"><mergeCell ref="A1:${ultimaColuna}1"/><mergeCell ref="A2:${ultimaColuna}2"/><mergeCell ref="A3:${ultimaColuna}3"/><mergeCell ref="A${linhaAtualizacao}:${ultimaColuna}${linhaAtualizacao}"/></mergeCells><pageMargins left="0.3" right="0.3" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="1" horizontalDpi="300" verticalDpi="300"/></worksheet>`;
 }
 
 function crc32(bytes) {
@@ -357,7 +390,8 @@ function criarExcel(linhas) {
 // ── Detalhe de uma célula: a lista de processos daquele bloco ────────────────
 // Uma linha por processo, nas mesmas colunas que o card mostra na tela.
 function planilhaDetalheXml(processos, titulo) {
-  const colunas = ['Nº do Processo', 'Cadeira', 'Conselheiro', 'Distribuição', 'Dias passados'];
+  const colunas = ['Nº do Processo', COL.coluna, COL.segundaColuna.rotulo,
+                   'Distribuição', 'Dias passados'];
   const texto = (col, linha, valor, estilo) =>
     `<c r="${colunaExcel(col)}${linha}" s="${estilo}" t="inlineStr"><is><t>${escaparXml(valor)}</t></is></c>`;
   const numero = (col, linha, valor, estilo) =>
@@ -373,8 +407,8 @@ function planilhaDetalheXml(processos, titulo) {
     const linha = 5 + n;
     linhas.push(`<row r="${linha}" ht="18" customHeight="1">`
       + texto(0, linha, p.num_processo, 5)
-      + texto(1, linha, p.relator, 5)
-      + texto(2, linha, p.conselheiro, 5)
+      + texto(1, linha, p[COL.campo], 5)
+      + texto(2, linha, p[COL.segundaColuna.campo] || '', 5)
       + texto(3, linha, dataBR(p.data_distribuicao), 5)
       // Estilo 14, não 6: o formato do painel desenha zero como travessão, que
       // ali significa "nenhum processo". Aqui zero é o processo distribuído
@@ -409,13 +443,13 @@ function celula(texto, tag = 'td', classe = '') {
   return el;
 }
 
-// Bloco com número abre a lista daquele recorte. `ordem` e `relator` vazios são
+// Bloco com número abre a lista daquele recorte. `ordem` e `unidade` vazios são
 // o total: a função do banco entende os dois como "não filtre por isso", e é o
 // que faz o total da linha, o da coluna e o geral serem clicáveis pelo mesmo
 // caminho da célula.
-function tornarClicavel(celulaEl, { ordem = '', relator = '', rotulo }) {
+function tornarClicavel(celulaEl, { ordem = '', unidade = '', rotulo }) {
   celulaEl.dataset.ordem = ordem;
-  celulaEl.dataset.relator = relator;
+  celulaEl.dataset.unidade = unidade;
   celulaEl.dataset.rotulo = rotulo;
 
   // Quem recebe o clique é um <button> dentro da célula, não a célula. Pôr
@@ -439,12 +473,13 @@ function tornarClicavel(celulaEl, { ordem = '', relator = '', rotulo }) {
 // aqui. Zero é desenhado como travessão: numa grade de contagem, uma coluna de
 // "0" repetido esconde os números que importam.
 function desenhar(linhas) {
-  const relatores = [...new Set(linhas.map(l => l.relator))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const relatores = [...new Set(linhas.map(l => l[COL.campo]))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   const faixas = [...new Map(linhas.map(l => [l.ordem, l.faixa])).entries()].sort((a, b) => a[0] - b[0]);
-  const valor = new Map(linhas.map(l => [`${l.ordem}|${l.relator}`, l.processos]));
+  const valor = new Map(linhas.map(l => [`${l.ordem}|${l[COL.campo]}`, l.processos]));
   // Quem ocupa cada cadeira vem na mesma resposta, da tabela cadeiras_cj: o
-  // front não repete o de-para, só apresenta.
-  const conselheiro = new Map(linhas.map(l => [l.relator, l.conselheiro]));
+  // front não repete o de-para, só apresenta. No Conselho a resposta não traz
+  // essa coluna, e o cabeçalho fica com a unidade sozinha.
+  const conselheiro = new Map(linhas.map(l => [l[COL.campo], l.conselheiro]));
 
   const thead = document.createElement('thead');
   const cabecalho = document.createElement('tr');
@@ -476,7 +511,7 @@ function desenhar(linhas) {
       const n = valor.get(`${ordem}|${r}`) || 0;
       somaLinha += n;
       const td = celula(n || '—', 'td', n ? 'acervo-detalhe' : 'acervo-zero');
-      if (n) tornarClicavel(td, { ordem, relator: r, rotulo: `${faixa} · ${r}` });
+      if (n) tornarClicavel(td, { ordem, unidade: r, rotulo: `${faixa} · ${r}` });
       tr.append(td);
     });
 
@@ -494,7 +529,7 @@ function desenhar(linhas) {
       totalLinha.setAttribute('aria-label', `Alerta: ${quantidade} nesta faixa de permanência`);
       totalLinha.title = `Alerta: ${quantidade} nesta faixa de permanência`;
     }
-    if (somaLinha) tornarClicavel(totalLinha, { ordem, rotulo: `${faixa} · todas as cadeiras` });
+    if (somaLinha) tornarClicavel(totalLinha, { ordem, rotulo: `${faixa} · ${COL.grupo}` });
     tr.append(totalLinha);
     total += somaLinha;
     tbody.append(tr);
@@ -506,7 +541,7 @@ function desenhar(linhas) {
   relatores.forEach(r => {
     const soma = faixas.reduce((acc, [ordem]) => acc + (valor.get(`${ordem}|${r}`) || 0), 0);
     const td = celula(soma || '—', 'td', soma ? 'acervo-detalhe' : 'acervo-zero');
-    if (soma) tornarClicavel(td, { relator: r, rotulo: `${r} · todo o período` });
+    if (soma) tornarClicavel(td, { unidade: r, rotulo: `${r} · todo o período` });
     trTotal.append(td);
   });
   const totalGeral = celula(total || '—', 'td', `acervo-total-col${total ? ' acervo-detalhe' : ''}`);
@@ -529,7 +564,7 @@ async function carregarAcervo({ carregamentoInicial = false } = {}) {
 
   let linhas;
   try {
-    linhas = await api('rpc/resumo_acervo_cj', { method: 'POST', body: '{}' });
+    linhas = await api(COL.resumo, { method: 'POST', body: '{}' });
   } catch (err) {
     if (carregamentoInicial) throw err;
     acervoTabela.replaceChildren();
@@ -559,7 +594,7 @@ async function carregarAcervo({ carregamentoInicial = false } = {}) {
 }
 
 // ── Detalhe: o card com os processos de um bloco ─────────────────────────────
-// A tabela conta; o card lista. Quem faz a lista é processos_acervo_cj, com a
+// A tabela conta; o card lista. Quem faz a lista é processos_acervo_<colegiado>, com a
 // MESMA definição de pendente e as mesmas faixas do resumo — se as duas
 // divergirem, o card abre um número diferente do que o bloco mostrava.
 
@@ -569,7 +604,7 @@ function abrirDetalheDaCelula(evento) {
 }
 
 async function abrirDetalhe(celulaEl) {
-  const { ordem, relator, rotulo } = celulaEl.dataset;
+  const { ordem, unidade, rotulo } = celulaEl.dataset;
   const pedido = ++detalhePedido;
   detalheAtual = null;
   detalheTitulo.textContent = rotulo;
@@ -586,9 +621,12 @@ async function abrirDetalhe(celulaEl) {
 
   let processos;
   try {
-    processos = await api('rpc/processos_acervo_cj', {
+    processos = await api(COL.processos, {
       method: 'POST',
-      body: JSON.stringify({ p_ordem: ordem ? Number(ordem) : null, p_relator: relator || null })
+      body: JSON.stringify({
+        p_ordem: ordem ? Number(ordem) : null,
+        [COL.parametro]: unidade || null
+      })
     });
   } catch (err) {
     if (pedido !== detalhePedido) return;
@@ -616,7 +654,11 @@ function desenharDetalhe(processos) {
 
   const thead = document.createElement('thead');
   const cabecalho = document.createElement('tr');
-  ['Nº do Processo', 'Relator', 'Distribuição', 'Dias passados']
+  // O Conselho ganha a coluna de assunto, que nele distingue de verdade: são 12
+  // tipos, contra o auto de infração único da Câmara.
+  ['Nº do Processo', COL.coluna,
+   ...(COL.segundaColuna.naTela ? [COL.segundaColuna.rotulo] : []),
+   'Distribuição', 'Dias passados']
     .forEach(rotulo => cabecalho.append(celula(rotulo, 'th')));
   thead.append(cabecalho);
 
@@ -624,14 +666,15 @@ function desenharDetalhe(processos) {
   processos.forEach(p => {
     const tr = document.createElement('tr');
     tr.append(celula(p.num_processo, 'th', 'linha'));
-    const cadeira = celula(p.relator);
+    const cadeira = celula(p[COL.campo]);
     // Mesmo par title/aria-label do painel: sem o rótulo, o leitor de tela
     // soletra "CJ3" em cada linha e o nome do conselheiro só existe no mouse.
-    if (p.conselheiro && p.conselheiro !== p.relator) {
+    if (p.conselheiro && p.conselheiro !== p[COL.campo]) {
       cadeira.title = p.conselheiro;
-      cadeira.setAttribute('aria-label', `${p.relator} — ${p.conselheiro}`);
+      cadeira.setAttribute('aria-label', `${p[COL.campo]} — ${p.conselheiro}`);
     }
     tr.append(cadeira);
+    if (COL.segundaColuna.naTela) tr.append(celula(p[COL.segundaColuna.campo] || '—'));
     tr.append(celula(dataBR(p.data_distribuicao)));
     tr.append(celula(p.dias));
     tbody.append(tr);
@@ -648,7 +691,7 @@ function exportarDetalhe() {
   detalheErro.hidden = true;
   try {
     baixarArquivo(criarExcelDetalhe(detalheAtual.processos, detalheAtual.rotulo),
-      `acervo-cj-${nome}-${dataArquivo()}.xlsx`);
+      `${COL.arquivo}-${nome}-${dataArquivo()}.xlsx`);
   } catch (erro) {
     detalheErro.querySelector('p').textContent = `Não foi possível gerar o arquivo (${erro.message}).`;
     detalheErro.hidden = false;

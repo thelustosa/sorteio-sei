@@ -1,29 +1,34 @@
 #!/usr/bin/env python3
-"""Sincroniza julgados_cj com as pautas publicadas pela AGR.
+"""Sincroniza os julgados de um colegiado com as pautas publicadas pela AGR.
 
     python sincronizacao/sincronizar.py --dsn "postgresql://…"
+    python sincronizacao/sincronizar.py --colegiado CREG
     python sincronizacao/sincronizar.py --simular          # não grava nada
 
 O DSN também pode vir da variável de ambiente SUPABASE_DB_URL.
+
+São dois colegiados, com o MESMO fluxo e as mesmas regras, mudando só a página
+da AGR e o par de tabelas (ver COLEGIADOS, abaixo). A Câmara de Julgamento é o
+padrão porque foi a primeira.
 
 Fluxo:
 
     listagem da AGR → pautas ainda não processadas → baixa o PDF
       → extrai o texto → descarta o rodapé `Referência: Processo nº …`
-      → extrai e normaliza os processos → insere em julgados_cj
-      → o gatilho do banco busca cada processo em acervo_cj e preenche
-        relator, defesa e data de distribuição
-      → registra o documento em pautas_cj
+      → extrai e normaliza os processos → insere na tabela de julgados
+      → o gatilho do banco busca cada processo no acervo do colegiado e
+        preenche os campos derivados
+      → registra o documento na tabela de pautas
 
 Quais pautas entram: as da comissão certa, com sessão já realizada, URL ainda
-não registrada em pautas_cj e posteriores ao marco de início da série. O marco
+não registrada na tabela de pautas e posteriores ao marco de início da série. O marco
 é fixo: uma pauta que falhar continua elegível mesmo que uma sessão posterior
 seja processada ou o ano vire, e uma republicação com URL nova também entra. Na
 execução automática são consultadas as listagens de todos os anos desde o marco;
 `--ano` limita a uma listagem quando a operação manual precisar disso.
 
 Nada aqui reimplementa a regra Acervo → Julgados: quem preenche os campos
-derivados é o gatilho julgados_cj_derivar_do_acervo, em schema.sql.
+derivados é o gatilho julgados_<colegiado>_derivar_do_acervo, em schema.sql.
 """
 
 import argparse
@@ -43,44 +48,67 @@ import pauta    # noqa: E402
 
 log = logging.getLogger('sincronizar')
 
+# Onde cada colegiado publica e onde cada um guarda. Os nomes de tabela saem
+# daqui e de nenhum outro lugar — nunca da linha de comando —, e é por isso que
+# entram nas consultas por interpolação de texto.
+COLEGIADOS = {
+    'CJ': {
+        'julgados': 'julgados_cj',
+        'pautas': 'pautas_cj',
+        'listagem': agr.LISTAGEM,
+        'comissao': 'Câmara de Julgamento',
+    },
+    'CREG': {
+        'julgados': 'julgados_creg',
+        'pautas': 'pautas_creg',
+        # A página do Conselho só publica sessões dele: filtrar por título
+        # devolveria zero, porque os títulos não nomeiam o colegiado.
+        'listagem': agr.LISTAGEM_CREG,
+        'comissao': None,
+    },
+}
+
 
 # ── Banco ────────────────────────────────────────────────────────────────────
 
-def ultima_sessao(cur):
+def ultima_sessao(cur, col):
     """A sessão mais recente que o banco já conhece, por qualquer caminho."""
-    cur.execute("""
+    cur.execute(f"""
         select greatest(
-                 coalesce((select max(data_sessao) from public.julgados_cj), date '1900-01-01'),
-                 coalesce((select max(data_sessao) from public.pautas_cj),   date '1900-01-01'))
+                 coalesce((select max(data_sessao) from public.{col['julgados']}),
+                          date '1900-01-01'),
+                 coalesce((select max(data_sessao) from public.{col['pautas']}),
+                          date '1900-01-01'))
     """)
     return cur.fetchone()[0]
 
 
-def urls_processadas(cur):
-    cur.execute('select url from public.pautas_cj')
+def urls_processadas(cur, col):
+    cur.execute(f"select url from public.{col['pautas']}")
     return {u for (u,) in cur.fetchall()}
 
 
-def inicio_da_serie(cur):
+def inicio_da_serie(cur, col):
     """Devolve o marco fixo do histórico, quando configurado."""
-    cur.execute("""select max(data_sessao) from public.pautas_cj
-                    where url = 'marco:inicio-da-serie'""")
+    cur.execute(f"""select max(data_sessao) from public.{col['pautas']}
+                     where url = 'marco:inicio-da-serie'""")
     return cur.fetchone()[0]
 
 
-def gravar_julgados(cur, p, processos):
+def gravar_julgados(cur, col, p, processos):
     """Insere os processos da pauta e devolve (importados, sem_acervo).
 
     Um único INSERT para o documento inteiro: o gatilho resolve o acervo linha a
-    linha usando o índice de acervo_cj, sem consulta extra da aplicação. O
+    linha usando o índice do acervo, sem consulta extra da aplicação. O
     RETURNING só traz as linhas realmente inseridas, então o que faltar são os
     processos que já estavam gravados naquela sessão.
     """
     inseridos = psycopg2.extras.execute_values(
         cur,
-        """insert into public.julgados_cj (num_processo, data_sessao, pauta) values %s
-           on conflict on constraint julgados_cj_sessao_unica do nothing
-           returning num_processo, acervo_id""",
+        f"""insert into public.{col['julgados']} (num_processo, data_sessao, pauta)
+            values %s
+            on conflict on constraint {col['julgados']}_sessao_unica do nothing
+            returning num_processo, acervo_id""",
         [(n, p.data_sessao, p.numero) for n in processos],
         fetch=True)
 
@@ -88,9 +116,9 @@ def gravar_julgados(cur, p, processos):
     return len(inseridos), sem_acervo
 
 
-def registrar_pauta(cur, p, sha256, encontrados, importados, sem_acervo):
-    cur.execute("""
-        insert into public.pautas_cj
+def registrar_pauta(cur, col, p, sha256, encontrados, importados, sem_acervo):
+    cur.execute(f"""
+        insert into public.{col['pautas']}
           (url, titulo, numero, data_sessao, sha256,
            processos_encontrados, processos_importados, processos_sem_acervo)
         values (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -101,12 +129,12 @@ def registrar_pauta(cur, p, sha256, encontrados, importados, sem_acervo):
 
 # ── Orquestração ─────────────────────────────────────────────────────────────
 
-def pautas_pendentes(cur, ano=None, desde=None, hoje=None):
+def pautas_pendentes(cur, col, ano=None, desde=None, hoje=None):
     """(pautas encontradas, pendentes, corte e anos consultados)."""
     hoje = hoje or date.today()
-    marco = inicio_da_serie(cur)
-    corte = desde or marco or ultima_sessao(cur)
-    ja_vistas = urls_processadas(cur)
+    marco = inicio_da_serie(cur, col)
+    corte = desde or marco or ultima_sessao(cur, col)
+    ja_vistas = urls_processadas(cur, col)
 
     if ano is not None:
         anos = [ano]
@@ -114,13 +142,14 @@ def pautas_pendentes(cur, ano=None, desde=None, hoje=None):
         anos = list(range(corte.year, hoje.year + 1))
     else:
         anos = [hoje.year]
-    todas = [p for a in anos for p in agr.listar_pautas(a)]
+    todas = [p for a in anos
+             for p in agr.listar_pautas(a, col['comissao'], col['listagem'])]
     pendentes = [p for p in todas
                  if p.url not in ja_vistas and corte < p.data_sessao <= hoje]
     return todas, sorted(pendentes, key=lambda p: (p.data_sessao, p.numero)), corte, anos
 
 
-def processar_pauta(cur, p):
+def processar_pauta(cur, col, p):
     """Processa um documento. Devolve o resumo dele."""
     pdf, sha256 = agr.baixar_pdf(p)
     texto = pauta.extrair_texto(pdf)
@@ -135,12 +164,19 @@ def processar_pauta(cur, p):
         log.warning('%s: %d número(s) de 15 dígitos sem o rótulo "Processo nº" '
                     '— confira se o formato da AGR mudou: %s', p.url, len(ignorados), ignorados)
 
+    # Documento sem processo não é erro: o Conselho Regulador convoca sessão
+    # especial, e a de 03/07/2026 não levou nenhum. Registrar com zero deixa a
+    # sessão marcada como vista, em vez de rebaixá-la a falha em toda execução.
+    # PDF quebrado continua caindo antes disto, em extrair_texto, e mudança de
+    # formato já é sinalizada por numeros_sem_rotulo.
     processos = pauta.extrair_processos(texto)
     if not processos:
-        raise pauta.ErroPauta('nenhum processo encontrado no documento')
+        log.warning('%s: nenhum processo no documento — registrado como sessão '
+                    'sem processos', p.url)
 
-    importados, sem_acervo = gravar_julgados(cur, p, processos)
-    registrar_pauta(cur, p, sha256, len(processos), importados, sem_acervo)
+    importados, sem_acervo = (gravar_julgados(cur, col, p, processos)
+                              if processos else (0, []))
+    registrar_pauta(cur, col, p, sha256, len(processos), importados, sem_acervo)
 
     log.info('%sª reunião (%s): %d processos, %d importados, %d já gravados, %d fora do acervo',
              p.numero, p.data_sessao.strftime('%d/%m/%Y'), len(processos),
@@ -159,13 +195,15 @@ def processar_pauta(cur, p):
     }
 
 
-def sincronizar(conn, ano=None, desde=None, hoje=None, simular=False):
+def sincronizar(conn, colegiado='CJ', ano=None, desde=None, hoje=None, simular=False):
     """Roda a sincronização inteira e devolve o resumo da operação."""
+    col = COLEGIADOS[colegiado]
     hoje = hoje or date.today()
     ano_resumo = ano or hoje.year
     resumo = {
+        'colegiado': colegiado,
         'ano': ano_resumo,
-        'fonte': agr.LISTAGEM.format(ano=ano_resumo),
+        'fonte': col['listagem'].format(ano=ano_resumo),
         'anos_consultados': [],
         'fontes': [],
         'simulacao': simular,
@@ -181,12 +219,12 @@ def sincronizar(conn, ano=None, desde=None, hoje=None, simular=False):
     }
 
     with conn.cursor() as cur:
-        ultima = ultima_sessao(cur)
-        todas, pendentes, corte, anos = pautas_pendentes(cur, ano, desde, hoje)
+        ultima = ultima_sessao(cur, col)
+        todas, pendentes, corte, anos = pautas_pendentes(cur, col, ano, desde, hoje)
         resumo['ultima_sessao_conhecida'] = ultima.isoformat()
         resumo['data_de_corte'] = corte.isoformat()
         resumo['anos_consultados'] = anos
-        resumo['fontes'] = [agr.LISTAGEM.format(ano=a) for a in anos]
+        resumo['fontes'] = [col['listagem'].format(ano=a) for a in anos]
         resumo['documentos_encontrados'] = len(todas)
         resumo['documentos_novos'] = len(pendentes)
 
@@ -195,7 +233,7 @@ def sincronizar(conn, ano=None, desde=None, hoje=None, simular=False):
         # que já entrou nem impede o processamento dos outros.
         try:
             with conn.cursor() as cur:
-                doc = processar_pauta(cur, p)
+                doc = processar_pauta(cur, col, p)
             conn.rollback() if simular else conn.commit()
             resumo['documentos'].append(doc)
             resumo['documentos_processados'] += 1
@@ -223,6 +261,8 @@ def main(argv=None):
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--dsn', default=os.environ.get('SUPABASE_DB_URL'),
                    help='conexão do Postgres (padrão: variável SUPABASE_DB_URL)')
+    p.add_argument('--colegiado', choices=sorted(COLEGIADOS), default='CJ',
+                   help='qual colegiado sincronizar (padrão: CJ)')
     p.add_argument('--ano', type=int,
                    help='limita a consulta a um ano (padrão: do marco ao ano corrente)')
     p.add_argument('--desde', type=lambda s: datetime.strptime(s, '%Y-%m-%d').date(),
@@ -238,7 +278,8 @@ def main(argv=None):
         p.error('informe --dsn ou defina SUPABASE_DB_URL')
 
     with psycopg2.connect(args.dsn) as conn:
-        resumo = sincronizar(conn, ano=args.ano, desde=args.desde, simular=args.simular)
+        resumo = sincronizar(conn, colegiado=args.colegiado, ano=args.ano,
+                             desde=args.desde, simular=args.simular)
 
     print(json.dumps(resumo, ensure_ascii=False, indent=2))
     return 1 if resumo['erros'] else 0

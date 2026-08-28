@@ -9,7 +9,18 @@ const PAGINAS = {
     texto: 'Preparando as pautas…',
     carregamentoLocal: true
   },
-  acervo: { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' }
+  // A tela do Conselho é gêmea da da Câmara e mostra o mesmo indicador dentro
+  // da própria lista, então carrega pelo mesmo caminho.
+  'julgados-creg': {
+    arquivo: 'julgados-creg.min.js',
+    iniciar: 'inicializarJulgadosCreg',
+    texto: 'Preparando as sessões…',
+    carregamentoLocal: true
+  },
+  acervo: { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' },
+  // Mesmo script para os dois colegiados: quem escolhe o par de funções do
+  // banco é o data-colegiado do <body> (ver COLEGIADOS em acervo.js).
+  'acervo-creg': { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' }
 };
 
 const paginaAtual = PAGINAS[document.body.dataset.page];
