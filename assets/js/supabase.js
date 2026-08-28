@@ -6,7 +6,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '973c719818';
+const ASSET_VERSION = '2a1886d7ba';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -49,6 +49,7 @@ function salvarSessao(sessao) {
   } catch (_) {
     // Sem armazenamento disponível, a sessão continua válida até a próxima navegação.
   }
+  document.documentElement?.classList?.add('has-session');
 }
 
 function restaurarSessao() {
@@ -59,7 +60,9 @@ function restaurarSessao() {
     accessToken = '';
     refreshToken = '';
   }
-  return Boolean(accessToken);
+  const temSessao = Boolean(accessToken);
+  document.documentElement?.classList?.toggle('has-session', temSessao);
+  return temSessao;
 }
 
 function encerrarSessao() {
@@ -71,6 +74,7 @@ function encerrarSessao() {
   } catch (_) {
     // A sessão em memória já foi descartada.
   }
+  document.documentElement?.classList?.remove('has-session');
 }
 
 async function revogarSessaoAtual() {
