@@ -1,12 +1,13 @@
 // Configuração e login do Supabase, compartilhados pelas páginas do sistema
-// (index.html e julgados.html). Carregue este arquivo antes do script da página.
+// (index.html, julgados-cj.html, julgados-creg.html, acervo-cj.html, acervo-creg.html).
+// Carregue este arquivo antes do script da página.
 //
 // SUPABASE_KEY aceita tanto a chave "publishable" (sb_publishable_...) quanto a
 // "anon" legada. Ambas são públicas por natureza; quem protege as tabelas é a
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '48e9daeb19';
+const ASSET_VERSION = '838b263017';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -372,13 +373,8 @@ function posicionarRegiaoDeAvisos(regiao) {
     return;
   }
 
-  // Alinha o topo do aviso com o topo do conteúdo (a borda superior do card),
-  // e não com a barra verde: depois do sorteio a página rola até o resultado e
-  // o aviso ficava flutuando acima do card.
-  const conteudo = document.querySelector('main');
-  const topoConteudo = conteudo
-    && conteudo.getBoundingClientRect().top + parseFloat(getComputedStyle(conteudo).paddingTop);
-  regiao.style.top = `${Number.isFinite(topoConteudo) ? Math.max(12, topoConteudo) : 20}px`;
+  const limiteNavegacao = document.querySelector('.green-bar')?.getBoundingClientRect().bottom;
+  regiao.style.top = `${Number.isFinite(limiteNavegacao) ? Math.max(12, limiteNavegacao + 12) : 20}px`;
   regiao.style.bottom = 'auto';
 }
 

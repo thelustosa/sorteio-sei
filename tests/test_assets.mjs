@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { calcularVersao, versaoGravada } from '../tools/versionar.mjs';
+import { calcularVersao, versaoGravada, PAGINAS } from '../tools/versionar.mjs';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ler = caminho => readFileSync(join(raiz, caminho), 'utf8');
@@ -21,7 +21,7 @@ const versaoMinificada = ler('assets/js/supabase.min.js')
 assert.equal(versaoMinificada, versao,
   'supabase.min.js carrega páginas com uma versão antiga dos assets');
 
-for (const pagina of ['index.html', 'julgados.html', 'acervo.html', '404.html']) {
+for (const pagina of ['index.html', 'julgados-cj.html', 'julgados-creg.html', 'acervo-cj.html', 'acervo-creg.html', '404.html']) {
   const html = ler(pagina);
   const assets = [...html.matchAll(/(?:href|src)="(assets\/(?:css|js)\/[^"?]+\.min\.(?:css|js))\?v=([^"&]+)"/g)];
   assert.ok(assets.length > 0, `${pagina}: nenhum asset minificado versionado`);
@@ -45,13 +45,34 @@ for (const [recurso, destino] of [
 }
 
 const index = ler('index.html');
-const julgados = ler('julgados.html');
-const acervo = ler('acervo.html');
+const julgadosCj = ler('julgados-cj.html');
+const julgadosCreg = ler('julgados-creg.html');
+const acervoCj = ler('acervo-cj.html');
+const acervoCreg = ler('acervo-creg.html');
 assert.doesNotMatch(index, /<script[^>]+index\.min\.js/, 'index.js voltou ao carregamento inicial');
-assert.doesNotMatch(julgados, /<script[^>]+julgados\.min\.js/, 'julgados.js voltou ao carregamento inicial');
-assert.ok(acervo.indexOf('class="nav-actions"') < acervo.indexOf('id="btnExportar"')
-  && acervo.indexOf('id="btnExportar"') < acervo.indexOf('</nav>'),
-  'Exportar precisa permanecer junto das ações da barra superior');
+assert.doesNotMatch(julgadosCj, /<script[^>]+julgados\.min\.js/, 'julgados.js voltou ao carregamento inicial');
+assert.doesNotMatch(julgadosCreg, /<script[^>]+julgados-creg\.min\.js/, 'julgados-creg.js voltou ao carregamento inicial');
+assert.ok(acervoCj.indexOf('class="nav-actions"') < acervoCj.indexOf('id="btnExportar"')
+  && acervoCj.indexOf('id="btnExportar"') < acervoCj.indexOf('</nav>'),
+  'Exportar precisa permanecer junto das ações da barra superior (Câmara)');
+assert.ok(acervoCreg.indexOf('class="nav-actions"') < acervoCreg.indexOf('id="btnExportar"')
+  && acervoCreg.indexOf('id="btnExportar"') < acervoCreg.indexOf('</nav>'),
+  'Exportar precisa permanecer junto das ações da barra superior (Conselho)');
+
+// Renomear uma página e esquecer a entrada correspondente deixa o dashboard em
+// branco: sem a chave, o bootstrap não carrega script nenhum e não reclama.
+const bootstrap = ler('assets/js/bootstrap.js');
+const chavesBootstrap = new Set([...bootstrap
+  .slice(bootstrap.indexOf('const PAGINAS'), bootstrap.indexOf('};', bootstrap.indexOf('const PAGINAS')))
+  .matchAll(/^ {2}'?([\w-]+)'?:\s*\{/gm)].map(([, chave]) => chave));
+const paginasDoHtml = PAGINAS.map(pagina => ler(pagina).match(/data-page="([^"]+)"/)?.[1]).filter(Boolean);
+assert.ok(paginasDoHtml.length >= 5, 'não achei os data-page das páginas: o atributo mudou?');
+for (const pagina of paginasDoHtml) {
+  assert.ok(chavesBootstrap.has(pagina), `data-page="${pagina}" não tem entrada em PAGINAS no bootstrap.js`);
+}
+for (const chave of chavesBootstrap) {
+  assert.ok(paginasDoHtml.includes(chave), `PAGINAS["${chave}"] no bootstrap.js não corresponde a página nenhuma`);
+}
 
 const css = ler('assets/css/index.css');
 // O seletor pode vir sozinho ou em lista, e a var pode trazer fallback — o que

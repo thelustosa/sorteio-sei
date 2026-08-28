@@ -25,7 +25,7 @@ flowchart TD
     D -->|"INSERT direto no banco"| E[("julgados_cj<br/>uma linha por sessão")]
     D --> F[("pautas_cj<br/>documentos processados")]
     B -.->|"gatilho preenche<br/>relator, defesa, data DIST"| E
-    E -->|"GET /rest/v1/julgados_cj"| G["Secretária registra<br/>julgados.html"]
+    E -->|"GET /rest/v1/julgados_cj"| G["Secretária registra<br/>julgados-cj.html"]
     G -->|"POST /rest/v1/rpc/registrar_votos"| E
 
     style B fill:#E9F5EC,stroke:#00534b
@@ -39,7 +39,7 @@ Três entradas de dados, e cada uma escreve em um lugar só:
 |---|---|---|
 | `index.html` (sorteio) | `acervo_cj` | PostgREST, usuário autenticado |
 | `sincronizar.py` (Actions) | `julgados_cj`, `pautas_cj` | conexão direta ao Postgres |
-| `julgados.html` (registro) | `julgados_cj` (só voto e status) | função `registrar_votos` |
+| `julgados-cj.html` (registro) | `julgados_cj` (só voto e status) | função `registrar_votos` |
 
 ---
 
@@ -358,7 +358,7 @@ continua lá.
 
 A pauta é **convocação**: chega sem voto e sem status, porque as duas coisas são
 decisão da sessão e só existem depois dela. Quem preenche é a secretaria, em
-[`julgados.html`](julgados.html).
+[`julgados-cj.html`](julgados-cj.html).
 
 ```mermaid
 flowchart LR
@@ -576,8 +576,8 @@ Postgres, e as regras moram no banco.
 | ação | chamada | quem faz |
 |---|---|---|
 | gravar sorteio CJ | `POST /rest/v1/acervo_cj` | `index.html` |
-| listar pendentes | `GET /rest/v1/julgados_cj?…&or=(voto.is.null,status.is.null)` | `julgados.html` |
-| gravar voto e status | `POST /rest/v1/rpc/registrar_votos` | `julgados.html` |
+| listar pendentes | `GET /rest/v1/julgados_cj?…&or=(voto.is.null,status.is.null)` | `julgados-cj.html` |
+| gravar voto e status | `POST /rest/v1/rpc/registrar_votos` | `julgados-cj.html` |
 | importar pautas | conexão direta ao Postgres | GitHub Actions |
 
 Toda chamada do navegador passa por `api()` em [`supabase.js`](assets/js/supabase.js), que
@@ -701,7 +701,8 @@ Chaves e índices que sustentam as regras:
 | [`sincronizacao/pauta.py`](sincronizacao/pauta.py) | texto do PDF, data, processos, exclusão da Referência |
 | [`sincronizacao/sincronizar.py`](sincronizacao/sincronizar.py) | orquestra, CLI, resumo JSON |
 | [`index.html`](index.html) / [`assets/js/index.js`](assets/js/index.js) | sorteio |
-| [`julgados.html`](julgados.html) / [`assets/js/julgados.js`](assets/js/julgados.js) | registro de voto e status |
+| [`julgados-cj.html`](julgados-cj.html) / [`assets/js/julgados.js`](assets/js/julgados.js) | registro de voto e status |
+| [`acervo-cj.html`](acervo-cj.html) / [`assets/js/acervo.js`](assets/js/acervo.js) | painel do acervo da Câmara |
 | [`assets/js/supabase.js`](assets/js/supabase.js) | configuração, login e chamadas, compartilhados |
 | [`assets/css/index.css`](assets/css/index.css) | o design das três páginas |
 | `.github/workflows/sincronizar-julgados-cj.yml` | o agendamento |

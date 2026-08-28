@@ -271,7 +271,7 @@ não de uma migração.
 recusa rótulo fora da lista, anota quem preencheu, e não encosta no histórico da
 planilha — linha que já veio com voto e status é imutável por ali.
 
-A tela é **[julgados-creg.html](julgados-creg.html)**, gêmea da `julgados.html`
+A tela é **[julgados-creg.html](julgados-creg.html)**, gêmea da `julgados-cj.html`
 da Câmara: lista as sessões com pendência, abre uma e mostra os processos com os
 seletores de voto e status. Duas diferenças, e ambas vêm de decisões já tomadas:
 a coluna mostra a **unidade** e para aí (não há de-para de nomes), e um rótulo do

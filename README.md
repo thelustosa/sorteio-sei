@@ -54,15 +54,15 @@ O visual foi adaptado com base na identidade visual institucional do portal do *
 
 ## Estrutura de Arquivos
 
-As três páginas ficam na raiz porque é de lá que o GitHub Pages serve o site —
+As páginas ficam na raiz porque é de lá que o GitHub Pages serve o site —
 `index.html` é a porta de entrada e `404.html` é o que o Pages procura quando o
 endereço não existe. Todo o resto está agrupado por natureza.
 
 ```text
 ├── index.html              sorteio de processos (entrada do site)
-├── julgados.html           registro do voto e do status (Câmara)
+├── julgados-cj.html        registro do voto e do status (Câmara)
 ├── julgados-creg.html      registro do voto e do status (Conselho)
-├── acervo.html             painel do acervo (Câmara)
+├── acervo-cj.html          painel do acervo (Câmara)
 ├── acervo-creg.html        painel do acervo (Conselho) — mesmo acervo.js
 ├── 404.html                página de endereço inexistente
 │
@@ -188,7 +188,7 @@ abaixo.
 
 ### Registro do voto e do status
 
-Os julgados que chegam da AGR vêm **sem voto e sem status** — as duas coisas são decisão da sessão e só existem depois dela. Quem preenche é a secretaria, em **[julgados.html](julgados.html)**:
+Os julgados que chegam da AGR vêm **sem voto e sem status** — as duas coisas são decisão da sessão e só existem depois dela. Quem preenche é a secretaria, em **[julgados-cj.html](julgados-cj.html)**:
 
 ```text
 lista das pautas com pendência → clica no número da reunião
