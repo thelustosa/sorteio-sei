@@ -5,8 +5,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#00534b" />
-  <meta name="description" content="Painel de acompanhamento do acervo de processos ainda não julgados pela Câmara de Julgamento." />
-  <title>Acervo não julgado | Sorteio de Processos SEI</title>
+  <meta name="description" content="Painel de acompanhamento do acervo de processos ainda não julgados pelo Conselho Regulador." />
+  <title>Acervo não julgado — Conselho Regulador | Sorteio de Processos SEI</title>
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
   <link rel="stylesheet" href="assets/css/index.min.css?v=ca51383a67" />
@@ -23,7 +23,7 @@
   <script defer src="assets/js/bootstrap.min.js?v=ca51383a67"></script>
 </head>
 
-<body class="dashboard-page" data-page="acervo" data-colegiado="cj">
+<body class="dashboard-page" data-page="acervo-creg" data-colegiado="creg">
   <a class="skip-link" href="#conteudo-principal">Pular para o conteúdo principal</a>
 
   <div class="page-header-wrapper">
@@ -35,7 +35,7 @@
         <div class="header-copy">
           <p class="institution-name">Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</p>
           <h1>Sorteio de Processos SEI</h1>
-          <p class="lead">Distribuição e acompanhamento dos processos da Câmara de Julgamento.</p>
+          <p class="lead">Distribuição e acompanhamento dos processos do Conselho Regulador.</p>
         </div>
       </header>
     </div>
@@ -115,7 +115,7 @@
         <div class="acervo-header-main">
           <div class="acervo-header-title-group">
             <h2 id="acervo-title">Acervo de processos</h2>
-            <p class="acervo-subtitle">Visão gerencial do tempo de permanência dos processos distribuídos à Câmara de Julgamento.</p>
+            <p class="acervo-subtitle">Visão gerencial do tempo de permanência dos processos distribuídos ao Conselho Regulador.</p>
           </div>
           <div class="acervo-header-summary">
             <div class="acervo-scope" aria-label="Escopo do painel">
@@ -144,10 +144,10 @@
             <p>Nenhum processo aguardando julgamento. Todo o acervo distribuído já passou por uma sessão.</p>
           </div>
         </div>
-        <div class="table-scroll" role="region" aria-label="Acervo por período e relatoria" tabindex="0">
+        <div class="table-scroll" role="region" aria-label="Acervo por período e unidade" tabindex="0">
           <!-- Cabeçalho e linhas são montados por acervo.js a partir do que a
-               função resumo_acervo_cj devolve: as colunas são os relatores que
-               existem no acervo, não uma lista fixa aqui. -->
+               função resumo_acervo_creg devolve: as colunas são as unidades
+               que existem no acervo, não uma lista fixa aqui. -->
           <table id="acervoTable" class="acervo-table"></table>
         </div>
         <footer class="acervo-panel-footer">
@@ -203,7 +203,7 @@
       <div class="logo footer-logo">
         <img src="assets/img/logo_footer.png" alt="Estado de Goiás" width="104" height="48" />
       </div>
-      <p class="footer-info">Painel institucional para acompanhamento do acervo da Câmara de Julgamento.</p>
+      <p class="footer-info">Painel institucional para acompanhamento do acervo do Conselho Regulador.</p>
       <div class="footer-meta">
         <div class="footer-version">Versão 3.6</div>
         <p class="footer-credit">Desenvolvido por <strong>Lucas Lustosa Coelho e Leonardo Ferreira Amichi</strong>.</p>

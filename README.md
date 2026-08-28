@@ -62,6 +62,8 @@ endereço não existe. Todo o resto está agrupado por natureza.
 ├── index.html              sorteio de processos (entrada do site)
 ├── julgados.html           registro do voto e do status (Câmara)
 ├── julgados-creg.html      registro do voto e do status (Conselho)
+├── acervo.html             painel do acervo (Câmara)
+├── acervo-creg.html        painel do acervo (Conselho) — mesmo acervo.js
 ├── 404.html                página de endereço inexistente
 │
 ├── assets/
@@ -288,10 +290,11 @@ Ordem de execução no SQL Editor:
 
 Tudo é idempotente: rodar de novo não duplica nada.
 
-O registro de voto e status do Conselho tem tela própria,
-[julgados-creg.html](julgados-creg.html), no mesmo desenho da Câmara. **Falta
-ainda o painel do acervo**: `resumo_acervo_creg` e `processos_acervo_creg` estão
-prontas e sem consumidor — `acervo.html` atende só a Câmara.
+O Conselho tem as duas telas no mesmo desenho da Câmara:
+[julgados-creg.html](julgados-creg.html) para o voto e o status, e
+[acervo-creg.html](acervo-creg.html) para o painel. O painel compartilha o
+`acervo.js` com a Câmara — quem escolhe o par de funções do banco é o
+`data-colegiado` do `<body>`.
 
 ### Backup e restauração
 

@@ -241,6 +241,15 @@ python sincronizacao/sincronizar.py --colegiado CREG --simular --dsn "postgresql
 
 ## 5. Painel e registro do voto
 
+O painel é **[acervo-creg.html](acervo-creg.html)**, e não é um arquivo novo de
+JavaScript: `assets/js/acervo.js` serve os dois colegiados, e quem escolhe o par
+de funções do banco é o `data-colegiado` do `<body>`. Duplicá-lo custaria 39 KB
+de exportação de Excel e PDF mantidos em dobro.
+
+O Conselho troca duas coisas na tela: a coluna do detalhe mostra a **unidade**
+sem hover de nome, e no lugar do conselheiro entra o **assunto** — que nele
+distingue de verdade, com 12 tipos contra o auto de infração único da Câmara.
+
 `resumo_acervo_creg()` e `processos_acervo_creg(ordem, unidade)` são o espelho
 das funções da Câmara, com as **mesmas oito faixas de tempo** — quem lê os dois
 painéis compara sem traduzir — e a mesma definição de pendente: processo do
@@ -385,8 +394,6 @@ Todos os passos são idempotentes.
 
 ## 8. O que ainda não está resolvido
 
-- **Painel do acervo do CREG na tela.** `acervo.html` chama
-  `resumo_acervo_cj`; as RPCs do Conselho estão prontas e não têm consumidor.
 - **O CREG1 não recebe distribuição desde 17/06/2026** e é a unidade com a
   maior fila (55 pendentes). Confirmado nas nove atas de sorteio; pode ser
   deliberado, para escoar o acervo, mas ninguém no sistema sabe dizer.
