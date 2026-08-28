@@ -19,7 +19,8 @@ falhas — está em **[FLUXO-CJ.md](FLUXO-CJ.md)** e não se repete aqui.
 | de-para de nomes | `cadeiras_cj` traduz CJ1..CJ5 | **não existe**, por decisão das unidades |
 | quem recebe | `relator`, cadeira `CJ1`..`CJ5` | `unidade`, gabinete `CREG1`..`CREG4` |
 | coluna de decisão | `defesa` (booleana: houve defesa?) | `recurso` (texto: Com recurso, Sem recurso, Não se aplica, Ad Referendum, Reexame Necessário) |
-| assunto | só Auto de Infração | 11 tipos (Requerimento, Chamamento Público, Gratuidade, Plano de Racionamento…) |
+| interessado | saiu em 20/08/2026 | **voltou em 27/08/2026**, digitado na tela do sorteio |
+| assunto | só Auto de Infração | 12 tipos (Requerimento, Chamamento Público, Gratuidade, Quadro de Horários…) |
 | votos | Manter, Anular, Vista | Manter, Anular, Aprovação, Indeferimento, Extinção, Retirado, Vista |
 | status | Julgado, Retornou, Retirado, Vista | Julgado, Retirado, Vista, Sobrestado, Prejudicado |
 | página da AGR | `pautas-das-reunioes-{ano}` | `pautas-das-sessoes-do-conselho-regulador-{ano}` |
@@ -122,9 +123,14 @@ no mínimo:
 - **duplicatas exatas** — 92 no acervo e 60 nos julgados, quase todas variando
   só a caixa do assunto ou o nome do interessado.
 
-O **interessado não é importado**. Saiu do sistema em 20/08/2026 pela mesma
-razão da Câmara: é nome de pessoa física num registro que ninguém consulta, e o
-repositório é público.
+O **interessado não é importado**, embora a coluna exista. Ele voltou para o
+Conselho em 27/08/2026 e é preenchido **só pelo sorteio**, digitado na tela: a
+secretaria o usa para reconhecer o processo na ata. No histórico das planilhas
+é nome de pessoa física em volume, e este repositório é público — importá-lo
+seria trocar de decisão sem ninguém ter pedido.
+
+Consequência: `interessado` fica nulo em tudo que veio de planilha ou de ata, e
+preenchido apenas nos sorteios feitos pelo sistema.
 
 ---
 
@@ -268,11 +274,11 @@ julho e agosto.
 
 | | |
 |---|---|
-| distribuições no acervo | 3.100 (planilha 3.064 + ata 36) |
+| distribuições no acervo | 3.181 (planilha 3.064 + ata 36 + sorteio 81) |
 | processos distintos | 3.059 |
 | julgados | 4.698, em 136 sessões |
 | período | 05/01/2023 → 19/08/2026 |
-| **pendentes de julgamento** | **87** (CREG1 54, CREG4 14, CREG3 11, CREG2 8) |
+| **pendentes de julgamento** | **166** (CREG1 54, CREG4 41, CREG3 37, CREG2 34) |
 | julgados de processo fora do acervo | 1.397 |
 | julgados cuja data de distribuição o acervo não tem | 47 |
 | dentro / fora / indefinido na META 45 | 3.519 / 1.169 / 10 |
@@ -299,6 +305,21 @@ processos que nenhuma delas conhecia. As **9 atas de sorteio de 17/06 a
 Rodada a sincronização sobre esse acervo, as pautas de 05/08 (59 processos) e
 19/08 (75) entram com **zero** em `processos_sem_acervo`, e todos os 134
 julgados novos têm unidade resolvida pelo gatilho.
+
+### Os 81 sorteados em 27/08 vieram da tabela antiga
+
+No dia da virada, a tela em produção ainda era a que gravava em
+`processos_sorteados`, e o sorteio daquele dia — 81 processos, 27 para cada uma
+de CREG2, CREG3 e CREG4 — entrou lá. A migração `20260828…` copiou os 81 para
+`acervo_creg` com `origem = 'sorteio'`; sem ela ficariam distribuídos e
+invisíveis ao painel.
+
+`processos_sorteados` **não foi esvaziada**: continua com as 81 linhas, como o
+registro do que a tela gravou na época. Os pendentes passaram de 87 para 166.
+
+Dois desses 81 já constavam do acervo em outra unidade e outra data — são
+redistribuições legítimas, e o painel conta cada processo uma vez só, na
+distribuição mais recente.
 
 ### O CREG1 não está desatualizado — ele parou de receber
 
