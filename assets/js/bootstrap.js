@@ -18,8 +18,10 @@ const sessionLoading = document.getElementById('sessionLoading');
 async function carregarPaginaAutenticada() {
   if (!paginaAtual) return;
 
-  sessionLoading.hidden = false;
-  sessionLoading.replaceChildren(criarIndicadorCarregamento(paginaAtual.texto));
+  if (!paginaAtual.carregamentoLocal) {
+    sessionLoading.hidden = false;
+    sessionLoading.replaceChildren(criarIndicadorCarregamento(paginaAtual.texto));
+  }
 
   try {
     await carregarScript(`assets/js/${paginaAtual.arquivo}?v=${ASSET_VERSION}`);
