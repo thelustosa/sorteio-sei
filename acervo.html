@@ -9,9 +9,18 @@
   <title>Acervo não julgado | Sorteio de Processos SEI</title>
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=973c719818" />
-  <script defer src="assets/js/supabase.min.js?v=973c719818"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=973c719818"></script>
+  <link rel="stylesheet" href="assets/css/index.min.css?v=2a1886d7ba" />
+  <script>
+    (function () {
+      try {
+        if (sessionStorage.getItem('sorteio-sei.access-token')) {
+          document.documentElement.classList.add('has-session');
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <script defer src="assets/js/supabase.min.js?v=2a1886d7ba"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=2a1886d7ba"></script>
 </head>
 
 <body class="dashboard-page" data-page="acervo">
