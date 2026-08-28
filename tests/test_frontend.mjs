@@ -133,7 +133,11 @@ function supabaseApp(fetch, itensIniciais = {}) {
   const document = new Document();
   const window = { addEventListener() {} };
   const navigator = {};
-  const location = { protocol: 'http:' };
+  const navegacoes = [];
+  const location = {
+    protocol: 'http:',
+    replace(destino) { navegacoes.push(destino); }
+  };
   const storage = new Map(Object.entries(itensIniciais));
   const sessionStorage = {
     getItem(chave) { return storage.get(chave) ?? null; },
@@ -142,11 +146,11 @@ function supabaseApp(fetch, itensIniciais = {}) {
   };
   const app = new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'fetch',
     `${source('supabase.js')}\nreturn {
-      autenticar, salvarSessao, restaurarSessao, encerrarSessao, revogarSessaoAtual, sair, api,
+      autenticar, salvarSessao, restaurarSessao, encerrarSessao, revogarSessaoAtual, sair, api, ligarLogin,
       CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento,
       estadoSessao: () => ({ accessToken, refreshToken })
     };`)(document, window, navigator, location, sessionStorage, fetch);
-  return { ...app, storage };
+  return { ...app, document, navegacoes, storage };
 }
 
 // O de-para das cadeiras mora no supabase.js, que toda página carrega antes do
@@ -501,6 +505,27 @@ test('falha de rede no logout ainda apaga os tokens locais', async () => {
   assert.equal(app.storage.size, 0);
 });
 
+test('botão sair sempre substitui a página atual pelo login inicial', async () => {
+  const app = supabaseApp(async () => ({ ok: true, status: 204 }), {
+    'sorteio-sei.access-token': 'access',
+    'sorteio-sei.refresh-token': 'refresh'
+  });
+  ['loginScreen', 'loginForm', 'loginEmail', 'loginSenha', 'loginErro'].forEach(id => {
+    app.document.add(id, id === 'loginForm' ? 'form' : 'div');
+  });
+  app.document.add('btnEntrar', 'button').textContent = 'Entrar';
+  const btnSair = app.document.add('btnSair', 'button');
+  btnSair.textContent = 'Sair';
+
+  app.ligarLogin(async () => {});
+  btnSair.click();
+  await wait();
+
+  assert.deepEqual(app.navegacoes, ['./index.html']);
+  assert.deepEqual(app.estadoSessao(), { accessToken: '', refreshToken: '' });
+  assert.equal(app.storage.size, 0);
+});
+
 test('autenticação traduz credencial inválida sem expor resposta técnica', async () => {
   const app = supabaseApp(async () => ({
     ok: false,
@@ -628,16 +653,21 @@ test('move o foco para a lista após o login', async () => {
 // aparecem é a função resumo_acervo_cj. Estes testes fixam esse contrato e os
 // três estados da tela — matriz, vazio e falha.
 
-function bootstrapPage(inicializar) {
+function bootstrapPage(inicializar, pagina = 'acervo') {
   const document = new Document();
-  document.body.dataset.page = 'acervo';
+  document.body.dataset.page = pagina;
   const sessionLoading = document.add('sessionLoading', 'div');
   sessionLoading.hidden = true;
   let aoEntrar;
+  const inicializadores = {
+    sorteio: 'inicializarSorteio',
+    julgados: 'inicializarJulgados',
+    acervo: 'inicializarAcervo'
+  };
 
   new Function('document', 'window', 'ASSET_VERSION', 'carregarScript',
     'criarIndicadorCarregamento', 'ligarLogin', source('bootstrap.js'))(
-    document, { inicializarAcervo: inicializar }, 'teste', async () => {},
+    document, { [inicializadores[pagina]]: inicializar }, 'teste', async () => {},
     texto => { const estado = document.createElement('div'); estado.textContent = texto; return estado; },
     callback => { aoEntrar = callback; });
 
@@ -657,6 +687,34 @@ test('bootstrap mantém o loading geral até a inicialização assíncrona termi
   await carregamento;
   assert.equal(page.sessionLoading.hidden, true,
     'o loading não pode sair enquanto dados e interface ainda estão sendo preparados');
+});
+
+test('julgados prioriza o loading menor enquanto busca as pautas', async () => {
+  let concluir;
+  const page = bootstrapPage(() => new Promise(resolve => { concluir = resolve; }), 'julgados');
+  const carregamento = page.iniciar();
+  await wait();
+
+  assert.equal(page.sessionLoading.hidden, true,
+    'o loading geral não pode competir com o indicador local das pautas');
+  assert.equal(page.sessionLoading.children.length, 0);
+
+  concluir();
+  await carregamento;
+});
+
+test('julgados recupera o loading geral para apresentar falha de inicialização', async () => {
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    const page = bootstrapPage(async () => { throw new Error('indisponível'); }, 'julgados');
+    await page.iniciar();
+
+    assert.equal(page.sessionLoading.hidden, false);
+    assert.equal(page.sessionLoading.children[0].role, 'alert');
+  } finally {
+    console.error = originalConsoleError;
+  }
 });
 
 function acervoPage(api, { imprimir = () => {} } = {}) {

@@ -96,6 +96,8 @@ async function carregarPautas(moverFoco = false) {
   pautasContainer.replaceChildren(criarIndicadorCarregamento('Buscando sessões com julgamento pendente…'));
   listaPautas.hidden = false;
   detalhePauta.hidden = true;
+  btnVoltarInicio.hidden = false;
+  btnVoltar.hidden = true;
   if (moverFoco) listaPautasTitulo.focus();
 
   let pendentes;

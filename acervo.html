@@ -9,9 +9,18 @@
   <title>Acervo não julgado | Sorteio de Processos SEI</title>
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=bde3424906" />
-  <script defer src="assets/js/supabase.min.js?v=bde3424906"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=bde3424906"></script>
+  <link rel="stylesheet" href="assets/css/index.min.css?v=487725e4a6" />
+  <script>
+    (function () {
+      try {
+        if (sessionStorage.getItem('sorteio-sei.access-token')) {
+          document.documentElement.classList.add('has-session');
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <script defer src="assets/js/supabase.min.js?v=487725e4a6"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=487725e4a6"></script>
 </head>
 
 <body class="dashboard-page" data-page="acervo">
@@ -195,7 +204,9 @@
         <img src="assets/img/logo_footer.png" alt="Estado de Goiás" width="104" height="48" />
       </div>
       <p class="footer-info">Painel institucional para acompanhamento do acervo da Câmara de Julgamento.</p>
-      <div class="footer-version">Versão 3.0
+      <div class="footer-meta">
+        <div class="footer-version">Versão 3.6</div>
+        <p class="footer-credit">Desenvolvido por <strong>Lucas Lustosa Coelho e Leonardo Ferreira Amichi</strong>.</p>
       </div>
     </div>
   </footer>
