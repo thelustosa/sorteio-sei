@@ -1299,9 +1299,9 @@ def rotulos_da_pagina_batem_com_os_do_banco(cur):
         return re.findall(r"'([^']+)'", achado.group(1))
 
     assert rotulos(pagina, r'const VOTOS = \[([^\]]+)\]') == \
-           rotulos(corpo, r"'voto', ''\), ''\)\s*not in \(([^)]+)\)")
+           rotulos(corpo, r"'voto', ''\)\s*not in \(([^)]+)\)")
     assert rotulos(pagina, r'const STATUS = \[([^\]]+)\]') == \
-           rotulos(corpo, r"'status', ''\), ''\)\s*not in \(([^)]+)\)")
+           rotulos(corpo, r"'status', ''\)\s*not in \(([^)]+)\)")
 
 
 @teste
@@ -1525,6 +1525,14 @@ def preparar_banco(planilha):
     rodar_arquivo(MIGRACAO_CADEIRAS)
     rodar_arquivo(MIGRACAO_HARDENING)
     rodar_arquivo(MIGRACAO_INTERESSADO)
+
+    # E o schema por último. preparar_upgrade_da_migracao instala a versão
+    # ANTIGA de registrar_votos para a migração ter o que corrigir, e nada a
+    # substituía depois: a suíte inteira rodava contra uma função que produção
+    # não tem mais — 64 testes verdes com o schema quebrado. Reaplicar o
+    # schema.sql aqui deixa o banco no estado que produção tem de verdade, e ele
+    # é idempotente por construção.
+    rodar_arquivo(RAIZ / 'sql' / 'schema.sql')
 
 
 def main(argv):

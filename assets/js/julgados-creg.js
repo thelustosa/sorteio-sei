@@ -301,7 +301,13 @@ async function salvar() {
   // A função do banco recusa a lista inteira quando um item traz rótulo fora da
   // lista — e "registro anterior" é exatamente esse caso. Avisar aqui diz qual
   // linha corrigir; deixar seguir devolveria um erro do Postgres sem endereço.
-  const foraDaLista = itens.filter(i => !VOTOS.includes(i.voto) || !STATUS.includes(i.status));
+  //
+  // Campo VAZIO não entra nesta conta: preencher só o voto ou só o status é
+  // fluxo previsto (processo retirado de pauta tem status e não tem voto), e o
+  // banco grava null. Barrá-lo aqui daria a mensagem errada para quem apenas
+  // ainda não decidiu.
+  const foraDaLista = itens.filter(i =>
+    (i.voto && !VOTOS.includes(i.voto)) || (i.status && !STATUS.includes(i.status)));
   if (foraDaLista.length > 0) {
     aviso(`${foraDaLista.length} ${foraDaLista.length === 1 ? 'processo tem' : 'processos têm'} `
       + 'voto ou status de um registro anterior, que o Conselho não usa mais. '

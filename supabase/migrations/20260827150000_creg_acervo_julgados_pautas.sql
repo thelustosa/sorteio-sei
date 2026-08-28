@@ -352,12 +352,17 @@ begin
 
   select count(*) into invalido
     from jsonb_array_elements(itens) i
+   -- Campo VAZIO é ausência de decisão, e é legítimo: processo retirado de
+      -- pauta tem status e não tem voto. Recusa-se o rótulo PREENCHIDO fora da
+      -- lista, não o campo em branco.
    where coalesce(i ->> 'id', '') !~ '^[0-9]+$'
-      or coalesce(nullif(i ->> 'voto', ''), '') not in
-         ('Manter', 'Anular', 'Aprovação', 'Indeferimento', 'Extinção',
-          'Retirado', 'Vista')
-      or coalesce(nullif(i ->> 'status', ''), '') not in
-         ('Julgado', 'Retirado', 'Vista', 'Sobrestado', 'Prejudicado');
+      or (nullif(i ->> 'voto', '') is not null
+          and nullif(i ->> 'voto', '') not in
+              ('Manter', 'Anular', 'Aprovação', 'Indeferimento', 'Extinção',
+               'Retirado', 'Vista'))
+      or (nullif(i ->> 'status', '') is not null
+          and nullif(i ->> 'status', '') not in
+              ('Julgado', 'Retirado', 'Vista', 'Sobrestado', 'Prejudicado'));
 
   if invalido > 0 then
     raise exception 'id, voto ou status fora do permitido (% item(ns))', invalido;
@@ -567,15 +572,17 @@ begin
 
   select count(*) into invalido
     from jsonb_array_elements(itens) i
-   -- coalesce, e não nullif sozinho: item sem voto ou sem status produz NULL,
-      -- e `NULL not in (...)` é NULL — o item escapava da contagem, passava pelo
-      -- UPDATE e APAGAVA o campo. Com '' no lugar, ele cai fora da lista e é
-      -- recusado, que é o que "fora do permitido" sempre quis dizer.
+   -- Campo VAZIO é ausência de decisão, e é legítimo: processo retirado de
+      -- pauta tem status e não tem voto, e a tela promete "preencha o voto OU o
+      -- status". Ele passa e grava null. O que se recusa é rótulo PREENCHIDO
+      -- fora da lista — daí testar `is not null and not in`, e não coalesce para
+      -- '', que barraria também o campo em branco.
    where coalesce(i ->> 'id', '') !~ '^[0-9]+$'
-      or coalesce(nullif(i ->> 'voto', ''), '')
-         not in ('Manter', 'Anular', 'Vista')
-      or coalesce(nullif(i ->> 'status', ''), '')
-         not in ('Julgado', 'Retornou', 'Retirado', 'Vista');
+      or (nullif(i ->> 'voto', '') is not null
+          and nullif(i ->> 'voto', '') not in ('Manter', 'Anular', 'Vista'))
+      or (nullif(i ->> 'status', '') is not null
+          and nullif(i ->> 'status', '')
+              not in ('Julgado', 'Retornou', 'Retirado', 'Vista'));
 
   if invalido > 0 then
     raise exception 'id, voto ou status fora do permitido (% item(ns))', invalido;
