@@ -6,7 +6,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = 'a018f17c43';
+const ASSET_VERSION = '1fb321bc26';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -34,13 +34,18 @@ function rotularCadeira(el, valor) {
 
 // O token fica somente na aba atual: navegar entre as páginas preserva a sessão,
 // mas fechar a aba a encerra. Senhas nunca são armazenadas.
-const SESSION_TOKEN_KEY = 'sorteio-sei.access-token';
+const SESSION_ACCESS_TOKEN_KEY = 'sorteio-sei.access-token';
+const SESSION_REFRESH_TOKEN_KEY = 'sorteio-sei.refresh-token';
 let accessToken = '';
+let refreshToken = '';
+let renovacaoEmAndamento = null;
 
-function salvarSessao(token) {
-  accessToken = token;
+function salvarSessao(sessao) {
+  accessToken = sessao.access_token || accessToken;
+  refreshToken = sessao.refresh_token || refreshToken;
   try {
-    sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+    sessionStorage.setItem(SESSION_ACCESS_TOKEN_KEY, accessToken);
+    sessionStorage.setItem(SESSION_REFRESH_TOKEN_KEY, refreshToken);
   } catch (_) {
     // Sem armazenamento disponível, a sessão continua válida até a próxima navegação.
   }
@@ -48,19 +53,51 @@ function salvarSessao(token) {
 
 function restaurarSessao() {
   try {
-    accessToken = sessionStorage.getItem(SESSION_TOKEN_KEY) || '';
+    accessToken = sessionStorage.getItem(SESSION_ACCESS_TOKEN_KEY) || '';
+    refreshToken = sessionStorage.getItem(SESSION_REFRESH_TOKEN_KEY) || '';
   } catch (_) {
     accessToken = '';
+    refreshToken = '';
   }
   return Boolean(accessToken);
 }
 
 function encerrarSessao() {
   accessToken = '';
+  refreshToken = '';
   try {
-    sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    sessionStorage.removeItem(SESSION_ACCESS_TOKEN_KEY);
+    sessionStorage.removeItem(SESSION_REFRESH_TOKEN_KEY);
   } catch (_) {
     // A sessão em memória já foi descartada.
+  }
+}
+
+async function revogarSessaoAtual() {
+  if (!accessToken) return;
+
+  const resp = await fetchComTimeout(`${baseUrl()}/auth/v1/logout?scope=local`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  // Um 401 significa que a sessão já não existe no servidor, portanto o
+  // resultado desejado do logout também foi alcançado.
+  if (!resp.ok && resp.status !== 401) {
+    throw new Error('Não foi possível encerrar a sessão no servidor.');
+  }
+}
+
+async function sair() {
+  try {
+    await revogarSessaoAtual();
+  } finally {
+    // Mesmo sem rede, não deixa credenciais utilizáveis nesta aba.
+    encerrarSessao();
   }
 }
 
@@ -126,12 +163,45 @@ async function autenticar(email, senha) {
     if (/not confirmed/i.test(detalhe)) throw new Error('Usuário ainda não confirmado. Procure o responsável pela manutenção.');
     throw new Error(detalhe || 'Não foi possível entrar. Tente novamente.');
   }
-  return dados.access_token;
+  return dados;
 }
 
-// Devolve a página à tela de login. Cada página instala a sua em ligarLogin;
-// até lá é um no-op, porque não há formulário para mostrar.
-let exigirLogin = () => {};
+async function executarRenovacao() {
+  if (!refreshToken) {
+    throw Object.assign(
+      new Error('Não foi possível renovar a sessão. Use Sair e entre novamente.'),
+      { status: 401 });
+  }
+
+  const resp = await fetchComTimeout(`${baseUrl()}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY },
+    body: JSON.stringify({ refresh_token: refreshToken })
+  });
+  const dados = await resp.json().catch(() => ({}));
+
+  if (!resp.ok || !dados.access_token) {
+    throw Object.assign(
+      new Error('Não foi possível renovar a sessão. Use Sair e entre novamente.'),
+      { status: 401 });
+  }
+
+  // O Supabase pode rotacionar o refresh token. salvarSessao conserva o atual
+  // quando a resposta traz apenas um access token e atualiza os dois quando
+  // recebe o novo par.
+  salvarSessao(dados);
+}
+
+function renovarSessao() {
+  // Páginas como o dashboard disparam mais de uma chamada juntas. Compartilhar
+  // a renovação evita tentar reutilizar simultaneamente um refresh token que o
+  // servidor acabou de rotacionar.
+  if (!renovacaoEmAndamento) {
+    renovacaoEmAndamento = executarRenovacao()
+      .finally(() => { renovacaoEmAndamento = null; });
+  }
+  return renovacaoEmAndamento;
+}
 
 // Estados de carregamento compartilhados: a interface nunca depende de texto
 // solto para explicar uma operação que ainda está em andamento.
@@ -181,7 +251,7 @@ function alternarBotaoCarregando(botao, carregando, texto) {
 // Chamada REST autenticada. Devolve o JSON da resposta (ou null quando vazia).
 // O erro carrega o status HTTP para quem precisa distinguir um caso específico.
 async function api(caminho, opcoes = {}) {
-  const resp = await fetchComTimeout(`${baseUrl()}/rest/v1/${caminho}`, {
+  const requisitar = () => fetchComTimeout(`${baseUrl()}/rest/v1/${caminho}`, {
     ...opcoes,
     headers: {
       'Content-Type': 'application/json',
@@ -191,14 +261,22 @@ async function api(caminho, opcoes = {}) {
     }
   });
 
+  let resp = await requisitar();
+
+  // Access tokens são curtos. Renova o par de tokens e repete a chamada uma
+  // única vez, mantendo a interface e o trabalho em andamento. Só o botão Sair
+  // encerra a sessão local.
+  if (resp.status === 401) {
+    await renovarSessao();
+    resp = await requisitar();
+  }
+
   if (resp.ok) return resp.status === 204 ? null : resp.json().catch(() => null);
 
-  // O token do Supabase expira em cerca de uma hora. Devolver a tela de login
-  // aqui, e não em cada chamada, garante que nenhuma página fique com aparência
-  // de logada depois que a sessão morreu.
   if (resp.status === 401) {
-    exigirLogin('Sua sessão expirou. Entre novamente para continuar.');
-    throw Object.assign(new Error('sessão expirada — entre novamente'), { status: 401 });
+    throw Object.assign(
+      new Error('Não foi possível validar a sessão. Use Sair e entre novamente.'),
+      { status: 401 });
   }
 
   // O PostgREST devolve o erro em JSON; a mensagem sozinha é o que serve para o
@@ -224,8 +302,6 @@ function ligarLogin(aoEntrar) {
   const loginErro = document.getElementById('loginErro');
   const btnEntrar = document.getElementById('btnEntrar');
   const btnSair = document.getElementById('btnSair');
-  const loginOnlyCard = loginScreen.closest('[data-login-only]');
-
   loginForm.addEventListener('submit', async e => {
     e.preventDefault();
     loginErro.textContent = '';
@@ -246,34 +322,23 @@ function ligarLogin(aoEntrar) {
     }
   });
 
-  // Sair descarta o token e limpa o que estava em andamento.
-  btnSair.addEventListener('click', () => {
-    encerrarSessao();
-    location.reload();
+  // Revoga a sessão atual no servidor antes de descartar os tokens locais.
+  btnSair.addEventListener('click', async () => {
+    alternarBotaoCarregando(btnSair, true, 'Saindo…');
+    try {
+      await sair();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      location.reload();
+    }
   });
-
-  // Quando a sessão cai, a tela de login voltava por cima do que estava aberto:
-  // a página mostrava o formulário e, logo abaixo, o resultado do sorteio ou a
-  // lista de pautas da sessão que acabou de expirar. Além de confuso, deixava o
-  // trabalho da pessoa anterior na tela para quem chegasse depois. Cada página
-  // marca com data-sessao o que só existe para quem está autenticado.
-  const conteudoDaSessao = document.querySelectorAll('[data-sessao]');
-
-  exigirLogin = mensagem => {
-    encerrarSessao();
-    conteudoDaSessao.forEach(el => { el.hidden = true; });
-    if (loginOnlyCard) loginOnlyCard.hidden = false;
-    loginScreen.hidden = false;
-    btnSair.hidden = true;
-    loginErro.textContent = mensagem;
-    loginEmail.focus();
-  };
 
   if (restaurarSessao()) {
     loginScreen.hidden = true;
     btnSair.hidden = false;
     Promise.resolve(aoEntrar()).catch(err => {
-      exigirLogin('Não foi possível restaurar a sessão. Entre novamente.');
+      aviso(`Não foi possível restaurar os dados da página (${err.message}).`, 'erro');
       console.error(err);
     });
   }

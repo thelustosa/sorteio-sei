@@ -531,13 +531,12 @@ async function carregarAcervo({ carregamentoInicial = false } = {}) {
   try {
     linhas = await api('rpc/resumo_acervo_cj', { method: 'POST', body: '{}' });
   } catch (err) {
-    // Sessão expirada já foi tratada em api(), que recolocou a tela de login.
-    // Sem esta saída, o painel diria "verifique sua conexão" logo abaixo de
-    // "sua sessão expirou" — dois diagnósticos contraditórios na mesma tela.
-    if (err.status === 401) return false;
     if (carregamentoInicial) throw err;
     acervoTabela.replaceChildren();
     linhasAtuais = null;
+    // O total é do acervo que acabou de sair da tela: mantê-lo anunciaria N
+    // processos acima de uma tabela vazia.
+    acervoTotal.textContent = '';
     acervoAtualizado.textContent = 'Atualização indisponível';
     acervoErro.querySelector('p').textContent = `Não foi possível carregar o acervo (${err.message}).`;
     acervoErro.hidden = false;
@@ -593,12 +592,6 @@ async function abrirDetalhe(celulaEl) {
     });
   } catch (err) {
     if (pedido !== detalhePedido) return;
-    // Sessão expirada já recolocou a tela de login atrás do card; deixá-lo
-    // aberto por cima esconderia justamente o formulário.
-    if (err.status === 401) {
-      detalheDialog.close();
-      return;
-    }
     detalheLoading.hidden = true;
     detalheLoading.replaceChildren();
     detalheCorpo.hidden = true;
