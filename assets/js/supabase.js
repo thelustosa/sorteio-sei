@@ -6,7 +6,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '1fb321bc26';
+const ASSET_VERSION = '973c719818';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -330,7 +330,9 @@ function ligarLogin(aoEntrar) {
     } catch (err) {
       console.error(err);
     } finally {
-      location.reload();
+      // Substitui a página protegida no histórico para que o logout sempre
+      // termine no login inicial, independentemente da tela de origem.
+      location.replace('./index.html');
     }
   });
 
@@ -358,6 +360,19 @@ const TRACADO_AVISO = {
   alerta: 'M12 8v4m0 4h.01M5.1 19h13.8a1 1 0 0 0 .9-1.5L12.9 5a1 1 0 0 0-1.8 0L4.2 17.5a1 1 0 0 0 .9 1.5Z'
 };
 
+function posicionarRegiaoDeAvisos(regiao) {
+  const telaEstreita = window.matchMedia?.('(max-width: 600px)').matches;
+  if (telaEstreita) {
+    regiao.style.top = 'auto';
+    regiao.style.bottom = '16px';
+    return;
+  }
+
+  const limiteNavegacao = document.querySelector('.green-bar')?.getBoundingClientRect().bottom;
+  regiao.style.top = `${Number.isFinite(limiteNavegacao) ? Math.max(12, limiteNavegacao + 12) : 20}px`;
+  regiao.style.bottom = 'auto';
+}
+
 function aviso(texto, tipo = 'sucesso') {
   const { titulo: rotulo, classe, assertivo } = TIPOS_AVISO[tipo] || TIPOS_AVISO.sucesso;
 
@@ -367,7 +382,15 @@ function aviso(texto, tipo = 'sucesso') {
     regiao.id = 'toastRegion';
     regiao.className = 'toast-region';
     regiao.setAttribute('aria-label', 'Notificações');
-    document.body.appendChild(regiao);
+    const navegacao = document.querySelector('.green-bar');
+    if (navegacao) navegacao.insertAdjacentElement('afterend', regiao);
+    else document.body.appendChild(regiao);
+
+    const reposicionar = () => {
+      if (regiao.firstChild) posicionarRegiaoDeAvisos(regiao);
+    };
+    window.addEventListener('resize', reposicionar);
+    window.addEventListener('scroll', reposicionar, { passive: true });
   }
 
   // Um aviso por vez. Cada ação do sistema produz exatamente um resultado, então
@@ -421,4 +444,5 @@ function aviso(texto, tipo = 'sucesso') {
 
   msg.append(icone, conteudo, fechar);
   regiao.appendChild(msg);
+  posicionarRegiaoDeAvisos(regiao);
 }

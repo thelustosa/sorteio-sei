@@ -12,9 +12,9 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=1fb321bc26" />
-  <script defer src="assets/js/supabase.min.js?v=1fb321bc26"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=1fb321bc26"></script>
+  <link rel="stylesheet" href="assets/css/index.min.css?v=973c719818" />
+  <script defer src="assets/js/supabase.min.js?v=973c719818"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=973c719818"></script>
 </head>
 
 <body data-page="sorteio">
@@ -142,16 +142,17 @@
           </div>
 
           <div class="table-toolbar">
-            <div>Desenvolvido por <strong>Lucas Lustosa Coelho</strong>.</div>
             <button id="addRowBtn" class="button-secondary" type="button">Adicionar linha</button>
           </div>
         </div>
 
         <!-- Seção de Resultados Pós-Sorteio -->
         <div id="resultadoSorteio" hidden>
-          <h2 id="resultadoSorteioTitle" tabindex="-1">Resultado do Sorteio</h2>
+          <div class="resultado-header">
+            <h2 id="resultadoSorteioTitle" tabindex="-1">Resultado do Sorteio</h2>
+            <button id="baixarBackup" class="button-secondary" type="button" hidden>Baixar backup .json</button>
+          </div>
           <div id="resultadoStatus" hidden></div>
-          <button id="baixarBackup" class="button-secondary" type="button" hidden>Baixar backup .json</button>
 
           <div id="resumoContagem">
             <!-- Exemplo: CREG1: 2 processos | CREG2: 3 processos -->
@@ -184,7 +185,10 @@
         Este sorteio segue regras de distribuição igualitária e proporcional por assunto e carga total de processos.<br>
         Todos os sorteios são auditáveis para garantir transparência.
       </p>
-      <div class="footer-version">Versão 3.0</div>
+      <div class="footer-meta">
+        <div class="footer-version">Versão 3.6</div>
+        <p class="footer-credit">Desenvolvido por <strong>Lucas Lustosa Coelho e Leonardo Ferreira Amichi</strong>.</p>
+      </div>
     </div>
   </footer>
 
