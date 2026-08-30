@@ -78,18 +78,32 @@ def distribuicoes(texto):
     mes = m.group(2).lower()
     if mes not in MESES:
         raise ErroAta(f'mês desconhecido: {mes!r}')
-    quando = date(int(m.group(3)), MESES.index(mes) + 1, int(m.group(1)))
+    try:
+        quando = date(int(m.group(3)), MESES.index(mes) + 1, int(m.group(1)))
+    except ValueError as e:
+        # "Aos 31 dias do mês de junho" é erro de digitação numa ata, e nada
+        # mais. Como ErroAta ele cai no PULA do main e as outras atas do lote
+        # continuam; solto, o ValueError abortava a rodada inteira e o SQL das
+        # atas já lidas nem chegava a ser escrito.
+        raise ErroAta(f'data inválida na ata: {e}') from e
 
     numero = NUMERO_ATA.search(texto)
     numero = int(numero.group(1)) if numero else None
 
-    linhas, ordem, pendente, orfaos = [], None, None, []
+    linhas, candidata, ordem, pendente, orfaos = [], None, None, None, []
     for bruta in texto.splitlines():
         s = bruta.strip()
         if PROCESSO.match(s):
             if pendente:
                 orfaos.append(pendente)
-            pendente = s
+            # A ordem é a última linha de 1 a 3 dígitos vista ANTES do processo,
+            # e é AQUI que ela se liga a ele. Ligá-la só quando o par fecha
+            # deixava qualquer número solto entre o processo e a unidade
+            # sobrescrevê-la: o pypdf quebra célula de Interessado que deu wrap,
+            # e um CNPJ vira `25.629.544` / `0001` / `48` — a `48` entrava como
+            # ordem, sem erro nenhum. Ligada aqui, ela também não vaza para o
+            # par seguinte quando este processo fica sem unidade.
+            pendente, ordem, candidata = s, candidata, None
         elif UNIDADE.match(s) and pendente:
             linhas.append({
                 'num_processo': pendente,
@@ -102,9 +116,7 @@ def distribuicoes(texto):
             })
             pendente, ordem = None, None
         elif ORDEM.match(s):
-            # A ordem vem imediatamente antes do processo, na mesma linha da
-            # tabela. Guardada aqui, consumida quando o par fecha.
-            ordem = int(s)
+            candidata = int(s)
     if pendente:
         orfaos.append(pendente)
 
@@ -125,12 +137,17 @@ def main(argv):
         print('Nenhuma ata encontrada.')
         return 1
 
-    todas, problemas = [], 0
+    # Duas contas diferentes: `puladas` é ata que não entrou (e o cabeçalho do
+    # SQL conta as que entraram); `problemas` é o que faz o script sair com 1.
+    # Somadas numa só, uma ata boa com uma célula de unidade em branco fazia o
+    # cabeçalho anunciar "de 0 ata(s)" acima das suas 30 linhas.
+    todas, puladas, problemas = [], 0, 0
     for caminho in alvos:
         try:
             numero, quando, linhas, orfaos = ler_ata(caminho)
         except (ErroAta, pauta.ErroPauta) as e:
             print(f'PULA  {caminho.name}: {e}')
+            puladas += 1
             problemas += 1
             continue
         aviso = f'  ATENÇÃO: {len(orfaos)} processo(s) sem unidade: {orfaos}' if orfaos else ''
@@ -148,13 +165,21 @@ def main(argv):
             unicas.append(l)
 
     saida = Path(__file__).resolve().parent / 'acervo_creg_atas.sql'
+    if not unicas:
+        # Sem escrever: gerar_sql sem linha nenhuma devolve só o cabeçalho, e
+        # gravá-lo por cima truncaria em silêncio o arquivo bom da rodada
+        # anterior. Rodada que não leu ata nenhuma não tem o que publicar.
+        print()
+        print(f'Nenhuma distribuição lida: {saida.name} não foi tocado.')
+        return 1
+
     saida.write_text(gerar_sql(
         'acervo_creg',
         ['num_processo', 'unidade', 'data_distribuicao', 'assunto', 'recurso',
          'ordem', 'origem'],
         unicas, 'acervo_creg_distribuicao_unica',
         f'Acervo do Conselho Regulador — {len(unicas)} distribuições '
-        f'de {len(alvos) - problemas} ata(s) de sorteio.',
+        f'de {len(alvos) - puladas} ata(s) de sorteio.',
     ), encoding='utf-8')
 
     print(f'\n{saida.name}  {len(unicas)} linhas '

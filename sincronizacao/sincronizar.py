@@ -62,7 +62,9 @@ COLEGIADOS = {
         'julgados': 'julgados_creg',
         'pautas': 'pautas_creg',
         # A página do Conselho só publica sessões dele: filtrar por título
-        # devolveria zero, porque os títulos não nomeiam o colegiado.
+        # devolveria zero, porque os títulos não nomeiam o colegiado. Sem esse
+        # filtro, o que separa sessão cancelada e adiada das demais é a leitura
+        # dos avisos da própria listagem, em agr.listar_pautas.
         'listagem': agr.LISTAGEM_CREG,
         'comissao': None,
     },
@@ -130,7 +132,7 @@ def registrar_pauta(cur, col, p, sha256, encontrados, importados, sem_acervo):
 # ── Orquestração ─────────────────────────────────────────────────────────────
 
 def pautas_pendentes(cur, col, ano=None, desde=None, hoje=None):
-    """(pautas encontradas, pendentes, corte e anos consultados)."""
+    """(pautas, pendentes, corte, anos consultados e listagens que falharam)."""
     hoje = hoje or date.today()
     marco = inicio_da_serie(cur, col)
     corte = desde or marco or ultima_sessao(cur, col)
@@ -142,11 +144,25 @@ def pautas_pendentes(cur, col, ano=None, desde=None, hoje=None):
         anos = list(range(corte.year, hoje.year + 1))
     else:
         anos = [hoje.year]
-    todas = [p for a in anos
-             for p in agr.listar_pautas(a, col['comissao'], col['listagem'])]
+    # Cada ano é consultado por conta própria. listar_pautas levanta ErroAGR
+    # tanto no 404 quanto na página sem item, e a listagem do ano novo só passa
+    # a existir depois da primeira sessão publicada — em 02/01 ela ainda não
+    # está lá. Fora do try, esse erro abortava a rodada inteira e as pautas
+    # pendentes do ano anterior nunca chegavam a ser processadas. A falha vira
+    # erro do resumo: o job termina vermelho, mas depois de fazer o que dava.
+    todas, falhas = [], []
+    for a in anos:
+        fonte = col['listagem'].format(ano=a)
+        try:
+            todas += agr.listar_pautas(a, col['comissao'], col['listagem'])
+        except agr.ErroAGR as e:
+            log.error('%s: %s', fonte, e)
+            falhas.append({'url': fonte, 'ano': a, 'erro': f'{type(e).__name__}: {e}'})
+
     pendentes = [p for p in todas
                  if p.url not in ja_vistas and corte < p.data_sessao <= hoje]
-    return todas, sorted(pendentes, key=lambda p: (p.data_sessao, p.numero)), corte, anos
+    return (todas, sorted(pendentes, key=lambda p: (p.data_sessao, p.numero)),
+            corte, anos, falhas)
 
 
 def processar_pauta(cur, col, p):
@@ -167,9 +183,19 @@ def processar_pauta(cur, col, p):
     # Documento sem processo não é erro: o Conselho Regulador convoca sessão
     # especial, e a de 03/07/2026 não levou nenhum. Registrar com zero deixa a
     # sessão marcada como vista, em vez de rebaixá-la a falha em toda execução.
-    # PDF quebrado continua caindo antes disto, em extrair_texto, e mudança de
-    # formato já é sinalizada por numeros_sem_rotulo.
+    # PDF quebrado continua caindo antes disto, em extrair_texto.
+    #
+    # O que separa a sessão vazia da AGR ter mudado o formato é numeros_sem_rotulo,
+    # que já desconta o rodapé `Referência: Processo nº …`: sessão sem processo
+    # não tem número de 15 dígitos nenhum. Zero processos COM números soltos é
+    # parser quebrado, e registrar aí marcaria a URL como vista para sempre —
+    # a sessão se perderia em silêncio, com o job terminando verde, e voltar
+    # atrás depois exigiria apagar a linha de pautas_* à mão.
     processos = pauta.extrair_processos(texto)
+    if not processos and ignorados:
+        raise pauta.ErroPauta(
+            f'nenhum processo extraído, mas {len(ignorados)} número(s) de 15 '
+            f'dígitos no documento — o formato da AGR mudou: {ignorados}')
     if not processos:
         log.warning('%s: nenhum processo no documento — registrado como sessão '
                     'sem processos', p.url)
@@ -220,7 +246,8 @@ def sincronizar(conn, colegiado='CJ', ano=None, desde=None, hoje=None, simular=F
 
     with conn.cursor() as cur:
         ultima = ultima_sessao(cur, col)
-        todas, pendentes, corte, anos = pautas_pendentes(cur, col, ano, desde, hoje)
+        todas, pendentes, corte, anos, falhas = pautas_pendentes(
+            cur, col, ano, desde, hoje)
         resumo['ultima_sessao_conhecida'] = ultima.isoformat()
         resumo['data_de_corte'] = corte.isoformat()
         resumo['anos_consultados'] = anos
@@ -252,6 +279,10 @@ def sincronizar(conn, colegiado='CJ', ano=None, desde=None, hoje=None, simular=F
             })
 
     resumo['documentos_com_erro'] = len(resumo['erros'])
+    # Listagem que não abriu entra depois da contagem: ela não é documento, mas
+    # é erro — e é o que faz o job terminar vermelho em vez de fingir que o ano
+    # não tinha pauta nenhuma.
+    resumo['erros'] += falhas
     resumo['processos_sem_acervo'] = sorted(set(resumo['processos_sem_acervo']))
     return resumo
 

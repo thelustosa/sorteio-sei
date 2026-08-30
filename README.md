@@ -240,8 +240,8 @@ sem acervo e sem julgados, medida provisória enquanto o Conselho não tinha o
 desenho da Câmara. Agora tem:
 
 - **`acervo_creg`** — uma linha por **distribuição** de um processo a uma unidade
-  (`CREG1`..`CREG4`). É aqui que o sorteio do CREG grava, e quem ocupa cada
-  unidade sai de `cadeiras_creg`.
+  (`CREG1`..`CREG4`). É aqui que o sorteio do CREG grava. A unidade é o que se
+  guarda: não há de-para de ocupantes, pelo motivo do parágrafo abaixo.
 - **`julgados_creg`** — uma linha por processo levado a uma **sessão do
   Conselho**, ligada ao acervo por `acervo_id`.
 - **`pautas_creg`** — um registro por documento de pauta já processado.

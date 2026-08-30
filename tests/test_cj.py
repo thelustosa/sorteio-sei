@@ -832,6 +832,31 @@ def registrar_votos_nao_encosta_no_historico_da_planilha(cur):
 
 
 @teste
+def registrar_votos_nao_apaga_decisao_com_campo_em_branco(cur):
+    """Branco quer dizer "ainda não decidi", nunca "apague o que está lá".
+
+    A função escrevia voto E status incondicionalmente: a linha que tem um dos
+    dois preenchido entra na fila de pendentes justamente por isso, e gravar a
+    sessão levava o campo já decidido junto. Pela API, {"voto":"","status":""}
+    zerava as duas colunas de qualquer linha que a tela já tivesse encostado.
+    """
+    ident, _, _ = julgado_pendente(cur, num='900000000000203')
+    cur.execute("""update julgados_cj set voto = 'Manter', status = null,
+                          atualizado_em = null, atualizado_por = null
+                    where id = %s""", (ident,))
+
+    assert registrar(cur, [{'id': ident, 'voto': '', 'status': 'Julgado'}]) == 1
+    cur.execute('select voto, status from julgados_cj where id = %s', (ident,))
+    assert cur.fetchone() == ('Manter', 'Julgado')
+
+    # Agora a linha é editável por esta porta, e o branco continua sem apagar.
+    registrar(cur, [{'id': ident, 'voto': '', 'status': ''}])
+    cur.execute('select voto, status from julgados_cj where id = %s', (ident,))
+    assert cur.fetchone() == ('Manter', 'Julgado')
+    cur.connection.rollback()
+
+
+@teste
 def registrar_votos_permite_corrigir_o_proprio_registro(cur):
     """O que a página gravou, a página conserta."""
     ident, _, _ = julgado_pendente(cur, num='900000000000202')
@@ -1007,6 +1032,43 @@ def resumo_do_acervo_conta_processo_redistribuido_uma_vez(cur):
     cur.execute('select faixa, relator, processos from public.resumo_acervo_cj()'
                 ' where processos > 0')
     assert cur.fetchall() == [('Até 15 dias', 'Atual', 1)], 'contou a distribuição antiga'
+    cur.connection.rollback()
+
+
+@teste
+def resumo_do_acervo_conta_redistribuicao_posterior_ao_julgado(cur):
+    """Julgado antigo não pode esconder a distribuição que veio depois dele.
+
+    "Não julgado" era "não aparece em julgados_cj", sem correlação de data
+    nenhuma. Enquanto julgados_cj só tinha jun/2026 em diante isso não mordia;
+    com a série crescendo, um processo julgado e depois redistribuído sumiria do
+    painel — distribuído e invisível.
+    """
+    autenticar(cur)
+    cur.execute("delete from public.julgados_cj")
+    cur.execute("delete from public.acervo_cj")
+    cur.execute("""insert into public.acervo_cj
+                     (num_processo, relator, data_distribuicao, defesa, origem) values
+                   ('202600029000005', 'CJ1', current_date - 300, true, 'sorteio'),
+                   ('202600029000005', 'CJ3', current_date - 3,   true, 'sorteio')""")
+    cur.execute("""insert into public.julgados_cj
+                     (num_processo, data_sessao, voto, status)
+                   values ('202600029000005', current_date - 200, 'Manter', 'Julgado')""")
+
+    cur.execute('select faixa, relator, processos from public.resumo_acervo_cj()'
+                ' where processos > 0')
+    assert cur.fetchall() == [('Até 15 dias', 'CJ3', 1)], \
+        'a redistribuição posterior ao julgado tem de aparecer'
+
+    cur.execute('select num_processo, relator from public.processos_acervo_cj()')
+    assert cur.fetchall() == [('202600029000005', 'CJ3')]
+
+    # E o julgado que veio DEPOIS da distribuição continua tirando do painel.
+    cur.execute("""insert into public.julgados_cj
+                     (num_processo, data_sessao, voto, status)
+                   values ('202600029000005', current_date, 'Manter', 'Julgado')""")
+    cur.execute('select coalesce(sum(processos), 0) from public.resumo_acervo_cj()')
+    assert cur.fetchone()[0] == 0
     cur.connection.rollback()
 
 
@@ -1376,7 +1438,73 @@ def backup_e_restauracao_fecham_o_ciclo(cur):
     PG.executar('drop schema backup_cj cascade')
 
 
+@teste
+def migracoes_estao_todas_cobertas(cur):
+    """Nenhuma migração pode entrar no diretório sem ser executada por aqui.
+
+    As duas do Conselho — a que cria as tabelas, gatilhos, RPCs e RLS dele e a
+    que copia o sorteio de 27/08 — ficaram meses sem teste nenhum justamente
+    porque a lista era escrita à mão.
+    """
+    arquivos = {a.name for a in (RAIZ / 'supabase' / 'migrations').glob('*.sql')}
+    aplicadas = {a.name for a in migracoes_a_aplicar()} | {MIGRACAO.name}
+
+    assert arquivos - aplicadas == MIGRACOES_SUPERADAS, (
+        'migração fora da bateria: ' + ', '.join(sorted(arquivos - aplicadas)))
+    assert MIGRACOES_SUPERADAS <= arquivos, 'MIGRACOES_SUPERADAS cita arquivo que não existe'
+    for constante in (MIGRACAO_CADEIRAS, MIGRACAO_HARDENING, MIGRACAO_INTERESSADO):
+        assert constante.name in aplicadas, constante.name
+
+
+@teste
+def migracoes_reproduzem_o_schema(cur):
+    """Produção aplica migrações; sql/schema.sql é só o estado desejado.
+
+    Este banco veio do schema.sql, foi rebaixado ao estado anterior por
+    preparar_upgrade_da_migracao e reconstruído SÓ pelo diretório de migrações.
+    Reaplicar o schema.sql agora não pode mudar função nenhuma: se mudar, é
+    porque alguma migração não carregou o que o schema já tem, e produção ficaria
+    com a versão velha para sempre — sem nada ficar vermelho.
+    """
+    def definicoes():
+        cur.execute("""
+            select p.proname || '(' ||
+                   pg_get_function_identity_arguments(p.oid) || ')',
+                   pg_get_functiondef(p.oid)
+              from pg_proc p
+              join pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'public'
+             order by 1""")
+        return dict(cur.fetchall())
+
+    antes = definicoes()
+    assert antes, 'nenhuma função em public: o cenário do teste não montou'
+    cur.connection.commit()
+
+    rodar_arquivo(RAIZ / 'sql' / 'schema.sql')
+    depois = definicoes()
+
+    divergentes = sorted(set(antes) ^ set(depois)) or sorted(
+        nome for nome in antes if antes[nome] != depois[nome])
+    assert not divergentes, (
+        'o schema.sql tem versão diferente da que as migrações entregam: '
+        + ', '.join(divergentes))
+
+
 # ── Runner ───────────────────────────────────────────────────────────────────
+
+# Migração que uma posterior substituiu: 20260824180000 derruba e recria
+# resumo_acervo_cj com a coluna `conselheiro`, então rodar a versão de
+# 20260824121500 sobre o schema atual falha com "cannot change return type" —
+# pelo motivo certo. Em produção ela rodou na ordem, sobre o banco de antes.
+MIGRACOES_SUPERADAS = {'20260824121500_painel_acervo_cj.sql'}
+
+
+def migracoes_a_aplicar():
+    """As migrações posteriores a MIGRACAO, em ordem cronológica."""
+    return [a for a in sorted((RAIZ / 'supabase' / 'migrations').glob('*.sql'))
+            if a.name > MIGRACAO.name and a.name not in MIGRACOES_SUPERADAS]
+
 
 def preparar_upgrade_da_migracao():
     """Volta só os deltas desta migração ao estado do schema no HEAD."""
@@ -1522,17 +1650,19 @@ def preparar_banco(planilha):
     # de fato executado em CI. Ele tem de ser repetível — rodar sobre um banco
     # que já veio do schema.sql, com o dado já em cadeira, não pode falhar nem
     # converter nada duas vezes.
-    rodar_arquivo(MIGRACAO_CADEIRAS)
-    rodar_arquivo(MIGRACAO_HARDENING)
-    rodar_arquivo(MIGRACAO_INTERESSADO)
-
-    # E o schema por último. preparar_upgrade_da_migracao instala a versão
-    # ANTIGA de registrar_votos para a migração ter o que corrigir, e nada a
-    # substituía depois: a suíte inteira rodava contra uma função que produção
-    # não tem mais — 64 testes verdes com o schema quebrado. Reaplicar o
-    # schema.sql aqui deixa o banco no estado que produção tem de verdade, e ele
-    # é idempotente por construção.
-    rodar_arquivo(RAIZ / 'sql' / 'schema.sql')
+    # Todas as migrações posteriores, em ordem de nome — que é a ordem
+    # cronológica. Produção aplica o diretório inteiro, e migração que nenhum
+    # teste executa chega lá sem nunca ter rodado; migracoes_estao_todas_cobertas
+    # não deixa uma nova passar batida. Depois da planilha porque
+    # MIGRACAO_CADEIRAS converte o dado importado, e todas têm de ser repetíveis
+    # sobre um banco que já veio do schema.sql.
+    #
+    # O schema.sql NÃO é reaplicado aqui. Reaplicá-lo refazia sozinho tudo o que
+    # preparar_upgrade_da_migracao havia rebaixado, e toda assertiva sobre
+    # migração passava independentemente do conteúdo dela. Quem fecha o cerco no
+    # lugar dele é migracoes_reproduzem_o_schema, no fim desta bateria.
+    for arquivo in migracoes_a_aplicar():
+        rodar_arquivo(arquivo)
 
 
 def main(argv):

@@ -357,7 +357,9 @@ Nada disto impede o funcionamento; está aqui para não ser redescoberto.
   com fila artificialmente curta no painel, e os processos dele julgados antes
   ficam sem distribuição de origem.
 - **18 processos aparecem em mais de uma unidade** — redistribuição, ou a mesma
-  linha lançada em dois gabinetes. O painel conta só a distribuição mais recente.
+  linha lançada em dois gabinetes. O painel conta só a distribuição mais
+  recente, e um julgado anterior a ela não a esconde: "julgado" ali é julgado
+  a partir da distribuição (`data_sessao >= data_distribuicao`).
 - **1 linha do CREG3 estava marcada `CREG4`** na coluna Gabinete. A unidade vem
   do arquivo, não da coluna, então ela entrou como CREG3.
 - **13 linhas com voto fora da lista do Conselho**, preservadas de propósito.
@@ -401,6 +403,8 @@ Todos os passos são idempotentes.
   `Com recurso`, `Sem recurso`, `Não se aplica` e `Pedido de revisão`; o acervo
   registrado traz `Ad Referendum` (38 linhas) e `Reexame Necessário` (15), e
   nenhum `Pedido de revisão`. Alinhar as duas listas é decisão do Conselho.
-- **`processos_sorteados` continua no schema**, vazia e sem ninguém escrevendo
-  nela desde 27/08/2026. Não foi derrubada porque é o objeto da migração
+- **`processos_sorteados` continua no schema**, sem ninguém escrevendo nela
+  desde 27/08/2026 — mas não vazia: guarda as 81 linhas daquele dia, como o
+  registro do que a tela gravou na época (a migração `20260828…` as copiou para
+  `acervo_creg`). Não foi derrubada porque é o objeto da migração
   20260823165725 e porque apagar tabela é decisão de quem opera o banco.
