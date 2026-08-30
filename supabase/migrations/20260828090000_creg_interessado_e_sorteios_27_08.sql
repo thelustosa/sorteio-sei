@@ -24,5 +24,10 @@ insert into public.acervo_creg
 select p.num_processo, p.unidade, p.data_distribuicao, p.assunto, p.recurso,
        p.interessado, p.ordem, p.data_hora, 'sorteio'
   from public.processos_sorteados p
- where p.modo = 'CREG'
+ -- O recorte é a DATA, não o modo: `modo` já é 'CREG' por check constraint da
+ -- tabela, então filtrar por ele não recorta nada e esta cópia levaria junto
+ -- qualquer sorteio antigo que a tabela guardasse, inflando o acervo e o painel
+ -- de pendentes com distribuição que já foi julgada.
+ where p.data_hora >= timestamptz '2026-08-27 00:00-03'
+   and p.data_hora <  timestamptz '2026-08-28 00:00-03'
 on conflict on constraint acervo_creg_distribuicao_unica do nothing;

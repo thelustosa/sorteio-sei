@@ -1096,13 +1096,18 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   display: block;
   width: 100%;
   /* Zera o min-height de 44px que `button, input, select` dá a todo controle.
-     Aqui o alvo de toque é a CÉLULA, não o botão: o ::after abaixo estende o
-     clique ao retângulo inteiro do <td>, e a célula não desce de 44px em
-     breakpoint nenhum (48px na base, 42+14 de padding no painel apertado).
-     Herdar o mínimo fazia o conteúdo mandar na altura da linha — em tabela,
-     `height` no <td> é piso, não teto — e inflava cada linha em 6px, o
-     suficiente para o painel, que é dimensionado para caber inteiro na tela,
-     passar a rolar. */
+     Aqui o alvo de toque é a CÉLULA, não o botão: o <td> é position: relative e
+     o ::after abaixo, com inset: 0, estende o clique e o anel de foco ao
+     retângulo inteiro dela. Herdar o mínimo fazia o conteúdo mandar na altura
+     da linha — em tabela, `height` no <td> é piso, não teto — e inflava cada
+     linha em 6px, o suficiente para o painel, que é dimensionado para caber
+     inteiro na tela, passar a rolar.
+
+     Quem garante os 44px do alvo é o `height` do <td>: 48px na base e 44px nos
+     dois breakpoints de densidade. Não some o padding a esse número —
+     box-sizing: border-box é global (ver o reset acima) e o height já o inclui.
+     Medido em 1366x768, o breakpoint mais apertado: 45,5px de célula, com a
+     tabela nos mesmos 458,5px que tinha com o piso em 40px. */
   min-height: 0;
   padding: 0;
   border: 0;
@@ -1652,9 +1657,13 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
   .dashboard-page .acervo-table thead th { padding-block: 6px; }
 
+  /* 44px é o piso de alvo de toque do projeto (`button, input, select`), e
+     aqui ele tem de ser explícito: o alvo é a célula, e sem este número os
+     44px dependeriam do rótulo da faixa esticar a linha. Não custa altura —
+     a linha já renderiza 45,5px. */
   .dashboard-page .acervo-table tbody th,
   .dashboard-page .acervo-table tbody td {
-    height: 42px;
+    height: 44px;
     padding-block: 7px;
   }
 
@@ -1716,9 +1725,10 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .dashboard-page .acervo-header-main { padding-block: 10px; }
   .dashboard-page .acervo-table thead th { padding-block: 4px; }
 
+  /* Mesmo piso de 44px do breakpoint anterior, pela mesma razão. */
   .dashboard-page .acervo-table tbody th,
   .dashboard-page .acervo-table tbody td {
-    height: 40px;
+    height: 44px;
     padding-block: 5px;
   }
 

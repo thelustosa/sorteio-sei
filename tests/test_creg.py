@@ -152,6 +152,49 @@ def distribuicao_toda_posterior_a_sessao_cai_na_mais_antiga(cur):
 
 
 @teste
+def empate_de_unidade_nao_troca_de_vinculo_na_rederivacao(cur):
+    """A mesma distribuição em duas unidades é legal, e o vínculo tem de ficar parado.
+
+    Caso real do banco: 202500029003459, distribuído em 19/09/2025 para o CREG3
+    e para o CREG4. Os dois ramos do gatilho desempatavam em direções opostas,
+    então bastava mexer no julgado para o vínculo migrar para a linha da outra
+    unidade — com `unidade` mantida pelo coalesce, virando a divergência que o
+    verificacao_creg.sql acusa. Quem desempata é a unidade que o julgado traz.
+    """
+    limpar(cur)
+    creg3 = distribuir(cur, '202500029003459', 'CREG3', date(2025, 9, 19))
+    creg4 = distribuir(cur, '202500029003459', 'CREG4', date(2025, 9, 19))
+    assert creg3 < creg4, 'o teste depende de o CREG3 ter entrado primeiro'
+
+    # Como a planilha traz: unidade e data informadas -> primeiro ramo.
+    jid = julgar(cur, '202500029003459', date(2026, 3, 12),
+                 unidade='CREG3', data_distribuicao=date(2025, 9, 19))
+    assert campos(cur, jid, 'acervo_id', 'unidade') == (creg3, 'CREG3')
+
+    # É o que sql/rederivar_creg.sql faz: gravar o campo derivado nele mesmo.
+    cur.execute('update public.julgados_creg set data_distribuicao = data_distribuicao'
+                ' where id = %s', (jid,))
+    assert campos(cur, jid, 'acervo_id', 'unidade') == (creg3, 'CREG3'), (
+        'a rederivação moveu o vínculo para a linha da outra unidade')
+
+    # O julgado do CREG4 na mesma data ancora na linha dele, não na primeira.
+    outro = julgar(cur, '202500029003459', date(2026, 4, 23),
+                   unidade='CREG4', data_distribuicao=date(2025, 9, 19))
+    assert campos(cur, outro, 'acervo_id', 'unidade') == (creg4, 'CREG4')
+
+    # E quem chega sem unidade — o sincronizador — também fica estável: o
+    # segundo ramo escolhe, o coalesce grava a unidade, e o primeiro confirma.
+    limpar(cur)
+    distribuir(cur, '202500029003459', 'CREG3', date(2025, 9, 19))
+    distribuir(cur, '202500029003459', 'CREG4', date(2025, 9, 19))
+    sync = julgar(cur, '202500029003459', date(2026, 3, 12))
+    antes = campos(cur, sync, 'acervo_id', 'unidade')
+    cur.execute('update public.julgados_creg set data_distribuicao = data_distribuicao'
+                ' where id = %s', (sync,))
+    assert campos(cur, sync, 'acervo_id', 'unidade') == antes
+
+
+@teste
 def processo_fora_do_acervo_entra_sem_vinculo(cur):
     """1.397 julgados do histórico são anteriores às planilhas de gabinete.
 
@@ -278,6 +321,48 @@ def redistribuido_conta_uma_vez_na_unidade_atual(cur):
 
 
 @teste
+def redistribuicao_depois_do_julgado_volta_ao_painel(cur):
+    """Julgado antigo não pode esconder a distribuição que veio depois dele.
+
+    julgados_creg tem julgado desde 2023, e "não julgado" era "não aparece na
+    tabela", sem correlação de data nenhuma: processo julgado em 2024 e sorteado
+    de novo em 2026 sumia do painel — distribuído e invisível, que é justamente
+    o caso que o painel existe para mostrar.
+    """
+    limpar(cur)
+    autenticado(cur)
+    distribuir(cur, '202400029000070', 'CREG1', date(2024, 3, 12))
+    julgar(cur, '202400029000070', date(2024, 6, 20),
+           voto='Manter', status='Julgado')
+    distribuir(cur, '202400029000070', 'CREG2', date.today())
+
+    cur.execute('select unidade, processos from resumo_acervo_creg()'
+                ' where processos > 0')
+    assert cur.fetchall() == [('CREG2', 1)], 'a redistribuição tem de aparecer'
+
+    cur.execute("select num_processo, unidade from processos_acervo_creg()")
+    assert cur.fetchall() == [('202400029000070', 'CREG2')]
+
+
+@teste
+def julgado_da_propria_distribuicao_continua_tirando_do_painel(cur):
+    """A correlação de data não pode devolver ao painel quem já foi julgado.
+
+    Inclusive quem foi à mesa e voltou sem decisão: Vista e Retirado têm fila
+    própria, que é a tela de registro.
+    """
+    limpar(cur)
+    autenticado(cur)
+    distribuir(cur, '202400029000071', 'CREG1', date(2026, 6, 1))
+    julgar(cur, '202400029000071', date(2026, 6, 1))          # mesma data
+    distribuir(cur, '202400029000072', 'CREG1', date(2026, 6, 1))
+    julgar(cur, '202400029000072', date(2026, 6, 17), status='Vista')
+
+    cur.execute('select coalesce(sum(processos), 0) from resumo_acervo_creg()')
+    assert cur.fetchone()[0] == 0
+
+
+@teste
 def detalhe_confere_celula_a_celula_com_o_painel(cur):
     """O card abre exatamente o número que o bloco mostrava."""
     limpar(cur)
@@ -344,6 +429,40 @@ def registrar_votos_grava_so_o_que_esta_pendente(cur):
     assert campos(cur, pendente, 'voto', 'atualizado_por') == \
         ('Anular', 'secretaria@agr.go.gov.br')
     assert campos(cur, historico, 'voto')[0] == 'Manter'
+
+
+@teste
+def registrar_votos_nao_apaga_decisao_com_campo_em_branco(cur):
+    """Branco quer dizer "ainda não decidi", nunca "apague o que está lá".
+
+    A fila de pendentes inclui de propósito a linha que tem voto e não tem
+    status — é assim que a planilha trouxe 13 votos com rótulo antigo. Gravando
+    a sessão inteira, a função escrevia os dois campos e o voto ia junto; pela
+    API, um POST de {"voto":"","status":""} zerava as duas colunas de qualquer
+    linha que a tela já tivesse encostado.
+    """
+    limpar(cur)
+    autenticado(cur)
+    parcial = julgar(cur, '202400029000085', date(2026, 4, 1), voto='Manter')
+
+    cur.execute("""select registrar_votos_creg(jsonb_build_array(
+                     jsonb_build_object('id', %s::text, 'voto', '',
+                                        'status', 'Julgado')))""", (parcial,))
+    assert cur.fetchone()[0] == 1
+    assert campos(cur, parcial, 'voto', 'status') == ('Manter', 'Julgado')
+
+    # E agora que a linha é editável por esta porta (atualizado_em preenchido),
+    # o branco continua sem apagar.
+    cur.execute("""select registrar_votos_creg(jsonb_build_array(
+                     jsonb_build_object('id', %s::text, 'voto', '',
+                                        'status', '')))""", (parcial,))
+    assert campos(cur, parcial, 'voto', 'status') == ('Manter', 'Julgado')
+
+    # Trocar um rótulo por outro continua funcionando: o que sumiu foi só apagar.
+    cur.execute("""select registrar_votos_creg(jsonb_build_array(
+                     jsonb_build_object('id', %s::text, 'voto', 'Anular',
+                                        'status', 'Julgado')))""", (parcial,))
+    assert campos(cur, parcial, 'voto')[0] == 'Anular'
 
 
 @teste
@@ -630,6 +749,97 @@ def ata_avisa_processo_sem_unidade(cur):
     _, _, linhas, orfaos = imp.distribuicoes(quebrada)
     assert orfaos == ['202500029005601']
     assert '202500029005601' not in {l['num_processo'] for l in linhas}
+
+
+@teste
+def numero_solto_depois_do_processo_nao_vira_ordem(cur):
+    """A ordem vem ANTES do processo; o que vem depois dele não é ordem.
+
+    O pypdf quebra célula de Interessado que deu wrap, e um CNPJ vira três
+    linhas — `25.629.544`, `0001`, `48`. Sem a guarda, a última casava com
+    `^(1,3 dígitos)$` e entrava como ordem da distribuição, sem erro nenhum.
+    """
+    sys.path.insert(0, str(RAIZ / 'dados'))
+    import importar_atas_creg as imp
+
+    quebrada = ATA_SINTETICA.replace('25.629.544/0001-48',
+                                     '25.629.544' + chr(10) + '0001' + chr(10) + '48')
+    _, _, linhas, orfaos = imp.distribuicoes(quebrada)
+
+    assert orfaos == []
+    assert [(l['num_processo'], l['ordem']) for l in linhas] == [
+        ('202600029000368', 8),
+        ('202500029005601', 9),
+        ('202600029000796', 4),      # e não 48
+        ('202600029001557', 1),
+    ]
+
+
+@teste
+def processo_orfao_nao_empresta_a_ordem_ao_seguinte(cur):
+    """Processo sem unidade leva a própria ordem embora."""
+    sys.path.insert(0, str(RAIZ / 'dados'))
+    import importar_atas_creg as imp
+
+    # O 202500029005601 fica sem unidade: some o CREG1 que vinha depois dele.
+    sem_unidade = ATA_SINTETICA.replace(
+        '202500029005601' + chr(10) + 'EMPRESA B LTDA' + chr(10) + 'CREG1',
+        '202500029005601' + chr(10) + 'EMPRESA B LTDA')
+    _, _, linhas, orfaos = imp.distribuicoes(sem_unidade)
+
+    assert orfaos == ['202500029005601']
+    assert [(l['num_processo'], l['ordem']) for l in linhas] == [
+        ('202600029000368', 8),
+        ('202600029000796', 4),      # e não 9, herdada do órfão
+        ('202600029001557', 1),
+    ]
+
+
+@teste
+def dia_impossivel_na_ata_e_recusado_sem_derrubar_o_lote(cur):
+    """"Aos 31 dias do mês de junho" é erro de digitação, não fim de rodada.
+
+    Como ErroAta cai no PULA do main e as outras atas continuam; solto, o
+    ValueError abortava tudo e o SQL das atas já lidas nem era escrito.
+    """
+    sys.path.insert(0, str(RAIZ / 'dados'))
+    import importar_atas_creg as imp
+
+    torta = ATA_SINTETICA.replace('Aos 17 dias', 'Aos 31 dias')
+    try:
+        imp.distribuicoes(torta)
+    except imp.ErroAta as e:
+        assert 'data inválida' in str(e), e
+        return
+    raise AssertionError('dia fora do calendário passou')
+
+
+@teste
+def rodada_sem_nenhuma_ata_nao_apaga_o_sql_anterior(cur):
+    """gerar_sql sem linha devolve só o cabeçalho; gravá-lo trunca o arquivo bom."""
+    sys.path.insert(0, str(RAIZ / 'dados'))
+    import importar_atas_creg as imp
+
+    saida = RAIZ / 'dados' / 'acervo_creg_atas.sql'
+    antes = saida.read_bytes() if saida.exists() else None
+    marca = '-- rodada anterior, com dado bom' + chr(10)
+    saida.write_text(marca, encoding='utf-8')
+
+    def recusa(caminho):
+        raise imp.ErroAta('não é ata do Conselho Regulador')
+
+    original = imp.ler_ata
+    imp.ler_ata = recusa
+    try:
+        codigo = imp.main(['importar_atas_creg.py', 'uma.pdf', 'outra.pdf'])
+        assert codigo == 1
+        assert saida.read_text(encoding='utf-8') == marca, 'o SQL bom foi truncado'
+    finally:
+        imp.ler_ata = original
+        if antes is None:
+            saida.unlink()
+        else:
+            saida.write_bytes(antes)
 
 
 @teste

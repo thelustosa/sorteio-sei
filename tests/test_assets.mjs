@@ -75,4 +75,17 @@ assert.match(css,
 assert.match(css, /\.acervo-celula-btn::after\s*\{[^}]*position:\s*absolute[^}]*inset:\s*0/,
   'sem o ::after, só o texto da célula seria clicável');
 
+// ...e é o `height` do <td> que dá a altura desse retângulo, porque o botão tem
+// min-height: 0. Sem este piso, os breakpoints de densidade decidiam a altura do
+// alvo de toque sozinhos — 40px no mais apertado, abaixo dos 44px que
+// `button, input, select` garante a todo o resto da interface.
+const PISO_ALVO = 44;
+const alturasDaCelula = [...css.matchAll(
+  /\.acervo-table tbody th,\s*[^{]*\.acervo-table tbody td\s*\{[^}]*?height:\s*(\d+)px/g)]
+  .map(m => Number(m[1]));
+assert.ok(alturasDaCelula.length >= 3,
+  'não achei as alturas da célula do painel: o seletor mudou?');
+assert.ok(alturasDaCelula.every(h => h >= PISO_ALVO),
+  `célula do painel abaixo do alvo de ${PISO_ALVO}px: ${alturasDaCelula.join(', ')}`);
+
 console.log('assets: minificação, lazy load e versão por hash coerentes ✓');

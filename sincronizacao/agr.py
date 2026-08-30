@@ -36,6 +36,21 @@ ITEM = re.compile(
     re.IGNORECASE)
 NUMERO = re.compile(r'(\d{1,3})\s*[ªa]\s', re.IGNORECASE)
 
+# A AGR pendura o aviso no MESMO item da listagem, como link ao lado da pauta:
+#
+#   <a …>Pauta da 006ª Sessão…</a> – 19/03/2026 … <a …>AVISO (Reunião Cancelada)</a>
+#   <a …>Pauta da 003ª Sessão…</a> – 05/02/2026 … <a …>aviso – sessão adiada
+#                                                  para o dia 09/02/2026 …</a>
+#
+# Sem ler esses avisos, a sessão cancelada era baixada e gravada como se tivesse
+# acontecido, e a adiada entrava com a data em que não houve sessão — as duas
+# contaminando data_sessao, de onde saem dias_dt e meta_45. O aviso não vira
+# pauta sozinho porque o ITEM exige uma data logo depois do link, e ele não tem.
+LINK = re.compile(r'<a[^>]*>([^<]*)</a>', re.IGNORECASE)
+CANCELADA = re.compile(r'cancelad', re.IGNORECASE)
+ADIADA = re.compile(r'adiad', re.IGNORECASE)
+DATA_BR = re.compile(r'(\d{2})/(\d{2})/(\d{4})')
+
 
 @dataclass(frozen=True)
 class Pauta:
@@ -93,12 +108,16 @@ def listar_pautas(ano, comissao='Câmara de Julgamento', listagem=LISTAGEM):
     `comissao=None` aceita todo item da página. É o caso do Conselho Regulador,
     que tem página própria: lá o filtro não separa nada e os títulos sequer
     nomeiam o colegiado.
+
+    Sessão cancelada não é devolvida, e sessão adiada vem com a data nova — as
+    duas lidas do aviso que a AGR publica no próprio item (ver LINK, acima).
     """
     pagina = _baixar(listagem.format(ano=ano)).decode('utf-8', 'replace')
     alvo = _sem_acento(comissao) if comissao else None
 
+    itens = list(ITEM.finditer(pagina))
     pautas = []
-    for m in ITEM.finditer(pagina):
+    for i, m in enumerate(itens):
         titulo = html.unescape(m.group('titulo')).strip()
         if alvo is not None and alvo not in _sem_acento(titulo):
             continue
@@ -107,11 +126,25 @@ def listar_pautas(ano, comissao='Câmara de Julgamento', listagem=LISTAGEM):
         if not numero:
             continue  # sem número de reunião não dá para preencher a pauta
 
+        data = date(int(m.group('ano')), int(m.group('mes')), int(m.group('dia')))
+
+        # O aviso desta pauta é o que vem depois dela e antes da próxima.
+        ate = itens[i + 1].start() if i + 1 < len(itens) else len(pagina)
+        avisos = [html.unescape(a) for a in LINK.findall(pagina[m.end():ate])]
+
+        if any(CANCELADA.search(a) for a in avisos):
+            continue  # a sessão não aconteceu: não há julgado para importar
+
+        adiada = next((a for a in avisos if ADIADA.search(a)), None)
+        nova = DATA_BR.search(adiada) if adiada else None
+        if nova:
+            data = date(int(nova.group(3)), int(nova.group(2)), int(nova.group(1)))
+
         pautas.append(Pauta(
             url=html.unescape(m.group('url')),
             titulo=titulo,
             numero=int(numero.group(1)),
-            data_sessao=date(int(m.group('ano')), int(m.group('mes')), int(m.group('dia'))),
+            data_sessao=data,
         ))
 
     if not pautas:

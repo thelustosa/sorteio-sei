@@ -259,14 +259,22 @@ begin
       from public.acervo_cj
      where num_processo = new.num_processo
        and data_distribuicao = new.data_distribuicao
-     order by id
+     -- Desempate: a mesma distribuição em duas cadeiras é legal, e os dois
+     -- ramos precisam escolher a MESMA linha, senão o vínculo troca a cada
+     -- rederivação. Quem decide é a cadeira que o julgado já tem — é ela que o
+     -- coalesce abaixo preserva, e apontar para a linha de outra cadeira seria a
+     -- divergência que verificacao_cj.sql acusa. Sem a cadeira informada
+     -- (o caso do sincronizador), nenhuma linha é preferida e o critério cai
+     -- para o seguinte, como antes.
+     order by (relator is not distinct from new.relator) desc, id
      limit 1;
   else
     select * into origem
       from public.acervo_cj
      where num_processo = new.num_processo
        and data_distribuicao <= new.data_sessao
-     order by data_distribuicao desc, id desc
+     order by data_distribuicao desc,
+              (relator is not distinct from new.relator) desc, id desc
      limit 1;
     if origem.id is null then
       select * into origem
@@ -378,9 +386,22 @@ begin
   -- Só o que ainda está pendente, ou o que esta mesma página já preencheu antes
   -- (typo se corrige). O histórico que veio da planilha tem atualizado_em nulo
   -- e os dois campos preenchidos: fica intocável por aqui.
+  --
+  -- Campo em BRANCO não apaga o que já está gravado — daí o coalesce. Branco
+  -- quer dizer "ainda não decidi", e a linha do histórico que tem voto e não
+  -- tem status entra nesta fila justamente por isso: sem o coalesce, gravar a
+  -- sessão inteira levaria o voto antigo junto, e a mesma porta aceitaria um
+  -- POST de {"voto":"","status":""} para zerar uma decisão. Trocar um rótulo
+  -- por outro continua funcionando; só apagar por aqui é que não.
+  --
+  -- Isso não tira nada da tela: a opção em branco do select é `disabled`, então
+  -- a secretaria nunca pôde voltar um campo ao vazio. DESFAZER um registro é
+  -- decisão administrativa, e vai ter porta própria — um painel de admin com
+  -- permissão que a secretaria não tem. Enquanto ela não existe, o certo é a
+  -- ausência da operação, não um branco que apaga em silêncio.
   update public.julgados_cj j
-     set voto           = nullif(i ->> 'voto', ''),
-         status         = nullif(i ->> 'status', ''),
+     set voto           = coalesce(nullif(i ->> 'voto', ''), j.voto),
+         status         = coalesce(nullif(i ->> 'status', ''), j.status),
          atualizado_em  = now(),
          atualizado_por = quem
     from jsonb_array_elements(itens) i
@@ -483,13 +504,20 @@ begin
   -- decisão (Retornou, Vista, Retirado) sai do painel — tem fila própria, que é
   -- a tela de registro. Para contá-los aqui, acrescente
   -- `and j.status = 'Julgado'` ao not exists.
+  --
+  -- "Julgado" aqui é julgado DEPOIS de receber esta distribuição
+  -- (data_sessao >= data_distribuicao). Sem a correlação de data, um julgado
+  -- antigo esconderia para sempre a redistribuição que veio depois dele — o
+  -- processo ficaria distribuído e invisível, que é justamente o caso que o
+  -- painel existe para mostrar.
   pendentes as (
     select distinct on (a.num_processo)
            a.relator,
            (current_date - a.data_distribuicao) as dias
       from public.acervo_cj a
      where not exists (select 1 from public.julgados_cj j
-                        where j.num_processo = a.num_processo)
+                        where j.num_processo = a.num_processo
+                          and j.data_sessao >= a.data_distribuicao)
      order by a.num_processo, a.data_distribuicao desc, a.id desc
   ),
 
@@ -567,6 +595,7 @@ begin
   ),
   -- Uma linha por processo, na distribuição mais recente: um processo
   -- redistribuído aparece uma vez, na cadeira de quem está com ele agora.
+  -- Pendente é o mesmo de resumo_acervo_cj, correlação de data inclusive.
   pendentes as (
     select distinct on (a.num_processo)
            a.num_processo,
@@ -575,7 +604,8 @@ begin
            (current_date - a.data_distribuicao) as dias
       from public.acervo_cj a
      where not exists (select 1 from public.julgados_cj j
-                        where j.num_processo = a.num_processo)
+                        where j.num_processo = a.num_processo
+                          and j.data_sessao >= a.data_distribuicao)
      order by a.num_processo, a.data_distribuicao desc, a.id desc
   )
   select p.num_processo,
@@ -929,14 +959,22 @@ begin
       from public.acervo_creg
      where num_processo = new.num_processo
        and data_distribuicao = new.data_distribuicao
-     order by id
+     -- Desempate: a mesma distribuição em duas unidades é legal, e os dois
+     -- ramos precisam escolher a MESMA linha, senão o vínculo troca a cada
+     -- rederivação. Quem decide é a unidade que o julgado já tem — é ela que o
+     -- coalesce abaixo preserva, e apontar para a linha de outra unidade seria a
+     -- divergência que verificacao_creg.sql acusa. Sem a unidade informada
+     -- (o caso do sincronizador), nenhuma linha é preferida e o critério cai
+     -- para o seguinte, como antes.
+     order by (unidade is not distinct from new.unidade) desc, id
      limit 1;
   else
     select * into origem
       from public.acervo_creg
      where num_processo = new.num_processo
        and data_distribuicao <= new.data_sessao
-     order by data_distribuicao desc, id desc
+     order by data_distribuicao desc,
+              (unidade is not distinct from new.unidade) desc, id desc
      limit 1;
     if origem.id is null then
       select * into origem
@@ -1015,9 +1053,22 @@ begin
   -- Só o que ainda está pendente, ou o que esta mesma página já preencheu antes
   -- (typo se corrige). O histórico que veio da planilha tem atualizado_em nulo
   -- e os dois campos preenchidos: fica intocável por aqui.
+  --
+  -- Campo em BRANCO não apaga o que já está gravado — daí o coalesce. Branco
+  -- quer dizer "ainda não decidi", e a linha do histórico que tem voto e não
+  -- tem status entra nesta fila justamente por isso: sem o coalesce, gravar a
+  -- sessão inteira levaria o voto antigo junto, e a mesma porta aceitaria um
+  -- POST de {"voto":"","status":""} para zerar uma decisão. Trocar um rótulo
+  -- por outro continua funcionando; só apagar por aqui é que não.
+  --
+  -- Isso não tira nada da tela: a opção em branco do select é `disabled`, então
+  -- a secretaria nunca pôde voltar um campo ao vazio. DESFAZER um registro é
+  -- decisão administrativa, e vai ter porta própria — um painel de admin com
+  -- permissão que a secretaria não tem. Enquanto ela não existe, o certo é a
+  -- ausência da operação, não um branco que apaga em silêncio.
   update public.julgados_creg j
-     set voto           = nullif(i ->> 'voto', ''),
-         status         = nullif(i ->> 'status', ''),
+     set voto           = coalesce(nullif(i ->> 'voto', ''), j.voto),
+         status         = coalesce(nullif(i ->> 'status', ''), j.status),
          atualizado_em  = now(),
          atualizado_por = quem
     from jsonb_array_elements(itens) i
@@ -1069,13 +1120,20 @@ begin
 
   -- Uma linha por PROCESSO, não por distribuição: um processo redistribuído
   -- conta uma vez só, na unidade e na data da distribuição mais recente.
+  --
+  -- "Julgado" aqui é julgado DEPOIS de receber esta distribuição
+  -- (data_sessao >= data_distribuicao). Sem a correlação de data, um julgado
+  -- antigo esconderia para sempre a redistribuição que veio depois dele — o
+  -- processo ficaria distribuído e invisível, que é justamente o caso que o
+  -- painel existe para mostrar.
   pendentes as (
     select distinct on (a.num_processo)
            a.unidade,
            (current_date - a.data_distribuicao) as dias
       from public.acervo_creg a
      where not exists (select 1 from public.julgados_creg j
-                        where j.num_processo = a.num_processo)
+                        where j.num_processo = a.num_processo
+                          and j.data_sessao >= a.data_distribuicao)
      order by a.num_processo, a.data_distribuicao desc, a.id desc
   ),
 
@@ -1142,7 +1200,8 @@ begin
            (current_date - a.data_distribuicao) as dias
       from public.acervo_creg a
      where not exists (select 1 from public.julgados_creg j
-                        where j.num_processo = a.num_processo)
+                        where j.num_processo = a.num_processo
+                          and j.data_sessao >= a.data_distribuicao)
      order by a.num_processo, a.data_distribuicao desc, a.id desc
   )
   select p.num_processo,

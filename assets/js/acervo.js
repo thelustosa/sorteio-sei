@@ -197,7 +197,7 @@ async function exportar(formato) {
     // síncrono de montar o arquivo ou abrir a caixa de impressão.
     await new Promise(resolve => setTimeout(resolve, 0));
     if (formato === 'pdf') exportarPdf();
-    else if (formato === 'excel') baixarArquivo(criarExcel(linhasAtuais), `acervo-cj-${dataArquivo()}.xlsx`);
+    else if (formato === 'excel') baixarArquivo(criarExcel(linhasAtuais), `${COL.arquivo}-${dataArquivo()}.xlsx`);
     else throw new Error('formato não reconhecido');
   } catch (erro) {
     informarExportacao(`Não foi possível gerar o arquivo. Tente novamente (${erro.message}).`, 'error');
@@ -208,7 +208,7 @@ async function exportar(formato) {
 
 function exportarPdf() {
   const tituloAnterior = document.title;
-  document.title = `acervo-cj-${dataArquivo()}`;
+  document.title = `${COL.arquivo}-${dataArquivo()}`;
   try {
     window.print();
   } finally {

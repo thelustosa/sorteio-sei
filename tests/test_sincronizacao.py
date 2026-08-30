@@ -746,8 +746,10 @@ def listagem_do_creg_dispensa_o_filtro_por_comissao():
     with AGRFalsa():
         pautas = agr.listar_pautas(2026, col['comissao'], col['listagem'])
 
-    assert len(pautas) == 15
-    assert sorted(p.numero for p in pautas) == list(range(1, 16))
+    # 14, e não 15: a 006ª está na página com o aviso de reunião cancelada e
+    # sai na leitura da própria listagem (ver sessao_cancelada_e_adiada, abaixo).
+    assert len(pautas) == 14
+    assert sorted(p.numero for p in pautas) == [n for n in range(1, 16) if n != 6]
     assert len({p.url for p in pautas}) == len(pautas)
     assert all('conselho-regulador' not in p.titulo.lower() for p in pautas)
 
@@ -816,9 +818,95 @@ def creg_e_cj_nao_disputam_a_mesma_fila(cur):
     assert 'pautas-das-reunioes' in cj['fonte']
     assert 'conselho-regulador' in creg['fonte']
     assert cj['documentos_novos'] and creg['documentos_novos']
+
     # Os dois olham listagens diferentes: nenhuma URL aparece nas duas filas.
-    assert not ({d['url'] for d in cj['documentos']}
-                & {d['url'] for d in creg['documentos']})
+    #
+    # A conferência é sobre os ERROS, e não sobre 'documentos': o AGRFalsa desta
+    # bateria não serve nenhum PDF, então todo documento cai em erro e
+    # 'documentos' fica vazio nos dois — comparar os dois conjuntos vazios
+    # passava mesmo se o CREG apontasse para a página da Câmara.
+    urls_cj = {e['url'] for e in cj['erros']}
+    urls_creg = {e['url'] for e in creg['erros']}
+    assert len(urls_cj) == cj['documentos_novos']
+    assert len(urls_creg) == creg['documentos_novos']
+    assert not (urls_cj & urls_creg)
+
+
+@teste
+def sessao_cancelada_e_adiada_saem_pelo_aviso_da_listagem():
+    """A AGR anuncia cancelamento e adiamento no próprio item da listagem.
+
+    Sem filtro por comissão — o caso do Conselho —, nada mais separava esses
+    itens dos válidos: a sessão cancelada era baixada e gravada como se tivesse
+    acontecido, e a adiada entrava com a data em que não houve sessão. As duas
+    contaminam data_sessao, de onde saem dias_dt e meta_45.
+    """
+    with AGRFalsa():
+        pautas = agr.listar_pautas(2026, None, agr.LISTAGEM_CREG)
+    por_numero = {p.numero: p for p in pautas}
+
+    # 006ª, 19/03/2026: "AVISO (Reunião Cancelada)" no mesmo <li>.
+    assert 6 not in por_numero, 'sessão cancelada não pode virar julgado'
+
+    # 003ª: listada em 05/02 com "aviso – sessão adiada para o dia 09/02/2026".
+    assert por_numero[3].data_sessao == date(2026, 2, 9)
+
+    # E o aviso não vira pauta por conta própria.
+    assert all('aviso' not in p.titulo.lower() for p in pautas)
+
+    # A listagem da Câmara não tem aviso nenhum e segue intacta.
+    with AGRFalsa():
+        assert len(agr.listar_pautas(2026)) == 30
+
+
+@teste
+def listagem_de_um_ano_indisponivel_nao_derruba_os_outros(cur):
+    """A página do ano novo só existe depois da primeira sessão publicada.
+
+    Em 02/01 ela ainda não está lá, e listar_pautas levanta ErroAGR tanto no 404
+    quanto na página sem item. Fora de um try isso abortava a rodada inteira e as
+    pautas pendentes do ano anterior nunca chegavam a ser processadas.
+    """
+    preparar(cur, sessao=date(2026, 6, 18))
+    inserir_marco(cur)
+    pdf = pdf_falso(PAUTA_022)
+    with AGRFalsa(pdfs={url_da(22): pdf},
+                  falhas=[agr.LISTAGEM.format(ano=2027)]):
+        r = sincronizar.sincronizar(cur.connection, hoje=date(2027, 1, 2))
+
+    assert r['anos_consultados'] == [2026, 2027]
+    assert r['documentos_processados'] >= 1, 'o ano de 2026 tinha de ser processado'
+    assert uma(cur, """select count(*) from julgados_cj
+                        where data_sessao = date '2026-06-30' and pauta = 22""") > 0
+
+    # A falha da listagem não some: é ela que faz o job terminar vermelho.
+    falhas = [e for e in r['erros'] if e.get('ano') == 2027]
+    assert len(falhas) == 1 and 'ErroAGR' in falhas[0]['erro']
+    assert r['documentos_com_erro'] == len(r['erros']) - 1
+
+
+@teste
+def documento_sem_processo_mas_com_numero_solto_e_erro(cur):
+    """Zero processos com número de 15 dígitos solto é parser quebrado.
+
+    Registrar aí marcaria a URL como vista para sempre: a sessão se perderia em
+    silêncio, com o job terminando verde, e voltar atrás exigiria apagar a linha
+    de pautas_cj à mão. Sessão realmente vazia não tem número nenhum e continua
+    sendo registrada com zero (documento_sem_processo_e_registrado_com_zero).
+    """
+    preparar(cur, sessao=date(2026, 6, 30))
+    # O mesmo PDF do teste da sessão vazia, com um número que o rótulo não
+    # alcança — é assim que uma mudança de formato da AGR apareceria.
+    quebrado = pdf_falso('PAUTA DE REUNIAO - 23\nData: 02/07/2026\n'
+                         'Proc. 202600029000777 - Interessado: X\n'
+                         'Referencia: Processo no 202600029000051')
+    with AGRFalsa(pdfs={url_da(23): quebrado}):
+        r = sincronizar.sincronizar(cur.connection, ano=2026, hoje=date(2026, 7, 5))
+
+    assert r['documentos_processados'] == 0 and r['documentos_com_erro'] == 1
+    assert 'ErroPauta' in r['erros'][0]['erro']
+    assert uma(cur, 'select count(*) from pautas_cj') == 0, (
+        'a pauta não pode ficar marcada como vista')
 
 
 def main(argv):
