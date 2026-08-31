@@ -533,7 +533,7 @@ tbody tr:hover td { background: var(--table-row-hover); }
   table-layout: fixed;
 }
 
-@media (min-width: 981px) {
+@media screen and (min-width: 981px) {
   /* Abaixo disto as colunas não cabem sem cortar texto: a tabela rola dentro de
      .table-scroll em vez de truncar o assunto do processo. */
   #processTable { min-width: 1040px; }
@@ -1285,7 +1285,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   box-shadow: 0 6px 16px rgba(17, 39, 32, 0.08);
 }
 
-@media (max-width: 480px) {
+@media screen and (max-width: 480px) {
   .detalhe-header {
     align-items: flex-start;
     flex-direction: column;
@@ -1554,7 +1554,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   border: 0;
 }
 
-@media (max-width: 980px) {
+@media screen and (max-width: 980px) {
   #processTable {
     display: block;
     width: 100%;
@@ -1624,7 +1624,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   #processTable tbody td.acoes::before { content: none; }
 }
 
-@media (max-width: 880px) {
+@media screen and (max-width: 880px) {
   .container,
   .footer-container { width: 100%; padding-inline: 12px; }
 
@@ -1648,7 +1648,12 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 /* Densidade para desktop baixo: mantém o painel completo entre o cabeçalho e
    o rodapé institucionais sem reduzir tipografia nem alvos de interação. */
-@media (min-width: 881px) and (max-height: 950px) {
+/* `screen and` não é decoração: a altura da página impressa também casa
+   `max-height`, e o Firefox aplica estes dois blocos no PDF enquanto o Chrome
+   não — foi o que sumia com o subtítulo do painel só num dos navegadores.
+   Encolher a interface para caber na tela é regra de tela; o bloco @media print
+   monta o layout do papel por conta própria. */
+@media screen and (min-width: 881px) and (max-height: 950px) {
   .dashboard-page .page-header-wrapper { padding-block: 10px; }
   .dashboard-page .green-bar,
   .dashboard-page .green-bar .container { min-height: 44px; }
@@ -1712,7 +1717,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .dashboard-page .acervo-table-shell .table-scroll { flex: 1 1 auto; }
 }
 
-@media (min-width: 881px) and (max-height: 840px) {
+@media screen and (min-width: 881px) and (max-height: 840px) {
   .dashboard-page .page-header-wrapper { padding-block: 8px; }
   /* Nas telas mais baixas o painel tem de caber inteiro, e é o texto
      descritivo que sai primeiro — o título de cada bloco continua dizendo o que
@@ -1742,7 +1747,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .dashboard-page .page-footer { padding-block: 6px; }
 }
 
-@media (max-width: 768px) {
+@media screen and (max-width: 768px) {
   .page-header-wrapper { padding-block: 16px; }
   .page-header-wrapper header { flex-direction: column; align-items: center; gap: 16px; }
 
@@ -1773,7 +1778,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .acervo-scope { max-width: 100%; justify-content: flex-start; white-space: normal; }
 }
 
-@media (max-width: 600px) {
+@media screen and (max-width: 600px) {
   .green-bar .container { gap: 8px; }
   .nav-actions { gap: 4px; }
   .nav-action { padding-inline: 10px; }
@@ -1807,7 +1812,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .toast-region { top: auto; right: 16px; bottom: 16px; }
 }
 
-@media (max-width: 480px) {
+@media screen and (max-width: 480px) {
   .dashboard-page #txtModo { display: none; }
   .dashboard-page .nav-actions {
     display: grid;
@@ -1987,7 +1992,11 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     width: 100% !important;
     min-width: 0 !important;
     height: auto !important;
-    border-collapse: collapse !important;
+    /* O Chrome não pinta as bordas horizontais do modelo colapsado ao imprimir:
+       a grade sai sem as linhas entre as faixas. No modelo separado cada célula
+       desenha a própria borda, e os dois navegadores imprimem igual. Com
+       border-spacing zerado o resultado é o mesmo da grade da tela. */
+    border-collapse: separate !important;
     border-spacing: 0 !important;
     table-layout: auto !important;
     border: 2px solid #00534b !important;
@@ -1998,9 +2007,18 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
   .acervo-table th,
   .acervo-table td {
-    border: 1.5px solid #00534b !important;
+    border: 0 !important;
+    border-left: 1.5px solid #00534b !important;
+    border-bottom: 1.5px solid #00534b !important;
     box-sizing: border-box !important;
   }
+
+  /* A moldura de 2px da tabela já fecha a esquerda e a base da grade. */
+  .acervo-table tr > :first-child { border-left: 0 !important; }
+  .acervo-table tbody tr:last-child > * { border-bottom: 0 !important; }
+
+  /* Divisor forte entre a coluna de período e os relatores. */
+  .acervo-table tr > td:first-of-type { border-left: 2px solid #00534b !important; }
 
   .acervo-table thead {
     display: table-header-group;
@@ -2018,8 +2036,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     letter-spacing: 0.04em !important;
     text-align: center !important;
     vertical-align: middle !important;
-    border: 1.5px solid #00534b !important;
-    border-right: 1.5px solid rgba(255, 255, 255, 0.7) !important;
+    border-left-color: rgba(255, 255, 255, 0.7) !important;
     border-bottom: 2px solid #00534b !important;
     break-inside: avoid;
   }
@@ -2028,13 +2045,11 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     text-align: left !important;
     padding-left: 10px !important;
     width: 22%;
-    border-left: 2px solid #00534b !important;
   }
 
   .acervo-table thead th:last-child {
     text-align: center !important;
     background-color: #003831 !important;
-    border-right: 2px solid #00534b !important;
     width: 10%;
   }
 
@@ -2060,8 +2075,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     text-transform: uppercase !important;
     letter-spacing: 0.02em !important;
     text-align: left !important;
-    border: 1.5px solid #00534b !important;
-    border-right: 2px solid #00534b !important;
     background: inherit !important;
     break-inside: avoid;
   }
@@ -2074,7 +2087,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     font-variant-numeric: tabular-nums !important;
     color: #112720 !important;
     text-align: center !important;
-    border: 1.5px solid #00534b !important;
     background: inherit !important;
     break-inside: avoid;
   }
@@ -2089,9 +2101,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     background-color: #dcefe6 !important;
     font-weight: 800 !important;
     color: #00534b !important;
-    border: 1.5px solid #00534b !important;
     border-left: 2px solid #00534b !important;
-    border-right: 2px solid #00534b !important;
     font-size: 9.5pt !important;
   }
 
@@ -2101,9 +2111,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     background-color: var(--danger-panel, #fee2e2) !important;
     color: var(--danger-panel-text, #991b1b) !important;
     font-weight: 800 !important;
-    border: 1.5px solid #00534b !important;
     border-left: 2px solid #00534b !important;
-    border-right: 2px solid #00534b !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -2132,10 +2140,8 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     text-transform: uppercase !important;
     letter-spacing: 0.04em !important;
     text-align: left !important;
-    border: 1.5px solid #00534b !important;
     border-top: 2px solid #00534b !important;
-    border-bottom: 2px solid #00534b !important;
-    border-right: 2px solid #00534b !important;
+    border-bottom: 0 !important;
     background-color: #d5ebe0 !important;
     color: #00534b !important;
     break-inside: avoid;
@@ -2148,9 +2154,8 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     font-weight: 800 !important;
     font-variant-numeric: tabular-nums !important;
     text-align: center !important;
-    border: 1.5px solid #00534b !important;
     border-top: 2px solid #00534b !important;
-    border-bottom: 2px solid #00534b !important;
+    border-bottom: 0 !important;
     background-color: #d5ebe0 !important;
     color: #00534b !important;
     break-inside: avoid;
@@ -2163,18 +2168,23 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     color: #00332d !important;
     font-size: 10pt !important;
     font-weight: 900 !important;
-    border: 1.5px solid #00534b !important;
     border-left: 2px solid #00534b !important;
-    border-right: 2px solid #00534b !important;
-    border-top: 2px solid #00534b !important;
-    border-bottom: 2px solid #00534b !important;
   }
 
-  /* Rodapé do painel */
+  /* Rodapé do painel. No papel é uma linha de texto e nada mais: o flex existe
+     na tela para alinhar o ponto de status ao texto, e o ponto está oculto aqui.
+     O Firefox não chega a desenhar o inline-flex dentro do flex ao paginar — a
+     data sumia do PDF dele. Sem flex, os dois navegadores imprimem a mesma
+     linha. */
   .acervo-panel-footer {
-    display: flex !important;
-    justify-content: flex-end !important;
-    padding: 8px 2px 0 0 !important;
+    display: block !important;
+    text-align: right !important;
+    /* O padding de baixo não é respiro: com zero, a borda inferior encosta na
+       linha de texto e o Firefox imprime a data com a metade de baixo aparada.
+       Medido em 10 impressões por valor, 10px e 16px ainda cortavam de vez em
+       quando; 24px é o primeiro que sai inteiro sempre. É espaço em branco no
+       papel de qualquer forma. */
+    padding: 8px 2px 24px 0 !important;
     border-top: none !important;
     background: transparent !important;
     color: #718096 !important;
@@ -2182,10 +2192,10 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   }
 
   .acervo-updated {
+    display: inline !important;
     color: #718096 !important;
     font-size: 8.5pt !important;
     font-weight: 500 !important;
-    gap: 0 !important;
   }
 }
 

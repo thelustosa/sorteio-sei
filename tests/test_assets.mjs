@@ -56,8 +56,15 @@ assert.ok(acervo.indexOf('class="nav-actions"') < acervo.indexOf('id="btnExporta
 const css = ler('assets/css/index.css');
 // O seletor pode vir sozinho ou em lista, e a var pode trazer fallback — o que
 // importa é a regra que o bloco aplica, não a forma exata de escrevê-la.
-const alertaImpresso = css.match(
-  /@media print[\s\S]*?\.acervo-table tbody td\.acervo-alerta[^{]*\{([^}]*)\}/)?.[1] || '';
+// Ancorado no início da linha: a palavra "@media print" também aparece em
+// comentário, e um regex solto passava a ler as regras de tela como se fossem
+// as do papel.
+const inicioImpressao = css.search(/^@media print \{/m);
+assert.ok(inicioImpressao >= 0, 'bloco @media print não encontrado');
+const blocoImpressao = css.slice(inicioImpressao);
+
+const alertaImpresso = blocoImpressao.match(
+  /\.acervo-table tbody td\.acervo-alerta[^{]*\{([^}]*)\}/)?.[1] || '';
 assert.match(alertaImpresso, /background-color:\s*var\(--danger-panel[^)]*\)\s*!important/,
   'impressão do alerta deve usar o mesmo vermelho da tela');
 assert.match(alertaImpresso, /color:\s*var\(--danger-panel-text[^)]*\)\s*!important/,
@@ -65,10 +72,10 @@ assert.match(alertaImpresso, /color:\s*var\(--danger-panel-text[^)]*\)\s*!import
 assert.match(alertaImpresso, /print-color-adjust:\s*exact/,
   'impressão do alerta deve solicitar preservação exata das cores');
 assert.match(css,
-  /@media \(max-width: 480px\)[\s\S]*?\.dashboard-page \.nav-actions\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(2,/,
+  /@media screen and \(max-width: 480px\)[\s\S]*?\.dashboard-page \.nav-actions\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(2,/,
   'as quatro ações do dashboard precisam formar duas colunas em telas estreitas');
 assert.match(css,
-  /@media \(max-width: 480px\)[\s\S]*?\.dashboard-page \.export-options,[\s\S]*?max-width:\s*calc\(100vw - 24px\)/,
+  /@media screen and \(max-width: 480px\)[\s\S]*?\.dashboard-page \.export-options,[\s\S]*?max-width:\s*calc\(100vw - 24px\)/,
   'centralizado numa célula de meia largura, o menu de exportação precisa caber na viewport');
 // O clicável do painel é um <button> dentro do <td>; o <td> mantém o padding
 // que muda por breakpoint, então quem estende o alvo ao retângulo é o ::after.
@@ -87,5 +94,29 @@ assert.ok(alturasDaCelula.length >= 3,
   'não achei as alturas da célula do painel: o seletor mudou?');
 assert.ok(alturasDaCelula.every(h => h >= PISO_ALVO),
   `célula do painel abaixo do alvo de ${PISO_ALVO}px: ${alturasDaCelula.join(', ')}`);
+
+// As larguras e alturas de tela também casam no papel — e com valores
+// diferentes em cada navegador: o Chrome imprime como se a página fosse
+// estreita, o Firefox não. Sem `screen`, um `display: none` pensado para caber
+// na tela apagava o subtítulo do painel só no PDF do Firefox. Quem monta o
+// layout impresso é o bloco @media print, sozinho.
+const responsivosSemScreen = [...css.matchAll(/^@media ([^{]*(?:max-width|min-width|max-height|min-height)[^{]*)\{/gm)]
+  .map(([, condicao]) => condicao.trim())
+  .filter(condicao => !condicao.startsWith('screen'));
+assert.deepEqual(responsivosSemScreen, [],
+  'bloco responsivo sem `screen and`: ele vaza para a impressão');
+
+const subtituloImpresso = blocoImpressao.match(/\.acervo-subtitle\s*\{([^}]*)\}/)?.[1] || '';
+assert.doesNotMatch(subtituloImpresso, /display:\s*none/,
+  'o subtítulo do painel precisa sair no PDF');
+
+// O rodapé do painel só sai inteiro no PDF do Firefox sem flex e com folga
+// abaixo da linha: com o inline-flex da tela a data não era desenhada, e com
+// padding-bottom zero ela saía com a metade de baixo aparada.
+const rodapeImpresso = blocoImpressao.match(/\.acervo-panel-footer\s*\{([^}]*)\}/)?.[1] || '';
+assert.match(rodapeImpresso, /display:\s*block/,
+  'o rodapé impresso não pode voltar a ser flex');
+assert.match(rodapeImpresso, /padding:\s*\d+px\s+\d+px\s+[1-9]\d*px/,
+  'o rodapé impresso precisa de padding-bottom, senão o Firefox corta a data');
 
 console.log('assets: minificação, lazy load e versão por hash coerentes ✓');
