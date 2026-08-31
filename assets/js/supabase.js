@@ -7,7 +7,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '838b263017';
+const ASSET_VERSION = '717d269752';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -373,8 +373,13 @@ function posicionarRegiaoDeAvisos(regiao) {
     return;
   }
 
-  const limiteNavegacao = document.querySelector('.green-bar')?.getBoundingClientRect().bottom;
-  regiao.style.top = `${Number.isFinite(limiteNavegacao) ? Math.max(12, limiteNavegacao + 12) : 20}px`;
+  // Alinha o topo do aviso com o topo do conteúdo (a borda superior do card),
+  // e não com a barra verde: depois do sorteio a página rola até o resultado e
+  // o aviso ficava flutuando acima do card.
+  const conteudo = document.querySelector('main');
+  const topoConteudo = conteudo
+    && conteudo.getBoundingClientRect().top + parseFloat(getComputedStyle(conteudo).paddingTop);
+  regiao.style.top = `${Number.isFinite(topoConteudo) ? Math.max(12, topoConteudo) : 20}px`;
   regiao.style.bottom = 'auto';
 }
 
