@@ -653,16 +653,19 @@ test('move o foco para a lista após o login', async () => {
 // aparecem é a função resumo_acervo_cj. Estes testes fixam esse contrato e os
 // três estados da tela — matriz, vazio e falha.
 
-function bootstrapPage(inicializar, pagina = 'acervo') {
+function bootstrapPage(inicializar, pagina = 'acervo-cj') {
   const document = new Document();
   document.body.dataset.page = pagina;
   const sessionLoading = document.add('sessionLoading', 'div');
   sessionLoading.hidden = true;
   let aoEntrar;
+  // As chaves são os data-page do <body>, os mesmos de PAGINAS no bootstrap.js.
   const inicializadores = {
     sorteio: 'inicializarSorteio',
-    julgados: 'inicializarJulgados',
-    acervo: 'inicializarAcervo'
+    'julgados-cj': 'inicializarJulgados',
+    'julgados-creg': 'inicializarJulgadosCreg',
+    'acervo-cj': 'inicializarAcervo',
+    'acervo-creg': 'inicializarAcervo'
   };
 
   new Function('document', 'window', 'ASSET_VERSION', 'carregarScript',
@@ -691,7 +694,7 @@ test('bootstrap mantém o loading geral até a inicialização assíncrona termi
 
 test('julgados prioriza o loading menor enquanto busca as pautas', async () => {
   let concluir;
-  const page = bootstrapPage(() => new Promise(resolve => { concluir = resolve; }), 'julgados');
+  const page = bootstrapPage(() => new Promise(resolve => { concluir = resolve; }), 'julgados-cj');
   const carregamento = page.iniciar();
   await wait();
 
@@ -707,7 +710,7 @@ test('julgados recupera o loading geral para apresentar falha de inicialização
   const originalConsoleError = console.error;
   console.error = () => {};
   try {
-    const page = bootstrapPage(async () => { throw new Error('indisponível'); }, 'julgados');
+    const page = bootstrapPage(async () => { throw new Error('indisponível'); }, 'julgados-cj');
     await page.iniciar();
 
     assert.equal(page.sessionLoading.hidden, false);
@@ -717,8 +720,9 @@ test('julgados recupera o loading geral para apresentar falha de inicialização
   }
 });
 
-function acervoPage(api, { imprimir = () => {} } = {}) {
+function acervoPage(api, { imprimir = () => {}, colegiado = 'cj' } = {}) {
   const document = new Document();
+  document.body.dataset.colegiado = colegiado;
   const loginOnlyCard = document.createElement('div');
   loginOnlyCard.dataset.loginOnly = '';
   document.body.append(loginOnlyCard);
@@ -763,7 +767,7 @@ function acervoPage(api, { imprimir = () => {} } = {}) {
   document.add('btnFecharDetalhe', 'button');
   document.add('btnExportarDetalhe', 'button');
   document.getElementById('acervoPanel').hidden = true;
-  document.getElementById('btnAtualizar').hidden = true;  // como no acervo.html
+  document.getElementById('btnAtualizar').hidden = true;  // como no acervo-cj.html
 
   const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento',
     `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, criarExcelDetalhe, dadosTabulares, abrirDetalhe, exportarDetalhe };`)(
@@ -977,8 +981,13 @@ test('Excel representa a matriz atual em colunas e gera um XLSX real', async () 
   assert.equal(arquivo.type, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   assert.match(texto, /xl\/worksheets\/sheet1\.xml/);
   assert.match(texto, /ATÉ &amp; 15 DIAS/, 'rótulo deve manter o conteúdo e seguir a caixa alta do dashboard');
-  assert.match(texto, /Acervo de processos/);
+  assert.match(texto, /Acervo de processos - CJ/,
+    'o título precisa dizer de qual colegiado é a planilha');
   assert.match(texto, /Visão gerencial do tempo de permanência/);
+  assert.match(texto, /<t>8 processos aguardando julgamento<\/t>/,
+    'o resumo não repete a data que a última linha já traz');
+  assert.equal(texto.match(/Atualizado em:/g).length, 1,
+    'a data de atualização aparece uma vez só na planilha');
   assert.match(texto, /showGridLines="0"/);
   assert.match(texto, /mergeCells count="4"/);
   assert.ok(texto.indexOf('<autoFilter ') < texto.indexOf('<mergeCells '),
@@ -988,12 +997,34 @@ test('Excel representa a matriz atual em colunas e gera um XLSX real', async () 
     'total da faixa deve ser fórmula com o verde claro do dashboard');
   assert.match(texto, /<c r="D6" s="8"><f>SUM\(B6:C6\)<\/f><v>5<\/v><\/c>/,
     'faixa crítica deve preservar o alerta vermelho do dashboard');
+  // O estilo do total comum (7) e o do total crítico (8) precisam apontar para
+  // a mesma borda: antes o comum usava a borda clara das células de contagem e
+  // só as faixas críticas ganhavam o contorno escuro da coluna.
+  const estilos = [...texto.matchAll(/<xf [^>]*borderId="(\d+)"[^>]*>(?:(?!<\/xf>).)*<\/xf>/g)].map(m => m[1]);
+  assert.equal(estilos[7], estilos[8],
+    'a coluna Total precisa da mesma borda em toda a sua altura');
   assert.match(texto, /<c r="B7" s="10"><f>SUM\(B5:B6\)<\/f><v>4<\/v><\/c>/,
     'rodapé deve ser auditável por fórmula');
-  for (const cor of ['FF00534B', 'FF00453E', 'FFE0F0E8', 'FFFEE2E2', 'FFE9F3EF', 'FFBFE3D1']) {
+  for (const cor of ['FF00534B', 'FF00453E', 'FFE0F0E8', 'FFF4DEDB', 'FFE9F3EF', 'FFBFE3D1']) {
     assert.match(texto, new RegExp(cor), `a paleta do dashboard precisa incluir ${cor}`);
   }
   assert.match(texto, /name val="Montserrat"/);
+});
+
+test('Excel do CREG se identifica e concorda com o nome do colegiado', async () => {
+  const linhas = [{ ordem: 1, faixa: 'Até 15 dias', unidade: 'CREG1', processos: 1 }];
+  const page = acervoPage(async () => linhas, { colegiado: 'creg' });
+  await page.inicializarAcervo();
+
+  const texto = new TextDecoder().decode(new Uint8Array(await page.criarExcel(linhas).arrayBuffer()));
+  assert.match(texto, /Acervo de processos - CREG/,
+    'o título precisa dizer de qual colegiado é a planilha');
+  // 'à Câmara' e 'ao Conselho' não saem do mesmo molde: o subtítulo saía com a
+  // preposição do CJ na planilha do CREG.
+  assert.match(texto, /distribuídos ao Conselho Regulador\./);
+  assert.doesNotMatch(texto, /distribuídos à Conselho/);
+  assert.match(texto, /<t>1 processo aguardando julgamento<\/t>/,
+    'um processo só não vira "1 processos"');
 });
 
 test('PDF usa o dashboard atual sem deixar mensagem de sucesso persistente', async () => {
