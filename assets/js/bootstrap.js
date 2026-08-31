@@ -3,7 +3,7 @@
 // execução no caminho crítico sem mudar o fluxo do sistema.
 const PAGINAS = {
   sorteio: { arquivo: 'index.min.js', iniciar: 'inicializarSorteio', texto: 'Preparando o sorteio…' },
-  julgados: {
+  'julgados-cj': {
     arquivo: 'julgados.min.js',
     iniciar: 'inicializarJulgados',
     texto: 'Preparando as pautas…',
@@ -17,7 +17,7 @@ const PAGINAS = {
     texto: 'Preparando as sessões…',
     carregamentoLocal: true
   },
-  acervo: { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' },
+  'acervo-cj': { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' },
   // Mesmo script para os dois colegiados: quem escolhe o par de funções do
   // banco é o data-colegiado do <body> (ver COLEGIADOS em acervo.js).
   'acervo-creg': { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' }
