@@ -39,6 +39,15 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 - **Defesa no lugar de Recurso** (CJ): na Câmara de Julgamento a 6ª coluna registra se o autuado apresentou **Defesa** (Sim/Não) — é esse o dado que os julgados herdam do acervo. Recurso é conceito do Conselho Regulador e só aparece no modo CREG.
 - **Exportação da Ata em Word**: geração automática da ata de distribuição em formato Word (`.doc`), nomeada dinamicamente (`Sorteio_CREG_18.08.2026.doc`). A ata traz as mesmas colunas da tela — ordem, processo, assunto, recurso (ou defesa, na CJ) e unidade sorteada — para que quem lê o documento consiga conferir a repartição por assunto sem abrir o sistema.
 - **Registro de Julgamentos**: página própria onde a secretaria abre uma pauta e preenche o voto e o status de cada processo julgado. Os processos chegam sozinhos das pautas publicadas pela AGR, e cada preenchimento guarda quem fez e quando.
+- **Histórico de Sorteios**: card na tela principal com um botão por colegiado, que abre [historico-creg.html](historico-creg.html) ou [historico-cj.html](historico-cj.html). A lista traz uma rodada por linha, da mais recente para a mais antiga, com a data (e o dia da semana), o horário, quantos processos entraram e para quais cadeiras ou unidades foram — por extenso, não como contagem. Clicar em **Ver processos** abre a rodada inteira: ordem, número do processo, cadeira ou unidade sorteada (com o conselheiro da época, na Câmara), assunto, defesa ou recurso e, no Conselho, o interessado.
+
+  Não há passo nenhum depois do sorteio: gravar no acervo já coloca a rodada no histórico. Duas condições recortam o que entra, e as duas dizem "o que o sistema sorteou, do marco em diante":
+
+  - **`origem = 'sorteio'`** — o que foi distribuído por esta tela. Fica de fora o acervo herdado das planilhas de gabinete (`planilha`), que nunca foi um evento de sorteio, e as atas anteriores ao sistema (`ata`), conhecidas só pelo PDF publicado no SEI.
+  - **`data >= 27/08/2026`** — o **marco de início da série**, o mesmo para os dois colegiados. É o dia do primeiro sorteio feito na tela: os 81 processos do Conselho Regulador que `processos_sorteados` gravou e que hoje vivem em `acervo_creg`, de onde o histórico os lê (aquela tabela provisória vai ser removida). As quatro rodadas da Câmara de 2026 são anteriores ao marco e ficam de fora, então a Câmara começa com o histórico vazio e o preenche no próximo sorteio — a tela diz isso em vez de abrir em branco.
+
+  O marco mora numa função só (`historico_marco`), usada pelas duas consultas; a tela guarda uma cópia apenas para poder anunciar a data, e um teste compara as duas. A consulta é só leitura: as funções do banco que a alimentam são `STABLE` e nada nesta tela escreve.
+
 - **Registro no Banco de Dados**: ao final do sorteio, os dados que antes iam para as planilhas são gravados no banco (Supabase/PostgreSQL), uma linha por processo, cada colegiado no seu acervo (`acervo_cj` e `acervo_creg`). Enquanto o banco não estiver configurado — ou se o envio falhar — o sistema oferece um botão para baixar o sorteio completo em `.json`, sem depender de downloads automáticos bloqueados pelo navegador.
 
 ---
@@ -64,6 +73,8 @@ endereço não existe. Todo o resto está agrupado por natureza.
 ├── julgados-creg.html      registro do voto e do status (Conselho)
 ├── acervo-cj.html          painel do acervo (Câmara)
 ├── acervo-creg.html        painel do acervo (Conselho) — mesmo acervo.js
+├── historico-cj.html       histórico de sorteios (Câmara)
+├── historico-creg.html     histórico de sorteios (Conselho) — mesmo historico.js
 ├── 404.html                página de endereço inexistente
 │
 ├── assets/
@@ -74,6 +85,8 @@ endereço não existe. Todo o resto está agrupado por natureza.
 │   │   ├── index.js        fonte da lógica do sorteio e da ata
 │   │   ├── julgados.js     fonte do registro de julgamentos da Câmara
 │   │   ├── julgados-creg.js  o mesmo, para o Conselho Regulador
+│   │   ├── acervo.js       fonte do painel do acervo dos dois colegiados
+│   │   ├── historico.js    fonte do histórico de sorteios dos dois colegiados
 │   │   ├── supabase.js     configuração, login e chamadas — usado pelas duas páginas
 │   │   └── *.min.js        versões otimizadas servidas pelo site
 │   ├── fonts/              Montserrat em .woff2 e a licença OFL

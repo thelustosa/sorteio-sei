@@ -665,7 +665,9 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj') {
     'julgados-cj': 'inicializarJulgados',
     'julgados-creg': 'inicializarJulgadosCreg',
     'acervo-cj': 'inicializarAcervo',
-    'acervo-creg': 'inicializarAcervo'
+    'acervo-creg': 'inicializarAcervo',
+    'historico-cj': 'inicializarHistorico',
+    'historico-creg': 'inicializarHistorico'
   };
 
   new Function('document', 'window', 'ASSET_VERSION', 'carregarScript',
@@ -1276,4 +1278,335 @@ test('o card abre em estado de loading antes da resposta da API', async () => {
     'o indicador de loading sai quando os dados chegam');
   assert.equal(page.document.getElementById('detalheCorpo').hidden, false,
     'o corpo com a tabela entra após o carregamento');
+});
+
+// ── Histórico de sorteios ────────────────────────────────────────────────────
+// Uma tela por colegiado, como o painel do acervo. A lista vem pronta e
+// ordenada do banco (historico_sorteios); esta tela desenha uma linha por
+// rodada. Estes testes fixam esse contrato — a ordem, a rodada sem carimbo, o
+// vocabulário de cada colegiado — e o recorte que cada linha pede ao abrir o
+// card.
+
+function historicoPage(api, colegiado = 'creg') {
+  const document = new Document();
+  document.body.dataset.colegiado = colegiado;
+  const loginOnlyCard = document.createElement('div');
+  loginOnlyCard.dataset.loginOnly = '';
+  document.body.append(loginOnlyCard);
+  ['historicoPanel', 'historicoVazio', 'historicoVazioTexto', 'historicoInicio',
+   'historicoTotal', 'historicoAtualizado'].forEach(id => document.add(id, 'div'));
+  const erroDiv = document.add('historicoErro', 'div');
+  erroDiv.appendChild(document.createElement('p'));
+  document.add('historicoTable', 'table');
+  document.add('btnAtualizar', 'button');
+  document.add('btnTentarNovamente', 'button');
+
+  const dialog = document.add('detalheDialog', 'dialog');
+  dialog.open = false;
+  dialog.showModal = () => { dialog.open = true; };
+  dialog.close = () => { dialog.open = false; };
+  document.add('detalheTitulo', 'h2');
+  document.add('detalheResumo', 'p');
+  const detalheLoading = document.add('detalheLoading', 'div');
+  detalheLoading.hidden = true;
+  document.add('detalheCorpo', 'div');
+  document.add('detalheTable', 'table');
+  const detalheErro = document.add('detalheErro', 'div');
+  detalheErro.hidden = true;
+  detalheErro.appendChild(document.createElement('p'));
+  document.add('btnFecharDetalhe', 'button');
+  document.getElementById('historicoPanel').hidden = true;
+  document.getElementById('btnAtualizar').hidden = true;  // como nas páginas
+
+  const app = new Function('document', 'api', 'criarIndicadorCarregamento',
+    `${source('historico.js')}\nreturn { inicializarHistorico, carregarHistorico, abrirDetalhe };`)(
+    document, api, criarIndicadorCarregamento);
+  return { document, loginOnlyCard, dialog, ...app };
+}
+
+// A série começa em 27/08/2026, para os dois colegiados: o primeiro sorteio
+// feito na tela — os 81 processos do Conselho que processos_sorteados gravou e
+// que hoje vivem em acervo_creg. Quem corta é o banco; aqui chega o resultado.
+const sorteiosCreg = [
+  { data_sorteio: '2026-08-27', sorteado_em: '2026-08-27T14:07:26.154+00:00',
+    processos: 81, destinos: ['CREG2', 'CREG3', 'CREG4'] }
+];
+
+// Rodadas posteriores ao marco. A segunda e a terceira vêm sem `sorteado_em`: a
+// coluna é opcional no acervo, e uma carga em lote pode deixá-la vazia.
+const sorteiosCj = [
+  { data_sorteio: '2026-09-28', sorteado_em: '2026-09-28T17:32:00+00:00', processos: 34,
+    destinos: ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'] },
+  { data_sorteio: '2026-09-14', sorteado_em: null, processos: 54,
+    destinos: ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'] },
+  { data_sorteio: '2026-08-31', sorteado_em: null, processos: 42,
+    destinos: ['CJ2', 'CJ3', 'CJ4', 'CJ5'] }
+];
+
+const linhas = page => page.document.getElementById('historicoTable').children[1].children;
+const acaoDe = (page, linha) => linhas(page)[linha].children.at(-1).children[0];
+const dataDe = linha => linha.children[0].children.map(s => s.textContent);
+
+test('histórico lista uma rodada por linha, na ordem que o banco devolveu', async () => {
+  const page = historicoPage(async () => sorteiosCj, 'cj');
+  await page.inicializarHistorico();
+
+  const [thead] = page.document.getElementById('historicoTable').children;
+  assert.deepEqual(celulas(thead.children[0]),
+    ['Data', 'Horário', 'Processos', 'Cadeiras', 'Detalhes'],
+    'na Câmara quem recebe o processo é a cadeira');
+
+  assert.equal(linhas(page).length, 3);
+  assert.deepEqual(dataDe(linhas(page)[0]), ['28/09/2026', 'Segunda-feira']);
+  assert.deepEqual(dataDe(linhas(page)[2]), ['31/08/2026', 'Segunda-feira']);
+  assert.deepEqual(linhas(page)[0].children.slice(2, 4).map(c => c.textContent),
+    ['34', 'CJ1 · CJ2 · CJ3 · CJ4 · CJ5'],
+    'os destinos saem por extenso: quem participou diz mais do que quantos');
+
+  assert.equal(page.document.getElementById('historicoTotal').textContent,
+    '3 sorteios · 130 processos');
+});
+
+test('no Conselho a coluna é a unidade, e o sorteio de 27/08 abre o histórico', async () => {
+  const page = historicoPage(async () => sorteiosCreg, 'creg');
+  await page.inicializarHistorico();
+
+  const [thead] = page.document.getElementById('historicoTable').children;
+  assert.deepEqual(celulas(thead.children[0]),
+    ['Data', 'Horário', 'Processos', 'Unidades', 'Detalhes']);
+
+  assert.equal(linhas(page).length, 1);
+  assert.deepEqual(dataDe(linhas(page)[0]), ['27/08/2026', 'Quinta-feira']);
+  assert.equal(linhas(page)[0].children[2].textContent, '81');
+  assert.equal(linhas(page)[0].children[3].textContent, 'CREG2 · CREG3 · CREG4');
+  assert.equal(page.document.getElementById('historicoTotal').textContent,
+    '1 sorteio · 81 processos');
+});
+
+test('rodada sem carimbo mostra o dia sem inventar horário', async () => {
+  const page = historicoPage(async () => sorteiosCj, 'cj');
+  await page.inicializarHistorico();
+
+  // A carimbada mostra hora e minuto, no relógio de quem lê.
+  assert.match(linhas(page)[0].children[1].textContent, /^\d{2}:\d{2}$/);
+
+  const hora = linhas(page)[1].children[1];
+  assert.equal(hora.textContent, '—', 'sem carimbo, a coluna fica com o travessão');
+  assert.equal(hora['aria-label'], 'Horário não registrado');
+});
+
+test('a tela diz de quando é a série, com a lista cheia ou vazia', async () => {
+  // Sem essa frase, a Câmara — que ainda não sorteou depois do marco — abre uma
+  // tela em branco que parece defeito, e quem procura um sorteio de julho não
+  // descobre por que não o encontra.
+  const vazia = historicoPage(async () => [], 'cj');
+  await vazia.inicializarHistorico();
+  assert.equal(vazia.document.getElementById('historicoInicio').textContent,
+    'Série iniciada em 27/08/2026');
+  const texto = vazia.document.getElementById('historicoVazioTexto').textContent;
+  assert.match(texto, /a partir de 27\/08\/2026/);
+  // Com o artigo: 'A Câmara' e 'O Conselho' não saem do mesmo molde, e sem ele
+  // a frase começaria em "Câmara de Julgamento não distribuiu".
+  assert.match(texto, /A Câmara de Julgamento não distribuiu/,
+    'o vazio precisa dizer de qual colegiado é, com concordância');
+  assert.equal(vazia.document.getElementById('historicoVazio').hidden, false);
+  assert.equal(vazia.document.getElementById('historicoTable').children.length, 0,
+    'sem rodada nenhuma, nem o cabeçalho da tabela deve sobrar');
+
+  const cheia = historicoPage(async () => sorteiosCreg, 'creg');
+  await cheia.inicializarHistorico();
+  assert.equal(cheia.document.getElementById('historicoInicio').textContent,
+    'Série iniciada em 27/08/2026');
+  assert.match(cheia.document.getElementById('historicoVazioTexto').textContent,
+    /O Conselho Regulador não distribuiu/);
+  assert.equal(cheia.document.getElementById('historicoVazio').hidden, true);
+});
+
+test('cada página pede ao banco o histórico do seu colegiado', async () => {
+  const pedidos = [];
+  const registrar = async (caminho, opcoes) => {
+    pedidos.push([caminho, JSON.parse(opcoes.body)]);
+    return [];
+  };
+  await historicoPage(registrar, 'cj').inicializarHistorico();
+  await historicoPage(registrar, 'creg').inicializarHistorico();
+
+  assert.deepEqual(pedidos, [
+    ['rpc/historico_sorteios', { p_colegiado: 'CJ' }],
+    ['rpc/historico_sorteios', { p_colegiado: 'CREG' }]
+  ]);
+});
+
+test('histórico só revela o painel depois que os dados estão prontos', async () => {
+  let responder;
+  const page = historicoPage(() => new Promise(resolve => { responder = resolve; }), 'creg');
+  const carregamento = page.inicializarHistorico();
+  await wait();
+
+  assert.equal(page.document.getElementById('historicoPanel').hidden, true);
+  assert.equal(page.document.getElementById('btnAtualizar').hidden, true,
+    'Atualizar redesenharia uma tabela ainda escondida');
+
+  responder(sorteiosCreg);
+  await carregamento;
+
+  assert.equal(page.loginOnlyCard.hidden, true);
+  assert.equal(page.document.getElementById('historicoPanel').hidden, false);
+  assert.equal(page.document.getElementById('btnAtualizar').hidden, false);
+});
+
+test('histórico avisa quando o colegiado ainda não sorteou pelo sistema', async () => {
+  const page = historicoPage(async () => []);
+  await page.inicializarHistorico();
+
+  assert.equal(page.document.getElementById('historicoVazio').hidden, false);
+  assert.equal(page.document.getElementById('historicoTotal').textContent,
+    '0 sorteios · 0 processos');
+});
+
+test('histórico propaga falha inicial sem forçar logout', async () => {
+  const page = historicoPage(async () => { throw Object.assign(new Error('sessão'), { status: 401 }); });
+  await assert.rejects(page.inicializarHistorico(), /sessão/);
+  assert.equal(page.document.getElementById('historicoPanel').hidden, true,
+    'a falha inicial fica com o carregamento geral, que sabe distinguir o 401');
+});
+
+test('falha ao atualizar não deixa o total anunciando uma tabela vazia', async () => {
+  let falhar = false;
+  const page = historicoPage(async () => {
+    if (falhar) throw new Error('indisponível');
+    return sorteiosCreg;
+  });
+  await page.inicializarHistorico();
+
+  falhar = true;
+  assert.equal(await page.carregarHistorico(), false);
+  assert.equal(page.document.getElementById('historicoTable').children.length, 0);
+  assert.equal(page.document.getElementById('historicoTotal').textContent, '');
+  assert.equal(page.document.getElementById('historicoErro').hidden, false);
+  assert.match(page.document.getElementById('historicoErro').children[0].textContent,
+    /indisponível/);
+  assert.equal(page.document.getElementById('btnAtualizar').disabled, false,
+    'o botão precisa voltar para permitir nova tentativa');
+});
+
+const processosCj = [
+  { ordem: 1, num_processo: '202600029000101', destino: 'CJ3', responsavel: 'Dorivan de Souza Lima',
+    assunto: 'Auto de Infração', decisao: 'Sim', interessado: null },
+  { ordem: 2, num_processo: '202600029000102', destino: 'CJ1', responsavel: 'CJ1',
+    assunto: 'Auto de Infração', decisao: 'Não', interessado: null }
+];
+
+test('o botão leva ao banco exatamente a rodada da sua linha', async () => {
+  const pedidos = [];
+  const paraCj = historicoPage(async (caminho, opcoes) => {
+    if (caminho === 'rpc/historico_sorteios') return sorteiosCj;
+    pedidos.push([caminho, JSON.parse(opcoes.body)]);
+    return processosCj;
+  }, 'cj');
+  await paraCj.inicializarHistorico();
+  await paraCj.abrirDetalhe(acaoDe(paraCj, 1));  // a rodada sem carimbo
+
+  const paraCreg = historicoPage(async (caminho, opcoes) => {
+    if (caminho === 'rpc/historico_sorteios') return sorteiosCreg;
+    pedidos.push([caminho, JSON.parse(opcoes.body)]);
+    return [];
+  }, 'creg');
+  await paraCreg.inicializarHistorico();
+  await paraCreg.abrirDetalhe(acaoDe(paraCreg, 0));
+
+  assert.deepEqual(pedidos, [
+    // Rodada sem carimbo: precisa chegar como null, senão o `is not distinct
+    // from` do banco não casa com linha nenhuma e o card abre vazio.
+    ['rpc/processos_sorteio', { p_colegiado: 'CJ', p_data: '2026-09-14', p_sorteado_em: null }],
+    ['rpc/processos_sorteio', { p_colegiado: 'CREG', p_data: '2026-08-27',
+      p_sorteado_em: '2026-08-27T14:07:26.154+00:00' }]
+  ]);
+});
+
+test('o card da Câmara mostra a defesa e o conselheiro da época', async () => {
+  const page = historicoPage(async caminho =>
+    caminho === 'rpc/historico_sorteios' ? sorteiosCj : processosCj, 'cj');
+  await page.inicializarHistorico();
+  await page.abrirDetalhe(acaoDe(page, 0));
+
+  assert.equal(page.dialog.open, true);
+  assert.equal(page.document.getElementById('detalheTitulo').textContent, 'Sorteio de 28/09/2026');
+  assert.match(page.document.getElementById('detalheResumo').textContent,
+    /^Câmara de Julgamento · 2 processos · às \d{2}:\d{2}$/);
+
+  const [thead, tbody] = page.document.getElementById('detalheTable').children;
+  assert.deepEqual(celulas(thead.children[0]),
+    ['Ordem', 'Nº do Processo', 'Cadeira', 'Assunto', 'Defesa'],
+    'na Câmara a coluna de decisão é a defesa, e não há interessado');
+  assert.deepEqual(celulas(tbody.children[0]),
+    ['1', '202600029000101', 'CJ3', 'Auto de Infração', 'Sim']);
+
+  // A cadeira sozinha não diz quem é; o ocupante da época vem na mesma resposta.
+  assert.equal(tbody.children[0].children[2].title, 'Dorivan de Souza Lima');
+  assert.equal(tbody.children[0].children[2]['aria-label'], 'CJ3 — Dorivan de Souza Lima');
+  // Cadeira sem de-para no período sai pelo próprio rótulo, sem hover vazio.
+  assert.equal(tbody.children[1].children[2].title, undefined);
+});
+
+test('o card do Conselho mostra o interessado e o recurso', async () => {
+  const page = historicoPage(async caminho =>
+    caminho === 'rpc/historico_sorteios' ? sorteiosCreg : [
+      { ordem: 1, num_processo: '202600029000792', destino: 'CREG3', responsavel: null,
+        assunto: 'Outros', decisao: 'Não se aplica', interessado: null },
+      { ordem: null, num_processo: '202600029001295', destino: 'CREG4', responsavel: null,
+        assunto: 'Auto de Infração', decisao: 'Sem recurso', interessado: 'Concessionária X' }
+    ], 'creg');
+  await page.inicializarHistorico();
+  await page.abrirDetalhe(acaoDe(page, 0));
+
+  const [thead, tbody] = page.document.getElementById('detalheTable').children;
+  assert.deepEqual(celulas(thead.children[0]),
+    ['Ordem', 'Nº do Processo', 'Unidade', 'Interessado', 'Assunto', 'Recurso']);
+  assert.deepEqual(celulas(tbody.children[0]),
+    ['1', '202600029000792', 'CREG3', '—', 'Outros', 'Não se aplica']);
+  // Rodada gravada sem a ordem do sorteio: travessão, e não um número inventado
+  // a partir da posição na lista.
+  assert.equal(tbody.children[1].children[0].textContent, '—');
+  assert.match(page.document.getElementById('detalheResumo').textContent,
+    /^Conselho Regulador · 2 processos · às \d{2}:\d{2}$/);
+});
+
+test('falha ao abrir a rodada aparece dentro do card, sem deslogar', async () => {
+  const page = historicoPage(async caminho => {
+    if (caminho === 'rpc/historico_sorteios') return sorteiosCreg;
+    throw Object.assign(new Error('sessão expirada'), { status: 401 });
+  }, 'creg');
+  await page.inicializarHistorico();
+  await page.abrirDetalhe(acaoDe(page, 0));
+
+  assert.equal(page.dialog.open, true, 'o card permanece aberto para mostrar o erro');
+  assert.equal(page.document.getElementById('detalheErro').hidden, false);
+  assert.match(page.document.getElementById('detalheErro').children[0].textContent,
+    /sessão expirada/);
+  assert.equal(page.document.getElementById('historicoPanel').hidden, false,
+    'a lista já carregada não pode sumir por causa do card');
+});
+
+test('resposta atrasada não sobrescreve a rodada aberta depois dela', async () => {
+  const respostas = [];
+  const page = historicoPage(async caminho => {
+    if (caminho === 'rpc/historico_sorteios') return sorteiosCj;
+    return new Promise(resolve => respostas.push(resolve));
+  }, 'cj');
+  await page.inicializarHistorico();
+
+  const lenta = page.abrirDetalhe(acaoDe(page, 0));
+  const rapida = page.abrirDetalhe(acaoDe(page, 2));
+
+  respostas[1]([{ ordem: 1, num_processo: '202600029000999', destino: 'CJ2',
+    responsavel: null, assunto: 'Auto de Infração', decisao: 'Sim', interessado: null }]);
+  await rapida;
+  respostas[0](processosCj);
+  await lenta;
+
+  assert.equal(page.document.getElementById('detalheTitulo').textContent, 'Sorteio de 31/08/2026');
+  const tbody = page.document.getElementById('detalheTable').children[1];
+  assert.deepEqual(tbody.children.map(l => l.children[1].textContent), ['202600029000999'],
+    'a resposta da rodada abandonada não pode reescrever o card');
 });
