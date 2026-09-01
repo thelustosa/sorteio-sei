@@ -1438,6 +1438,368 @@ def backup_e_restauracao_fecham_o_ciclo(cur):
     PG.executar('drop schema backup_cj cascade')
 
 
+# ── Histórico de sorteios ────────────────────────────────────────────────────
+# As duas funções que alimentam historico-cj.html e historico-creg.html. Elas
+# leem os acervos, que são fechados ao navegador, e por isso são SECURITY
+# DEFINER como as do painel.
+
+
+def semear_historico(cur):
+    """Rodadas dos dois lados do marco, mais ata e planilha.
+
+    Três contraexemplos, cada um cortado por um motivo diferente:
+
+      planilha  acervo herdado dos gabinetes — nunca foi evento de sorteio;
+      ata       sorteio de verdade, mas anterior ao sistema, conhecido só pelo
+                PDF publicado no SEI;
+      sorteio   feito na tela, porém ANTES do marco — é o caso das quatro
+                rodadas reais da Câmara (29/06 a 14/08/2026), que saíram do
+                histórico quando a série passou a começar no mesmo dia para os
+                dois colegiados.
+    """
+    # Os julgados referenciam o acervo: sem apagá-los antes, o DELETE esbarra
+    # na chave estrangeira.
+    cur.execute('delete from public.julgados_cj')
+    cur.execute('delete from public.julgados_creg')
+    cur.execute('delete from public.acervo_cj')
+    cur.execute('delete from public.acervo_creg')
+    cur.execute("""
+        insert into public.acervo_cj
+          (num_processo, relator, data_distribuicao, defesa, assunto, ordem,
+           sorteado_em, origem) values
+          ('202600029000101', 'CJ1', date '2026-09-28', true,  'Auto de Infração', 1,
+           timestamptz '2026-09-28 14:32:00-03', 'sorteio'),
+          ('202600029000102', 'CJ3', date '2026-09-28', false, 'Auto de Infração', 2,
+           timestamptz '2026-09-28 14:32:00-03', 'sorteio'),
+          -- Rodada sem carimbo: a coluna é opcional no acervo, e uma carga em
+          -- lote pode deixá-la vazia. Quem data o sorteio é a distribuição.
+          ('202600029000103', 'CJ1', date '2026-09-14', null,  'Auto de Infração', 1,
+           null, 'sorteio'),
+          -- Sorteio real da Câmara, mas ANTERIOR ao marco: fica de fora.
+          ('202600029000105', 'CJ4', date '2026-08-14', true,  'Auto de Infração', 1,
+           null, 'sorteio'),
+          -- Acervo herdado da planilha: não é rodada de sorteio.
+          ('202600029000104', 'CJ2', date '2026-05-05', true,  'Auto de Infração', null,
+           null, 'planilha')""")
+    cur.execute("""
+        insert into public.acervo_creg
+          (num_processo, unidade, data_distribuicao, recurso, assunto, interessado,
+           ordem, sorteado_em, origem) values
+          ('202600029000201', 'CREG2', date '2026-08-27', 'Com recurso', 'Requerimento',
+           'Concessionária X', 1, timestamptz '2026-08-27 11:07:26.154-03', 'sorteio'),
+          ('202600029000202', 'CREG4', date '2026-08-27', 'Sem recurso', 'Auto de Infração',
+           null, 2, timestamptz '2026-08-27 11:07:26.154-03', 'sorteio'),
+          -- Sorteio anterior ao sistema, lido do PDF da ata: fica de fora.
+          ('202600029000203', 'CREG1', date '2026-08-07', null, 'Auto de Infração',
+           null, 1, null, 'ata'),
+          ('202600029000204', 'CREG3', date '2026-07-24', 'Com recurso', 'Minuta',
+           null, null, null, 'planilha')""")
+
+
+@teste
+def historico_exige_sessao(cur):
+    """As duas funções leem os acervos, que são fechados ao navegador.
+
+    Sem a checagem, cada uma seria um endpoint /rest/v1/rpc que entrega o
+    histórico inteiro a quem tiver só a chave publicável.
+    """
+    for chamada in ("select * from public.historico_sorteios('CJ')",
+                    "select * from public.processos_sorteio('CJ', current_date)"):
+        # Dentro do laço: o rollback do bloco anterior devolve o set_config,
+        # que é local à transação.
+        cur.execute("select set_config('request.jwt.claims', '', true)")
+        try:
+            cur.execute(chamada)
+            raise AssertionError(f'respondeu sem sessão autenticada: {chamada}')
+        except psycopg2.errors.InvalidAuthorizationSpecification:
+            cur.connection.rollback()
+
+
+@teste
+def historico_so_e_executavel_por_authenticated(cur):
+    """EXECUTE é concedido a PUBLIC por padrão; sem o revoke, anon chamaria."""
+    for nome in ('historico_sorteios', 'processos_sorteio'):
+        cur.execute("""select coalesce(string_agg(distinct grantee, ',' order by grantee), '')
+                         from information_schema.role_routine_grants
+                        where routine_schema = 'public'
+                          and routine_name = %s
+                          and grantee in ('anon', 'authenticated', 'service_role', 'PUBLIC')""",
+                    (nome,))
+        assert cur.fetchone()[0] == 'authenticated', nome
+
+
+@teste
+def historico_e_so_leitura(cur):
+    """Consultar o histórico não pode alterar registro nenhum.
+
+    STABLE não é decoração: uma função marcada assim não escreve — o Postgres
+    recusa o INSERT em tempo de execução. É a garantia estrutural de que abrir
+    esta tela não mexe no acervo, e vale mais do que contar linhas antes e
+    depois de uma chamada.
+    """
+    cur.execute("""select proname, provolatile, prosecdef, proconfig
+                     from pg_proc
+                    where proname in ('historico_sorteios', 'processos_sorteio')""")
+    encontradas = {nome: (volatil, secdef, config)
+                   for nome, volatil, secdef, config in cur.fetchall()}
+    assert set(encontradas) == {'historico_sorteios', 'processos_sorteio'}, encontradas
+    for nome, (volatil, secdef, config) in encontradas.items():
+        assert volatil == 's', f'{nome} deixou de ser STABLE'
+        assert secdef is True, f'{nome} precisa ser SECURITY DEFINER para ler o acervo'
+        assert config and any(c.startswith('search_path=') for c in config), nome
+
+    # E o efeito prático: chamar as duas não mexe no que está gravado.
+    autenticar(cur)
+    semear_historico(cur)
+    antes = uma(cur, """select (select count(*) from public.acervo_cj),
+                               (select count(*) from public.acervo_creg)""")
+    cur.execute("select * from public.historico_sorteios('CREG')")
+    cur.execute("select * from public.processos_sorteio('CREG', date '2026-08-27',"
+                " timestamptz '2026-08-27 11:07:26.154-03')")
+    assert uma(cur, """select (select count(*) from public.acervo_cj),
+                              (select count(*) from public.acervo_creg)""") == antes
+    cur.connection.rollback()
+
+
+@teste
+def historico_comeca_no_mesmo_marco_nos_dois_colegiados(cur):
+    """27/08/2026 para a Câmara e para o Conselho, sem exceção.
+
+    O marco é o dia do primeiro sorteio feito na tela — os 81 processos do
+    Conselho. Unificá-lo evita a pergunta "por que a Câmara mostra junho e o
+    Conselho não?", que só teria como resposta um acidente de importação.
+    """
+    autenticar(cur)
+    semear_historico(cur)
+
+    assert uma(cur, 'select public.historico_marco()') == date(2026, 8, 27)
+
+    # A rodada de 14/08 da Câmara é sorteio de verdade, feito na tela, e mesmo
+    # assim fica de fora: é anterior ao marco.
+    cur.execute("select data_sorteio from public.historico_sorteios('CJ')")
+    assert [linha[0] for linha in cur.fetchall()] == [date(2026, 9, 28), date(2026, 9, 14)], \
+        'rodada anterior ao marco entrou no histórico da Câmara'
+
+    # E o card não pode ser uma porta lateral para ela.
+    assert uma(cur, """select count(*) from public.processos_sorteio(
+                         'CJ', date '2026-08-14', null)""") == 0
+
+    # O primeiro dia da série entra: o corte é >= marco, não > marco. Sem isso o
+    # histórico do Conselho nasceria vazio, sem justamente o sorteio que o abre.
+    assert uma(cur, """select processos from public.historico_sorteios('CREG')
+                        where data_sorteio = public.historico_marco()""") == 2
+    cur.connection.rollback()
+
+
+@teste
+def historico_lista_so_o_que_o_sistema_sorteou(cur):
+    """origem = 'sorteio', e só: planilha e ata ficam de fora.
+
+    São 3.064 linhas de planilha no acervo do Conselho contra 81 de sorteio.
+    Sem o recorte, uma importação de ata ou de planilha datada depois do marco
+    entraria no histórico como se fosse rodada feita na tela.
+    """
+    autenticar(cur)
+    semear_historico(cur)
+
+    cur.execute("""select data_sorteio, sorteado_em is null, processos, destinos
+                     from public.historico_sorteios('CREG')""")
+    assert cur.fetchall() == [(date(2026, 8, 27), False, 2, ['CREG2', 'CREG4'])], \
+        'a ata de 07/08 ou a planilha de 24/07 entraram no histórico do Conselho'
+
+    cur.execute("""select data_sorteio, sorteado_em is null, processos, destinos
+                     from public.historico_sorteios('CJ')""")
+    assert cur.fetchall() == [
+        (date(2026, 9, 28), False, 2, ['CJ1', 'CJ3']),
+        # Rodada sem carimbo: aparece pela data da distribuição.
+        (date(2026, 9, 14), True,  1, ['CJ1']),
+    ]
+
+    # Uma ata POSTERIOR ao marco continua fora: o marco sozinho não bastaria.
+    cur.execute("""insert into public.acervo_creg
+                     (num_processo, unidade, data_distribuicao, assunto, ordem,
+                      sorteado_em, origem)
+                   values ('202600029000205', 'CREG1', date '2026-09-10',
+                           'Auto de Infração', 1, null, 'ata')""")
+    cur.execute("select data_sorteio from public.historico_sorteios('CREG')")
+    assert [linha[0] for linha in cur.fetchall()] == [date(2026, 8, 27)], \
+        'ata posterior ao marco entrou no histórico'
+
+    # E a lista está ordenada do mais recente para o mais antigo.
+    cur.execute("select data_sorteio from public.historico_sorteios('CJ')")
+    datas = [linha[0] for linha in cur.fetchall()]
+    assert datas == sorted(datas, reverse=True), datas
+    cur.connection.rollback()
+
+
+@teste
+def historico_traz_os_destinos_por_extenso(cur):
+    """Quem participou da rodada diz mais do que quantos participaram.
+
+    A contagem some quando duas rodadas do mesmo tamanho foram para cadeiras
+    diferentes — que é justamente o que a secretaria confere na ata.
+    """
+    autenticar(cur)
+    semear_historico(cur)
+
+    destinos = uma(cur, """select destinos from public.historico_sorteios('CJ')
+                            where data_sorteio = date '2026-09-28'""")
+    assert destinos == ['CJ1', 'CJ3'], destinos
+    cur.connection.rollback()
+
+
+@teste
+def processos_do_sorteio_trazem_exatamente_a_rodada_pedida(cur):
+    """O par (data, carimbo) é a chave: rodada vizinha não vaza para o card."""
+    autenticar(cur)
+    semear_historico(cur)
+
+    cur.execute("""select ordem, num_processo, destino, assunto, decisao
+                     from public.processos_sorteio('CJ', date '2026-09-28',
+                                                   timestamptz '2026-09-28 14:32:00-03')""")
+    assert cur.fetchall() == [
+        (1, '202600029000101', 'CJ1', 'Auto de Infração', 'Sim'),
+        (2, '202600029000102', 'CJ3', 'Auto de Infração', 'Não'),
+    ]
+
+    # Mesmo dia, carimbo de outra rodada: nada.
+    assert uma(cur, """select count(*) from public.processos_sorteio(
+                         'CJ', date '2026-09-28',
+                         timestamptz '2026-09-14 09:10:00-03')""") == 0
+
+    # A rodada sem carimbo abre com null. Com `=` no lugar de `is not distinct
+    # from`, a comparação com nulo devolveria lista vazia para ela.
+    cur.execute("""select num_processo, destino
+                     from public.processos_sorteio('CJ', date '2026-09-14', null)""")
+    assert cur.fetchall() == [('202600029000103', 'CJ1')]
+
+    # E o carimbo nulo não é curinga: não pode abrir a rodada carimbada.
+    assert uma(cur, """select count(*) from public.processos_sorteio(
+                         'CJ', date '2026-09-28', null)""") == 0
+
+    # A ata continua fora também aqui: se o card a abrisse, o histórico teria
+    # uma porta lateral para o que a lista não mostra.
+    assert uma(cur, """select count(*) from public.processos_sorteio(
+                         'CREG', date '2026-08-07', null)""") == 0
+    cur.connection.rollback()
+
+
+@teste
+def processos_do_sorteio_traduzem_o_vocabulario_de_cada_colegiado(cur):
+    """Relator/defesa na Câmara e unidade/recurso no Conselho, mesma saída.
+
+    Sem a tradução no banco, a tela precisaria de dois caminhos para desenhar a
+    mesma tabela.
+    """
+    autenticar(cur)
+    semear_historico(cur)
+
+    cur.execute("""select destino, responsavel from public.processos_sorteio(
+                     'CJ', date '2026-09-28', timestamptz '2026-09-28 14:32:00-03')""")
+    # O conselheiro sai do de-para de cadeiras_cj, no período da distribuição.
+    assert cur.fetchall() == [('CJ1', 'Paulo Otoni Ribeiro'),
+                              ('CJ3', 'Dorivan de Souza Lima')]
+
+    cur.execute("""select destino, responsavel, assunto, decisao, interessado
+                     from public.processos_sorteio('CREG', date '2026-08-27',
+                                                   timestamptz '2026-08-27 11:07:26.154-03')""")
+    assert cur.fetchall() == [
+        # O Conselho não tem de-para de cadeira: o responsável vem nulo, e a
+        # tela mostra a unidade sozinha em vez de um hover vazio.
+        ('CREG2', None, 'Requerimento', 'Com recurso', 'Concessionária X'),
+        ('CREG4', None, 'Auto de Infração', 'Sem recurso', None),
+    ]
+    cur.connection.rollback()
+
+
+@teste
+def defesa_nula_nao_vira_nao_no_historico(cur):
+    """Sem defesa registrada, a decisão é o legado — ou nada, nunca 'Não'.
+
+    Um CASE sem tratar o nulo cairia no ELSE e afirmaria que o autuado não
+    apresentou defesa, que é dado que ninguém registrou.
+    """
+    autenticar(cur)
+    semear_historico(cur)
+
+    assert uma(cur, """select decisao from public.processos_sorteio(
+                         'CJ', date '2026-09-14', null)""") is None
+
+    # A coluna `recurso` da Câmara é o legado da época em que ela dividia a
+    # tabela com o Conselho: quando existe, é ela que sai.
+    cur.execute("""update public.acervo_cj set recurso = 'Com recurso'
+                    where num_processo = '202600029000103'""")
+    assert uma(cur, """select decisao from public.processos_sorteio(
+                         'CJ', date '2026-09-14', null)""") == 'Com recurso'
+    cur.connection.rollback()
+
+
+@teste
+def historico_recusa_colegiado_desconhecido(cur):
+    """Errar a sigla tem de falhar, não devolver uma lista vazia plausível."""
+    autenticar(cur)
+    for chamada in ("select * from public.historico_sorteios('CJX')",
+                    "select * from public.historico_sorteios(null)",
+                    "select * from public.processos_sorteio('CJX', current_date)"):
+        try:
+            cur.execute(chamada)
+            raise AssertionError(f'aceitou colegiado inexistente: {chamada}')
+        except psycopg2.errors.InvalidParameterValue:
+            cur.connection.rollback()
+            autenticar(cur)
+    cur.connection.rollback()
+
+
+@teste
+def marco_do_historico_e_interno_e_a_pagina_o_repete_certo(cur):
+    """A data do corte mora no banco; a tela guarda uma cópia só para dizê-la.
+
+    A tela precisa ANUNCIAR o início da série — sem isso, a Câmara abre em
+    branco e parece defeito. Mas quem corta é o banco. Se as duas divergirem, a
+    frase mentiria sobre o recorte aplicado, que é pior do que não ter frase.
+    """
+    # Ninguém chama a função pela API: as duas do histórico são SECURITY
+    # DEFINER e a executam como dono.
+    cur.execute("""select coalesce(string_agg(distinct grantee, ',' order by grantee), '')
+                     from information_schema.role_routine_grants
+                    where routine_schema = 'public'
+                      and routine_name = 'historico_marco'
+                      and grantee in ('anon', 'authenticated', 'service_role', 'PUBLIC')""")
+    assert cur.fetchone()[0] == '', 'historico_marco não deveria ser executável pela API'
+
+    pagina = (RAIZ / 'assets' / 'js' / 'historico.js').read_text(encoding='utf-8')
+    na_tela = re.search(r"INICIO_DA_SERIE = '([\d-]+)'", pagina)
+    assert na_tela, 'INICIO_DA_SERIE não encontrada em historico.js'
+    assert na_tela.group(1) == uma(cur, 'select public.historico_marco()').isoformat(), \
+        'a data que a tela anuncia não é a que o banco usa para cortar'
+
+
+@teste
+def historico_da_pagina_usa_as_funcoes_que_existem(cur):
+    """historico.js chama exatamente as RPCs publicadas pelo schema.
+
+    Renomear uma delas no banco e esquecer a página deixa a tela quebrada só em
+    produção, depois do login.
+    """
+    pagina = (RAIZ / 'assets' / 'js' / 'historico.js').read_text(encoding='utf-8')
+    chamadas = set(re.findall(r"api\('rpc/(\w+)'", pagina))
+    assert chamadas == {'historico_sorteios', 'processos_sorteio'}, chamadas
+
+    for nome in chamadas:
+        assert uma(cur, 'select count(*) from pg_proc where proname = %s', (nome,)) == 1, nome
+
+    # Os parâmetros que a página envia são os que as funções declaram.
+    enviados = set(re.findall(r'(p_\w+):', pagina))
+    cur.execute("""select distinct unnest(proargnames) from pg_proc
+                    where proname in ('historico_sorteios', 'processos_sorteio')""")
+    declarados = {linha[0] for linha in cur.fetchall() if linha[0].startswith('p_')}
+    assert enviados == declarados, (enviados, declarados)
+
+    # E a sigla que a página manda é uma das que o banco aceita.
+    siglas = set(re.findall(r"sigla: '(\w+)'", pagina))
+    assert siglas == {'CJ', 'CREG'}, siglas
+
+
 @teste
 def migracoes_estao_todas_cobertas(cur):
     """Nenhuma migração pode entrar no diretório sem ser executada por aqui.

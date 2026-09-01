@@ -390,7 +390,11 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
   background: var(--surface-raised);
 }
 
-.selection-card-acervo { background: var(--surface-subtle); }
+/* Os dois cards de CONSULTA — acervo e histórico — dividem o mesmo fundo: é
+   o que os separa, na leitura, do card que abre um sorteio novo e do que
+   pede registro de dado. */
+.selection-card-acervo,
+.selection-card-historico { background: var(--surface-subtle); }
 .selection-card-records {
   border-color: var(--accent-hover-soft);
   background: var(--accent-panel);
@@ -1324,6 +1328,25 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
   .detalhe-table tbody th,
   .detalhe-table tbody td { font-size: var(--text-xs); }
+
+  /* O card do histórico não exporta — é só leitura —, então o cabeçalho tem
+     apenas o fechar. Título e um X cabem lado a lado nesta largura; a coluna
+     existe para o card do acervo, onde o Exportar divide a linha com ele. */
+  .detalhe-header:not(:has(#btnExportarDetalhe)) {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .detalhe-header:not(:has(#btnExportarDetalhe)) .detalhe-acoes { width: auto; }
+}
+
+/* Seis colunas — duas delas de texto livre — não cabem em 390px por mais que se
+   aperte o padding, e o overflow-x: hidden do corpo do card deixava as duas
+   últimas fora de alcance. Rolar de lado dentro do card devolve o acesso a
+   elas. O card do acervo, com quatro colunas curtas, continua sem precisar. */
+@media screen and (max-width: 620px) {
+  .detalhe-corpo:has(> .historico-detalhe) { overflow-x: auto; }
+  .detalhe-table.historico-detalhe { min-width: 520px; }
 }
 
 .acervo-table tbody td.acervo-zero {
@@ -1375,6 +1398,121 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 .acervo-table tfoot td { font-size: var(--text-lg); text-align: center; }
 .acervo-table tfoot td:last-child { border-right: 0; border-left: 1px solid var(--border); background: var(--table-total-bg); color: var(--accent); font-size: calc(var(--text-lg) + 1px); }
+
+/* ── Histórico de sorteios ──────────────────────────────────────────────────
+   Mesma moldura do painel do acervo (.acervo-panel, .acervo-table-shell,
+   .acervo-panel-footer) e o mesmo card de detalhe. O que muda é a tabela: aqui
+   é uma LISTA cronológica, não uma matriz de contagem — uma linha por rodada,
+   texto alinhado à esquerda e a data como identidade da linha. */
+.historico-table {
+  min-width: 720px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.historico-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 48px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  border-bottom: 0;
+  background: #00453e;
+  color: var(--on-accent);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.historico-table thead th:first-child { padding-left: 24px; }
+.historico-table thead th:last-child { padding-right: 24px; text-align: right; }
+
+.historico-table tbody th,
+.historico-table tbody td {
+  height: 56px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: var(--text-sm);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.historico-table tbody th:first-child,
+.historico-table tbody td:first-child { padding-left: 24px; }
+.historico-table tbody tr:last-child th,
+.historico-table tbody tr:last-child td { border-bottom: 0; }
+
+/* A data é a identidade da rodada — é ela que se procura no histórico. O dia da
+   semana entra abaixo, menor: é o que confirma que se achou a sessão certa. */
+.historico-data { white-space: nowrap; }
+
+.historico-data-dia {
+  display: block;
+  color: var(--accent);
+  font-size: var(--text-md);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.historico-data-semana {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+/* Horário e contagem se leem em coluna: tabulares para os dígitos alinharem de
+   uma linha para a outra. */
+.historico-hora,
+.historico-numero { font-variant-numeric: tabular-nums; font-weight: 700; }
+
+/* Cadeiras e unidades vêm por extenso do banco. Quebram linha quando a rodada
+   inteira participou — cinco cadeiras não cabem numa linha em tela estreita. */
+.historico-destinos {
+  color: var(--muted-strong);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.historico-acao { padding-right: 24px; text-align: right; }
+
+/* O início da série encosta na ponta esquerda do rodapé; "Atualizado em"
+   continua na direita, onde o painel do acervo o pôs. O rodapé já dá cor,
+   tamanho e peso — aqui só o empurrão. */
+.historico-inicio { margin-right: auto; }
+
+/* O alvo mantém altura de toque confortável; o que encolhe é a folga lateral,
+   para a coluna de ação não roubar largura das quatro que informam. */
+.historico-ver {
+  min-height: 40px;
+  padding: 6px 12px;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .historico-table tbody tr:hover th,
+  .historico-table tbody tr:hover td { background: var(--accent-soft); }
+}
+
+/* O card do acervo tem sempre as mesmas quatro ou cinco colunas, e por isso a
+   largura fixa. Aqui a lista muda de forma entre os colegiados — o Conselho tem
+   interessado, a Câmara não —, e com seis colunas iguais o número de 15 dígitos
+   e o rótulo dele ficavam cortados. Em auto, quem manda é o conteúdo. */
+.detalhe-table.historico-detalhe { table-layout: auto; }
+
+/* Assunto e interessado são os campos de texto livre da lista de processos, e
+   não cabem numa coluna que não quebra linha. */
+.detalhe-table td.historico-livre { white-space: normal; }
 
 .acervo-panel-footer {
   display: flex;
@@ -1879,6 +2017,10 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .status-dot,
   .nav-icon,
   .empty-state-icon,
+  /* No papel não há o que clicar: a coluna de ação do histórico vira largura
+     desperdiçada, e as quatro colunas que informam a recuperam. */
+  .historico-acao,
+  .historico-table thead th:last-child,
   svg {
     display: none !important;
   }

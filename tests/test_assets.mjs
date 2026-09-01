@@ -21,7 +21,7 @@ const versaoMinificada = ler('assets/js/supabase.min.js')
 assert.equal(versaoMinificada, versao,
   'supabase.min.js carrega páginas com uma versão antiga dos assets');
 
-for (const pagina of ['index.html', 'julgados-cj.html', 'julgados-creg.html', 'acervo-cj.html', 'acervo-creg.html', '404.html']) {
+for (const pagina of PAGINAS) {
   const html = ler(pagina);
   const assets = [...html.matchAll(/(?:href|src)="(assets\/(?:css|js)\/[^"?]+\.min\.(?:css|js))\?v=([^"&]+)"/g)];
   assert.ok(assets.length > 0, `${pagina}: nenhum asset minificado versionado`);
@@ -59,6 +59,24 @@ assert.ok(acervoCreg.indexOf('class="nav-actions"') < acervoCreg.indexOf('id="bt
   && acervoCreg.indexOf('id="btnExportar"') < acervoCreg.indexOf('</nav>'),
   'Exportar precisa permanecer junto das ações da barra superior (Conselho)');
 
+// O histórico entra pelo mesmo caminho das demais telas autenticadas: o script
+// da página só é buscado depois que a sessão existe. E as duas páginas são
+// gêmeas — mesmo script, colegiados diferentes —, então cada uma precisa dizer
+// qual é o seu, ou as duas mostrariam a Câmara.
+assert.match(index, /class="selection-card selection-card-historico"/,
+  'o card de histórico saiu da tela principal');
+for (const [pagina, colegiado] of [['historico-cj.html', 'cj'], ['historico-creg.html', 'creg']]) {
+  const html = ler(pagina);
+  assert.doesNotMatch(html, /<script[^>]+historico\.min\.js/,
+    `${pagina}: historico.js voltou ao carregamento inicial`);
+  assert.match(html, new RegExp(`data-colegiado="${colegiado}"`),
+    `${pagina}: sem data-colegiado, o script cai no padrão e mostra o outro colegiado`);
+  // O card da tela principal é a única porta para cada histórico: sem o link, a
+  // página existe e ninguém chega nela.
+  assert.ok(index.includes(`href="./${pagina}"`),
+    `o card de histórico não aponta para ${pagina}`);
+}
+
 // Renomear uma página e esquecer a entrada correspondente deixa o dashboard em
 // branco: sem a chave, o bootstrap não carrega script nenhum e não reclama.
 const bootstrap = ler('assets/js/bootstrap.js');
@@ -66,7 +84,7 @@ const chavesBootstrap = new Set([...bootstrap
   .slice(bootstrap.indexOf('const PAGINAS'), bootstrap.indexOf('};', bootstrap.indexOf('const PAGINAS')))
   .matchAll(/^ {2}'?([\w-]+)'?:\s*\{/gm)].map(([, chave]) => chave));
 const paginasDoHtml = PAGINAS.map(pagina => ler(pagina).match(/data-page="([^"]+)"/)?.[1]).filter(Boolean);
-assert.ok(paginasDoHtml.length >= 5, 'não achei os data-page das páginas: o atributo mudou?');
+assert.ok(paginasDoHtml.length >= 6, 'não achei os data-page das páginas: o atributo mudou?');
 for (const pagina of paginasDoHtml) {
   assert.ok(chavesBootstrap.has(pagina), `data-page="${pagina}" não tem entrada em PAGINAS no bootstrap.js`);
 }

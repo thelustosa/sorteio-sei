@@ -20,7 +20,12 @@ const PAGINAS = {
   'acervo-cj': { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' },
   // Mesmo script para os dois colegiados: quem escolhe o par de funções do
   // banco é o data-colegiado do <body> (ver COLEGIADOS em acervo.js).
-  'acervo-creg': { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' }
+  'acervo-creg': { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' },
+  'historico-cj': { arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Preparando o histórico…' },
+  // Mesmo script para os dois colegiados, como o painel do acervo: quem escolhe
+  // o vocabulário e a sigla que vai ao banco é o data-colegiado do <body>
+  // (ver COLEGIADOS em historico.js).
+  'historico-creg': { arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Preparando o histórico…' }
 };
 
 const paginaAtual = PAGINAS[document.body.dataset.page];

@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#00534b" />
+  <meta name="description" content="Consulta dos sorteios de processos já realizados pela Câmara de Julgamento." />
+  <title>Histórico de sorteios — Câmara de Julgamento | Sorteio de Processos SEI</title>
+  <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="icon" href="assets/img/favicon.png" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=c7bb0aa05b" />
+  <script>
+    (function () {
+      try {
+        if (sessionStorage.getItem('sorteio-sei.access-token')) {
+          document.documentElement.classList.add('has-session');
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <script defer src="assets/js/supabase.min.js?v=c7bb0aa05b"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=c7bb0aa05b"></script>
+</head>
+
+<body class="dashboard-page" data-page="historico-cj" data-colegiado="cj">
+  <a class="skip-link" href="#conteudo-principal">Pular para o conteúdo principal</a>
+
+  <div class="page-header-wrapper">
+    <div class="container">
+      <header>
+        <div class="logo">
+          <img src="assets/img/logo_header.png" alt="Governo de Goiás" width="120" height="55" />
+        </div>
+        <div class="header-copy">
+          <p class="institution-name">Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</p>
+          <h1>Sorteio de Processos SEI</h1>
+          <p class="lead">Consulta das distribuições já realizadas pela Câmara de Julgamento.</p>
+        </div>
+      </header>
+    </div>
+  </div>
+
+  <nav class="green-bar" aria-label="Navegação do sistema">
+    <div class="container">
+      <span id="txtModo">Histórico de sorteios</span>
+      <div class="nav-actions">
+        <button id="btnAtualizar" class="nav-action" type="button" data-sessao hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M16.5 10a6.5 6.5 0 1 1-1.9-4.6"></path><path d="M16.5 3v4h-4"></path>
+          </svg>
+          <span>Atualizar</span>
+        </button>
+        <a class="nav-action" href="./index.html">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15.5 10h-11"></path><path d="m8.5 6-4 4 4 4"></path>
+          </svg>
+          <span>Voltar</span>
+        </a>
+        <button id="btnSair" class="nav-action" type="button" hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"></path>
+            <path d="m11 7 3 3-3 3"></path>
+            <path d="M14 10H8"></path>
+          </svg>
+          <span>Sair</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="conteudo-principal" class="container dashboard-main" tabindex="-1">
+    <div class="card" data-login-only>
+      <div id="loginScreen">
+        <h2>Acesso restrito</h2>
+        <p>Identifique-se para consultar o histórico.</p>
+        <form id="loginForm">
+          <label for="loginEmail">E-mail</label>
+          <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
+          <label for="loginSenha">Senha</label>
+          <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+          <button id="btnEntrar" type="submit">Entrar</button>
+          <div id="loginErro" role="alert" aria-live="assertive"></div>
+        </form>
+      </div>
+
+      <div id="sessionLoading" class="session-loading" data-sessao hidden></div>
+    </div>
+
+    <!-- O painel é o mesmo do acervo: mesma moldura, mesmo cabeçalho verde,
+         mesmo rodapé de atualização. O que muda é a tabela — aqui é uma lista
+         cronológica, não uma matriz. -->
+    <section id="historicoPanel" class="acervo-panel" aria-labelledby="historico-title" data-sessao hidden>
+      <header class="acervo-header">
+        <div class="acervo-header-main">
+          <div class="acervo-header-title-group">
+            <h2 id="historico-title">Histórico de sorteios</h2>
+            <p class="acervo-subtitle">Rodadas de sorteio da Câmara de Julgamento, da mais recente para a mais antiga, com os processos de cada uma.</p>
+          </div>
+          <div class="acervo-header-summary">
+            <div class="acervo-scope" aria-label="Escopo do painel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 8v4l3 2"></path><circle cx="12" cy="12" r="9"></circle>
+              </svg>
+              <span id="historicoTotal">Sorteios realizados</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="acervo-table-shell">
+        <div id="historicoErro" class="load-error" role="alert" hidden>
+          <p></p>
+          <button id="btnTentarNovamente" class="button-secondary" type="button">Tentar novamente</button>
+        </div>
+        <div id="historicoVazio" class="empty-state" role="status" hidden>
+          <div class="empty-state-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 8v4l3 2"></path><circle cx="12" cy="12" r="9"></circle>
+            </svg>
+          </div>
+          <div>
+            <h3>Nenhum sorteio neste período</h3>
+            <!-- O texto é montado por historico.js: ele carrega a data de início
+                 da série, e essa data tem de ser a mesma que a função do banco
+                 usa para cortar. Um vazio sem essa frase parece defeito. -->
+            <p id="historicoVazioTexto"></p>
+          </div>
+        </div>
+        <div class="table-scroll" role="region" aria-label="Sorteios realizados pela Câmara de Julgamento, por data" tabindex="0">
+          <!-- Uma linha por rodada, montada por historico.js a partir do que
+               historico_sorteios devolve para este colegiado: as rodadas são as
+               que existem no acervo, não uma lista fixa aqui. -->
+          <table id="historicoTable" class="historico-table"></table>
+        </div>
+        <footer class="acervo-panel-footer">
+          <!-- O início da série fica no rodapé mesmo com a lista cheia: sem
+               ele, quem procura um sorteio anterior ao marco não descobre por
+               que não o encontra. -->
+          <span id="historicoInicio" class="historico-inicio"></span>
+          <div class="acervo-updated" role="status" aria-live="polite" aria-atomic="true">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="historicoAtualizado">Carregando…</span>
+          </div>
+        </footer>
+      </div>
+    </section>
+
+    <!-- Os processos de um sorteio. Mesmo <dialog> nativo do painel do acervo:
+         o modo modal traz o fechamento por Escape, a devolução do foco e o
+         ::backdrop que desfoca o fundo, sem acessibilidade escrita à mão. -->
+    <dialog id="detalheDialog" class="detalhe-dialog" aria-labelledby="detalheTitulo">
+      <header class="detalhe-header">
+        <div class="detalhe-identidade">
+          <h2 id="detalheTitulo">Processos do sorteio</h2>
+          <p id="detalheResumo" class="detalhe-resumo"></p>
+        </div>
+        <div class="detalhe-acoes">
+          <button id="btnFecharDetalhe" class="nav-action detalhe-fechar" type="button" aria-label="Fechar">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+              <path d="m6 6 8 8"></path><path d="m14 6-8 8"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <div id="detalheLoading" class="detalhe-loading" hidden></div>
+      <div id="detalheErro" class="load-error" role="alert" hidden><p></p></div>
+
+      <div id="detalheCorpo" class="detalhe-corpo">
+        <table id="detalheTable" class="detalhe-table historico-detalhe"></table>
+      </div>
+    </dialog>
+  </main>
+
+  <footer class="page-footer">
+    <div class="footer-container">
+      <div class="logo footer-logo">
+        <img src="assets/img/logo_footer.png" alt="Estado de Goiás" width="104" height="48" />
+      </div>
+      <p class="footer-info">Registro auditável das distribuições realizadas por sorteio eletrônico na Câmara de Julgamento.</p>
+      <div class="footer-meta">
+        <div class="footer-version">Versão 3.6</div>
+        <p class="footer-credit">Desenvolvido por <strong>Lucas Lustosa Coelho e Leonardo Ferreira Amichi</strong>.</p>
+      </div>
+    </div>
+  </footer>
+</body>
+
+</html>

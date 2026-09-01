@@ -17,10 +17,12 @@ export const FONTES = [
   'assets/js/index.js',
   'assets/js/julgados.js',
   'assets/js/julgados-creg.js',
-  'assets/js/acervo.js'
+  'assets/js/acervo.js',
+  'assets/js/historico.js'
 ];
 export const PAGINAS = ['index.html', 'julgados-cj.html', 'julgados-creg.html',
-                        'acervo-cj.html', 'acervo-creg.html', '404.html'];
+                        'acervo-cj.html', 'acervo-creg.html',
+                        'historico-cj.html', 'historico-creg.html', '404.html'];
 
 const ler = caminho => readFileSync(join(RAIZ, caminho), 'utf8');
 // Zera a própria versão antes de hashear, senão o valor gravado mudaria o hash
