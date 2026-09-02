@@ -1649,6 +1649,31 @@ def historico_traz_os_destinos_por_extenso(cur):
 
 
 @teste
+def historico_traz_a_quantidade_de_processos_por_destino(cur):
+    """A lista mostra o volume de cada unidade sem buscar cada rodada de novo."""
+    autenticar(cur)
+    semear_historico(cur)
+    cur.execute("""
+        insert into public.acervo_creg
+          (num_processo, unidade, data_distribuicao, recurso, assunto, ordem,
+           sorteado_em, origem) values
+          ('202600029000206', 'CREG2', date '2026-08-27', 'Com recurso',
+           'Requerimento', 3, timestamptz '2026-08-27 11:07:26.154-03', 'sorteio'),
+          ('202600029000207', 'CREG2', date '2026-08-27', 'Sem recurso',
+           'Auto de Infração', 4, timestamptz '2026-08-27 11:07:26.154-03', 'sorteio')
+    """)
+
+    distribuicao = uma(cur, """select distribuicao
+                                  from public.historico_sorteios('CREG')
+                                 where data_sorteio = date '2026-08-27'""")
+    assert distribuicao == [
+        {'destino': 'CREG2', 'processos': 3},
+        {'destino': 'CREG4', 'processos': 1},
+    ], distribuicao
+    cur.connection.rollback()
+
+
+@teste
 def processos_do_sorteio_trazem_exatamente_a_rodada_pedida(cur):
     """O par (data, carimbo) é a chave: rodada vizinha não vaza para o card."""
     autenticar(cur)
