@@ -17,63 +17,6 @@
 -- CREG a coluna é RECURSO e quem recebe é a UNIDADE (CREG1..CREG4). O CREG
 -- ainda calcula META 45 e a divergência em relação à CJ, que a Câmara não tem.
 
--- ── CREG: a tabela do sorteio antigo ────────────────────────────────────────
--- Até 27/08/2026 o sorteio do Conselho Regulador gravava aqui — uma tabela sem
--- acervo e sem julgados, medida provisória enquanto o CREG não tinha o desenho
--- da Câmara. Agora tem: index.js grava em acervo_creg.
---
--- Ela CONTINUA no schema, e não está vazia: guarda os 81 processos sorteados em
--- 27/08/2026, o último sorteio feito antes da virada. Esses registros foram
--- copiados para acervo_creg (migração 20260828…), e ficam aqui como o que a
--- tela gravou na época. Apagar tabela é decisão de quem opera o banco, não
--- efeito colateral de rodar um schema — e esta ainda é o objeto da migração
--- 20260823165725, que validou a restrição de 15 dígitos sobre o legado.
-create table if not exists public.processos_sorteados (
-  id                bigint generated always as identity primary key,
-  criado_em         timestamptz not null default now(),
-  modo              text        not null check (modo = 'CREG'),
-  data_hora         timestamptz not null,
-  ordem             int         not null,
-  num_processo      text        not null,
-  assunto           text        not null,
-  interessado       text,
-  data_distribuicao date        not null,
-  recurso           text        not null,
-  unidade           text        not null
-);
-
--- Campo livre digitado pela secretaria; sorteios anteriores não o têm, então a
--- coluna nasce anulável em vez de inventar valor para o histórico.
-alter table public.processos_sorteados
-  add column if not exists interessado text;
-
--- Criar em duas etapas mantinha a proteção para novas linhas enquanto uma base
--- antiga era conferida; a validação abaixo exige que nenhum legado inválido reste.
-do $$
-begin
-  if not exists (
-    select 1
-      from pg_constraint
-     where conrelid = 'public.processos_sorteados'::regclass
-       and conname = 'processos_sorteados_num_processo_15_digitos'
-  ) then
-    alter table public.processos_sorteados
-      add constraint processos_sorteados_num_processo_15_digitos
-      check (num_processo ~ '^[0-9]{15}$') not valid;
-  end if;
-end
-$$;
-
-alter table public.processos_sorteados
-  validate constraint processos_sorteados_num_processo_15_digitos;
-
-create index if not exists idx_processos_sorteados_modo_data
-  on public.processos_sorteados (modo, data_hora desc);
-
-create unique index if not exists ux_processos_sorteados_distribuicao
-  on public.processos_sorteados
-  (modo, num_processo, data_distribuicao, unidade);
-
 -- ── CJ · Acervo ──────────────────────────────────────────────────────────────
 -- Uma linha por DISTRIBUIÇÃO de um processo a um relator — não uma linha por
 -- processo. Um processo redistribuído aparece mais de uma vez, com datas e
@@ -318,8 +261,8 @@ alter table public.julgados_cj
 
 -- O interessado saiu da Câmara de Julgamento em 20/08/2026: lá ninguém o
 -- consultava e não valia a pena guardar nome de pessoa. No Conselho Regulador
--- ele voltou em 27/08/2026, digitado na tela do sorteio — por isso
--- processos_sorteados não entra nesta limpeza (a coluna é criada acima).
+-- ele voltou em 27/08/2026, digitado na tela do sorteio — por isso a limpeza é
+-- só das duas tabelas da Câmara, e acervo_creg mantém a coluna.
 alter table public.acervo_cj   drop column if exists interessado;
 alter table public.julgados_cj drop column if exists interessado;
 
@@ -629,7 +572,7 @@ revoke all on function public.processos_acervo_cj(int, text) from public, anon, 
 grant execute on function public.processos_acervo_cj(int, text) to authenticated;
 
 -- ── Segurança (RLS) ──────────────────────────────────────────────────────────
--- Duas camadas de proteção, iguais para as três tabelas:
+-- Duas camadas de proteção, iguais para as tabelas da Câmara:
 --
 -- 1. Somente INSERT. O site acrescenta registros, mas não pode ler, alterar nem
 --    apagar um sorteio já gravado. Consultas e relatórios são feitos pelo painel
@@ -645,14 +588,8 @@ grant execute on function public.processos_acervo_cj(int, text) to authenticated
 -- O gatilho acima é SECURITY DEFINER justamente por causa da regra 1: ele
 -- precisa LER o acervo para derivar os campos, e quem insere não tem esse
 -- direito.
-alter table public.processos_sorteados enable row level security;
-alter table public.acervo_cj           enable row level security;
-alter table public.julgados_cj         enable row level security;
-
-drop policy if exists "front pode inserir" on public.processos_sorteados;
-drop policy if exists "usuario autenticado pode inserir" on public.processos_sorteados;
-create policy "usuario autenticado pode inserir"
-  on public.processos_sorteados for insert to authenticated with check (true);
+alter table public.acervo_cj   enable row level security;
+alter table public.julgados_cj enable row level security;
 
 drop policy if exists "usuario autenticado pode inserir" on public.acervo_cj;
 create policy "usuario autenticado pode inserir"
@@ -670,22 +607,18 @@ create policy "usuario autenticado pode ler"
 -- O Supabase concede privilégios amplos aos papéis da API por padrão. RLS ainda
 -- bloquearia as linhas, mas os grants abaixo repetem o mesmo mínimo como segunda
 -- camada e deixam o schema idêntico num Postgres comum.
-revoke all privileges on table public.processos_sorteados, public.acervo_cj,
-                               public.julgados_cj, public.pautas_cj
+revoke all privileges on table public.acervo_cj, public.julgados_cj,
+                               public.pautas_cj
   from anon, authenticated;
-revoke all privileges on sequence public.processos_sorteados_id_seq,
-                                  public.acervo_cj_id_seq,
+revoke all privileges on sequence public.acervo_cj_id_seq,
                                   public.julgados_cj_id_seq,
                                   public.pautas_cj_id_seq
   from anon, authenticated;
 
 grant usage on schema public to anon, authenticated;
-grant insert on public.processos_sorteados to authenticated;
-grant insert on public.acervo_cj           to authenticated;
-grant select on public.julgados_cj         to authenticated;
-grant usage on sequence public.processos_sorteados_id_seq,
-                        public.acervo_cj_id_seq
-  to authenticated;
+grant insert on public.acervo_cj   to authenticated;
+grant select on public.julgados_cj to authenticated;
+grant usage on sequence public.acervo_cj_id_seq to authenticated;
 
 -- ── CREG · Acervo ────────────────────────────────────────────────────────────
 -- Uma linha por DISTRIBUIÇÃO de um processo a uma unidade (CREG1..CREG4) — não
@@ -1248,6 +1181,200 @@ revoke all privileges on sequence public.acervo_creg_id_seq,
 grant insert on public.acervo_creg   to authenticated;
 grant select on public.julgados_creg to authenticated;
 grant usage  on sequence public.acervo_creg_id_seq to authenticated;
+
+-- ── Histórico de sorteios ────────────────────────────────────────────────────
+-- O que alimenta historico-cj.html e historico-creg.html: as rodadas de sorteio
+-- já realizadas, uma tela por colegiado, como o painel do acervo.
+--
+-- Um SORTEIO é o lote que a tela gravou de uma vez: as linhas do acervo que
+-- compartilham (data_distribuicao, sorteado_em). index.js usa um só instante
+-- para o lote inteiro — ver "Um só instante para o sorteio inteiro" lá —, então
+-- o carimbo já identifica a rodada e o histórico não precisa de tabela nova nem
+-- de escrever coisa alguma: consultar não pode mexer no que está gravado.
+--
+-- O carimbo pode faltar, e por isso a chave é o PAR (data, carimbo) e não o
+-- carimbo sozinho: as quatro rodadas da Câmara de 2026 entraram num lote só, em
+-- 21/08/2026, sem `sorteado_em`. Nelas quem data o sorteio é a distribuição, e
+-- a tela mostra a rodada sem horário em vez de inventar um.
+--
+-- ONDE O HISTÓRICO COMEÇA: em `origem = 'sorteio'`, e a partir do marco abaixo.
+-- É o recorte do que o SISTEMA distribuiu, que é o que esta tela promete.
+--
+--   • 'planilha' fica de fora — acervo herdado das planilhas de gabinete, que
+--     nunca foi um evento de sorteio; listá-lo inventaria rodadas que não houve
+--     (são 3.064 linhas no CREG, contra 81 de sorteio).
+--   • 'ata' também fica de fora — sorteio de verdade, mas anterior ao sistema e
+--     conhecido só pelo PDF publicado no SEI.
+--
+-- A primeira versão de historico_sorteios não tinha parâmetro: servia os dois
+-- colegiados na mesma lista. `create or replace` não muda a assinatura de uma
+-- função, então a antiga precisa sair antes da nova entrar.
+drop function if exists public.historico_sorteios();
+
+create or replace function public.historico_marco()
+returns date
+language sql
+immutable
+set search_path = ''
+as $$
+  -- 27/08/2026: o dia do primeiro sorteio feito na tela — os 81 processos do
+  -- Conselho Regulador que processos_sorteados gravou e que hoje vivem em
+  -- acervo_creg (migração 20260828…). Aquela tabela provisória vai ser
+  -- removida, e por isso o histórico lê o acervo, nunca ela.
+  --
+  -- O MESMO corte vale para os dois colegiados, de propósito: a série começa no
+  -- mesmo dia para a Câmara e para o Conselho. As quatro rodadas da Câmara de
+  -- 2026 (29/06 a 14/08) ficam de fora — entraram no acervo num lote só, em
+  -- 21/08, sem carimbo de hora, e são anteriores ao marco. A Câmara começa com
+  -- o histórico vazio e o preenche no próximo sorteio.
+  --
+  -- Mora numa função, e não repetido nas duas consultas, porque corte escrito
+  -- em dois lugares é corte que vai divergir. Ninguém a executa pela API: as
+  -- duas funções do histórico são SECURITY DEFINER e a chamam como dono.
+  select date '2026-08-27'
+$$;
+
+revoke all on function public.historico_marco() from public, anon, authenticated, service_role;
+
+create or replace function public.historico_sorteios(p_colegiado text)
+returns table (
+  data_sorteio date,
+  sorteado_em  timestamptz,
+  processos    int,
+  destinos     text[]
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  marco constant date := public.historico_marco();
+begin
+  if (select auth.uid()) is null then
+    raise exception 'autenticação exigida' using errcode = '28000';
+  end if;
+
+  if coalesce(p_colegiado, '') not in ('CJ', 'CREG') then
+    raise exception 'colegiado desconhecido: %', p_colegiado using errcode = '22023';
+  end if;
+
+  return query
+  -- Os destinos saem por extenso, não como contagem: "CREG1, CREG2, CREG4" diz
+  -- quem participou da rodada, e "3" só diz quantos foram.
+  select a.data_distribuicao, a.sorteado_em, count(*)::int,
+         array_agg(distinct a.relator order by a.relator)
+    from public.acervo_cj a
+   where p_colegiado = 'CJ'
+     and a.origem = 'sorteio'
+     and a.data_distribuicao >= marco
+   group by a.data_distribuicao, a.sorteado_em
+   union all
+  select b.data_distribuicao, b.sorteado_em, count(*)::int,
+         array_agg(distinct b.unidade order by b.unidade)
+    from public.acervo_creg b
+   where p_colegiado = 'CREG'
+     and b.origem = 'sorteio'
+     and b.data_distribuicao >= marco
+   group by b.data_distribuicao, b.sorteado_em
+   -- Mais recente primeiro, que é como um histórico é lido. `nulls last` deixa
+   -- a rodada sem carimbo depois da carimbada do mesmo dia, e não antes dela.
+   order by 1 desc, 2 desc nulls last;
+end;
+$$;
+
+revoke all on function public.historico_sorteios(text) from public, anon, service_role;
+grant execute on function public.historico_sorteios(text) to authenticated;
+
+-- ── Os processos de um sorteio ───────────────────────────────────────────────
+-- A lista que o histórico abre ao clicar numa rodada. Mesma razão de
+-- processos_acervo_cj existir: os dois acervos são fechados ao navegador, e
+-- abrir SELECT neles só para montar esta tela entregaria o acervo inteiro ao
+-- cliente.
+--
+-- Uma função para os dois colegiados, com o vocabulário traduzido aqui: o que
+-- na Câmara é relator/defesa e no Conselho é unidade/recurso sai como
+-- destino/decisao. Sem essa tradução, a tela precisaria de dois caminhos para
+-- desenhar a mesma tabela.
+--
+-- `is not distinct from` e não `=`: o carimbo das rodadas antigas é nulo, e um
+-- `=` com nulo devolveria lista vazia justamente para elas.
+create or replace function public.processos_sorteio(
+  p_colegiado   text,
+  p_data        date,
+  p_sorteado_em timestamptz default null
+)
+returns table (
+  ordem        int,
+  num_processo text,
+  destino      text,
+  responsavel  text,
+  assunto      text,
+  decisao      text,
+  interessado  text
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  marco constant date := public.historico_marco();
+begin
+  if (select auth.uid()) is null then
+    raise exception 'autenticação exigida' using errcode = '28000';
+  end if;
+
+  if coalesce(p_colegiado, '') not in ('CJ', 'CREG') then
+    raise exception 'colegiado desconhecido: %', p_colegiado using errcode = '22023';
+  end if;
+
+  return query
+  select a.ordem,
+         a.num_processo,
+         a.relator,
+         -- O ocupante da cadeira NA DATA do sorteio, não o de hoje: histórico
+         -- que reescreve o relator a cada mudança de composição deixa de ser
+         -- histórico. Cadeira sem de-para no período sai pelo próprio rótulo.
+         coalesce(c.conselheiro, a.relator),
+         a.assunto,
+         -- Na Câmara a coluna é a DEFESA, booleana. O texto em `recurso` é o
+         -- legado da época em que a CJ dividia a tabela com o Conselho: sai
+         -- como está, porque relê-lo como defesa inventaria a decisão. E
+         -- defesa nula tem de cair nesse legado, não virar 'Não'.
+         case when a.defesa is null then a.recurso
+              when a.defesa        then 'Sim'
+              else 'Não' end,
+         null::text
+    from public.acervo_cj a
+    left join public.cadeiras_cj c
+           on c.cadeira = a.relator
+          and a.data_distribuicao >= c.desde
+          and (c.ate is null or a.data_distribuicao <= c.ate)
+   where p_colegiado = 'CJ'
+     and a.data_distribuicao = p_data
+     and a.sorteado_em is not distinct from p_sorteado_em
+     and a.origem = 'sorteio'
+     and a.data_distribuicao >= marco
+   union all
+  select b.ordem, b.num_processo, b.unidade, null::text,
+         b.assunto, b.recurso, b.interessado
+    from public.acervo_creg b
+   where p_colegiado = 'CREG'
+     and b.data_distribuicao = p_data
+     and b.sorteado_em is not distinct from p_sorteado_em
+     and b.origem = 'sorteio'
+     and b.data_distribuicao >= marco
+   -- A ordem do sorteio é a da ata. Linha sem ordem — gravação que não a
+   -- registrou — vai para o fim, com o número do processo como desempate
+   -- estável.
+   order by 1 nulls last, 2;
+end;
+$$;
+
+revoke all on function public.processos_sorteio(text, date, timestamptz)
+  from public, anon, service_role;
+grant execute on function public.processos_sorteio(text, date, timestamptz) to authenticated;
 
 -- ── Monitoramento / Keep-Alive (UptimeRobot / Health Check) ──────────────────
 -- Função leve sem efeitos colaterais (STABLE) que permite requisições HEAD/GET

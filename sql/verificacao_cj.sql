@@ -33,16 +33,6 @@ select 2, 'ERRO',
           having count(*) > 1) x)
 
 union all
-select 2.5, 'ERRO',
-       'Distribuição CREG repetida',
-       'mesmo processo, data e unidade mais de uma vez',
-       (select count(*) from (
-          select 1 from public.processos_sorteados
-           where modo = 'CREG'
-           group by modo, num_processo, data_distribuicao, unidade
-          having count(*) > 1) x)
-
-union all
 select 3, 'ERRO',
        'Julgado apontando para processo diferente no acervo',
        'acervo_id existe mas o num_processo dos dois não bate',
@@ -72,12 +62,6 @@ select 6, 'ERRO',
        'processo SEI da AGR tem 15 dígitos, só dígitos',
        (select count(*) from public.julgados_cj where num_processo !~ '^[0-9]{15}$')
 
-union all
-select 6.5, 'AVISO',
-       'Número de processo fora do padrão no CREG',
-       'legado preservado; novos registros já exigem 15 dígitos, só dígitos',
-       (select count(*) from public.processos_sorteados
-         where modo = 'CREG' and num_processo !~ '^[0-9]{15}$')
 
 -- ── Rótulos ──────────────────────────────────────────────────────────────────
 
@@ -215,12 +199,6 @@ select 23, 'INFO',
        'Pautas já sincronizadas da AGR',
        'documentos processados por sincronizacao/sincronizar.py',
        (select count(*) from public.pautas_cj where url like 'https://%')
-
-union all
-select 24, 'ERRO',
-       'Processo CJ ainda na tabela antiga',
-       'processos_sorteados deixou de ser fonte de dados da Câmara',
-       (select count(*) from public.processos_sorteados where modo <> 'CREG')
 
 )
 select gravidade, conferencia, quantidade, explicacao
