@@ -230,8 +230,9 @@ grava em `pautas_creg` o número que a AGR usa.
 
 O job do GitHub Actions sincroniza os **dois** colegiados na mesma rodada, um de
 cada vez. A Câmara reúne às quintas; o Conselho não tem dia fixo (em 2026 houve
-sessão em quarta, quinta e sexta), então a rodada semanal de sexta cobre a
-semana inteira dos dois.
+sessão em quarta, quinta e sexta), e a pauta pode ir ao ar em qualquer hora
+do expediente — por isso a busca é de hora em hora, das 07:00 às 20:00 de
+Goiás, e não uma rodada semanal.
 
 ```bash
 python sincronizacao/sincronizar.py --colegiado CREG --simular --dsn "postgresql://…"
@@ -323,14 +324,15 @@ julgados novos têm unidade resolvida pelo gatilho.
 
 ### Os 81 sorteados em 27/08 vieram da tabela antiga
 
-No dia da virada, a tela em produção ainda era a que gravava em
-`processos_sorteados`, e o sorteio daquele dia — 81 processos, 27 para cada uma
-de CREG2, CREG3 e CREG4 — entrou lá. A migração `20260828…` copiou os 81 para
+No dia da virada, a tela em produção ainda era a que gravava na tabela antiga
+do sorteio, e o sorteio daquele dia — 81 processos, 27 para cada uma de CREG2,
+CREG3 e CREG4 — entrou lá. A migração `20260828…` copiou os 81 para
 `acervo_creg` com `origem = 'sorteio'`; sem ela ficariam distribuídos e
-invisíveis ao painel.
+invisíveis ao painel. Os pendentes passaram de 87 para 166.
 
-`processos_sorteados` **não foi esvaziada**: continua com as 81 linhas, como o
-registro do que a tela gravou na época. Os pendentes passaram de 87 para 166.
+A tabela antiga foi mantida por uns dias como o registro do que a tela gravou
+na época, e removida do schema em 02/09/2026 pela migração `20260902…` — depois
+de conferido, linha a linha, que as 81 estavam em `acervo_creg`.
 
 Dois desses 81 já constavam do acervo em outra unidade e outra data — são
 redistribuições legítimas, e o painel conta cada processo uma vez só, na
@@ -403,8 +405,8 @@ Todos os passos são idempotentes.
   `Com recurso`, `Sem recurso`, `Não se aplica` e `Pedido de revisão`; o acervo
   registrado traz `Ad Referendum` (38 linhas) e `Reexame Necessário` (15), e
   nenhum `Pedido de revisão`. Alinhar as duas listas é decisão do Conselho.
-- **`processos_sorteados` continua no schema**, sem ninguém escrevendo nela
-  desde 27/08/2026 — mas não vazia: guarda as 81 linhas daquele dia, como o
-  registro do que a tela gravou na época (a migração `20260828…` as copiou para
-  `acervo_creg`). Não foi derrubada porque é o objeto da migração
-  20260823165725 e porque apagar tabela é decisão de quem opera o banco.
+- ~~**A tabela antiga do sorteio continua no schema.**~~ Resolvido em
+  02/09/2026: a migração `20260902…` a removeu. O que ela guardava — as 81
+  linhas de 27/08 — já estava em `acervo_creg` desde a `20260828…`, e a
+  remoção só acontece depois de a migração conferir que nenhuma linha ficou
+  sem correspondente. `acervo_creg` é a única fonte do acervo do Conselho.

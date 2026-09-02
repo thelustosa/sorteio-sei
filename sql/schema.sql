@@ -17,63 +17,6 @@
 -- CREG a coluna é RECURSO e quem recebe é a UNIDADE (CREG1..CREG4). O CREG
 -- ainda calcula META 45 e a divergência em relação à CJ, que a Câmara não tem.
 
--- ── CREG: a tabela do sorteio antigo ────────────────────────────────────────
--- Até 27/08/2026 o sorteio do Conselho Regulador gravava aqui — uma tabela sem
--- acervo e sem julgados, medida provisória enquanto o CREG não tinha o desenho
--- da Câmara. Agora tem: index.js grava em acervo_creg.
---
--- Ela CONTINUA no schema, e não está vazia: guarda os 81 processos sorteados em
--- 27/08/2026, o último sorteio feito antes da virada. Esses registros foram
--- copiados para acervo_creg (migração 20260828…), e ficam aqui como o que a
--- tela gravou na época. Apagar tabela é decisão de quem opera o banco, não
--- efeito colateral de rodar um schema — e esta ainda é o objeto da migração
--- 20260823165725, que validou a restrição de 15 dígitos sobre o legado.
-create table if not exists public.processos_sorteados (
-  id                bigint generated always as identity primary key,
-  criado_em         timestamptz not null default now(),
-  modo              text        not null check (modo = 'CREG'),
-  data_hora         timestamptz not null,
-  ordem             int         not null,
-  num_processo      text        not null,
-  assunto           text        not null,
-  interessado       text,
-  data_distribuicao date        not null,
-  recurso           text        not null,
-  unidade           text        not null
-);
-
--- Campo livre digitado pela secretaria; sorteios anteriores não o têm, então a
--- coluna nasce anulável em vez de inventar valor para o histórico.
-alter table public.processos_sorteados
-  add column if not exists interessado text;
-
--- Criar em duas etapas mantinha a proteção para novas linhas enquanto uma base
--- antiga era conferida; a validação abaixo exige que nenhum legado inválido reste.
-do $$
-begin
-  if not exists (
-    select 1
-      from pg_constraint
-     where conrelid = 'public.processos_sorteados'::regclass
-       and conname = 'processos_sorteados_num_processo_15_digitos'
-  ) then
-    alter table public.processos_sorteados
-      add constraint processos_sorteados_num_processo_15_digitos
-      check (num_processo ~ '^[0-9]{15}$') not valid;
-  end if;
-end
-$$;
-
-alter table public.processos_sorteados
-  validate constraint processos_sorteados_num_processo_15_digitos;
-
-create index if not exists idx_processos_sorteados_modo_data
-  on public.processos_sorteados (modo, data_hora desc);
-
-create unique index if not exists ux_processos_sorteados_distribuicao
-  on public.processos_sorteados
-  (modo, num_processo, data_distribuicao, unidade);
-
 -- ── CJ · Acervo ──────────────────────────────────────────────────────────────
 -- Uma linha por DISTRIBUIÇÃO de um processo a um relator — não uma linha por
 -- processo. Um processo redistribuído aparece mais de uma vez, com datas e
@@ -318,8 +261,8 @@ alter table public.julgados_cj
 
 -- O interessado saiu da Câmara de Julgamento em 20/08/2026: lá ninguém o
 -- consultava e não valia a pena guardar nome de pessoa. No Conselho Regulador
--- ele voltou em 27/08/2026, digitado na tela do sorteio — por isso
--- processos_sorteados não entra nesta limpeza (a coluna é criada acima).
+-- ele voltou em 27/08/2026, digitado na tela do sorteio — por isso a limpeza é
+-- só das duas tabelas da Câmara, e acervo_creg mantém a coluna.
 alter table public.acervo_cj   drop column if exists interessado;
 alter table public.julgados_cj drop column if exists interessado;
 
@@ -629,7 +572,7 @@ revoke all on function public.processos_acervo_cj(int, text) from public, anon, 
 grant execute on function public.processos_acervo_cj(int, text) to authenticated;
 
 -- ── Segurança (RLS) ──────────────────────────────────────────────────────────
--- Duas camadas de proteção, iguais para as três tabelas:
+-- Duas camadas de proteção, iguais para as tabelas da Câmara:
 --
 -- 1. Somente INSERT. O site acrescenta registros, mas não pode ler, alterar nem
 --    apagar um sorteio já gravado. Consultas e relatórios são feitos pelo painel
@@ -645,14 +588,8 @@ grant execute on function public.processos_acervo_cj(int, text) to authenticated
 -- O gatilho acima é SECURITY DEFINER justamente por causa da regra 1: ele
 -- precisa LER o acervo para derivar os campos, e quem insere não tem esse
 -- direito.
-alter table public.processos_sorteados enable row level security;
-alter table public.acervo_cj           enable row level security;
-alter table public.julgados_cj         enable row level security;
-
-drop policy if exists "front pode inserir" on public.processos_sorteados;
-drop policy if exists "usuario autenticado pode inserir" on public.processos_sorteados;
-create policy "usuario autenticado pode inserir"
-  on public.processos_sorteados for insert to authenticated with check (true);
+alter table public.acervo_cj   enable row level security;
+alter table public.julgados_cj enable row level security;
 
 drop policy if exists "usuario autenticado pode inserir" on public.acervo_cj;
 create policy "usuario autenticado pode inserir"
@@ -670,22 +607,18 @@ create policy "usuario autenticado pode ler"
 -- O Supabase concede privilégios amplos aos papéis da API por padrão. RLS ainda
 -- bloquearia as linhas, mas os grants abaixo repetem o mesmo mínimo como segunda
 -- camada e deixam o schema idêntico num Postgres comum.
-revoke all privileges on table public.processos_sorteados, public.acervo_cj,
-                               public.julgados_cj, public.pautas_cj
+revoke all privileges on table public.acervo_cj, public.julgados_cj,
+                               public.pautas_cj
   from anon, authenticated;
-revoke all privileges on sequence public.processos_sorteados_id_seq,
-                                  public.acervo_cj_id_seq,
+revoke all privileges on sequence public.acervo_cj_id_seq,
                                   public.julgados_cj_id_seq,
                                   public.pautas_cj_id_seq
   from anon, authenticated;
 
 grant usage on schema public to anon, authenticated;
-grant insert on public.processos_sorteados to authenticated;
-grant insert on public.acervo_cj           to authenticated;
-grant select on public.julgados_cj         to authenticated;
-grant usage on sequence public.processos_sorteados_id_seq,
-                        public.acervo_cj_id_seq
-  to authenticated;
+grant insert on public.acervo_cj   to authenticated;
+grant select on public.julgados_cj to authenticated;
+grant usage on sequence public.acervo_cj_id_seq to authenticated;
 
 -- ── CREG · Acervo ────────────────────────────────────────────────────────────
 -- Uma linha por DISTRIBUIÇÃO de um processo a uma unidade (CREG1..CREG4) — não
@@ -1249,11 +1182,6 @@ grant insert on public.acervo_creg   to authenticated;
 grant select on public.julgados_creg to authenticated;
 grant usage  on sequence public.acervo_creg_id_seq to authenticated;
 
--- A primeira versão desta função não tinha parâmetro: servia os dois colegiados
--- na mesma lista. `create or replace` não muda a assinatura de uma função, então
--- a antiga precisa sair antes da nova entrar.
-drop function if exists public.historico_sorteios();
-
 -- ── Histórico de sorteios ────────────────────────────────────────────────────
 -- O que alimenta historico-cj.html e historico-creg.html: as rodadas de sorteio
 -- já realizadas, uma tela por colegiado, como o painel do acervo.
@@ -1262,23 +1190,27 @@ drop function if exists public.historico_sorteios();
 -- compartilham (data_distribuicao, sorteado_em). index.js usa um só instante
 -- para o lote inteiro — ver "Um só instante para o sorteio inteiro" lá —, então
 -- o carimbo já identifica a rodada e o histórico não precisa de tabela nova nem
--- de escrever coisa alguma: consultar não pode mexer no que está gravado. Cada
--- sorteio novo entra aqui por ter sido gravado no acervo, sem passo nenhum a
--- mais depois do sorteio.
+-- de escrever coisa alguma: consultar não pode mexer no que está gravado.
 --
 -- O carimbo pode faltar, e por isso a chave é o PAR (data, carimbo) e não o
--- carimbo sozinho. Quando falta, quem data o sorteio é a distribuição.
+-- carimbo sozinho: as quatro rodadas da Câmara de 2026 entraram num lote só, em
+-- 21/08/2026, sem `sorteado_em`. Nelas quem data o sorteio é a distribuição, e
+-- a tela mostra a rodada sem horário em vez de inventar um.
 --
--- Duas condições recortam o que entra, e as duas dizem a mesma coisa por
--- ângulos diferentes — "o que o sistema sorteou, do marco em diante":
+-- ONDE O HISTÓRICO COMEÇA: em `origem = 'sorteio'`, e a partir do marco abaixo.
+-- É o recorte do que o SISTEMA distribuiu, que é o que esta tela promete.
 --
---   origem = 'sorteio'       o que foi distribuído POR ESTA TELA. Fica de fora
---                            'planilha' (acervo herdado dos gabinetes, que
---                            nunca foi um evento de sorteio — 3.064 linhas no
---                            Conselho contra 81 de sorteio) e 'ata' (sorteio
---                            real, mas anterior ao sistema e conhecido só pelo
---                            PDF publicado no SEI).
---   data >= historico_marco  o início da série, definido abaixo.
+--   • 'planilha' fica de fora — acervo herdado das planilhas de gabinete, que
+--     nunca foi um evento de sorteio; listá-lo inventaria rodadas que não houve
+--     (são 3.064 linhas no CREG, contra 81 de sorteio).
+--   • 'ata' também fica de fora — sorteio de verdade, mas anterior ao sistema e
+--     conhecido só pelo PDF publicado no SEI.
+--
+-- A primeira versão de historico_sorteios não tinha parâmetro: servia os dois
+-- colegiados na mesma lista. `create or replace` não muda a assinatura de uma
+-- função, então a antiga precisa sair antes da nova entrar.
+drop function if exists public.historico_sorteios();
+
 create or replace function public.historico_marco()
 returns date
 language sql

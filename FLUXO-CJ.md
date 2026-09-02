@@ -4,9 +4,9 @@ Como um processo da Câmara de Julgamento (CJ) atravessa o sistema, do sorteio a
 julgamento registrado. Este documento é a referência de manutenção: o que cada
 peça faz, por que foi feita assim, e onde estão as regras.
 
-O Conselho Regulador (CREG) não está aqui — continua na tabela
-`processos_sorteados` até 27/08/2026, quando ganhou o mesmo par de tabelas —
-ver [FLUXO-CREG.md](FLUXO-CREG.md).
+O Conselho Regulador (CREG) não está aqui — usou uma tabela de sorteio à parte
+até 27/08/2026, quando ganhou o mesmo par de tabelas — ver
+[FLUXO-CREG.md](FLUXO-CREG.md).
 
 > **Reinício em 19/08/2026.** A série de julgados recomeçou nessa data: o
 > histórico importado da planilha saiu das tabelas de produção e ficou guardado
@@ -21,7 +21,7 @@ ver [FLUXO-CREG.md](FLUXO-CREG.md).
 ```mermaid
 flowchart TD
     A["Secretária sorteia<br/>index.html"] -->|"POST /rest/v1/acervo_cj"| B[("acervo_cj<br/>uma linha por distribuição")]
-    C["Site da AGR<br/>pautas das reuniões"] -->|"GitHub Actions, semanal"| D["sincronizar.py<br/>baixa PDF e extrai processos"]
+    C["Site da AGR<br/>pautas das reuniões"] -->|"GitHub Actions, de hora em hora"| D["sincronizar.py<br/>baixa PDF e extrai processos"]
     D -->|"INSERT direto no banco"| E[("julgados_cj<br/>uma linha por sessão")]
     D --> F[("pautas_cj<br/>documentos processados")]
     B -.->|"gatilho preenche<br/>relator, defesa, data DIST"| E
@@ -124,7 +124,7 @@ Não existe servidor nosso, então o "endpoint" virou um job agendado — que ai
 tem a vantagem de deixar o log de cada rodada na aba Actions, coerente com a
 proposta de auditoria do projeto.
 
-Dispara sozinho toda sexta de manhã (as sessões são às quintas) ou à mão em
+Dispara sozinho de hora em hora, das 07:00 às 20:00 de Goiás, ou à mão em
 **Actions → Sincronizar Julgados → Run workflow**, com opção de simular. A
 mesma rodada sincroniza o Conselho Regulador.
 
@@ -596,7 +596,6 @@ atual no Supabase e apaga os tokens locais; fechar a aba também descarta o
 
 | tabela | o navegador pode |
 |---|---|
-| `processos_sorteados` | INSERT (legado: nada escreve nela desde 27/08/2026) |
 | `acervo_creg` | INSERT |
 | `julgados_creg` | SELECT |
 | `acervo_cj` | INSERT |
@@ -678,7 +677,6 @@ Chaves e índices que sustentam as regras:
 | objeto | para quê |
 |---|---|
 | `acervo_creg_distribuicao_unica (num_processo, data_distribuicao, unidade)` | o mesmo sorteio CREG não é gravado duas vezes |
-| `ux_processos_sorteados_distribuicao` e `processos_sorteados_num_processo_15_digitos` | legado da tabela aposentada, mantidos com ela |
 | `acervo_cj_distribuicao_unica (num_processo, data_distribuicao, relator)` | sorteio/importação repetidos não duplicam; é o índice da busca do processo |
 | `julgados_cj_sessao_unica (num_processo, data_sessao)` | um processo não é julgado duas vezes na mesma sessão |
 | `pautas_cj.url` único | o mesmo PDF não é processado duas vezes |
@@ -770,9 +768,11 @@ Revisto depois da carga de recuperação, em 21/08/2026.
   anteriores sem cadeira conhecida — eles seguem pelo nome, porque inventar o
   número seria pior. Se alguém rodar o `restaurar_cj.sql`, o painel passa a
   misturar cadeiras e nomes até que essas composições sejam informadas.
-- ~~**CREG** continua em `processos_sorteados`.~~ Resolvido em 27/08/2026: o
-  Conselho ganhou `acervo_creg`, `julgados_creg` e `pautas_creg`, e o sorteio
-  passou a gravar no acervo. Ver [FLUXO-CREG.md](FLUXO-CREG.md).
+- ~~**CREG** continua numa tabela de sorteio à parte.~~ Resolvido em
+  27/08/2026: o Conselho ganhou `acervo_creg`, `julgados_creg` e `pautas_creg`,
+  e o sorteio passou a gravar no acervo. A tabela antiga foi removida do schema
+  em 02/09/2026, depois de o que ela guardava ser conferido em `acervo_creg`.
+  Ver [FLUXO-CREG.md](FLUXO-CREG.md).
 
 ### Decidido e encerrado
 
@@ -782,8 +782,8 @@ Revisto depois da carga de recuperação, em 21/08/2026.
   página de julgados e das atas em Word — o `schema.sql` derruba a coluna de
   quem já existia. **No Conselho Regulador ele voltou** em 27/08/2026, agora
   como campo livre digitado na tela do sorteio: fica em
-  `processos_sorteados.interessado` (anulável, porque os sorteios antigos não
-  têm o dado) e na ata do CREG.
+  `acervo_creg.interessado` (anulável, porque os sorteios antigos não têm o
+  dado) e na ata do CREG.
 - **Edição concorrente** não é preocupação: a secretaria é pequena e, se duas
   pessoas abrirem a mesma pauta, vale quem salvar por último.
 
