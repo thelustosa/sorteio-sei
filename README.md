@@ -109,6 +109,29 @@ endereço não existe. Todo o resto está agrupado por natureza.
 └── tests/                  suítes automatizadas e dependências de teste
 ```
 
+O `supabase/migrations/` e o ledger do projeto hospedado
+(`supabase_migrations.schema_migrations`) têm de ter as MESMAS versões: uma
+linha por arquivo, sob o timestamp do próprio nome. O `supabase db push`
+reaplica todo arquivo cuja versão não esteja no ledger — e reaplicar
+20260902120000 derruba tabela de novo. Aplicar migração pelo SQL Editor ou
+pelo `apply_migration` do MCP grava a linha com o timestamp DA HORA, e esse
+número não se escolhe.
+
+Então a ordem é: aplicar PRIMEIRO, e só depois nomear o arquivo com a versão
+que o ledger recebeu. O número é arbitrário — só precisa ordenar direito e ser
+o mesmo dos dois lados —, e assim ele nasce igual, sem correção nenhuma. Se o
+arquivo já tiver sido nomeado antes, renomeie ou renumere a linha:
+
+```sql
+update supabase_migrations.schema_migrations
+   set version = '<versão do arquivo>' where version = '<a que o Supabase gerou>';
+```
+
+As duas linhagens foram reconciliadas em 02/09/2026 — nove linhas do ledger
+eram iterações que os arquivos de hoje consolidam, e saíram. O ledger de antes
+está inteiro, com o SQL que rodou, em
+`supabase_migrations.ledger_backup_20260902`.
+
 Documentação: este README, mais um documento por colegiado —
 [`FLUXO-CJ.md`](FLUXO-CJ.md), o fluxo completo da Câmara de Julgamento, do
 sorteio ao julgamento registrado, com as regras, as tabelas, a API e o
