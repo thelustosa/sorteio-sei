@@ -1328,16 +1328,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
   .detalhe-table tbody th,
   .detalhe-table tbody td { font-size: var(--text-xs); }
-
-  /* O card do histórico não exporta — é só leitura —, então o cabeçalho tem
-     apenas o fechar. Título e um X cabem lado a lado nesta largura; a coluna
-     existe para o card do acervo, onde o Exportar divide a linha com ele. */
-  .detalhe-header:not(:has(#btnExportarDetalhe)) {
-    align-items: center;
-    flex-direction: row;
-  }
-
-  .detalhe-header:not(:has(#btnExportarDetalhe)) .detalhe-acoes { width: auto; }
 }
 
 /* Seis colunas — duas delas de texto livre — não cabem em 390px por mais que se

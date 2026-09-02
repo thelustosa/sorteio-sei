@@ -58,7 +58,22 @@
           <h2 id="detalheTitulo">Processos do sorteio</h2>
           <p id="detalheResumo" class="detalhe-resumo"></p>
         </div>
-        <button id="btnFecharDetalhe" type="button" aria-label="Fechar">Fechar</button>
+        <!-- Mesmo par de ações das páginas reais. O historico.js liga o clique
+             nos dois no topo do arquivo: sem o Exportar aqui, o script morria
+             antes de definir inicializarHistorico e a fixture abria em branco. -->
+        <div class="detalhe-acoes">
+          <button id="btnExportarDetalhe" class="nav-action" type="button">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10 2.5v10"></path><path d="m6.5 9 3.5 3.5L13.5 9"></path><path d="M4 13.5v3h12v-3"></path>
+            </svg>
+            <span>Exportar</span>
+          </button>
+          <button id="btnFecharDetalhe" class="nav-action detalhe-fechar" type="button" aria-label="Fechar">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+              <path d="m6 6 8 8"></path><path d="m14 6-8 8"></path>
+            </svg>
+          </button>
+        </div>
       </header>
       <div id="detalheLoading" class="detalhe-loading" hidden></div>
       <div id="detalheErro" class="load-error" role="alert" hidden><p></p></div>

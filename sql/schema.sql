@@ -1368,10 +1368,23 @@ begin
               else 'Não' end,
          null::text
     from public.acervo_cj a
-    left join public.cadeiras_cj c
-           on c.cadeira = a.relator
-          and a.data_distribuicao >= c.desde
-          and (c.ate is null or a.data_distribuicao <= c.ate)
+    -- Uma cadeira pode ter mais de um período cobrindo a mesma data: a chave
+    -- primária é (cadeira, desde) e o índice único só cobre o período EM
+    -- ABERTO, então dois intervalos fechados que se sobrepõem entram sem erro
+    -- nenhum. Num join comum, cada processo daquela cadeira sairia repetido —
+    -- na lista do card e na ata exportada, que a lista alimenta.
+    --
+    -- O lateral devolve no máximo uma linha, sempre: o período que começou por
+    -- último até a data do sorteio, que é o que vigorava nela.
+    left join lateral (
+      select cc.conselheiro
+        from public.cadeiras_cj cc
+       where cc.cadeira = a.relator
+         and a.data_distribuicao >= cc.desde
+         and (cc.ate is null or a.data_distribuicao <= cc.ate)
+       order by cc.desde desc
+       limit 1
+    ) c on true
    where p_colegiado = 'CJ'
      and a.data_distribuicao = p_data
      and a.sorteado_em is not distinct from p_sorteado_em

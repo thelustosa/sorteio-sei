@@ -1732,6 +1732,34 @@ test('a ata em .docx é um pacote válido, sem número de ata, com o cabeçalho 
     'sem esses dados no sistema, o texto genérico não pode inventar um número');
 });
 
+test('a tabela da ata traz o w:tblGrid que o Word exige, com uma coluna por cabeçalho', async () => {
+  // Sem <w:tblGrid> logo depois do <w:tblPr>, o CT_Tbl é inválido e o Word abre
+  // a ata oferecendo reparar o arquivo. Grepar o XML não pega isso: o documento
+  // continua tendo todo o texto certo.
+  const larguraUtil = 11906 - 1701 - 1133;   // pgSz menos as margens do sectPr
+  for (const [colegiado, processos, colunas] of [
+    ['cj', processosCj, 3],
+    ['creg', [{ ordem: 1, num_processo: 'P1', destino: 'CREG1', interessado: 'A' }], 4]
+  ]) {
+    const page = historicoPage(async () => [], colegiado);
+    const texto = new TextDecoder().decode(new Uint8Array(
+      await page.criarDocxDetalhe(processos, '2026-08-27').arrayBuffer()));
+
+    assert.match(texto, /<\/w:tblPr><w:tblGrid>/,
+      `${colegiado}: o w:tblGrid tem de vir imediatamente depois do w:tblPr`);
+    const grade = texto.match(/<w:tblGrid>(.*?)<\/w:tblGrid>/)?.[1] || '';
+    assert.ok(texto.indexOf('</w:tblGrid>') < texto.indexOf('<w:tr>'),
+      `${colegiado}: o w:tblGrid tem de vir antes da primeira linha`);
+
+    const larguras = [...grade.matchAll(/<w:gridCol w:w="(\d+)"\/>/g)].map(([, w]) => Number(w));
+    assert.equal(larguras.length, colunas,
+      `${colegiado}: uma w:gridCol por coluna, senão o Word remonta a tabela`);
+    assert.equal(larguras.reduce((a, b) => a + b, 0), larguraUtil,
+      `${colegiado}: as colunas têm de somar a largura útil da página`);
+    assert.ok(larguras.every(w => w > 0), `${colegiado}: coluna de largura zero`);
+  }
+});
+
 test('ata do CJ lista Ordem, Nº do Processo e o RELATOR — não o código da cadeira', async () => {
   const page = historicoPage(async () => [], 'cj');
   const texto = new TextDecoder().decode(new Uint8Array(
