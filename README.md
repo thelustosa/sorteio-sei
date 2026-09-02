@@ -163,7 +163,7 @@ A chave publicável é pública por natureza e pode ficar no código: ela identi
 
 > O passo a passo completo, com diagramas, está em **[FLUXO-CJ.md](FLUXO-CJ.md)**.
 
-A CJ deixou de compartilhar a tabela `processos_sorteados` com o Conselho Regulador e passou a ter as duas tabelas que a secretaria já usava na planilha:
+A CJ deixou de compartilhar uma tabela única de sorteio com o Conselho Regulador e passou a ter as duas tabelas que a secretaria já usava na planilha:
 
 - **`acervo_cj`** — uma linha por **distribuição** de um processo a um relator. Um processo redistribuído aparece mais de uma vez, com datas e relatores diferentes. É aqui que o sorteio da CJ grava: a cadeira sorteada (`CJ1`..`CJ5`) é o relator do processo, e quem ocupa cada cadeira sai da tabela `cadeiras_cj`.
 - **`julgados_cj`** — uma linha por processo levado a uma **sessão de julgamento**, ligada ao registro do acervo por `acervo_id`.
@@ -235,9 +235,9 @@ Rodar duas vezes não duplica nada: `pautas_cj.url` barra o documento repetido e
 > O que difere da Câmara, com as fórmulas traduzidas uma a uma, está em
 > **[FLUXO-CREG.md](FLUXO-CREG.md)**.
 
-Até 27/08/2026 o sorteio do CREG gravava em `processos_sorteados` — uma tabela
-sem acervo e sem julgados, medida provisória enquanto o Conselho não tinha o
-desenho da Câmara. Agora tem:
+Até 27/08/2026 o sorteio do CREG gravava numa tabela solta, sem acervo e sem
+julgados, medida provisória enquanto o Conselho não tinha o desenho da Câmara.
+Agora tem:
 
 - **`acervo_creg`** — uma linha por **distribuição** de um processo a uma unidade
   (`CREG1`..`CREG4`). É aqui que o sorteio do CREG grava. A unidade é o que se
