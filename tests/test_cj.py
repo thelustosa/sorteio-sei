@@ -38,6 +38,11 @@ MIGRACAO_HARDENING = RAIZ / 'supabase' / 'migrations' / \
     '20260827104200_restringir_cadeiras_e_ping.sql'
 MIGRACAO_INTERESSADO = RAIZ / 'supabase' / 'migrations' / \
     '20260827160000_interessado_creg.sql'
+# Derruba a tabela do sorteio antigo do Conselho, mas só depois de conferir que
+# o que ela guardava está em acervo_creg. Rodada à parte num teste, para provar
+# que a conferência é de verdade e não decoração.
+MIGRACAO_REMOCAO = RAIZ / 'supabase' / 'migrations' / \
+    '20260902120000_remover_processos_sorteados.sql'
 
 testes = []
 
@@ -176,7 +181,6 @@ def rls_da_cada_tabela_o_minimo(cur):
     existir política de UPDATE nem de DELETE em lugar nenhum.
     """
     esperado = {
-        'processos_sorteados': {'INSERT'},
         'acervo_cj': {'INSERT'},
         'julgados_cj': {'SELECT'},
         'pautas_cj': set(),
@@ -207,7 +211,6 @@ def navegador_nao_atualiza_nem_apaga_julgados(cur):
 def privilegios_sql_repetem_o_minimo_da_rls(cur):
     """Grants padrão do Supabase não podem ampliar o que cada política permite."""
     esperado = {
-        ('authenticated', 'processos_sorteados'): {'INSERT'},
         ('authenticated', 'acervo_cj'): {'INSERT'},
         ('authenticated', 'julgados_cj'): {'SELECT'},
         ('authenticated', 'acervo_creg'): {'INSERT'},
@@ -216,10 +219,9 @@ def privilegios_sql_repetem_o_minimo_da_rls(cur):
     cur.execute("""select grantee, table_name, privilege_type
                      from information_schema.role_table_grants
                     where table_schema = 'public'
-                      and table_name in ('processos_sorteados', 'acervo_cj',
-                                         'julgados_cj', 'pautas_cj', 'cadeiras_cj',
-                                         'acervo_creg', 'julgados_creg',
-                                         'pautas_creg')
+                      and table_name in ('acervo_cj', 'julgados_cj', 'pautas_cj',
+                                         'cadeiras_cj', 'acervo_creg',
+                                         'julgados_creg', 'pautas_creg')
                       and grantee in ('anon', 'authenticated')""")
     obtido = {}
     for papel, tabela, privilegio in cur.fetchall():
@@ -231,7 +233,6 @@ def privilegios_sql_repetem_o_minimo_da_rls(cur):
                     where object_schema = 'public' and object_type = 'SEQUENCE'
                       and grantee in ('anon', 'authenticated')""")
     assert set(cur.fetchall()) == {
-        ('authenticated', 'processos_sorteados_id_seq', 'USAGE'),
         ('authenticated', 'acervo_cj_id_seq', 'USAGE'),
         ('authenticated', 'acervo_creg_id_seq', 'USAGE'),
     }
@@ -271,19 +272,33 @@ def ping_tem_search_path_fixo_e_privilegio_minimo(cur):
 
 
 @teste
-def tabela_antiga_recusa_cj(cur):
-    """processos_sorteados é só do CREG: processo da Câmara não entra ali."""
-    try:
-        cur.execute("""insert into processos_sorteados
-                       (modo, data_hora, ordem, num_processo, assunto,
-                        data_distribuicao, recurso, unidade)
-                       values ('CJ', now(), 1, '202600029000001', 'Auto de Infração',
-                               current_date, 'Com recurso', 'CJ1')""")
-    except psycopg2.errors.CheckViolation:
-        return
-    finally:
-        cur.connection.rollback()
-    raise AssertionError('processos_sorteados ainda aceita CJ')
+def tabela_antiga_foi_removida(cur):
+    """processos_sorteados saiu do schema, e com ela tudo que pendurava nela.
+
+    Era a tabela do sorteio antigo do Conselho: sem acervo, sem julgados e sem
+    vínculo com nada, provisória até o CREG ganhar o desenho da Câmara. O que
+    ela guardava vive em acervo_creg desde a migração 20260828090000, e a
+    20260902120000 a derrubou.
+
+    Não basta a tabela ter sumido: sequência, política de RLS e privilégio
+    sobrevivem a um drop malfeito e continuariam aparecendo em auditoria.
+    """
+    assert uma(cur, "select to_regclass('public.processos_sorteados')") is None
+    assert uma(cur, "select to_regclass('public.processos_sorteados_id_seq')") is None
+
+    assert uma(cur, """select count(*) from pg_policies
+                        where schemaname = 'public'
+                          and tablename = 'processos_sorteados'""") == 0
+    assert uma(cur, """select count(*) from information_schema.role_table_grants
+                        where table_schema = 'public'
+                          and table_name = 'processos_sorteados'""") == 0
+
+    # O índice e a restrição de 15 dígitos caíram junto com a tabela.
+    assert uma(cur, """select count(*) from pg_indexes
+                        where schemaname = 'public'
+                          and indexname like '%processos_sorteados%'""") == 0
+    assert uma(cur, """select count(*) from pg_constraint
+                        where conname like '%processos_sorteados%'""") == 0
 
 
 # ── Testes: importação da planilha ───────────────────────────────────────────
@@ -605,39 +620,41 @@ def sorteio_repetido_e_barrado(cur):
 
 @teste
 def creg_recusa_a_mesma_distribuicao_duas_vezes(cur):
-    """Mesmo processo, dia e unidade do CREG não podem virar duas linhas."""
-    valores = ("CREG", "2026-08-22 09:00:00+00", "202600029000020",
-               "2026-08-22", "CREG1")
-    cur.execute("""insert into processos_sorteados
-                   (modo, data_hora, ordem, num_processo, assunto,
-                    data_distribuicao, recurso, unidade)
-                   values (%s, %s, 1, %s, 'Requerimento', %s, 'Não se aplica', %s)""",
+    """Mesmo processo, dia e unidade do CREG não podem virar duas linhas.
+
+    A regra saiu da tabela antiga junto com ela: quem a carrega hoje é a
+    restrição acervo_creg_distribuicao_unica.
+    """
+    valores = ("202600029000020", "CREG1", "2026-08-22")
+    cur.execute("""insert into acervo_creg
+                   (num_processo, unidade, data_distribuicao, assunto, recurso, ordem)
+                   values (%s, %s, %s, 'Requerimento', 'Não se aplica', 1)""",
                 valores)
     try:
-        cur.execute("""insert into processos_sorteados
-                       (modo, data_hora, ordem, num_processo, assunto,
-                        data_distribuicao, recurso, unidade)
-                       values (%s, %s, 2, %s, 'Requerimento', %s, 'Não se aplica', %s)""",
+        cur.execute("""insert into acervo_creg
+                       (num_processo, unidade, data_distribuicao, assunto, recurso, ordem)
+                       values (%s, %s, %s, 'Requerimento', 'Não se aplica', 2)""",
                     valores)
     except psycopg2.errors.UniqueViolation:
         return
     finally:
         cur.connection.rollback()
-    raise AssertionError('processos_sorteados aceitou a mesma distribuição duas vezes')
+    raise AssertionError('acervo_creg aceitou a mesma distribuição duas vezes')
 
 
 @teste
 def creg_novo_exige_numero_de_processo_com_15_digitos(cur):
-    """O acervo limpo mantém validada a regra aplicada às novas gravações."""
-    assert uma(cur, """select convalidated from pg_constraint
-                         where conrelid = 'public.processos_sorteados'::regclass
-                           and conname = 'processos_sorteados_num_processo_15_digitos'""") is True
+    """O acervo do Conselho recusa processo fora do padrão SEI.
+
+    Na tabela antiga isso era restrição acrescentada depois, NOT VALID até o
+    legado ser limpo. Em acervo_creg nasce no CREATE TABLE: não há legado a
+    tolerar, então vale para toda linha desde a primeira.
+    """
     try:
-        cur.execute("""insert into processos_sorteados
-                       (modo, data_hora, ordem, num_processo, assunto,
-                        data_distribuicao, recurso, unidade)
-                       values ('CREG', now(), 3, '1234', 'Requerimento',
-                               current_date, 'Não se aplica', 'CREG3')""")
+        cur.execute("""insert into acervo_creg
+                       (num_processo, unidade, data_distribuicao, assunto, recurso)
+                       values ('1234', 'CREG3', current_date,
+                               'Requerimento', 'Não se aplica')""")
     except psycopg2.errors.CheckViolation:
         return
     finally:
@@ -646,12 +663,78 @@ def creg_novo_exige_numero_de_processo_com_15_digitos(cur):
 
 
 @teste
-def migracao_preserva_creg_valido(cur):
-    """A limpeza remove só os dois fixtures inválidos, nunca o acervo real."""
-    assert uma(cur, """select modo, ordem, assunto, data_distribuicao, recurso, unidade
-                         from processos_sorteados
+def migracao_levou_o_sorteio_antigo_para_o_acervo(cur):
+    """A cadeia inteira que aposentou a tabela antiga, medida no resultado.
+
+    Os fixtures nascem em processos_sorteados (preparar_upgrade_da_migracao),
+    com a data do sorteio de 27/08/2026. Daí em diante, três migrações em
+    sequência: a 20260823165725 apaga os dois registros fora do padrão, a
+    20260828090000 copia o que sobrou para acervo_creg e a 20260902120000
+    derruba a tabela — só depois de conferir que nada ficou para trás.
+
+    Se qualquer um dos três elos falhar, é aqui que aparece: o processo válido
+    tem de estar no acervo, com os valores que tinha, e os dois inválidos não
+    podem ter atravessado a limpeza.
+    """
+    assert uma(cur, """select unidade, data_distribuicao, assunto, recurso,
+                              ordem, origem
+                         from acervo_creg
                         where num_processo = '202600029000777'""") == (
-        'CREG', 3, 'Requerimento', date(2026, 8, 20), 'Com recurso', 'CREG2')
+        'CREG2', date(2026, 8, 20), 'Requerimento', 'Com recurso', 3, 'sorteio')
+
+    assert uma(cur, """select count(*) from acervo_creg
+                        where num_processo in ('123421', '1234')""") == 0
+
+
+@teste
+def remocao_recusa_apagar_o_que_nao_foi_copiado(cur):
+    """A trava da migração de remoção é de verdade: sem cópia, ela não apaga.
+
+    Toda a segurança de derrubar uma tabela com dado dentro está nessa
+    conferência. Se ela estivesse escrita errada — condição invertida, join que
+    sempre casa — a migração passaria verde apagando o que ninguém teria como
+    recuperar, e nenhum outro teste perceberia: no banco da bateria a cópia
+    sempre deu certo.
+
+    Então aqui a tabela volta com uma linha que não está em acervo_creg, e a
+    migração roda de novo. Tem de parar, e a linha tem de continuar lá.
+    """
+    cur.execute("""create table public.processos_sorteados (
+                     id                bigint generated always as identity primary key,
+                     modo              text not null,
+                     data_hora         timestamptz not null,
+                     ordem             int,
+                     num_processo      text not null,
+                     assunto           text,
+                     data_distribuicao date not null,
+                     recurso           text,
+                     unidade           text not null)""")
+    cur.execute("""insert into public.processos_sorteados
+                   (modo, data_hora, ordem, num_processo, assunto,
+                    data_distribuicao, recurso, unidade)
+                   values ('CREG', now(), 1, '202600029000888', 'Requerimento',
+                           date '2026-08-20', 'Com recurso', 'CREG4')""")
+    cur.connection.commit()
+
+    try:
+        try:
+            rodar_arquivo(MIGRACAO_REMOCAO)
+        except psycopg2.errors.RaiseException as erro:
+            assert 'acervo_creg' in str(erro), erro
+        else:
+            raise AssertionError('a migração apagou a tabela sem conferir a cópia')
+
+        sobrou = uma(cur, """select count(*) from public.processos_sorteados
+                              where num_processo = '202600029000888'""")
+        assert sobrou == 1, 'a linha sem cópia devia ter sobrevivido'
+    finally:
+        # A transação de cur segura um lock sobre a tabela; o drop vem de outra
+        # conexão e ficaria esperando por ela para sempre. Fechar antes não é
+        # zelo, é o que impede a bateria de travar aqui.
+        cur.connection.rollback()
+        PG.executar('drop table if exists public.processos_sorteados')
+
+    assert uma(cur, "select to_regclass('public.processos_sorteados')") is None
 
 
 @teste
@@ -1308,9 +1391,8 @@ def painel_traduz_cadeira_e_deixa_o_resto_intacto(cur):
 def creg_grava_no_proprio_acervo(cur):
     """Desde 27/08/2026 o sorteio do Conselho vai para acervo_creg.
 
-    processos_sorteados continua no schema como legado (ver o comentário lá),
-    mas nada escreve nela: o front aponta para o acervo, e é de lá que os
-    julgados do CREG saem.
+    É a única tabela em que o CREG grava: a antiga saiu do schema, o front
+    aponta para o acervo e é de lá que os julgados do Conselho saem.
     """
     cur.execute("""insert into acervo_creg
                    (num_processo, unidade, data_distribuicao, assunto, recurso)
@@ -1452,8 +1534,44 @@ def migracoes_estao_todas_cobertas(cur):
     assert arquivos - aplicadas == MIGRACOES_SUPERADAS, (
         'migração fora da bateria: ' + ', '.join(sorted(arquivos - aplicadas)))
     assert MIGRACOES_SUPERADAS <= arquivos, 'MIGRACOES_SUPERADAS cita arquivo que não existe'
-    for constante in (MIGRACAO_CADEIRAS, MIGRACAO_HARDENING, MIGRACAO_INTERESSADO):
+    for constante in (MIGRACAO_CADEIRAS, MIGRACAO_HARDENING, MIGRACAO_INTERESSADO,
+                      MIGRACAO_REMOCAO):
         assert constante.name in aplicadas, constante.name
+
+
+@teste
+def schema_declara_toda_funcao_que_existe_no_banco(cur):
+    """O schema.sql tem de conhecer toda função que o banco tem.
+
+    migracoes_reproduzem_o_schema pega a função que o schema MUDA, mas não a
+    que ele esquece: se uma migração cria uma função que o schema.sql nunca
+    menciona, reaplicar o schema não mexe nela, `antes` e `depois` ficam iguais
+    e a comparação passa verde.
+
+    Foi por esse buraco que historico_sorteios, processos_sorteio e
+    historico_marco viveram em produção sem estar no repositório — aplicadas
+    direto no banco, sem commit, e nenhum teste tinha como notar. A conta aqui
+    é a inversa: o conjunto de funções do banco tem de ser exatamente o que o
+    arquivo declara, nem mais nem menos.
+
+    Roda ANTES de migracoes_reproduzem_o_schema de propósito: neste ponto o
+    banco veio só das migrações, que é o estado que produção tem.
+    """
+    fonte = (RAIZ / 'sql' / 'schema.sql').read_text(encoding='utf-8')
+    declaradas = set(re.findall(
+        r'create\s+(?:or\s+replace\s+)?function\s+public\.(\w+)', fonte))
+
+    cur.execute("""select distinct p.proname
+                     from pg_proc p
+                     join pg_namespace n on n.oid = p.pronamespace
+                    where n.nspname = 'public' and p.prokind = 'f'""")
+    no_banco = {nome for (nome,) in cur.fetchall()}
+
+    assert no_banco == declaradas, (
+        'no banco e fora do schema.sql: '
+        + (', '.join(sorted(no_banco - declaradas)) or '—')
+        + ' / no schema.sql e fora do banco: '
+        + (', '.join(sorted(declaradas - no_banco)) or '—'))
 
 
 @teste
@@ -1509,9 +1627,32 @@ def migracoes_a_aplicar():
 def preparar_upgrade_da_migracao():
     """Volta só os deltas desta migração ao estado do schema no HEAD."""
     PG.executar("""
-        alter table public.processos_sorteados
-          drop constraint processos_sorteados_num_processo_15_digitos;
-        drop index public.ux_processos_sorteados_distribuicao;
+        -- A tabela do sorteio antigo do Conselho, recriada no formato que ela
+        -- tinha antes desta migração: sem a restrição de 15 dígitos, sem o
+        -- índice de distribuição única e sem a coluna interessado, que só
+        -- chegaria em 20260827160000. O schema.sql não a cria mais — quem a
+        -- derrubou foi a migração 20260902120000 —, então é aqui que ela
+        -- volta, e só para que as migrações que mexem nela tenham em que
+        -- mexer. No fim da bateria ela é derrubada de novo, pela migração de
+        -- verdade.
+        create table public.processos_sorteados (
+          id                bigint generated always as identity primary key,
+          criado_em         timestamptz not null default now(),
+          modo              text        not null check (modo = 'CREG'),
+          data_hora         timestamptz not null,
+          ordem             int         not null,
+          num_processo      text        not null,
+          assunto           text        not null,
+          data_distribuicao date        not null,
+          recurso           text        not null,
+          unidade           text        not null
+        );
+        create index idx_processos_sorteados_modo_data
+          on public.processos_sorteados (modo, data_hora desc);
+        alter table public.processos_sorteados enable row level security;
+        create policy "usuario autenticado pode inserir"
+          on public.processos_sorteados for insert to authenticated with check (true);
+
         delete from public.pautas_cj where url = 'marco:inicio-da-serie';
 
         create or replace function public.julgados_cj_derivar_do_acervo()
@@ -1622,15 +1763,19 @@ def preparar_upgrade_da_migracao():
         grant execute on function public.registrar_votos(jsonb)
           to anon, service_role;
 
+        -- data_hora dentro de 27/08/2026 de propósito: é a janela que a
+        -- migração 20260828090000 copia para acervo_creg. Com now() a cópia
+        -- não alcançava linha nenhuma e passava verde sem ter feito nada —
+        -- migracao_levou_o_sorteio_antigo_para_o_acervo mede o resultado dela.
         insert into public.processos_sorteados
           (modo, data_hora, ordem, num_processo, assunto,
            data_distribuicao, recurso, unidade)
         values
-          ('CREG', now(), 1, '123421', 'Requerimento',
+          ('CREG', timestamptz '2026-08-27 11:07:26-03', 1, '123421', 'Requerimento',
            date '2026-08-20', 'Com recurso', 'CREG2'),
-          ('CREG', now(), 2, '1234', 'Requerimento',
+          ('CREG', timestamptz '2026-08-27 11:07:26-03', 2, '1234', 'Requerimento',
            date '2026-08-20', 'Sem recurso', 'CREG3'),
-          ('CREG', now(), 3, '202600029000777', 'Requerimento',
+          ('CREG', timestamptz '2026-08-27 11:07:26-03', 3, '202600029000777', 'Requerimento',
            date '2026-08-20', 'Com recurso', 'CREG2');
     """)
 
