@@ -2036,15 +2036,13 @@ def migracoes_reproduzem_o_schema(cur):
 #
 #   20260824121500  20260824180000 derruba e recria resumo_acervo_cj com a
 #                   coluna `conselheiro`.
-#   20260901134138  historico_sorteios nasce com quatro colunas; 20260902130000
-#   20260901135740  acrescenta `distribuicao` e o retorno passa a cinco. As
-#                   duas continuam sendo a versão que produção aplicou — quem
-#                   entrega a função de hoje é 20260902130000, e o
-#                   processos_sorteio delas, 20260902131000.
+#
+# As do histórico NÃO estão aqui: 20260901134138 abre com o drop da
+# historico_sorteios(text), então a dupla dela e de 20260901135740 volta a rodar
+# sobre o schema de hoje — e a criação de historico_marco por migração continua
+# sendo exercitada.
 MIGRACOES_SUPERADAS = {
     '20260824121500_painel_acervo_cj.sql',
-    '20260901134138_historico_sorteios.sql',
-    '20260901135740_historico_sorteios_marco_unico.sql',
 }
 
 
