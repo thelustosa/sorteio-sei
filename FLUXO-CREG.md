@@ -230,8 +230,9 @@ grava em `pautas_creg` o número que a AGR usa.
 
 O job do GitHub Actions sincroniza os **dois** colegiados na mesma rodada, um de
 cada vez. A Câmara reúne às quintas; o Conselho não tem dia fixo (em 2026 houve
-sessão em quarta, quinta e sexta), então a rodada semanal de sexta cobre a
-semana inteira dos dois.
+sessão em quarta, quinta e sexta), e a pauta pode ir ao ar em qualquer hora
+do expediente — por isso a busca é de hora em hora, das 07:00 às 20:00 de
+Goiás, e não uma rodada semanal.
 
 ```bash
 python sincronizacao/sincronizar.py --colegiado CREG --simular --dsn "postgresql://…"
