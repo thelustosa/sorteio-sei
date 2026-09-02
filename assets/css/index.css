@@ -1491,13 +1491,56 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   box-shadow: inset 1px 0 var(--border-subtle), inset -1px 0 var(--border-subtle);
 }
 
-/* Cadeiras e unidades vêm por extenso do banco. Quebram linha quando a rodada
-   inteira participou — cinco cadeiras não cabem numa linha em tela estreita. */
+/* Cada destino fica unido à própria contagem; a quebra acontece entre grupos,
+   nunca entre "CREG2" e "27". Cinco cadeiras cabem em duas linhas sem alargar
+   a tabela nem transformar a célula em uma sequência difícil de comparar. */
 .historico-destinos {
   color: var(--muted-strong);
   font-weight: 700;
   line-height: 1.4;
   text-align: center;
+}
+
+.historico-destinos-lista {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.historico-destino {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 3px 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-control);
+  color: var(--text);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.historico-destino-sigla {
+  font-size: var(--text-xs);
+  letter-spacing: 0.01em;
+}
+
+.historico-destino-contagem {
+  display: inline-flex;
+  min-width: 24px;
+  min-height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 5px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft-strong);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .historico-acao { text-align: center; }

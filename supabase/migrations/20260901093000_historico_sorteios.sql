@@ -13,6 +13,9 @@
 -- na mesma lista. `create or replace` não muda a assinatura de uma função, então
 -- a antiga precisa sair antes da nova entrar.
 drop function if exists public.historico_sorteios();
+-- Permite reaplicar esta migração sobre o schema atual, cujo retorno ganhou a
+-- coluna `distribuicao`; CREATE OR REPLACE não pode trocar parâmetros OUT.
+drop function if exists public.historico_sorteios(text);
 
 -- ── Histórico de sorteios ────────────────────────────────────────────────────
 -- O que alimenta historico-cj.html e historico-creg.html: as rodadas de sorteio

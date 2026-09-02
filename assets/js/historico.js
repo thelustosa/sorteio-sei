@@ -158,6 +158,64 @@ function identidade(sorteio) {
   };
 }
 
+// Durante o deploy a página nova pode encontrar a RPC antiga por alguns
+// instantes. Nesse caso as siglas continuam aparecendo, apenas sem inventar uma
+// contagem. Quando `distribuicao` existe, cada número vem da mesma agregação que
+// calcula o total da rodada no banco.
+function distribuicaoDo(sorteio) {
+  const itens = Array.isArray(sorteio.distribuicao)
+    ? sorteio.distribuicao
+    : (sorteio.destinos || []).map(destino => ({ destino, processos: null }));
+
+  return itens
+    .filter(item => item && String(item.destino || '').trim())
+    .map(item => {
+      const numero = item.processos == null ? null : Number(item.processos);
+      return {
+        destino: String(item.destino).trim(),
+        processos: Number.isInteger(numero) && numero >= 0 ? numero : null
+      };
+    });
+}
+
+function celulaDestinos(sorteio) {
+  const celulaEl = celula('', 'td', 'historico-destinos');
+  const distribuicao = distribuicaoDo(sorteio);
+  if (!distribuicao.length) {
+    celulaEl.textContent = '—';
+    return celulaEl;
+  }
+
+  const lista = document.createElement('span');
+  lista.className = 'historico-destinos-lista';
+  const descricoes = [];
+
+  distribuicao.forEach(({ destino, processos }) => {
+    const item = document.createElement('span');
+    item.className = 'historico-destino';
+    const sigla = document.createElement('span');
+    sigla.className = 'historico-destino-sigla';
+    sigla.textContent = destino;
+    item.append(sigla);
+
+    if (processos !== null) {
+      const contagem = document.createElement('span');
+      contagem.className = 'historico-destino-contagem';
+      contagem.textContent = String(processos);
+      item.append(contagem);
+      descricoes.push(`${destino}: ${quantidadeProcessos(processos)}`);
+    } else {
+      descricoes.push(destino);
+    }
+
+    lista.append(item);
+  });
+
+  celulaEl.setAttribute('aria-label', descricoes.join('; '));
+  celulaEl.append(lista);
+  return celulaEl;
+}
+
 // Uma linha por rodada, na ordem que o banco devolveu — da mais recente para a
 // mais antiga. A data é a identidade da linha, e por isso é o <th> dela.
 function desenhar(sorteios) {
@@ -203,10 +261,9 @@ function desenhar(sorteios) {
 
     tr.append(celula(sorteio.processos, 'td', 'historico-numero'));
 
-    // Os destinos vêm por extenso do banco: quem participou da rodada diz mais
-    // do que quantos participaram, e é a resposta à pergunta "para quem foi".
-    const destinos = sorteio.destinos || [];
-    tr.append(celula(destinos.length ? destinos.join(' · ') : '—', 'td', 'historico-destinos'));
+    // Cada destino leva a sua parcela da rodada. A soma desses números é o total
+    // da coluna anterior; juntos eles respondem "quantos foram para quem".
+    tr.append(celulaDestinos(sorteio));
 
     // O alvo é um <button> dentro do <td>: a célula precisa continuar sendo
     // célula para o leitor de tela, e o botão nativo já traz foco, Enter e

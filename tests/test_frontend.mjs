@@ -1329,14 +1329,24 @@ function historicoPage(api, colegiado = 'creg') {
 // que hoje vivem em acervo_creg. Quem corta é o banco; aqui chega o resultado.
 const sorteiosCreg = [
   { data_sorteio: '2026-08-27', sorteado_em: '2026-08-27T14:07:26.154+00:00',
-    processos: 81, destinos: ['CREG2', 'CREG3', 'CREG4'] }
+    processos: 81, destinos: ['CREG2', 'CREG3', 'CREG4'], distribuicao: [
+      { destino: 'CREG2', processos: 27 },
+      { destino: 'CREG3', processos: 27 },
+      { destino: 'CREG4', processos: 27 }
+    ] }
 ];
 
 // Rodadas posteriores ao marco. A segunda e a terceira vêm sem `sorteado_em`: a
 // coluna é opcional no acervo, e uma carga em lote pode deixá-la vazia.
 const sorteiosCj = [
   { data_sorteio: '2026-09-28', sorteado_em: '2026-09-28T17:32:00+00:00', processos: 34,
-    destinos: ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'] },
+    destinos: ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'], distribuicao: [
+      { destino: 'CJ1', processos: 7 },
+      { destino: 'CJ2', processos: 7 },
+      { destino: 'CJ3', processos: 7 },
+      { destino: 'CJ4', processos: 7 },
+      { destino: 'CJ5', processos: 6 }
+    ] },
   { data_sorteio: '2026-09-14', sorteado_em: null, processos: 54,
     destinos: ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'] },
   { data_sorteio: '2026-08-31', sorteado_em: null, processos: 42,
@@ -1346,6 +1356,10 @@ const sorteiosCj = [
 const linhas = page => page.document.getElementById('historicoTable').children[1].children;
 const acaoDe = (page, linha) => linhas(page)[linha].children.at(-1).children[0];
 const dataDe = linha => linha.children[0].children.map(s => s.textContent);
+const destinosDe = linha => linha.children[3].querySelectorAll('.historico-destino').map(item => ({
+  destino: item.querySelector('.historico-destino-sigla')?.textContent,
+  processos: item.querySelector('.historico-destino-contagem')?.textContent
+}));
 
 test('histórico lista uma rodada por linha, na ordem que o banco devolveu', async () => {
   const page = historicoPage(async () => sorteiosCj, 'cj');
@@ -1359,9 +1373,7 @@ test('histórico lista uma rodada por linha, na ordem que o banco devolveu', asy
   assert.equal(linhas(page).length, 3);
   assert.deepEqual(dataDe(linhas(page)[0]), ['28/09/2026', 'Segunda-feira']);
   assert.deepEqual(dataDe(linhas(page)[2]), ['31/08/2026', 'Segunda-feira']);
-  assert.deepEqual(linhas(page)[0].children.slice(2, 4).map(c => c.textContent),
-    ['34', 'CJ1 · CJ2 · CJ3 · CJ4 · CJ5'],
-    'os destinos saem por extenso: quem participou diz mais do que quantos');
+  assert.equal(linhas(page)[0].children[2].textContent, '34');
 
   assert.equal(page.document.getElementById('historicoTotal').textContent,
     '3 sorteios · 130 processos');
@@ -1378,9 +1390,37 @@ test('no Conselho a coluna é a unidade, e o sorteio de 27/08 abre o histórico'
   assert.equal(linhas(page).length, 1);
   assert.deepEqual(dataDe(linhas(page)[0]), ['27/08/2026', 'Quinta-feira']);
   assert.equal(linhas(page)[0].children[2].textContent, '81');
-  assert.equal(linhas(page)[0].children[3].textContent, 'CREG2 · CREG3 · CREG4');
   assert.equal(page.document.getElementById('historicoTotal').textContent,
     '1 sorteio · 81 processos');
+});
+
+test('histórico mostra a quantidade de processos por destino em CREG e CJ', async () => {
+  const creg = historicoPage(async () => sorteiosCreg, 'creg');
+  await creg.inicializarHistorico();
+  assert.deepEqual(destinosDe(linhas(creg)[0]), [
+    { destino: 'CREG2', processos: '27' },
+    { destino: 'CREG3', processos: '27' },
+    { destino: 'CREG4', processos: '27' }
+  ]);
+  assert.equal(linhas(creg)[0].children[3].getAttribute('aria-label'),
+    'CREG2: 27 processos; CREG3: 27 processos; CREG4: 27 processos');
+
+  const cj = historicoPage(async () => sorteiosCj, 'cj');
+  await cj.inicializarHistorico();
+  assert.deepEqual(destinosDe(linhas(cj)[0]), [
+    { destino: 'CJ1', processos: '7' },
+    { destino: 'CJ2', processos: '7' },
+    { destino: 'CJ3', processos: '7' },
+    { destino: 'CJ4', processos: '7' },
+    { destino: 'CJ5', processos: '6' }
+  ]);
+  assert.deepEqual(destinosDe(linhas(cj)[1]), [
+    { destino: 'CJ1', processos: undefined },
+    { destino: 'CJ2', processos: undefined },
+    { destino: 'CJ3', processos: undefined },
+    { destino: 'CJ4', processos: undefined },
+    { destino: 'CJ5', processos: undefined }
+  ], 'durante o rollout, a resposta antiga continua mostrando as cadeiras');
 });
 
 test('rodada sem carimbo mostra o dia sem inventar horário', async () => {
