@@ -1509,6 +1509,8 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   gap: 6px;
 }
 
+/* Também é o botão que abre o card filtrado por aquele destino — por isso o
+   cursor e o hover, que uma cápsula só informativa não teria. */
 .historico-destino {
   display: inline-flex;
   min-height: 28px;
@@ -1521,7 +1523,12 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   color: var(--text);
   line-height: 1;
   white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
 }
+
+.historico-destino:hover { background: var(--accent-soft); border-color: var(--accent); }
+.historico-destino:active { transform: translateY(1px); }
 
 .historico-destino-sigla {
   font-size: var(--text-xs);

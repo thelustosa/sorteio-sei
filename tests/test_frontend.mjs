@@ -1360,6 +1360,8 @@ const destinosDe = linha => linha.children[3].querySelectorAll('.historico-desti
   destino: item.querySelector('.historico-destino-sigla')?.textContent,
   processos: item.querySelector('.historico-destino-contagem')?.textContent
 }));
+const destinoBotaoDe = (linha, sigla) => linha.children[3].querySelectorAll('.historico-destino')
+  .find(item => item.querySelector('.historico-destino-sigla')?.textContent === sigla);
 
 test('histórico lista uma rodada por linha, na ordem que o banco devolveu', async () => {
   const page = historicoPage(async () => sorteiosCj, 'cj');
@@ -1562,6 +1564,27 @@ test('o botão leva ao banco exatamente a rodada da sua linha', async () => {
     ['rpc/processos_sorteio', { p_colegiado: 'CREG', p_data: '2026-08-27',
       p_sorteado_em: '2026-08-27T14:07:26.154+00:00' }]
   ]);
+});
+
+test('clicar num destino abre o card já filtrado só para aquela unidade ou cadeira', async () => {
+  const page = historicoPage(async caminho =>
+    caminho === 'rpc/historico_sorteios' ? sorteiosCj : processosCj, 'cj');
+  await page.inicializarHistorico();
+
+  const pill = destinoBotaoDe(linhas(page)[0], 'CJ1');
+  await page.abrirDetalhe(pill);
+
+  assert.equal(page.document.getElementById('detalheTitulo').textContent,
+    'Sorteio de 28/09/2026 — CJ1',
+    'o título precisa dizer qual destino está filtrado, não só a rodada');
+  const [, tbody] = page.document.getElementById('detalheTable').children;
+  assert.equal(tbody.children.length, 1,
+    'só o processo de CJ1 aparece; a resposta inteira da rodada não vaza para o card');
+  assert.deepEqual(celulas(tbody.children[0]),
+    ['2', '202600029000102', 'CJ1', 'Auto de Infração', 'Não']);
+  assert.match(page.document.getElementById('detalheResumo').textContent,
+    /^Câmara de Julgamento · 1 processo · às \d{2}:\d{2}$/,
+    'o resumo conta só os processos filtrados, não o total da rodada');
 });
 
 test('o card da Câmara mostra a defesa e o conselheiro da época', async () => {

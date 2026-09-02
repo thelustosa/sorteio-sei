@@ -178,6 +178,8 @@ function distribuicaoDo(sorteio) {
     });
 }
 
+// Cada pill também é a porta de entrada do card filtrado: um clique nele abre
+// exatamente os processos daquele destino, sem passar pela rodada inteira.
 function celulaDestinos(sorteio) {
   const celulaEl = celula('', 'td', 'historico-destinos');
   const distribuicao = distribuicaoDo(sorteio);
@@ -186,13 +188,16 @@ function celulaDestinos(sorteio) {
     return celulaEl;
   }
 
+  const { data, carimbo } = identidade(sorteio);
   const lista = document.createElement('span');
   lista.className = 'historico-destinos-lista';
   const descricoes = [];
 
   distribuicao.forEach(({ destino, processos }) => {
-    const item = document.createElement('span');
+    const item = document.createElement('button');
+    item.type = 'button';
     item.className = 'historico-destino';
+    Object.assign(item.dataset, { data, carimbo, destino });
     const sigla = document.createElement('span');
     sigla.className = 'historico-destino-sigla';
     sigla.textContent = destino;
@@ -204,8 +209,10 @@ function celulaDestinos(sorteio) {
       contagem.textContent = String(processos);
       item.append(contagem);
       descricoes.push(`${destino}: ${quantidadeProcessos(processos)}`);
+      item.setAttribute('aria-label', `Ver os ${quantidadeProcessos(processos)} de ${destino}`);
     } else {
       descricoes.push(destino);
+      item.setAttribute('aria-label', `Ver os processos de ${destino}`);
     }
 
     lista.append(item);
@@ -332,16 +339,16 @@ async function carregarHistorico({ carregamentoInicial = false } = {}) {
 // divergirem, o card abre um número diferente do que a linha mostrava.
 
 function abrirDetalheDaLinha(evento) {
-  const botao = evento.target.closest('.historico-ver');
+  const botao = evento.target.closest('.historico-ver, .historico-destino');
   if (botao && historicoTabela.contains(botao)) abrirDetalhe(botao);
 }
 
 async function abrirDetalhe(botao) {
-  const { data, carimbo } = botao.dataset;
+  const { data, carimbo, destino } = botao.dataset;
   const hora = horaBR(carimbo);
   const pedido = ++detalhePedido;
 
-  detalheTitulo.textContent = `Sorteio de ${dataBR(data)}`;
+  detalheTitulo.textContent = destino ? `Sorteio de ${dataBR(data)} — ${destino}` : `Sorteio de ${dataBR(data)}`;
   detalheResumo.textContent = 'Carregando…';
   detalheTabela.replaceChildren();
   detalheErro.hidden = true;
@@ -379,7 +386,11 @@ async function abrirDetalhe(botao) {
   detalheLoading.hidden = true;
   detalheLoading.replaceChildren();
   detalheCorpo.hidden = false;
-  desenharDetalhe(processos || [], hora);
+  // O filtro por destino é feito aqui, não no banco: processos_sorteio já traz
+  // a rodada inteira, e uma rodada tem no máximo algumas dezenas de processos —
+  // não vale uma RPC nova só para recortar o que já chegou.
+  const lista = destino ? (processos || []).filter(p => p.destino === destino) : (processos || []);
+  desenharDetalhe(lista, hora);
 }
 
 function desenharDetalhe(processos, hora) {
