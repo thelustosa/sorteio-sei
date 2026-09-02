@@ -1403,49 +1403,59 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
    Mesma moldura do painel do acervo (.acervo-panel, .acervo-table-shell,
    .acervo-panel-footer) e o mesmo card de detalhe. O que muda é a tabela: aqui
    é uma LISTA cronológica, não uma matriz de contagem — uma linha por rodada,
-   texto alinhado à esquerda e a data como identidade da linha. */
+   colunas centralizadas e a data como identidade da linha. */
 .historico-table {
-  min-width: 720px;
+  min-width: 760px;
   margin: 0;
   border: 0;
   border-radius: 0;
+  table-layout: fixed;
 }
 
 .historico-table thead th {
   position: sticky;
   top: 0;
   z-index: 1;
-  height: 48px;
-  padding: 10px 12px;
+  height: 52px;
+  padding: 11px 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.16);
+  border-right: 1px solid var(--on-accent-rule);
   border-bottom: 0;
   background: #00453e;
   color: var(--on-accent);
   font-size: var(--text-xs);
   letter-spacing: 0.04em;
-  text-align: left;
+  text-align: center;
   text-transform: uppercase;
 }
 
-.historico-table thead th:first-child { padding-left: 24px; }
-.historico-table thead th:last-child { padding-right: 24px; text-align: right; }
+.historico-table thead th:nth-child(1) { width: 18%; }
+.historico-table thead th:nth-child(2) { width: 13%; }
+.historico-table thead th:nth-child(3) { width: 14%; }
+.historico-table thead th:nth-child(4) { width: 35%; }
+.historico-table thead th:nth-child(5) { width: 20%; border-right: 0; }
 
 .historico-table tbody th,
 .historico-table tbody td {
-  height: 56px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
+  height: 64px;
+  padding: 12px 14px;
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-strong);
   background: var(--surface-raised);
   color: var(--text);
   font-size: var(--text-sm);
-  text-align: left;
+  text-align: center;
   vertical-align: middle;
+  transition: background-color 140ms ease, box-shadow 140ms ease;
 }
 
-.historico-table tbody th:first-child,
-.historico-table tbody td:first-child { padding-left: 24px; }
-.historico-table tbody tr:last-child th,
-.historico-table tbody tr:last-child td { border-bottom: 0; }
+.historico-table tbody th:last-child,
+.historico-table tbody td:last-child { border-right: 0; }
+/* A regra global das tabelas remove a base do último <td>. No histórico a linha
+   final também separa a lista do espaço livre e precisa fechar as cinco colunas. */
+.historico-table tbody tr:last-child > * { border-bottom: 1px solid var(--border-strong); }
+.historico-table tbody tr:nth-child(even) th,
+.historico-table tbody tr:nth-child(even) td { background: var(--surface-subtle); }
 
 /* A data é a identidade da rodada — é ela que se procura no histórico. O dia da
    semana entra abaixo, menor: é o que confirma que se achou a sessão certa. */
@@ -1475,15 +1485,22 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 .historico-hora,
 .historico-numero { font-variant-numeric: tabular-nums; font-weight: 700; }
 
+.historico-table tbody td.historico-numero {
+  color: var(--accent);
+  font-size: var(--text-md);
+  box-shadow: inset 1px 0 var(--border-subtle), inset -1px 0 var(--border-subtle);
+}
+
 /* Cadeiras e unidades vêm por extenso do banco. Quebram linha quando a rodada
    inteira participou — cinco cadeiras não cabem numa linha em tela estreita. */
 .historico-destinos {
   color: var(--muted-strong);
   font-weight: 700;
   line-height: 1.4;
+  text-align: center;
 }
 
-.historico-acao { padding-right: 24px; text-align: right; }
+.historico-acao { text-align: center; }
 
 /* O início da série encosta na ponta esquerda do rodapé; "Atualizado em"
    continua na direita, onde o painel do acervo o pôs. O rodapé já dá cor,
@@ -1493,8 +1510,13 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 /* O alvo mantém altura de toque confortável; o que encolhe é a folga lateral,
    para a coluna de ação não roubar largura das quatro que informam. */
 .historico-ver {
-  min-height: 40px;
-  padding: 6px 12px;
+  min-width: 128px;
+  min-height: 42px;
+  padding: 8px 14px;
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 2px 6px rgba(0, 83, 75, 0.16);
+  color: var(--on-accent);
   font-size: var(--text-sm);
   white-space: nowrap;
 }
@@ -1502,6 +1524,20 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 @media (hover: hover) {
   .historico-table tbody tr:hover th,
   .historico-table tbody tr:hover td { background: var(--accent-soft); }
+
+  .historico-ver:hover:not(:disabled) {
+    border-color: var(--accent-hover);
+    background: var(--accent-hover);
+  }
+}
+
+/* O <dialog> devolve o foco ao botão que o abriu. Com :focus-within, isso
+   mantinha a linha selecionada até depois de um clique; :focus-visible
+   preserva a orientação por teclado sem criar um estado visual falso. */
+.historico-table tbody tr:has(.historico-ver:focus-visible) th,
+.historico-table tbody tr:has(.historico-ver:focus-visible) td {
+  background: var(--accent-soft-strong);
+  box-shadow: inset 0 2px var(--accent-secondary), inset 0 -2px var(--accent-secondary);
 }
 
 /* O card do acervo tem sempre as mesmas quatro ou cinco colunas, e por isso a

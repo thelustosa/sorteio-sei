@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fixture visual — Histórico de sorteios</title>
+  <link rel="stylesheet" href="../../assets/css/index.min.css?fixture=8" />
+</head>
+
+<body class="dashboard-page" data-colegiado="creg">
+  <main class="container dashboard-main">
+    <section id="historicoPanel" class="acervo-panel" aria-labelledby="historico-title" hidden>
+      <header class="acervo-header">
+        <div class="acervo-header-main">
+          <div class="acervo-header-title-group">
+            <h2 id="historico-title">Histórico de sorteios</h2>
+            <p class="acervo-subtitle">Rodadas de sorteio do Conselho Regulador, da mais recente para a mais antiga, com os processos de cada uma.</p>
+          </div>
+          <div class="acervo-header-summary">
+            <div class="acervo-scope" aria-label="Escopo do painel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 8v4l3 2"></path><circle cx="12" cy="12" r="9"></circle>
+              </svg>
+              <span id="historicoTotal">Sorteios realizados</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="acervo-table-shell">
+        <div id="historicoErro" class="load-error" role="alert" hidden>
+          <p></p>
+          <button id="btnTentarNovamente" class="button-secondary" type="button">Tentar novamente</button>
+        </div>
+        <div id="historicoVazio" class="empty-state" role="status" hidden>
+          <p id="historicoVazioTexto"></p>
+        </div>
+        <div class="table-scroll" role="region" aria-label="Sorteios fictícios, por data" tabindex="0">
+          <table id="historicoTable" class="historico-table"></table>
+        </div>
+        <footer class="acervo-panel-footer">
+          <span id="historicoInicio" class="historico-inicio"></span>
+          <div class="acervo-updated" role="status" aria-live="polite" aria-atomic="true">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="historicoAtualizado">Carregando…</span>
+          </div>
+        </footer>
+      </div>
+    </section>
+
+    <button id="btnAtualizar" type="button" style="display: none" hidden>Atualizar</button>
+    <div data-login-only></div>
+
+    <dialog id="detalheDialog" class="detalhe-dialog" aria-labelledby="detalheTitulo">
+      <header class="detalhe-header">
+        <div class="detalhe-identidade">
+          <h2 id="detalheTitulo">Processos do sorteio</h2>
+          <p id="detalheResumo" class="detalhe-resumo"></p>
+        </div>
+        <button id="btnFecharDetalhe" type="button" aria-label="Fechar">Fechar</button>
+      </header>
+      <div id="detalheLoading" class="detalhe-loading" hidden></div>
+      <div id="detalheErro" class="load-error" role="alert" hidden><p></p></div>
+      <div id="detalheCorpo" class="detalhe-corpo">
+        <table id="detalheTable" class="detalhe-table historico-detalhe"></table>
+      </div>
+    </dialog>
+  </main>
+
+  <script>
+    const sorteiosFicticios = [
+      { data_sorteio: '2026-09-02', sorteado_em: '2026-09-02T12:35:00-03:00', processos: 7, destinos: ['CREG2', 'CREG3'] },
+      { data_sorteio: '2026-09-02', sorteado_em: '2026-09-02T09:10:00-03:00', processos: 34, destinos: ['CREG1', 'CREG4'] },
+      { data_sorteio: '2026-09-01', sorteado_em: '2026-09-01T16:22:00-03:00', processos: 81, destinos: ['CREG2', 'CREG3', 'CREG4'] },
+      { data_sorteio: '2026-09-01', sorteado_em: '2026-09-01T10:05:00-03:00', processos: 1, destinos: ['CREG1'] },
+      { data_sorteio: '2026-09-01', sorteado_em: null, processos: 126, destinos: ['CREG1', 'CREG2', 'CREG3', 'CREG4'] },
+      { data_sorteio: '2026-08-31', sorteado_em: '2026-08-31T17:40:00-03:00', processos: 23, destinos: ['CREG4'] },
+      { data_sorteio: '2026-08-31', sorteado_em: '2026-08-31T14:15:00-03:00', processos: 48, destinos: ['CREG1', 'CREG3', 'CREG4'] },
+      { data_sorteio: '2026-08-31', sorteado_em: '2026-08-31T11:30:00-03:00', processos: 15, destinos: [] },
+      { data_sorteio: '2026-08-30', sorteado_em: '2026-08-30T15:50:00-03:00', processos: 99, destinos: ['CREG1', 'CREG2', 'CREG3', 'CREG4'] },
+      { data_sorteio: '2026-08-30', sorteado_em: '2026-08-30T08:45:00-03:00', processos: 12, destinos: ['CREG2'] },
+      { data_sorteio: '2026-08-29', sorteado_em: '2026-08-29T18:05:00-03:00', processos: 63, destinos: ['CREG1', 'CREG2', 'CREG4'] },
+      { data_sorteio: '2026-08-29', sorteado_em: '2026-08-29T13:20:00-03:00', processos: 4, destinos: ['CREG3'] },
+      { data_sorteio: '2026-08-29', sorteado_em: '2026-08-29T09:00:00-03:00', processos: 72, destinos: ['CREG1', 'CREG2', 'CREG3', 'CREG4'] },
+      { data_sorteio: '2026-08-28', sorteado_em: '2026-08-28T16:48:00-03:00', processos: 28, destinos: ['CREG2', 'CREG3'] },
+      { data_sorteio: '2026-08-28', sorteado_em: '2026-08-28T14:03:00-03:00', processos: 45, destinos: ['CREG1', 'CREG3'] },
+      { data_sorteio: '2026-08-28', sorteado_em: '2026-08-28T10:20:00-03:00', processos: 8, destinos: ['CREG4'] },
+      { data_sorteio: '2026-08-27', sorteado_em: '2026-08-27T17:30:00-03:00', processos: 56, destinos: ['CREG1', 'CREG2', 'CREG4'] },
+      { data_sorteio: '2026-08-27', sorteado_em: '2026-08-27T14:07:00-03:00', processos: 19, destinos: ['CREG3', 'CREG4'] },
+      { data_sorteio: '2026-08-27', sorteado_em: '2026-08-27T11:07:00-03:00', processos: 81, destinos: ['CREG2', 'CREG3', 'CREG4'] },
+      { data_sorteio: '2026-08-27', sorteado_em: '2026-08-27T08:30:00-03:00', processos: 6, destinos: ['CREG1'] }
+    ];
+
+    async function api(caminho) {
+      if (caminho === 'rpc/historico_sorteios') {
+        const limite = Number(new URLSearchParams(location.search).get('linhas'));
+        return limite > 0 ? sorteiosFicticios.slice(0, limite) : sorteiosFicticios;
+      }
+      return [];
+    }
+
+    function criarIndicadorCarregamento(texto) {
+      const elemento = document.createElement('span');
+      elemento.textContent = texto;
+      return elemento;
+    }
+  </script>
+  <script src="../../assets/js/historico.js"></script>
+  <script>inicializarHistorico();</script>
+</body>
+
+</html>
