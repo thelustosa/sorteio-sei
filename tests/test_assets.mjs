@@ -77,6 +77,21 @@ for (const [pagina, colegiado] of [['historico-cj.html', 'cj'], ['historico-creg
     `o card de histórico não aponta para ${pagina}`);
 }
 
+// A fixture visual do histórico carrega o historico.js de verdade, e o script
+// resolve todos os elementos no topo do arquivo. Um id que exista nas páginas e
+// falte aqui não dá erro nenhum na CI — a fixture não está em PAGINAS —, mas
+// derruba o script no carregamento e a tela abre em branco, que foi o que
+// aconteceu quando o card do histórico ganhou o botão Exportar.
+const historicoJs = ler('assets/js/historico.js');
+const fixtureHistorico = ler('tests/fixtures/historico-visual.html');
+const idsDoHistorico = [...new Set([...historicoJs.matchAll(/getElementById\('([^']+)'\)/g)]
+  .map(([, id]) => id))];
+assert.ok(idsDoHistorico.length >= 15, 'não achei os getElementById do historico.js: a forma mudou?');
+for (const id of idsDoHistorico) {
+  assert.ok(fixtureHistorico.includes(`id="${id}"`),
+    `historico-visual.html não tem id="${id}": a fixture abre em branco`);
+}
+
 // Renomear uma página e esquecer a entrada correspondente deixa o dashboard em
 // branco: sem a chave, o bootstrap não carrega script nenhum e não reclama.
 const bootstrap = ler('assets/js/bootstrap.js');

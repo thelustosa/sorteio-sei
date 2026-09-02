@@ -629,6 +629,32 @@ function processosParaDocx(processos) {
   });
 }
 
+// A largura que sobra entre as margens do DOCX_SECAO, em twips. É a régua do
+// <w:tblGrid>, que só aceita medida absoluta — o `pct` das colunas é convertido
+// contra ela.
+const DOCX_LARGURA_UTIL = 11906 - 1701 - 1133;
+
+// O <w:tblGrid> é obrigatório no CT_Tbl e tem de vir logo depois do <w:tblPr>:
+// sem ele o Word não abre a ata, oferece reparar o arquivo. Os testes só liam o
+// XML cru e passavam com a tabela inválida do mesmo jeito.
+//
+// O arredondamento é cumulativo — cada coluna recebe a diferença entre o seu
+// acumulado e o da anterior — para que a soma feche a largura útil exata em vez
+// de escorregar um twip por coluna arredondada.
+function gradeDocxXml(colunas) {
+  const total = colunas.reduce((soma, c) => soma + c.pct, 0);
+  let acumulado = 0;
+  let anterior = 0;
+  const grade = colunas.map(c => {
+    acumulado += c.pct;
+    const limite = Math.round(acumulado / total * DOCX_LARGURA_UTIL);
+    const largura = limite - anterior;
+    anterior = limite;
+    return `<w:gridCol w:w="${largura}"/>`;
+  }).join('');
+  return `<w:tblGrid>${grade}</w:tblGrid>`;
+}
+
 function tabelaDocxXml(processos) {
   const colunas = COL.docx.colunas;
   const cabecalho = `<w:tr>${colunas.map(c => celulaDocxXml(c.rotulo, { negrito: true, pct: c.pct })).join('')}</w:tr>`;
@@ -636,7 +662,7 @@ function tabelaDocxXml(processos) {
     `<w:tr>${colunas.map(c => celulaDocxXml(String(valorDaColunaDocx(processo, c.campo)), { pct: c.pct })).join('')}</w:tr>`
   ).join('');
   return `<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblBorders>${DOCX_TABELA_BORDAS}</w:tblBorders></w:tblPr>`
-    + `${cabecalho}${linhas}</w:tbl>`;
+    + `${gradeDocxXml(colunas)}${cabecalho}${linhas}</w:tbl>`;
 }
 
 // `data` é a da própria rodada (aaaa-mm-dd), não a de hoje: a ata registra

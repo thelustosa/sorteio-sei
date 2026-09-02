@@ -1820,6 +1820,36 @@ def processos_do_sorteio_traduzem_o_vocabulario_de_cada_colegiado(cur):
 
 
 @teste
+def cadeira_com_periodos_sobrepostos_nao_duplica_o_processo(cur):
+    """Dois períodos cobrindo a mesma data dão UMA linha, não duas.
+
+    cadeiras_cj não impede a sobreposição: a chave primária é (cadeira, desde)
+    e ux_cadeiras_cj_vigente só alcança o período em aberto. Com um join comum
+    sobre o intervalo, cada processo da cadeira saía repetido no card do
+    histórico — e na ata .docx que o card exporta, onde a linha dobrada vira
+    processo distribuído duas vezes.
+    """
+    autenticar(cur)
+    semear_historico(cur)
+
+    # Uma correção de composição registrada sem fechar a linha anterior: o
+    # período novo é fechado, então o índice do período vigente não reclama.
+    cur.execute("""insert into public.cadeiras_cj (cadeira, conselheiro, desde, ate)
+                   values ('CJ1', 'Ocupante Posterior', date '2026-06-01', date '2026-12-31')""")
+
+    cur.execute("""select num_processo, destino, responsavel
+                     from public.processos_sorteio(
+                       'CJ', date '2026-09-28', timestamptz '2026-09-28 14:32:00-03')
+                    where destino = 'CJ1'""")
+    linhas = cur.fetchall()
+    assert len(linhas) == 1, f'processo duplicado pelo de-para de cadeiras: {linhas}'
+    # E quem sai é o período que começou por último até a data do sorteio.
+    assert linhas[0][2] == 'Ocupante Posterior', linhas
+
+    cur.connection.rollback()
+
+
+@teste
 def defesa_nula_nao_vira_nao_no_historico(cur):
     """Sem defesa registrada, a decisão é o legado — ou nada, nunca 'Não'.
 
@@ -1998,11 +2028,24 @@ def migracoes_reproduzem_o_schema(cur):
 
 # ── Runner ───────────────────────────────────────────────────────────────────
 
-# Migração que uma posterior substituiu: 20260824180000 derruba e recria
-# resumo_acervo_cj com a coluna `conselheiro`, então rodar a versão de
-# 20260824121500 sobre o schema atual falha com "cannot change return type" —
-# pelo motivo certo. Em produção ela rodou na ordem, sobre o banco de antes.
-MIGRACOES_SUPERADAS = {'20260824121500_painel_acervo_cj.sql'}
+# Migração que uma posterior substituiu. A bateria aplica o schema.sql primeiro
+# e só depois as migrações, então uma migração que crie uma função com um
+# retorno que outra POSTERIOR alargou falha aqui com "cannot change return
+# type" — pelo motivo certo. Em produção cada uma rodou na ordem, sobre o banco
+# de antes; o que se perde é só a repetição delas sobre o schema de hoje.
+#
+#   20260824121500  20260824180000 derruba e recria resumo_acervo_cj com a
+#                   coluna `conselheiro`.
+#   20260901134138  historico_sorteios nasce com quatro colunas; 20260902130000
+#   20260901135740  acrescenta `distribuicao` e o retorno passa a cinco. As
+#                   duas continuam sendo a versão que produção aplicou — quem
+#                   entrega a função de hoje é 20260902130000, e o
+#                   processos_sorteio delas, 20260902131000.
+MIGRACOES_SUPERADAS = {
+    '20260824121500_painel_acervo_cj.sql',
+    '20260901134138_historico_sorteios.sql',
+    '20260901135740_historico_sorteios_marco_unico.sql',
+}
 
 
 def migracoes_a_aplicar():
