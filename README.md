@@ -176,7 +176,7 @@ A chave publicável é pública por natureza e pode ficar no código: ela identi
 
 > O passo a passo completo, com diagramas, está em **[FLUXO-CJ.md](FLUXO-CJ.md)**.
 
-A CJ deixou de compartilhar a tabela `processos_sorteados` com o Conselho Regulador e passou a ter as duas tabelas que a secretaria já usava na planilha:
+A CJ deixou de compartilhar uma tabela única de sorteio com o Conselho Regulador e passou a ter as duas tabelas que a secretaria já usava na planilha:
 
 - **`acervo_cj`** — uma linha por **distribuição** de um processo a um relator. Um processo redistribuído aparece mais de uma vez, com datas e relatores diferentes. É aqui que o sorteio da CJ grava: a cadeira sorteada (`CJ1`..`CJ5`) é o relator do processo, e quem ocupa cada cadeira sai da tabela `cadeiras_cj`.
 - **`julgados_cj`** — uma linha por processo levado a uma **sessão de julgamento**, ligada ao registro do acervo por `acervo_id`.
@@ -227,7 +227,7 @@ listagem da AGR → reuniões ainda não processadas → baixa o PDF
   → registra o documento em pautas_cj
 ```
 
-Onde isso roda: **GitHub Actions**, não no site. O site é estático no Pages e o navegador nem conseguiria consultar `goias.gov.br`, que não libera CORS. O job roda toda sexta de manhã e sincroniza os dois colegiados na mesma passagem — a Câmara reúne às quintas e o Conselho não tem dia fixo. Pode ser disparado à mão em **Actions → Sincronizar Julgados → Run workflow**, com a opção `simular` para ver o resultado sem gravar nada e a opção de limitar a um colegiado. O log de cada rodada fica na aba Actions, o que mantém a sincronização tão auditável quanto o resto do projeto.
+Onde isso roda: **GitHub Actions**, não no site. O site é estático no Pages e o navegador nem conseguiria consultar `goias.gov.br`, que não libera CORS. O job roda de hora em hora, das 07:00 às 20:00 de Goiás, e sincroniza os dois colegiados na mesma passagem — a Câmara reúne às quintas, o Conselho não tem dia fixo e nenhum dos dois avisa a hora em que a pauta vai ao ar. Repetir a busca não duplica nada: a URL já registrada em `pautas_*` fica de fora da rodada seguinte. Se um colegiado falhar, o outro continua e a Action aponta qual foi. Pode ser disparado à mão em **Actions → Sincronizar Julgados → Run workflow**, com a opção `simular` para ver o resultado sem gravar nada e a opção de limitar a um colegiado. O log de cada rodada fica na aba Actions, o que mantém a sincronização tão auditável quanto o resto do projeto.
 
 Para funcionar, cadastre em **Settings → Secrets and variables → Actions** o segredo `SUPABASE_DB_URL` com a connection string do banco.
 
@@ -248,9 +248,9 @@ Rodar duas vezes não duplica nada: `pautas_cj.url` barra o documento repetido e
 > O que difere da Câmara, com as fórmulas traduzidas uma a uma, está em
 > **[FLUXO-CREG.md](FLUXO-CREG.md)**.
 
-Até 27/08/2026 o sorteio do CREG gravava em `processos_sorteados` — uma tabela
-sem acervo e sem julgados, medida provisória enquanto o Conselho não tinha o
-desenho da Câmara. Agora tem:
+Até 27/08/2026 o sorteio do CREG gravava numa tabela solta, sem acervo e sem
+julgados, medida provisória enquanto o Conselho não tinha o desenho da Câmara.
+Agora tem:
 
 - **`acervo_creg`** — uma linha por **distribuição** de um processo a uma unidade
   (`CREG1`..`CREG4`). É aqui que o sorteio do CREG grava. A unidade é o que se
@@ -359,6 +359,15 @@ python tests/test_sincronizacao.py
 ```
 
 Testa o parser e a sincronização contra fixtures reais (HTML da listagem, texto e PDF de pautas de datas diferentes) e contra o mesmo Postgres descartável, sem depender do site estar no ar. Com `--online` roda também um teste que consulta a AGR de verdade — serve para avisar quando o portal mudar de formato.
+
+```bash
+python tests/test_workflows.py
+```
+
+Confere o contrato do agendamento, que nenhuma outra suíte alcança: um único
+workflow para os dois colegiados, busca várias vezes por dia, disparo manual
+preservado e falha de um colegiado anotada no log da Action. Lê o arquivo do
+workflow, sem Docker nem rede.
 
 ```bash
 node tests/test_sorteio.mjs
