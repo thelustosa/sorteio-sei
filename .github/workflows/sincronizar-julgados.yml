@@ -8,9 +8,16 @@
 #
 # Roda os DOIS colegiados na mesma passagem, um de cada vez. A Câmara de
 # Julgamento reúne às quintas e o Conselho Regulador não tem dia fixo (em 2026
-# houve sessão em quarta, quinta e sexta), então a rodada semanal de sexta
-# cobre a semana inteira dos dois. Cada colegiado tem a sua página na AGR e o
-# seu par de tabelas — ver COLEGIADOS em sincronizacao/sincronizar.py.
+# houve sessão em quarta, quinta e sexta), e nenhum dos dois anuncia a hora em
+# que a pauta vai ao ar — por isso a busca é de hora em hora durante o
+# expediente, e não uma rodada semanal: uma pauta publicada na terça à tarde
+# entrava no site só na sexta seguinte. Cada colegiado tem a sua página na AGR
+# e o seu par de tabelas — ver COLEGIADOS em sincronizacao/sincronizar.py.
+#
+# Repetir a busca é barato e não duplica nada: a rodada que não acha pauta nova
+# é uma consulta à listagem de cada colegiado, e o que já foi sincronizado fica
+# de fora pela URL registrada em pautas_* (ver pautas_pendentes) — quem chega ao
+# banco ainda esbarra na chave da sessão.
 #
 # Pode ser disparado à mão em Actions → Sincronizar Julgados → Run workflow,
 # onde dá para marcar "simular" para ver o resultado sem gravar nada e limitar
@@ -24,7 +31,12 @@ name: Sincronizar Julgados
 
 on:
   schedule:
-    - cron: '0 12 * * 5'   # sexta, 09:00 em Goiás (12:00 UTC)
+    # De hora em hora, das 07:00 às 20:00 em Goiás (UTC−3, sem horário de
+    # verão), todos os dias. A janela cobre o expediente da AGR com folga dos
+    # dois lados; o que sair fora dela espera a primeira rodada da manhã. O
+    # GitHub atrasa agendamentos em horário de pico e não garante o minuto
+    # exato — por isso a janela, e não um horário só.
+    - cron: '0 10-23 * * *'
   workflow_dispatch:
     inputs:
       colegiado:
@@ -100,22 +112,45 @@ jobs:
           falhou=0
           for colegiado in $alvos; do
             echo "::group::$colegiado"
+            estado=0
+            # `shell: bash` roda com `-eo pipefail`, então o `tee` no fim do
+            # cano não engole o código de saída do Python — sem pipefail, todo
+            # colegiado terminaria verde, porque quem falha aqui é o script.
             python sincronizacao/sincronizar.py --colegiado "$colegiado" \
-              "${args[@]}" | tee "resumo-$colegiado.json" || falhou=1
+              "${args[@]}" | tee "resumo-$colegiado.json" || estado=1
             echo '::endgroup::'
+
+            # A anotação fica FORA do grupo: dentro, ela nasceria dobrada junto
+            # com o log e o motivo do vermelho só apareceria depois de expandir.
+            # Nomear o colegiado é o que separa "a Action falhou" de "a CREG
+            # falhou e a CJ sincronizou" quando a rodada leva os dois.
+            if [ "$estado" -ne 0 ]; then
+              falhou=1
+              echo "::error title=Sincronização $colegiado::Falhou — abra o grupo \"$colegiado\" no log e o resumo do job."
+            fi
+            echo "$colegiado=$estado" >> estados.txt
           done
-          exit $falhou
+          exit "$falhou"
 
       - name: Resumo
         if: always()
         shell: bash
         run: |
-          for arquivo in resumo-*.json; do
-            [ -s "$arquivo" ] || continue
+          # O resumo sai de estados.txt, e não dos resumo-*.json: colegiado que
+          # falhou antes de imprimir o JSON não tem arquivo, e é justamente o
+          # que precisa aparecer aqui.
+          [ -s estados.txt ] || exit 0
+
+          while IFS='=' read -r colegiado estado; do
+            if [ "$estado" = 0 ]; then marca='✅'; else marca='❌ falhou'; fi
             {
-              echo "### Sincronização — ${arquivo#resumo-}"
-              echo '```json'
-              cat "$arquivo"
-              echo '```'
+              echo "### Sincronização — $colegiado $marca"
+              if [ -s "resumo-$colegiado.json" ]; then
+                echo '```json'
+                cat "resumo-$colegiado.json"
+                echo '```'
+              else
+                echo '_Sem resumo: a execução terminou antes de produzir o JSON._'
+              fi
             } >> "$GITHUB_STEP_SUMMARY"
-          done
+          done < estados.txt
