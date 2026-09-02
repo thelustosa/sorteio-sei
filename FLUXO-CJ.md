@@ -21,7 +21,7 @@ até 27/08/2026, quando ganhou o mesmo par de tabelas — ver
 ```mermaid
 flowchart TD
     A["Secretária sorteia<br/>index.html"] -->|"POST /rest/v1/acervo_cj"| B[("acervo_cj<br/>uma linha por distribuição")]
-    C["Site da AGR<br/>pautas das reuniões"] -->|"GitHub Actions, semanal"| D["sincronizar.py<br/>baixa PDF e extrai processos"]
+    C["Site da AGR<br/>pautas das reuniões"] -->|"GitHub Actions, de hora em hora"| D["sincronizar.py<br/>baixa PDF e extrai processos"]
     D -->|"INSERT direto no banco"| E[("julgados_cj<br/>uma linha por sessão")]
     D --> F[("pautas_cj<br/>documentos processados")]
     B -.->|"gatilho preenche<br/>relator, defesa, data DIST"| E
@@ -124,7 +124,7 @@ Não existe servidor nosso, então o "endpoint" virou um job agendado — que ai
 tem a vantagem de deixar o log de cada rodada na aba Actions, coerente com a
 proposta de auditoria do projeto.
 
-Dispara sozinho toda sexta de manhã (as sessões são às quintas) ou à mão em
+Dispara sozinho de hora em hora, das 07:00 às 20:00 de Goiás, ou à mão em
 **Actions → Sincronizar Julgados → Run workflow**, com opção de simular. A
 mesma rodada sincroniza o Conselho Regulador.
 
