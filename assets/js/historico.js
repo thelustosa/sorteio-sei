@@ -23,7 +23,28 @@ const COLEGIADOS = {
     decisao: 'Defesa',
     // O interessado é campo livre que só a tela do sorteio do Conselho
     // preenche: na Câmara a coluna nem existe no acervo.
-    interessado: false
+    interessado: false,
+    arquivo: 'historico-cj',
+    // A ata em .docx segue o padrão da AGR, que aqui difere do que a tela
+    // mostra: a Câmara distribui por RELATOR, e a ata publica o nome de quem
+    // vai relatar — não o código da cadeira (`destino`) que a tabela usa para
+    // poder mostrar o ocupante da época só no hover. A ata do CJ também não
+    // agrupa as linhas: fica na mesma ordem de sorteio que a tela já lista.
+    docx: {
+      agrupar: false,
+      colunas: [
+        { rotulo: 'Ordem', campo: 'ordem', pct: 600 },
+        { rotulo: 'Nº do Processo', campo: 'num_processo', pct: 2200 },
+        { rotulo: 'Relator', campo: 'responsavel', pct: 2200 }
+      ],
+      // Sem o número da Resolução Normativa que designa a composição da
+      // Câmara: essa informação não fica gravada por sorteio, e citar um
+      // número aqui arriscaria uma ata com uma resolução desatualizada.
+      introducao: (dia, mes, ano) => `Aos ${dia} dias do mês de ${mes} de ${ano} na sede da `
+        + `Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos – AGR, `
+        + `realizou-se a distribuição de processos para análise, elaboração de relatório e voto `
+        + `entre os integrantes da Câmara de Julgamento, através de sorteio eletrônico.`
+    }
   },
   creg: {
     sigla: 'CREG',
@@ -32,7 +53,24 @@ const COLEGIADOS = {
     destinos: 'Unidades',
     destino: 'Unidade',
     decisao: 'Recurso',
-    interessado: true
+    interessado: true,
+    arquivo: 'historico-creg',
+    // A ata do Conselho agrupa as linhas por unidade — todas as de uma
+    // unidade juntas, unidades em ordem crescente, ordem de sorteio dentro de
+    // cada grupo — diferente da tela, que lista pela ordem pura do sorteio.
+    // Só a exportação reorganiza; os dados voltam do banco como sempre.
+    docx: {
+      agrupar: true,
+      colunas: [
+        { rotulo: 'Ordem', campo: 'ordem', pct: 500 },
+        { rotulo: 'Nº do Processo', campo: 'num_processo', pct: 1800 },
+        { rotulo: 'Interessado', campo: 'interessado', pct: 1800 },
+        { rotulo: 'Unidade', campo: 'destino', pct: 900 }
+      ],
+      introducao: (dia, mes, ano) => `Aos ${dia} dias do mês de ${mes} de ${ano} na sede da `
+        + `Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos, realizou-se `
+        + `a distribuição de processos por sorteio eletrônico.`
+    }
   }
 };
 
@@ -66,10 +104,14 @@ const detalheCorpo = document.getElementById('detalheCorpo');
 const detalheTabela = document.getElementById('detalheTable');
 const detalheErro = document.getElementById('detalheErro');
 const btnFecharDetalhe = document.getElementById('btnFecharDetalhe');
+const btnExportarDetalhe = document.getElementById('btnExportarDetalhe');
 // Cada abertura invalida a anterior: fechar no Escape durante uma busca lenta e
 // clicar noutra rodada deixaria a resposta atrasada chegar por último e
 // sobrescrever o card — título de um sorteio, lista de outro.
 let detalhePedido = 0;
+// O que está aberto no card agora: só o que está nele pode ser exportado, e só
+// depois que a lista chega — nunca a resposta de uma busca que já saiu de foco.
+let detalheAtual = null;
 
 // A data de início entra assim que o script carrega: ela não depende da
 // resposta do banco, e escrevê-la só depois deixaria o rodapé piscando.
@@ -82,6 +124,7 @@ btnAtualizar.addEventListener('click', () => carregarHistorico());
 btnTentarNovamente.addEventListener('click', () => carregarHistorico());
 historicoTabela.addEventListener('click', abrirDetalheDaLinha);
 btnFecharDetalhe.addEventListener('click', () => detalheDialog.close());
+btnExportarDetalhe.addEventListener('click', exportarDetalheDocx);
 // Clique no ::backdrop chega como clique no próprio dialog: fechar ali é o que
 // a pessoa espera de um card modal, e o <dialog> não faz isso sozinho.
 detalheDialog.addEventListener('click', evento => {
@@ -347,6 +390,7 @@ async function abrirDetalhe(botao) {
   const { data, carimbo, destino } = botao.dataset;
   const hora = horaBR(carimbo);
   const pedido = ++detalhePedido;
+  detalheAtual = null;
 
   detalheTitulo.textContent = destino ? `Sorteio de ${dataBR(data)} — ${destino}` : `Sorteio de ${dataBR(data)}`;
   detalheResumo.textContent = 'Carregando…';
@@ -355,6 +399,7 @@ async function abrirDetalhe(botao) {
   detalheCorpo.hidden = true;
   detalheLoading.hidden = false;
   detalheLoading.replaceChildren(criarIndicadorCarregamento('Carregando processos…'));
+  btnExportarDetalhe.disabled = true;
   // showModal antes da busca: o card aparece com o loading em vez de a tela
   // ficar parada sem resposta ao clique.
   if (!detalheDialog.open) detalheDialog.showModal();
@@ -390,6 +435,8 @@ async function abrirDetalhe(botao) {
   // a rodada inteira, e uma rodada tem no máximo algumas dezenas de processos —
   // não vale uma RPC nova só para recortar o que já chegou.
   const lista = destino ? (processos || []).filter(p => p.destino === destino) : (processos || []);
+  detalheAtual = { data, destino, processos: lista };
+  btnExportarDetalhe.disabled = lista.length === 0;
   desenharDetalhe(lista, hora);
 }
 
@@ -431,4 +478,195 @@ function desenharDetalhe(processos, hora) {
   });
 
   detalheTabela.replaceChildren(thead, tbody);
+}
+
+// ── Exportar a ata do sorteio em .docx ───────────────────────────────────────
+// O arquivo segue o padrão visual e estrutural das atas que a AGR publica:
+// cabeçalho institucional em texto (sem imagem, sem numeração de ata),
+// parágrafo de abertura e a tabela do sorteio — sem Assunto/Decisão, que
+// existem no card mas não na ata oficial.
+//
+// Sem biblioteca nova: um .docx também é um zip com XML dentro (WordprocessingML,
+// em vez do SpreadsheetML do .xlsx), e o projeto já monta esse zip à mão para o
+// Excel do acervo. `criarZip`/`crc32`/`escaparXml`/`baixarArquivo` são cópias
+// dos mesmos utilitários — não há um arquivo compartilhado entre as páginas, e
+// acervo.js e index.js já duplicam essas funções entre si.
+
+function baixarArquivo(blob, nome) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nome;
+  link.hidden = true;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Alguns navegadores só assumem o Blob depois que a navegação de download
+  // avança; revogá-lo no mesmo ciclo pode cancelar um arquivo válido.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function escaparXml(valor) {
+  return String(valor).replace(/[&<>"']/g, caractere => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;'
+  })[caractere]);
+}
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function inteiro(buffer, deslocamento, valor, bytes) {
+  for (let i = 0; i < bytes; i++) buffer[deslocamento + i] = (valor >>> (i * 8)) & 0xff;
+}
+
+function criarZip(arquivos) {
+  const encoder = new TextEncoder();
+  const locais = [];
+  const centrais = [];
+  let deslocamento = 0;
+
+  for (const [nome, conteudo] of arquivos) {
+    const nomeBytes = encoder.encode(nome);
+    const dados = encoder.encode(conteudo);
+    const crc = crc32(dados);
+    const local = new Uint8Array(30 + nomeBytes.length + dados.length);
+    inteiro(local, 0, 0x04034b50, 4); inteiro(local, 4, 20, 2); inteiro(local, 6, 0x0800, 2);
+    inteiro(local, 14, crc, 4); inteiro(local, 18, dados.length, 4); inteiro(local, 22, dados.length, 4);
+    inteiro(local, 26, nomeBytes.length, 2); local.set(nomeBytes, 30); local.set(dados, 30 + nomeBytes.length);
+    locais.push(local);
+
+    const central = new Uint8Array(46 + nomeBytes.length);
+    inteiro(central, 0, 0x02014b50, 4); inteiro(central, 4, 20, 2); inteiro(central, 6, 20, 2);
+    inteiro(central, 8, 0x0800, 2); inteiro(central, 16, crc, 4); inteiro(central, 20, dados.length, 4);
+    inteiro(central, 24, dados.length, 4); inteiro(central, 28, nomeBytes.length, 2);
+    inteiro(central, 42, deslocamento, 4); central.set(nomeBytes, 46);
+    centrais.push(central);
+    deslocamento += local.length;
+  }
+
+  const tamanhoCentral = centrais.reduce((total, parte) => total + parte.length, 0);
+  const fim = new Uint8Array(22);
+  inteiro(fim, 0, 0x06054b50, 4); inteiro(fim, 8, arquivos.length, 2); inteiro(fim, 10, arquivos.length, 2);
+  inteiro(fim, 12, tamanhoCentral, 4); inteiro(fim, 16, deslocamento, 4);
+  return new Blob([...locais, ...centrais, fim],
+    { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+}
+
+const DOCX_TIPOS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+  + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+  + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+  + '<Default Extension="xml" ContentType="application/xml"/>'
+  + '<Override PartName="/word/document.xml" '
+  + 'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+  + '</Types>';
+const DOCX_RELACOES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+  + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+  + '<Relationship Id="rId1" '
+  + 'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+  + 'Target="word/document.xml"/></Relationships>';
+// Uma borda simples em toda a tabela, para não sair sem contorno nenhum no
+// Word — o schema exige as seis direções, mesmo repetindo o mesmo traço.
+const DOCX_TABELA_BORDAS = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
+  .map(lado => `<w:${lado} w:val="single" w:sz="4" w:space="0" w:color="000000"/>`).join('');
+const DOCX_SECAO = '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
+  + '<w:pgMar w:top="1417" w:right="1133" w:bottom="1417" w:left="1701" w:header="708" w:footer="708" '
+  + 'w:gutter="0"/></w:sectPr>';
+
+const MESES_POR_EXTENSO = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho',
+  'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
+// dd, mês por extenso e aaaa para o parágrafo de abertura da ata. Sem passar
+// por toLocaleDateString: o nome do mês sairia dependente da ICU do motor, e a
+// ata precisa da mesma grafia sempre.
+function dataPorExtenso(iso) {
+  const [ano, mes, dia] = String(iso).slice(0, 10).split('-').map(Number);
+  return { dia, mes: MESES_POR_EXTENSO[mes - 1] || '', ano };
+}
+
+function paragrafoXml(texto, { negrito = false, centralizado = false, justificado = false } = {}) {
+  const pPr = centralizado ? '<w:pPr><w:jc w:val="center"/></w:pPr>'
+    : justificado ? '<w:pPr><w:jc w:val="both"/></w:pPr>' : '';
+  const rPr = negrito ? '<w:rPr><w:b/></w:rPr>' : '';
+  return `<w:p>${pPr}<w:r>${rPr}<w:t xml:space="preserve">${escaparXml(texto)}</w:t></w:r></w:p>`;
+}
+
+function celulaDocxXml(texto, { negrito = false, pct } = {}) {
+  return `<w:tc><w:tcPr><w:tcW w:w="${pct}" w:type="pct"/></w:tcPr>`
+    + `${paragrafoXml(texto, { negrito })}</w:tc>`;
+}
+
+// O cabeçalho institucional das atas da AGR, sem a imagem do brasão (que o
+// card não tem como reproduzir) e sem "ATA Nº ..." — a exportação registra o
+// conteúdo do sorteio, não substitui a ata assinada eletronicamente no SEI.
+function cabecalhoInstitucionalXml() {
+  return [
+    'ESTADO DE GOIÁS',
+    'AGÊNCIA GOIANA DE REGULAÇÃO, CONTROLE E FISCALIZAÇÃO DE SERVIÇOS PÚBLICOS',
+    COL.nome.toLocaleUpperCase('pt-BR')
+  ].map(linha => paragrafoXml(linha, { negrito: true, centralizado: true })).join('')
+    + paragrafoXml('');
+}
+
+function valorDaColunaDocx(processo, campo) {
+  if (campo === 'ordem') return processo.ordem ?? '—';
+  return processo[campo] || '—';
+}
+
+// A ata do Conselho agrupa por unidade (todas as linhas de uma unidade juntas,
+// unidades em ordem crescente); a da Câmara não agrupa — cada colegiado usa o
+// mesmo `agrupar` que já escolhe as colunas.
+function processosParaDocx(processos) {
+  if (!COL.docx.agrupar) return processos;
+  return [...processos].sort((a, b) => {
+    const grupo = String(a.destino).localeCompare(String(b.destino), 'pt-BR', { numeric: true });
+    return grupo || ((Number(a.ordem) || 0) - (Number(b.ordem) || 0));
+  });
+}
+
+function tabelaDocxXml(processos) {
+  const colunas = COL.docx.colunas;
+  const cabecalho = `<w:tr>${colunas.map(c => celulaDocxXml(c.rotulo, { negrito: true, pct: c.pct })).join('')}</w:tr>`;
+  const linhas = processosParaDocx(processos).map(processo =>
+    `<w:tr>${colunas.map(c => celulaDocxXml(String(valorDaColunaDocx(processo, c.campo)), { pct: c.pct })).join('')}</w:tr>`
+  ).join('');
+  return `<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblBorders>${DOCX_TABELA_BORDAS}</w:tblBorders></w:tblPr>`
+    + `${cabecalho}${linhas}</w:tbl>`;
+}
+
+// `data` é a da própria rodada (aaaa-mm-dd), não a de hoje: a ata registra
+// quando o sorteio aconteceu, não quando foi exportada.
+function criarDocxDetalhe(processos, data) {
+  const { dia, mes, ano } = dataPorExtenso(data);
+  const corpo = cabecalhoInstitucionalXml()
+    + paragrafoXml(COL.docx.introducao(dia, mes, ano), { justificado: true })
+    + paragrafoXml('')
+    + tabelaDocxXml(processos)
+    + DOCX_SECAO;
+  const documentoXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+    + `<w:body>${corpo}</w:body></w:document>`;
+  return criarZip([
+    ['[Content_Types].xml', DOCX_TIPOS], ['_rels/.rels', DOCX_RELACOES],
+    ['word/document.xml', documentoXml]
+  ]);
+}
+
+function exportarDetalheDocx() {
+  if (!detalheAtual || !detalheAtual.processos.length) return;
+  // Reaproveita o alerta que o card já tem: sem aviso, uma falha ao montar o
+  // arquivo é indistinguível de um download que o navegador engoliu.
+  detalheErro.hidden = true;
+  try {
+    const nome = [COL.arquivo, detalheAtual.data, detalheAtual.destino].filter(Boolean).join('-');
+    baixarArquivo(criarDocxDetalhe(detalheAtual.processos, detalheAtual.data), `${nome}.docx`);
+  } catch (erro) {
+    detalheErro.querySelector('p').textContent = `Não foi possível gerar o arquivo (${erro.message}).`;
+    detalheErro.hidden = false;
+  }
 }

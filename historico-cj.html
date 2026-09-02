@@ -9,7 +9,7 @@
   <title>Histórico de sorteios — Câmara de Julgamento | Sorteio de Processos SEI</title>
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=296ec634c7" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=5ea8f617d0" />
   <script>
     (function () {
       try {
@@ -19,8 +19,8 @@
       } catch (_) {}
     })();
   </script>
-  <script defer src="assets/js/supabase.min.js?v=296ec634c7"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=296ec634c7"></script>
+  <script defer src="assets/js/supabase.min.js?v=5ea8f617d0"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=5ea8f617d0"></script>
 </head>
 
 <body class="dashboard-page" data-page="historico-cj" data-colegiado="cj">
@@ -156,6 +156,12 @@
           <p id="detalheResumo" class="detalhe-resumo"></p>
         </div>
         <div class="detalhe-acoes">
+          <button id="btnExportarDetalhe" class="nav-action" type="button">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10 2.5v10"></path><path d="m6.5 9 3.5 3.5L13.5 9"></path><path d="M4 13.5v3h12v-3"></path>
+            </svg>
+            <span>Exportar</span>
+          </button>
           <button id="btnFecharDetalhe" class="nav-action detalhe-fechar" type="button" aria-label="Fechar">
             <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
               <path d="m6 6 8 8"></path><path d="m14 6-8 8"></path>

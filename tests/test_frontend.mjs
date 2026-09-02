@@ -1315,11 +1315,13 @@ function historicoPage(api, colegiado = 'creg') {
   detalheErro.hidden = true;
   detalheErro.appendChild(document.createElement('p'));
   document.add('btnFecharDetalhe', 'button');
+  document.add('btnExportarDetalhe', 'button');
   document.getElementById('historicoPanel').hidden = true;
   document.getElementById('btnAtualizar').hidden = true;  // como nas páginas
 
   const app = new Function('document', 'api', 'criarIndicadorCarregamento',
-    `${source('historico.js')}\nreturn { inicializarHistorico, carregarHistorico, abrirDetalhe };`)(
+    `${source('historico.js')}\nreturn { inicializarHistorico, carregarHistorico, abrirDetalhe,
+      criarDocxDetalhe, exportarDetalheDocx };`)(
     document, api, criarIndicadorCarregamento);
   return { document, loginOnlyCard, dialog, ...app };
 }
@@ -1672,4 +1674,156 @@ test('resposta atrasada não sobrescreve a rodada aberta depois dela', async () 
   const tbody = page.document.getElementById('detalheTable').children[1];
   assert.deepEqual(tbody.children.map(l => l.children[1].textContent), ['202600029000999'],
     'a resposta da rodada abandonada não pode reescrever o card');
+});
+
+// ── Exportar a ata em .docx ──────────────────────────────────────────────────
+// O documento segue o padrão visual das atas que a AGR publica: cabeçalho
+// institucional em texto (sem imagem, sem número de ata), o parágrafo de
+// abertura e a tabela — sem as colunas de Assunto/Decisão, que existem na tela
+// mas não na ata oficial.
+
+test('botão de exportar só habilita quando o card tem processos para exportar', async () => {
+  const page = historicoPage(async caminho =>
+    caminho === 'rpc/historico_sorteios' ? sorteiosCj : processosCj, 'cj');
+  await page.inicializarHistorico();
+
+  const abertura = page.abrirDetalhe(acaoDe(page, 0));
+  assert.equal(page.document.getElementById('btnExportarDetalhe').disabled, true,
+    'enquanto a lista ainda está sendo buscada não há o que exportar');
+  await abertura;
+  assert.equal(page.document.getElementById('btnExportarDetalhe').disabled, false);
+});
+
+test('card sem processos ou com falha mantém a exportação desabilitada', async () => {
+  const semProcessos = historicoPage(async caminho =>
+    caminho === 'rpc/historico_sorteios' ? sorteiosCreg : [], 'creg');
+  await semProcessos.inicializarHistorico();
+  await semProcessos.abrirDetalhe(acaoDe(semProcessos, 0));
+  assert.equal(semProcessos.document.getElementById('btnExportarDetalhe').disabled, true);
+
+  const comFalha = historicoPage(async caminho => {
+    if (caminho === 'rpc/historico_sorteios') return sorteiosCreg;
+    throw new Error('indisponível');
+  }, 'creg');
+  await comFalha.inicializarHistorico();
+  await comFalha.abrirDetalhe(acaoDe(comFalha, 0));
+  assert.equal(comFalha.document.getElementById('btnExportarDetalhe').disabled, true,
+    'não há o que exportar quando a lista não chegou');
+});
+
+test('a ata em .docx é um pacote válido, sem número de ata, com o cabeçalho do colegiado', async () => {
+  const page = historicoPage(async caminho =>
+    caminho === 'rpc/historico_sorteios' ? sorteiosCj : processosCj, 'cj');
+  await page.inicializarHistorico();
+
+  const blob = page.criarDocxDetalhe(processosCj, '2026-09-28');
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  assert.deepEqual([...bytes.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04], 'docx precisa ser um pacote ZIP');
+  assert.equal(blob.type, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+
+  const texto = new TextDecoder().decode(bytes);
+  assert.match(texto, /word\/document\.xml/);
+  assert.match(texto, /AGÊNCIA GOIANA DE REGULAÇÃO, CONTROLE E FISCALIZAÇÃO DE SERVIÇOS PÚBLICOS/);
+  assert.match(texto, /CÂMARA DE JULGAMENTO/);
+  assert.doesNotMatch(texto, /ATA N/i, 'a ata exportada não numera a sessão, diferente da ata oficial');
+  assert.match(texto, /Aos 28 dias do mês de setembro de 2026/,
+    'a data do parágrafo de abertura é a da própria rodada, não a de hoje');
+  assert.doesNotMatch(texto, /Resolução Normativa|Decreto/,
+    'sem esses dados no sistema, o texto genérico não pode inventar um número');
+});
+
+test('ata do CJ lista Ordem, Nº do Processo e o RELATOR — não o código da cadeira', async () => {
+  const page = historicoPage(async () => [], 'cj');
+  const texto = new TextDecoder().decode(new Uint8Array(
+    await page.criarDocxDetalhe(processosCj, '2026-09-28').arrayBuffer()));
+
+  assert.match(texto, /<w:t[^>]*>Ordem<\/w:t>/);
+  assert.match(texto, /<w:t[^>]*>Nº do Processo<\/w:t>/);
+  assert.match(texto, /<w:t[^>]*>Relator<\/w:t>/);
+  assert.doesNotMatch(texto, /<w:t[^>]*>Assunto<\/w:t>/, 'a ata oficial não tem essa coluna');
+  assert.doesNotMatch(texto, /<w:t[^>]*>Defesa<\/w:t>/);
+  // processosCj[0].destino é 'CJ3' (a cadeira); quem aparece na ata é
+  // 'Dorivan de Souza Lima', o responsável pela cadeira na data do sorteio.
+  assert.match(texto, /Dorivan de Souza Lima/);
+  assert.doesNotMatch(texto, /<w:t[^>]*>CJ3<\/w:t>/, 'a ata do CJ não mostra o código da cadeira');
+});
+
+test('ata do CREG lista Interessado e Unidade, sem agrupar quando é um recorte só', async () => {
+  const page = historicoPage(async () => [], 'creg');
+  const processos = [
+    { ordem: 1, num_processo: '202600029000792', destino: 'CREG3', interessado: 'Concessionária X' }
+  ];
+  const texto = new TextDecoder().decode(new Uint8Array(
+    await page.criarDocxDetalhe(processos, '2026-08-27').arrayBuffer()));
+
+  assert.match(texto, /<w:t[^>]*>Interessado<\/w:t>/);
+  assert.match(texto, /<w:t[^>]*>Unidade<\/w:t>/);
+  assert.match(texto, /Concessionária X/);
+  assert.match(texto, /CREG3/);
+});
+
+test('ata do CREG agrupa por unidade quando o sorteio tem mais de um destino', async () => {
+  const page = historicoPage(async () => [], 'creg');
+  // Fora de ordem de sorteio de propósito: CREG4 aparece antes da CREG1 na
+  // resposta, mas a ata oficial mostra todas as linhas da CREG1 primeiro.
+  const processos = [
+    { ordem: 1, num_processo: 'P1', destino: 'CREG4', interessado: 'A' },
+    { ordem: 2, num_processo: 'P2', destino: 'CREG1', interessado: 'B' },
+    { ordem: 3, num_processo: 'P3', destino: 'CREG4', interessado: 'C' },
+    { ordem: 4, num_processo: 'P4', destino: 'CREG1', interessado: 'D' }
+  ];
+  const texto = new TextDecoder().decode(new Uint8Array(
+    await page.criarDocxDetalhe(processos, '2026-08-27').arrayBuffer()));
+
+  const ordemEncontrada = [...texto.matchAll(/P\d/g)].map(m => m[0]);
+  assert.deepEqual(ordemEncontrada, ['P2', 'P4', 'P1', 'P3'],
+    'CREG1 (ordem 2 e 4) precisa vir antes da CREG4 (ordem 1 e 3), como na ata oficial');
+});
+
+test('ata do CJ mantém a ordem de sorteio, sem agrupar por relator', async () => {
+  const page = historicoPage(async () => [], 'cj');
+  const processos = [
+    { ordem: 1, num_processo: 'P1', destino: 'CJ3', responsavel: 'Dorivan de Souza Lima' },
+    { ordem: 2, num_processo: 'P2', destino: 'CJ1', responsavel: 'Paulo Otoni Ribeiro' },
+    { ordem: 3, num_processo: 'P3', destino: 'CJ3', responsavel: 'Dorivan de Souza Lima' }
+  ];
+  const texto = new TextDecoder().decode(new Uint8Array(
+    await page.criarDocxDetalhe(processos, '2026-09-28').arrayBuffer()));
+
+  const ordemEncontrada = [...texto.matchAll(/P\d/g)].map(m => m[0]);
+  assert.deepEqual(ordemEncontrada, ['P1', 'P2', 'P3'],
+    'a ata do CJ segue a ordem pura do sorteio, igual à tela');
+});
+
+test('exportar baixa o .docx com o nome da rodada e, quando filtrado, do destino', async () => {
+  const page = historicoPage(async caminho =>
+    caminho === 'rpc/historico_sorteios' ? sorteiosCj : processosCj, 'cj');
+  await page.inicializarHistorico();
+
+  await page.abrirDetalhe(acaoDe(page, 0));
+  page.exportarDetalheDocx();
+  assert.deepEqual(page.document.downloads, ['historico-cj-2026-09-28.docx']);
+
+  const pill = destinoBotaoDe(linhas(page)[0], 'CJ1');
+  await page.abrirDetalhe(pill);
+  page.exportarDetalheDocx();
+  assert.deepEqual(page.document.downloads, ['historico-cj-2026-09-28.docx', 'historico-cj-2026-09-28-CJ1.docx']);
+});
+
+test('falha ao exportar a ata avisa dentro do próprio card', async () => {
+  const page = historicoPage(async caminho =>
+    caminho === 'rpc/historico_sorteios' ? sorteiosCj : processosCj, 'cj');
+  await page.inicializarHistorico();
+  await page.abrirDetalhe(acaoDe(page, 0));
+
+  const criar = page.document.createElement.bind(page.document);
+  page.document.createElement = tag => {
+    if (tag === 'a') throw new Error('download bloqueado');
+    return criar(tag);
+  };
+  page.exportarDetalheDocx();
+
+  const erro = page.document.getElementById('detalheErro');
+  assert.equal(erro.hidden, false);
+  assert.match(erro.children[0].textContent, /Não foi possível gerar o arquivo.*download bloqueado/);
 });
