@@ -356,6 +356,10 @@ begin
     raise exception 'autenticação exigida' using errcode = '28000';
   end if;
 
+  if not (select public.tem_acesso_orgao('CJ')) then
+    raise exception 'acesso ao orgao CJ nao autorizado' using errcode = '42501';
+  end if;
+
   if jsonb_typeof(itens) is distinct from 'array' then
     raise exception 'registrar_votos espera uma lista de itens';
   end if;
@@ -480,6 +484,10 @@ begin
     raise exception 'autenticação exigida' using errcode = '28000';
   end if;
 
+  if not (select public.tem_acesso_orgao('CJ')) then
+    raise exception 'acesso ao orgao CJ nao autorizado' using errcode = '42501';
+  end if;
+
   return query
   with faixas(ordem, faixa, de, ate) as (values
       (1, 'Até 15 dias',            0,  15),
@@ -583,6 +591,10 @@ begin
     raise exception 'autenticação exigida' using errcode = '28000';
   end if;
 
+  if not (select public.tem_acesso_orgao('CJ')) then
+    raise exception 'acesso ao orgao CJ nao autorizado' using errcode = '42501';
+  end if;
+
   return query
   with faixas(ordem, de, ate) as (values
       (1,   0,  15), (2,  16,  30), (3,  31,  45), (4,  46,  90),
@@ -644,8 +656,10 @@ alter table public.acervo_cj   enable row level security;
 alter table public.julgados_cj enable row level security;
 
 drop policy if exists "usuario autenticado pode inserir" on public.acervo_cj;
-create policy "usuario autenticado pode inserir"
-  on public.acervo_cj for insert to authenticated with check (true);
+drop policy if exists "usuario com acesso cj pode inserir" on public.acervo_cj;
+create policy "usuario com acesso cj pode inserir"
+  on public.acervo_cj for insert to authenticated
+  with check ((select public.tem_acesso_orgao('CJ')));
 
 -- julgados_cj é a única tabela que o navegador lê, e ele só lê: a página
 -- julgados-cj.html precisa listar os pendentes. Gravar voto e status é feito pela
@@ -653,8 +667,10 @@ create policy "usuario autenticado pode inserir"
 -- job de sincronização, que se conecta direto ao banco.
 drop policy if exists "usuario autenticado pode inserir" on public.julgados_cj;
 drop policy if exists "usuario autenticado pode ler" on public.julgados_cj;
-create policy "usuario autenticado pode ler"
-  on public.julgados_cj for select to authenticated using (true);
+drop policy if exists "usuario com acesso cj pode ler" on public.julgados_cj;
+create policy "usuario com acesso cj pode ler"
+  on public.julgados_cj for select to authenticated
+  using ((select public.tem_acesso_orgao('CJ')));
 
 -- O Supabase concede privilégios amplos aos papéis da API por padrão. RLS ainda
 -- bloquearia as linhas, mas os grants abaixo repetem o mesmo mínimo como segunda
@@ -1013,6 +1029,10 @@ begin
     raise exception 'autenticação exigida' using errcode = '28000';
   end if;
 
+  if not (select public.tem_acesso_orgao('CREG')) then
+    raise exception 'acesso ao orgao CREG nao autorizado' using errcode = '42501';
+  end if;
+
   if jsonb_typeof(itens) is distinct from 'array' then
     raise exception 'registrar_votos_creg espera uma lista de itens';
   end if;
@@ -1089,6 +1109,10 @@ as $$
 begin
   if (select auth.uid()) is null then
     raise exception 'autenticação exigida' using errcode = '28000';
+  end if;
+
+  if not (select public.tem_acesso_orgao('CREG')) then
+    raise exception 'acesso ao orgao CREG nao autorizado' using errcode = '42501';
   end if;
 
   return query
@@ -1171,6 +1195,10 @@ begin
     raise exception 'autenticação exigida' using errcode = '28000';
   end if;
 
+  if not (select public.tem_acesso_orgao('CREG')) then
+    raise exception 'acesso ao orgao CREG nao autorizado' using errcode = '42501';
+  end if;
+
   return query
   with faixas(ordem, de, ate) as (values
       (1,   0,  15), (2,  16,  30), (3,  31,  45), (4,  46,  90),
@@ -1215,12 +1243,16 @@ alter table public.acervo_creg   enable row level security;
 alter table public.julgados_creg enable row level security;
 
 drop policy if exists "usuario autenticado pode inserir" on public.acervo_creg;
-create policy "usuario autenticado pode inserir"
-  on public.acervo_creg for insert to authenticated with check (true);
+drop policy if exists "usuario com acesso creg pode inserir" on public.acervo_creg;
+create policy "usuario com acesso creg pode inserir"
+  on public.acervo_creg for insert to authenticated
+  with check ((select public.tem_acesso_orgao('CREG')));
 
 drop policy if exists "usuario autenticado pode ler" on public.julgados_creg;
-create policy "usuario autenticado pode ler"
-  on public.julgados_creg for select to authenticated using (true);
+drop policy if exists "usuario com acesso creg pode ler" on public.julgados_creg;
+create policy "usuario com acesso creg pode ler"
+  on public.julgados_creg for select to authenticated
+  using ((select public.tem_acesso_orgao('CREG')));
 
 revoke all privileges on table public.acervo_creg, public.julgados_creg,
                                public.pautas_creg
@@ -1317,6 +1349,10 @@ begin
     raise exception 'colegiado desconhecido: %', p_colegiado using errcode = '22023';
   end if;
 
+  if not (select public.tem_acesso_orgao(p_colegiado)) then
+    raise exception 'acesso ao orgao % nao autorizado', p_colegiado using errcode = '42501';
+  end if;
+
   return query
   -- Primeiro contamos cada destino dentro da rodada; depois reunimos essas
   -- parcelas. Assim `processos`, `destinos` e `distribuicao` nascem da mesma
@@ -1400,6 +1436,10 @@ begin
 
   if coalesce(p_colegiado, '') not in ('CJ', 'CREG') then
     raise exception 'colegiado desconhecido: %', p_colegiado using errcode = '22023';
+  end if;
+
+  if not (select public.tem_acesso_orgao(p_colegiado)) then
+    raise exception 'acesso ao orgao % nao autorizado', p_colegiado using errcode = '42501';
   end if;
 
   return query

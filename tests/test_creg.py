@@ -1056,6 +1056,10 @@ def main(argv):
     PG.subir()
     try:
         PG.rodar_arquivo(RAIZ / 'sql' / 'schema.sql')
+        PG.executar("""insert into public.permissoes_usuario (user_id, orgao) values
+          ('00000000-0000-0000-0000-000000000001', 'CJ'),
+          ('00000000-0000-0000-0000-000000000001', 'CREG')
+        on conflict (user_id, orgao) do nothing""")
 
         falhas = executados = 0
         with PG.conectar() as conn:
