@@ -5,8 +5,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#00534b" />
-  <meta name="description" content="Painel de acompanhamento do acervo de processos ainda não julgados pelo Conselho Regulador." />
-  <title>Acervo não julgado — Conselho Regulador | Sorteio de Processos SEI</title>
+  <meta name="description" content="Consulta dos sorteios de processos já realizados pelo Conselho Regulador." />
+  <title>Histórico de sorteios — Conselho Regulador | Sorteio de Processos SEI</title>
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
   <link rel="stylesheet" href="assets/css/index.min.css?v=4d50005d20" />
@@ -23,7 +23,7 @@
   <script defer src="assets/js/bootstrap.min.js?v=4d50005d20"></script>
 </head>
 
-<body class="dashboard-page" data-page="acervo-creg" data-colegiado="creg">
+<body class="dashboard-page" data-page="historico-creg" data-colegiado="creg">
   <a class="skip-link" href="#conteudo-principal">Pular para o conteúdo principal</a>
 
   <div class="page-header-wrapper">
@@ -35,7 +35,7 @@
         <div class="header-copy">
           <p class="institution-name">Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</p>
           <h1>Sorteio de Processos SEI</h1>
-          <p class="lead">Distribuição e acompanhamento dos processos do Conselho Regulador.</p>
+          <p class="lead">Consulta das distribuições já realizadas pelo Conselho Regulador.</p>
         </div>
       </header>
     </div>
@@ -43,7 +43,7 @@
 
   <nav class="green-bar" aria-label="Navegação do sistema">
     <div class="container">
-      <span id="txtModo">Acervo de processos</span>
+      <span id="txtModo">Histórico de sorteios</span>
       <div class="nav-actions">
         <button id="btnAtualizar" class="nav-action" type="button" data-sessao hidden>
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -51,29 +51,6 @@
           </svg>
           <span>Atualizar</span>
         </button>
-        <div id="exportMenu" class="export-menu export-menu-nav" data-sessao hidden>
-          <button id="btnExportar" class="nav-action nav-action-export" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="exportOptions" disabled>
-            <span class="export-spinner" aria-hidden="true"></span>
-            <svg class="nav-icon export-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M10 2.5v10"></path><path d="m6.5 9 3.5 3.5L13.5 9"></path><path d="M4 13.5v3h12v-3"></path>
-            </svg>
-            <span class="export-label">Exportar</span>
-            <svg class="export-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="m4 6 4 4 4-4"></path>
-            </svg>
-          </button>
-          <div id="exportOptions" class="export-options" role="menu" aria-label="Formatos de exportação" hidden>
-            <button type="button" role="menuitem" data-export-format="pdf">
-              <span>Dashboard em PDF</span>
-              <small>Indicadores e tabela visíveis</small>
-            </button>
-            <button type="button" role="menuitem" data-export-format="excel">
-              <span>Tabela em Excel</span>
-              <small>Dados organizados em colunas</small>
-            </button>
-          </div>
-          <div id="exportFeedback" class="export-feedback" role="status" aria-live="polite" aria-atomic="true"></div>
-        </div>
         <a class="nav-action" href="./index.html">
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M15.5 10h-11"></path><path d="m8.5 6-4 4 4 4"></path>
@@ -96,7 +73,7 @@
     <div class="card" data-login-only>
       <div id="loginScreen">
         <h2>Acesso restrito</h2>
-        <p>Identifique-se para consultar o acervo.</p>
+        <p>Identifique-se para consultar o histórico.</p>
         <form id="loginForm">
           <label for="loginEmail">E-mail</label>
           <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
@@ -110,68 +87,74 @@
       <div id="sessionLoading" class="session-loading" data-sessao hidden></div>
     </div>
 
-    <section id="acervoPanel" class="acervo-panel" aria-labelledby="acervo-title" data-sessao hidden>
+    <!-- O painel é o mesmo do acervo: mesma moldura, mesmo cabeçalho verde,
+         mesmo rodapé de atualização. O que muda é a tabela — aqui é uma lista
+         cronológica, não uma matriz. -->
+    <section id="historicoPanel" class="acervo-panel" aria-labelledby="historico-title" data-sessao hidden>
       <header class="acervo-header">
         <div class="acervo-header-main">
           <div class="acervo-header-title-group">
-            <h2 id="acervo-title">Acervo de processos</h2>
-            <p class="acervo-subtitle">Visão gerencial do tempo de permanência dos processos distribuídos ao Conselho Regulador.</p>
+            <h2 id="historico-title">Histórico de sorteios</h2>
+            <p class="acervo-subtitle">Rodadas de sorteio do Conselho Regulador, da mais recente para a mais antiga, com os processos de cada uma.</p>
           </div>
           <div class="acervo-header-summary">
             <div class="acervo-scope" aria-label="Escopo do painel">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M4 7.5h16v12H4z"></path><path d="M3 4.5h18v3H3z"></path><path d="M9 12h6"></path>
+                <path d="M12 8v4l3 2"></path><circle cx="12" cy="12" r="9"></circle>
               </svg>
-              <span id="acervoTotal">Processos aguardando julgamento</span>
+              <span id="historicoTotal">Sorteios realizados</span>
             </div>
           </div>
         </div>
       </header>
 
       <div class="acervo-table-shell">
-        <div id="acervoErro" class="load-error" role="alert" hidden>
+        <div id="historicoErro" class="load-error" role="alert" hidden>
           <p></p>
           <button id="btnTentarNovamente" class="button-secondary" type="button">Tentar novamente</button>
         </div>
-        <div id="acervoVazio" class="empty-state" role="status" hidden>
+        <div id="historicoVazio" class="empty-state" role="status" hidden>
           <div class="empty-state-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 21H4a1 1 0 0 1-1-1V8l3-5h12l3 5v12a1 1 0 0 1-1 1Z"></path><path d="M3 8h18"></path><path d="M10 12h4"></path>
+              <path d="M12 8v4l3 2"></path><circle cx="12" cy="12" r="9"></circle>
             </svg>
           </div>
           <div>
-            <h3>Acervo zerado</h3>
-            <p>Nenhum processo aguardando julgamento. Todo o acervo distribuído já passou por uma sessão.</p>
+            <h3>Nenhum sorteio neste período</h3>
+            <!-- O texto é montado por historico.js: ele carrega a data de início
+                 da série, e essa data tem de ser a mesma que a função do banco
+                 usa para cortar. Um vazio sem essa frase parece defeito. -->
+            <p id="historicoVazioTexto"></p>
           </div>
         </div>
-        <div class="table-scroll" role="region" aria-label="Acervo por período e unidade" tabindex="0">
-          <!-- Cabeçalho e linhas são montados por acervo.js a partir do que a
-               função resumo_acervo_creg devolve: as colunas são as unidades
+        <div class="table-scroll" role="region" aria-label="Sorteios realizados pelo Conselho Regulador, por data" tabindex="0">
+          <!-- Uma linha por rodada, montada por historico.js a partir do que
+               historico_sorteios devolve para este colegiado: as rodadas são as
                que existem no acervo, não uma lista fixa aqui. -->
-          <table id="acervoTable" class="acervo-table"></table>
+          <table id="historicoTable" class="historico-table"></table>
         </div>
         <footer class="acervo-panel-footer">
+          <!-- O início da série fica no rodapé mesmo com a lista cheia: sem
+               ele, quem procura um sorteio anterior ao marco não descobre por
+               que não o encontra. -->
+          <span id="historicoInicio" class="historico-inicio"></span>
           <div class="acervo-updated" role="status" aria-live="polite" aria-atomic="true">
             <span class="status-dot" aria-hidden="true"></span>
-            <span id="acervoAtualizado">Carregando…</span>
+            <span id="historicoAtualizado">Carregando…</span>
           </div>
         </footer>
       </div>
     </section>
 
-    <!-- Detalhe de uma célula do painel. <dialog> nativo: traz o modo modal, o
-         fechamento por Escape, a devolução do foco e o ::backdrop que desfoca o
-         fundo — tudo sem JavaScript de acessibilidade escrito à mão. -->
+    <!-- Os processos de um sorteio. Mesmo <dialog> nativo do painel do acervo:
+         o modo modal traz o fechamento por Escape, a devolução do foco e o
+         ::backdrop que desfoca o fundo, sem acessibilidade escrita à mão. -->
     <dialog id="detalheDialog" class="detalhe-dialog" aria-labelledby="detalheTitulo">
       <header class="detalhe-header">
         <div class="detalhe-identidade">
-          <h2 id="detalheTitulo">Processos</h2>
+          <h2 id="detalheTitulo">Processos do sorteio</h2>
           <p id="detalheResumo" class="detalhe-resumo"></p>
         </div>
-        <!-- As duas ações do card ficam no cabeçalho. Um rodapé só para repetir
-             o fechar duplicaria o X e roubaria altura da lista, que é o
-             conteúdo. .nav-action é o botão que este projeto já usa sobre o
-             verde institucional. -->
         <div class="detalhe-acoes">
           <button id="btnExportarDetalhe" class="nav-action" type="button">
             <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -190,10 +173,8 @@
       <div id="detalheLoading" class="detalhe-loading" hidden></div>
       <div id="detalheErro" class="load-error" role="alert" hidden><p></p></div>
 
-      <!-- Um contêiner rolável só. A tabela cabe na largura do card, então a
-           rolagem é vertical e o cabeçalho dela gruda no topo. -->
       <div id="detalheCorpo" class="detalhe-corpo">
-        <table id="detalheTable" class="detalhe-table"></table>
+        <table id="detalheTable" class="detalhe-table historico-detalhe"></table>
       </div>
     </dialog>
   </main>
@@ -203,7 +184,7 @@
       <div class="logo footer-logo">
         <img src="assets/img/logo_footer.png" alt="Estado de Goiás" width="104" height="48" />
       </div>
-      <p class="footer-info">Painel institucional para acompanhamento do acervo do Conselho Regulador.</p>
+      <p class="footer-info">Registro auditável das distribuições realizadas por sorteio eletrônico no Conselho Regulador.</p>
       <div class="footer-meta">
         <div class="footer-version">Versão 3.6</div>
         <p class="footer-credit">Desenvolvido por <strong>Lucas Lustosa Coelho e Leonardo Ferreira Amichi</strong>.</p>
