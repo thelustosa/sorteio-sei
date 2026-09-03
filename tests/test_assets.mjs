@@ -56,7 +56,7 @@ assert.match(cssIndex,
   /\.selection-card-sorteio\s*\{\s*background:\s*#ffffff;\s*\}/,
   'o sorteio precisa manter o fundo inicial do gradiente');
 assert.match(cssIndex,
-  /\.selection-card-sorteio \.mode-button\s*\{\s*border-color:\s*#00534b;\s*background:\s*#00534b;\s*color:\s*var\(--on-accent\);\s*\}/,
+  /\.selection-card-sorteio \.mode-button\s*\{\s*border-color:\s*var\(--accent\);\s*background:\s*var\(--accent\);\s*color:\s*var\(--on-accent\);\s*\}/,
   'os botões do sorteio precisam usar o primeiro tom do gradiente');
 assert.doesNotMatch(index, /<script[^>]+index\.min\.js/, 'index.js voltou ao carregamento inicial');
 assert.doesNotMatch(julgadosCj, /<script[^>]+julgados\.min\.js/, 'julgados.js voltou ao carregamento inicial');
@@ -75,20 +75,31 @@ assert.ok(acervoCreg.indexOf('class="nav-actions"') < acervoCreg.indexOf('id="bt
 assert.match(index, /class="selection-card selection-card-historico"/,
   'o card de histórico saiu da tela principal');
 assert.match(cssIndex,
-  /\.selection-card-historico\s*\{\s*background:\s*#f1f7f5;\s*\}/,
+  /\.selection-card-historico\s*\{\s*background:\s*var\(--surface-historico\);\s*\}/,
   'o histórico precisa usar o tom intermediário do gradiente entre acervo e registro');
 assert.match(cssIndex,
-  /\.selection-card-historico \.mode-button-outline\s*\{\s*border-color:\s*#16816e;\s*background:\s*#16816e;\s*color:\s*var\(--on-accent\);\s*\}/,
+  /\.selection-card-historico \.mode-button-outline\s*\{\s*border-color:\s*var\(--accent-historico\);\s*background:\s*var\(--accent-historico\);\s*color:\s*var\(--on-accent\);\s*\}/,
   'os botões do histórico precisam usar o verde intermediário do gradiente');
 assert.match(cssIndex,
-  /\.selection-card-acervo \.mode-button-outline\s*\{\s*border-color:\s*#0c695c;\s*background:\s*#0c695c;\s*color:\s*var\(--on-accent\);\s*\}/,
+  /\.selection-card-acervo \.mode-button-outline\s*\{\s*border-color:\s*var\(--accent-acervo\);\s*background:\s*var\(--accent-acervo\);\s*color:\s*var\(--on-accent\);\s*\}/,
   'os botões do acervo precisam inaugurar o gradiente preenchido');
-for (const [card, cor] of [
-  ['acervo', '#0c695c'],
-  ['historico', '#126b5c'],
-  ['records', '#245f55']
+// Cada cor do "gradiente" dos quatro cards é um token em :root, não um hex
+// solto no seletor — checa as duas pontas: a variável resolve pro tom certo,
+// e o card de fato referencia a variável (não redeclara o valor por conta).
+for (const [nome, cor] of [
+  ['--accent-acervo', '#0c695c'],
+  ['--accent-historico-hover', '#126b5c'],
+  ['--accent-secondary-hover', '#245f55']
 ]) {
-  assert.match(cssIndex, new RegExp(`\\.selection-card-${card} \\.selection-copy h2\\s*\\{\\s*color:\\s*${cor};`),
+  assert.match(cssIndex, new RegExp(`${nome}:\\s*${cor};`),
+    `${nome} precisa continuar valendo ${cor}`);
+}
+for (const [card, token] of [
+  ['acervo', '--accent-acervo'],
+  ['historico', '--accent-historico-hover'],
+  ['records', '--accent-secondary-hover']
+]) {
+  assert.match(cssIndex, new RegExp(`\\.selection-card-${card} \\.selection-copy h2\\s*\\{\\s*color:\\s*var\\(${token}\\);`),
     `${card} precisa acompanhar o tom correspondente do gradiente`);
 }
 for (const [pagina, colegiado] of [['historico-cj.html', 'cj'], ['historico-creg.html', 'creg']]) {

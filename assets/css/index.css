@@ -63,11 +63,26 @@
   --table-row-hover: rgba(0, 83, 75, 0.025);
   --shadow-toast: 0 12px 28px rgba(17, 39, 32, 0.18);
   --shadow-panel: 0 12px 32px rgba(17, 39, 32, 0.09);
+  --shadow-badge: 0 2px 6px rgba(17, 39, 32, 0.22);
   --surface-subtle: #f8fbfa;
   --surface-control: #f4f7f6;
+  --surface-historico: #f1f7f5;
   --accent-panel: #e9f3ef;
   --accent-secondary: #2f7668;
   --accent-secondary-hover: #245f55;
+  --accent-secondary-ring: rgba(47, 118, 104, 0.2);
+  --accent-secondary-ring-strong: rgba(47, 118, 104, 0.38);
+  --muted-records: #3f665c;
+  /* As outras duas cores da progressão de quatro cards da tela inicial (ver
+     comentário abaixo, em .selection-card-acervo/.selection-card-historico) —
+     tokenizadas aqui pelo mesmo motivo que --accent-secondary já era: são
+     parte do mesmo sistema de cor, não um valor de uso único. */
+  --accent-acervo: #0c695c;
+  --accent-acervo-hover: #095548;
+  --muted-acervo: #4c6c63;
+  --accent-historico: #16816e;
+  --accent-historico-hover: #126b5c;
+  --muted-historico: #466c61;
   --status-positive: #16816e;
   --status-positive-ring: rgba(22, 129, 110, 0.11);
   --on-accent-icon: #b8dbd1;
@@ -380,6 +395,7 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
 }
 
 .selection-card {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(250px, 0.85fr) minmax(340px, 1.15fr);
   align-items: center;
@@ -390,54 +406,58 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
   background: var(--surface-raised);
 }
 
-/* Os quatro caminhos avançam do neutro ao verde, em fundos, textos e botões. */
+/* Os quatro caminhos avançam do neutro ao verde, em fundos, textos e botões.
+   As quatro cores desta progressão são tokens em :root (--accent para o
+   Sorteio, --accent-secondary para Registrar dados faltantes, --accent-acervo
+   e --accent-historico para os outros dois) — nenhuma delas é um valor de
+   uso único, então nenhuma fica hardcoded aqui. */
 .selection-card-sorteio { background: #ffffff; }
-.selection-card-sorteio .selection-copy h2 { color: #00534b; }
-.selection-card-sorteio .mode-description { color: #556b63; }
+.selection-card-sorteio .selection-copy h2 { color: var(--accent); }
+.selection-card-sorteio .mode-description { color: var(--muted); }
 .selection-card-sorteio .mode-button {
-  border-color: #00534b;
-  background: #00534b;
+  border-color: var(--accent);
+  background: var(--accent);
   color: var(--on-accent);
 }
 
 .selection-card-sorteio .mode-button:hover {
-  border-color: #003e38;
-  background: #003e38;
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
 }
 
 .selection-card-acervo { background: var(--surface-subtle); }
-.selection-card-acervo .selection-copy h2 { color: #0c695c; }
-.selection-card-acervo .mode-description { color: #4c6c63; }
+.selection-card-acervo .selection-copy h2 { color: var(--accent-acervo); }
+.selection-card-acervo .mode-description { color: var(--muted-acervo); }
 .selection-card-acervo .mode-button-outline {
-  border-color: #0c695c;
-  background: #0c695c;
+  border-color: var(--accent-acervo);
+  background: var(--accent-acervo);
   color: var(--on-accent);
 }
 
 .selection-card-acervo .mode-button-outline:hover {
-  border-color: #095548;
-  background: #095548;
+  border-color: var(--accent-acervo-hover);
+  background: var(--accent-acervo-hover);
 }
 
-.selection-card-historico { background: #f1f7f5; }
-.selection-card-historico .selection-copy h2 { color: #126b5c; }
-.selection-card-historico .mode-description { color: #466c61; }
+.selection-card-historico { background: var(--surface-historico); }
+.selection-card-historico .selection-copy h2 { color: var(--accent-historico-hover); }
+.selection-card-historico .mode-description { color: var(--muted-historico); }
 .selection-card-historico .mode-button-outline {
-  border-color: #16816e;
-  background: #16816e;
+  border-color: var(--accent-historico);
+  background: var(--accent-historico);
   color: var(--on-accent);
 }
 
 .selection-card-historico .mode-button-outline:hover {
-  border-color: #126b5c;
-  background: #126b5c;
+  border-color: var(--accent-historico-hover);
+  background: var(--accent-historico-hover);
 }
 .selection-card-records {
   border-color: var(--accent-hover-soft);
   background: var(--accent-panel);
 }
-.selection-card-records .selection-copy h2 { color: #245f55; }
-.selection-card-records .mode-description { color: #3f665c; }
+.selection-card-records .selection-copy h2 { color: var(--accent-secondary-hover); }
+.selection-card-records .mode-description { color: var(--muted-records); }
 
 .selection-card-records .mode-button-outline {
   border-color: var(--accent-secondary);
@@ -449,6 +469,39 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
   border-color: var(--accent-secondary-hover);
   background: var(--accent-secondary-hover);
 }
+
+/* Aviso de pendência: index.js busca, ao carregar, se há julgados sem voto
+   ou sem status (mesmo filtro que julgados.js usa) e só então aplica esta
+   classe — o card fica normal enquanto não se sabe se há pendência. O selo
+   dá a contagem (essencial pra quem usa leitor de tela: o pulso sozinho não
+   diz nada). A borda/glow pulsa sem parar enquanto a classe estiver presente
+   — some sozinha na próxima carga da página, quando não houver mais
+   pendência pra reaplicar a classe. */
+.selection-card-records.tem-pendencia {
+  border-color: var(--accent-secondary);
+  box-shadow: 0 0 0 3px var(--accent-secondary-ring);
+  animation: card-pulso-pendencia 1.8s ease-in-out infinite;
+}
+
+@keyframes card-pulso-pendencia {
+  0%, 100% { box-shadow: 0 0 0 3px var(--accent-secondary-ring); }
+  50% { box-shadow: 0 0 0 7px var(--accent-secondary-ring-strong); }
+}
+
+.pendencias-badge {
+  position: absolute;
+  top: -10px;
+  right: 20px;
+  z-index: 1;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-secondary);
+  color: var(--on-accent);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  box-shadow: var(--shadow-badge);
+}
+
 .selection-copy { display: grid; align-content: center; gap: 8px; }
 
 .mode-description {
@@ -600,6 +653,40 @@ tbody tr:hover td { background: var(--table-row-hover); }
   #processTable input,
   #processTable select { font-size: var(--text-base); }
 }
+
+/* Tabela de julgamento: sem largura fixa por coluna, o layout automático
+   dimensiona cada <td> pelo próprio conteúdo — e como VOTOS e STATUS têm
+   textos de tamanhos diferentes, os dois <select> saíam com larguras
+   diferentes e a borda esquerda de cada coluna ficava desalinhada com o
+   cabeçalho acima. table-layout: fixed trava as quatro larguras.
+
+   Nº Processo e Relator têm conteúdo curto (um número ou uma cadeira tipo
+   "CJ3"); dar a eles a mesma largura das colunas de Voto/Status sobrava
+   como um vão vazio entre as duas metades da tabela. Aqui ficam mais
+   estreitos, e a largura que sobra vai para Voto/Status — que têm um
+   <select> com rótulo mais longo ("Selecione o status"). As quatro colunas
+   e o cabeçalho ficam centralizados, para o valor casar com o rótulo acima
+   dele em vez de "flutuar" à esquerda da própria coluna. */
+#julgadosTable { table-layout: fixed; }
+
+#julgadosTable th,
+#julgadosTable td { text-align: center; }
+
+/* As quatro colunas dividem o espaço em partes iguais. Antes Voto/Status
+   ganhavam 30% para o <select> esticar até a borda — mas agora ele tem
+   largura própria (15rem, ver abaixo), e sobrava um vão bem maior ali do
+   que ao redor do texto curto de Nº Processo/Relator. Com partes iguais o
+   respiro em volta de cada valor fica parecido de coluna a coluna. */
+#julgadosTable th { width: 25%; }
+
+/* A regra global de select (mais acima) é width: 100% — pensada para campos
+   empilhados em formulário. Aqui o <select> esticava até a borda da coluna
+   de 30%, e como "Manter"/"Julgado" são bem mais curtos que o rótulo
+   "Selecione o status", sobrava uma faixa vazia entre o texto e a seta.
+   Trava numa largura fixa, que cabe o rótulo mais longo sem sobra, e deixa
+   o text-align: center da célula centralizar a caixa dentro da coluna. */
+#julgadosTable .col-voto select,
+#julgadosTable .col-status select { width: 15rem; max-width: 100%; }
 
 .button-secondary.button-danger {
   border-color: var(--danger);
@@ -1581,11 +1668,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 .historico-acao { text-align: center; }
 
-/* O início da série encosta na ponta esquerda do rodapé; "Atualizado em"
-   continua na direita, onde o painel do acervo o pôs. O rodapé já dá cor,
-   tamanho e peso — aqui só o empurrão. */
-.historico-inicio { margin-right: auto; }
-
 /* O alvo mantém altura de toque confortável; o que encolhe é a folga lateral,
    para a coluna de ação não roubar largura das quatro que informam. */
 .historico-ver {
@@ -1702,7 +1784,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   max-width: 100%;
   margin: 0;
   color: var(--on-accent-muted);
-  font-size: 9px;
+  font-size: var(--text-xs);
   font-weight: 400;
   line-height: 1.3;
 }
@@ -2477,6 +2559,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .pauta-card { transition: none; }
 
   .acervo-panel { animation: none; }
+  .selection-card-records.tem-pendencia { animation: none; }
   .acervo-table td.acervo-detalhe { transition: none; }
   .detalhe-dialog::backdrop { backdrop-filter: none; -webkit-backdrop-filter: none; }
   .export-spinner { animation: none; }

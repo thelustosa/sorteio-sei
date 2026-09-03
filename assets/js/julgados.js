@@ -238,8 +238,7 @@ function abrirPauta(chave) {
     // relator é a CADEIRA (CJ1..CJ5). Sem o de-para a coluna mostraria só
     // "CJ3": o nome vai no hover e no aria-label, como nas outras telas.
     const relator = document.createElement('td');
-    relator.className = 'small';
-    relator.textContent = j.relator || '— fora do acervo —';
+    relator.textContent = j.relator || 'Sem cadeira no acervo';
     rotularCadeira(relator, j.relator);
 
     const tdVoto = document.createElement('td');

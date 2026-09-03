@@ -89,7 +89,6 @@ const historicoPanel = document.getElementById('historicoPanel');
 const historicoTabela = document.getElementById('historicoTable');
 const historicoVazio = document.getElementById('historicoVazio');
 const historicoVazioTexto = document.getElementById('historicoVazioTexto');
-const historicoInicio = document.getElementById('historicoInicio');
 const historicoErro = document.getElementById('historicoErro');
 const historicoTotal = document.getElementById('historicoTotal');
 const historicoAtualizado = document.getElementById('historicoAtualizado');
@@ -119,9 +118,6 @@ let historicoPedido = 0;
 // depois que a lista chega — nunca a resposta de uma busca que já saiu de foco.
 let detalheAtual = null;
 
-// A data de início entra assim que o script carrega: ela não depende da
-// resposta do banco, e escrevê-la só depois deixaria o rodapé piscando.
-historicoInicio.textContent = `Série iniciada em ${dataBR(INICIO_DA_SERIE)}`;
 historicoVazioTexto.textContent = `O histórico reúne os sorteios realizados no sistema a partir de `
   + `${dataBR(INICIO_DA_SERIE)}. ${COL.sujeito} não distribuiu processos nesse período — o próximo `
   + `sorteio aparece aqui assim que for realizado.`;
