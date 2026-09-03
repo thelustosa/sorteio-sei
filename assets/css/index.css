@@ -68,6 +68,8 @@
   --accent-panel: #e9f3ef;
   --accent-secondary: #2f7668;
   --accent-secondary-hover: #245f55;
+  --accent-secondary-ring: rgba(47, 118, 104, 0.2);
+  --accent-secondary-ring-strong: rgba(47, 118, 104, 0.38);
   --status-positive: #16816e;
   --status-positive-ring: rgba(22, 129, 110, 0.11);
   --on-accent-icon: #b8dbd1;
@@ -380,6 +382,7 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
 }
 
 .selection-card {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(250px, 0.85fr) minmax(340px, 1.15fr);
   align-items: center;
@@ -449,6 +452,38 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
   border-color: var(--accent-secondary-hover);
   background: var(--accent-secondary-hover);
 }
+
+/* Aviso de pendência: index.js busca, ao carregar, se há julgados sem voto
+   ou sem status (mesmo filtro que julgados.js usa) e só então aplica esta
+   classe — o card fica normal enquanto não se sabe se há pendência. O selo
+   dá a contagem (essencial pra quem usa leitor de tela: o pulso sozinho não
+   diz nada). A borda/glow pulsa por 3 ciclos e se acomoda no estado estático
+   já declarado abaixo — não fica "respirando" pra sempre. */
+.selection-card-records.tem-pendencia {
+  border-color: var(--accent-secondary);
+  box-shadow: 0 0 0 3px var(--accent-secondary-ring);
+  animation: card-pulso-pendencia 1.8s ease-in-out 3;
+}
+
+@keyframes card-pulso-pendencia {
+  0%, 100% { box-shadow: 0 0 0 3px var(--accent-secondary-ring); }
+  50% { box-shadow: 0 0 0 7px var(--accent-secondary-ring-strong); }
+}
+
+.pendencias-badge {
+  position: absolute;
+  top: -10px;
+  right: 20px;
+  z-index: 1;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-secondary);
+  color: var(--on-accent);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(17, 39, 32, 0.22);
+}
+
 .selection-copy { display: grid; align-content: center; gap: 8px; }
 
 .mode-description {
@@ -2511,6 +2546,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .pauta-card { transition: none; }
 
   .acervo-panel { animation: none; }
+  .selection-card-records.tem-pendencia { animation: none; }
   .acervo-table td.acervo-detalhe { transition: none; }
   .detalhe-dialog::backdrop { backdrop-filter: none; -webkit-backdrop-filter: none; }
   .export-spinner { animation: none; }
