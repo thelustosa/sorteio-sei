@@ -245,8 +245,7 @@ function abrirPauta(chave) {
     // existe de-para de nomes: os responsáveis por CREG1..CREG4 pediram para
     // não ter os nomes vinculados aos processos.
     const unidade = document.createElement('td');
-    unidade.className = 'small';
-    unidade.textContent = j.unidade || '— fora do acervo —';
+    unidade.textContent = j.unidade || 'Sem cadeira no acervo';
 
     const tdVoto = document.createElement('td');
     tdVoto.className = 'col-voto';
