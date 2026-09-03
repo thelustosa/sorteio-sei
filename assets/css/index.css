@@ -390,15 +390,54 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
   background: var(--surface-raised);
 }
 
-/* Os dois cards de CONSULTA — acervo e histórico — dividem o mesmo fundo: é
-   o que os separa, na leitura, do card que abre um sorteio novo e do que
-   pede registro de dado. */
-.selection-card-acervo,
-.selection-card-historico { background: var(--surface-subtle); }
+/* Os quatro caminhos avançam do neutro ao verde, em fundos, textos e botões. */
+.selection-card-sorteio { background: #ffffff; }
+.selection-card-sorteio .selection-copy h2 { color: #00534b; }
+.selection-card-sorteio .mode-description { color: #556b63; }
+.selection-card-sorteio .mode-button {
+  border-color: #00534b;
+  background: #00534b;
+  color: var(--on-accent);
+}
+
+.selection-card-sorteio .mode-button:hover {
+  border-color: #003e38;
+  background: #003e38;
+}
+
+.selection-card-acervo { background: var(--surface-subtle); }
+.selection-card-acervo .selection-copy h2 { color: #0c695c; }
+.selection-card-acervo .mode-description { color: #4c6c63; }
+.selection-card-acervo .mode-button-outline {
+  border-color: #0c695c;
+  background: #0c695c;
+  color: var(--on-accent);
+}
+
+.selection-card-acervo .mode-button-outline:hover {
+  border-color: #095548;
+  background: #095548;
+}
+
+.selection-card-historico { background: #f1f7f5; }
+.selection-card-historico .selection-copy h2 { color: #126b5c; }
+.selection-card-historico .mode-description { color: #466c61; }
+.selection-card-historico .mode-button-outline {
+  border-color: #16816e;
+  background: #16816e;
+  color: var(--on-accent);
+}
+
+.selection-card-historico .mode-button-outline:hover {
+  border-color: #126b5c;
+  background: #126b5c;
+}
 .selection-card-records {
   border-color: var(--accent-hover-soft);
   background: var(--accent-panel);
 }
+.selection-card-records .selection-copy h2 { color: #245f55; }
+.selection-card-records .mode-description { color: #3f665c; }
 
 .selection-card-records .mode-button-outline {
   border-color: var(--accent-secondary);

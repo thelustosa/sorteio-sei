@@ -45,10 +45,19 @@ for (const [recurso, destino] of [
 }
 
 const index = ler('index.html');
+const cssIndex = ler('assets/css/index.css');
 const julgadosCj = ler('julgados-cj.html');
 const julgadosCreg = ler('julgados-creg.html');
 const acervoCj = ler('acervo-cj.html');
 const acervoCreg = ler('acervo-creg.html');
+assert.match(index, /class="selection-card selection-card-sorteio"/,
+  'o card de sorteio precisa ser o primeiro degrau explícito do gradiente');
+assert.match(cssIndex,
+  /\.selection-card-sorteio\s*\{\s*background:\s*#ffffff;\s*\}/,
+  'o sorteio precisa manter o fundo inicial do gradiente');
+assert.match(cssIndex,
+  /\.selection-card-sorteio \.mode-button\s*\{\s*border-color:\s*#00534b;\s*background:\s*#00534b;\s*color:\s*var\(--on-accent\);\s*\}/,
+  'os botões do sorteio precisam usar o primeiro tom do gradiente');
 assert.doesNotMatch(index, /<script[^>]+index\.min\.js/, 'index.js voltou ao carregamento inicial');
 assert.doesNotMatch(julgadosCj, /<script[^>]+julgados\.min\.js/, 'julgados.js voltou ao carregamento inicial');
 assert.doesNotMatch(julgadosCreg, /<script[^>]+julgados-creg\.min\.js/, 'julgados-creg.js voltou ao carregamento inicial');
@@ -65,6 +74,23 @@ assert.ok(acervoCreg.indexOf('class="nav-actions"') < acervoCreg.indexOf('id="bt
 // qual é o seu, ou as duas mostrariam a Câmara.
 assert.match(index, /class="selection-card selection-card-historico"/,
   'o card de histórico saiu da tela principal');
+assert.match(cssIndex,
+  /\.selection-card-historico\s*\{\s*background:\s*#f1f7f5;\s*\}/,
+  'o histórico precisa usar o tom intermediário do gradiente entre acervo e registro');
+assert.match(cssIndex,
+  /\.selection-card-historico \.mode-button-outline\s*\{\s*border-color:\s*#16816e;\s*background:\s*#16816e;\s*color:\s*var\(--on-accent\);\s*\}/,
+  'os botões do histórico precisam usar o verde intermediário do gradiente');
+assert.match(cssIndex,
+  /\.selection-card-acervo \.mode-button-outline\s*\{\s*border-color:\s*#0c695c;\s*background:\s*#0c695c;\s*color:\s*var\(--on-accent\);\s*\}/,
+  'os botões do acervo precisam inaugurar o gradiente preenchido');
+for (const [card, cor] of [
+  ['acervo', '#0c695c'],
+  ['historico', '#126b5c'],
+  ['records', '#245f55']
+]) {
+  assert.match(cssIndex, new RegExp(`\\.selection-card-${card} \\.selection-copy h2\\s*\\{\\s*color:\\s*${cor};`),
+    `${card} precisa acompanhar o tom correspondente do gradiente`);
+}
 for (const [pagina, colegiado] of [['historico-cj.html', 'cj'], ['historico-creg.html', 'creg']]) {
   const html = ler(pagina);
   assert.doesNotMatch(html, /<script[^>]+historico\.min\.js/,
