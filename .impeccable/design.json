@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-03T13:45:00.000Z",
+  "title": "Design System: Sorteador de Processos SEI",
+  "extensions": {
+    "colorMeta": {
+      "institutional-green": {
+        "role": "primary",
+        "displayName": "Verde Institucional",
+        "canonical": "#00534b",
+        "tonalRamp": ["#001a17", "#00332e", "#004941", "#00534b", "#1a6f66", "#4d9089", "#99c4bf", "#e0f0ee"]
+      },
+      "pending-teal": {
+        "role": "secondary",
+        "displayName": "Teal dos Pendentes",
+        "canonical": "#2f7668",
+        "tonalRamp": ["#0e2622", "#194840", "#245f55", "#2f7668", "#4f9184", "#7fb2a8", "#bcd8d1", "#e8f3f0"]
+      },
+      "acervo-green": {
+        "role": "tertiary",
+        "displayName": "Verde do Acervo",
+        "canonical": "#0c695c",
+        "tonalRamp": ["#03211d", "#063b33", "#094f45", "#0c695c", "#2d8579", "#5ba89c", "#96cec4", "#e2f3f0"]
+      },
+      "historico-green": {
+        "role": "tertiary",
+        "displayName": "Verde do Histórico",
+        "canonical": "#16816e",
+        "tonalRamp": ["#052924", "#0c473d", "#116457", "#16816e", "#3a9e8c", "#72bcae", "#addad0", "#e3f3f0"]
+      },
+      "surface-historico": { "role": "neutral", "displayName": "Superfície do Histórico", "canonical": "#f1f7f5" },
+      "alert-red": {
+        "role": "tertiary",
+        "displayName": "Vermelho de Alerta",
+        "canonical": "#b42318",
+        "tonalRamp": ["#390b07", "#5c120c", "#8f1d14", "#b42318", "#c95147", "#dd8a80", "#f0c3bd", "#faeae7"]
+      },
+      "positive-green": {
+        "role": "tertiary",
+        "displayName": "Verde Positivo",
+        "canonical": "#16816e",
+        "tonalRamp": ["#052924", "#0c473d", "#116457", "#16816e", "#3a9e8c", "#72bcae", "#addad0", "#e3f3f0"]
+      },
+      "neutral-bg": { "role": "neutral", "displayName": "Fundo Neutro", "canonical": "#f4f7f5" },
+      "neutral-surface": { "role": "neutral", "displayName": "Superfície Branca", "canonical": "#ffffff" },
+      "institutional-panel": { "role": "neutral", "displayName": "Painel Institucional", "canonical": "#e9f3ef" },
+      "neutral-text": { "role": "neutral", "displayName": "Texto Principal", "canonical": "#112720" },
+      "neutral-muted": { "role": "neutral", "displayName": "Texto Secundário", "canonical": "#556b63" },
+      "neutral-border": { "role": "neutral", "displayName": "Borda Institucional", "canonical": "rgba(0, 83, 75, 0.16)" },
+      "on-accent": { "role": "neutral", "displayName": "Texto sobre Acento", "canonical": "#ffffff" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Título do painel do Acervo/Histórico (.acervo-header-title-group h2), branco sobre a barra verde — o maior texto do sistema, exclusivo das duas telas de dashboard." },
+      "headline": { "displayName": "Headline", "purpose": "Título dentro do card de conteúdo principal (.card h2/h3) — maior que o <h1> da página fora das telas de dashboard." },
+      "title": { "displayName": "Title", "purpose": "H1 do cabeçalho institucional da página, deliberadamente mais discreto que o Headline." },
+      "body": { "displayName": "Body", "purpose": "Texto corrido padrão do sistema." },
+      "label": { "displayName": "Label", "purpose": "Texto de botão, badge, rótulo de formulário e navegação — sempre em negrito, 0,8125rem a 0,875rem." }
+    },
+    "shadows": [
+      { "name": "toast", "value": "0 12px 28px rgba(17, 39, 32, 0.18)", "purpose": "Notificação flutuante fixa no canto da tela." },
+      { "name": "panel", "value": "0 12px 32px rgba(17, 39, 32, 0.09)", "purpose": "Painel/diálogo sobreposto do acervo — mais suave que o toast por cobrir mais área." },
+      { "name": "badge", "value": "0 2px 6px rgba(17, 39, 32, 0.22)", "purpose": "Selo flutuante (ex.: contagem de pendências) sobre a borda de um card." }
+    ],
+    "motion": [
+      { "name": "ease-interaction", "value": "160ms ease", "purpose": "Transição padrão de background/border em botões, chips e links de navegação." },
+      { "name": "ease-toast-enter", "value": "220ms ease-out", "purpose": "Entrada de um toast (translateY + opacidade)." },
+      { "name": "ease-dashboard-reveal", "value": "480ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Revelação do painel do dashboard/acervo depois de carregar." },
+      { "name": "ease-spin", "value": "700ms linear infinite", "purpose": "Rotação do spinner de carregamento." },
+      { "name": "ease-press", "value": "120ms ease", "purpose": "translateY(1px) no :active de botões e chips — feedback de \"pressionado\"." },
+      { "name": "pulse-pendencia", "value": "1.8s ease-in-out, 3 iterações", "purpose": "Glow de borda que chama atenção para pendência no card e se acomoda num estado estático — nunca em loop infinito." }
+    ],
+    "breakpoints": [
+      { "name": "xs", "value": "480px" },
+      { "name": "sm", "value": "600px" },
+      { "name": "sm-alt", "value": "620px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "880px" },
+      { "name": "xl", "value": "981px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ação principal de uma tela — sortear, salvar julgamento, entrar.",
+      "html": "<button class=\"ds-btn-primary\">Salvar julgamentos</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 14px; border: 1px solid #00534b; border-radius: 8px; background: #00534b; color: #ffffff; font-weight: 700; line-height: 1.2; cursor: pointer; transition: background-color 160ms ease, border-color 160ms ease, transform 120ms ease; } .ds-btn-primary:hover { background: #003e38; border-color: #003e38; } .ds-btn-primary:focus-visible { outline: 2px solid #00534b; outline-offset: 2px; } .ds-btn-primary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Ação alternativa ou de baixo compromisso ao lado de uma primária.",
+      "html": "<button class=\"ds-btn-secondary\">Marcar tudo como Manter</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 14px; border: 1px solid #00534b; border-radius: 8px; background: transparent; color: #00534b; font-weight: 700; line-height: 1.2; cursor: pointer; transition: background-color 160ms ease, border-color 160ms ease, transform 120ms ease; } .ds-btn-secondary:hover { background: rgba(0, 83, 75, 0.08); } .ds-btn-secondary:focus-visible { outline: 2px solid #00534b; outline-offset: 2px; } .ds-btn-secondary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Mode Button",
+      "kind": "button",
+      "refersTo": "mode-button",
+      "description": "Botão grande de seleção de colegiado na tela inicial (CREG / CJ).",
+      "html": "<button class=\"ds-mode-btn\">Câmara de Julgamento (CJ)</button>",
+      "css": ".ds-mode-btn { min-width: 0; min-height: 48px; padding: 12px 16px; border: 1px solid #00534b; border-radius: 8px; background: #00534b; color: #ffffff; font-weight: 700; line-height: 1.3; text-align: center; cursor: pointer; transition: background-color 160ms ease, border-color 160ms ease, transform 120ms ease; } .ds-mode-btn:hover { background: #003e38; border-color: #003e38; } .ds-mode-btn:focus-visible { outline: 2px solid #00534b; outline-offset: 2px; } .ds-mode-btn:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Contêiner de conteúdo principal — plano, borda fina, sem sombra em repouso.",
+      "html": "<div class=\"ds-card\"><h3 class=\"ds-card-title\">Acesso restrito</h3><p class=\"ds-card-text\">Identifique-se para registrar os julgamentos.</p></div>",
+      "css": ".ds-card { padding: 24px; border: 1px solid rgba(0, 83, 75, 0.1); border-radius: 12px; background: #ffffff; } .ds-card-title { margin: 0 0 4px; color: #00534b; font-family: Montserrat, ui-sans-serif, sans-serif; font-size: 1.25rem; font-weight: 700; line-height: 1.25; } .ds-card-text { margin: 0; color: #112720; font-size: 1rem; line-height: 1.5; }"
+    },
+    {
+      "name": "Pending Badge",
+      "kind": "chip",
+      "refersTo": "badge-pending",
+      "description": "Selo de contagem flutuante que avisa sobre sessões sem voto ou status.",
+      "html": "<span class=\"ds-badge-pending\">3 pendentes</span>",
+      "css": ".ds-badge-pending { display: inline-block; padding: 6px 14px; border-radius: 999px; background: #2f7668; color: #ffffff; font-size: 0.8125rem; font-weight: 700; box-shadow: 0 2px 6px rgba(17, 39, 32, 0.22); }"
+    },
+    {
+      "name": "Filter Pill",
+      "kind": "chip",
+      "refersTo": "pill",
+      "description": "Chip de inclusão/exclusão de unidade no sorteio — alterna para vermelho riscado quando excluído.",
+      "html": "<button class=\"ds-pill\">CREG1</button><button class=\"ds-pill ds-pill--excluded\">CREG2</button>",
+      "css": ".ds-pill { min-height: 44px; padding: 8px 14px; border: 1px solid transparent; border-radius: 999px; background: rgba(0, 83, 75, 0.08); color: #00534b; font-weight: 700; cursor: pointer; transition: background-color 160ms ease, color 160ms ease, transform 120ms ease; } .ds-pill:hover { background: rgba(0, 83, 75, 0.2); } .ds-pill:active { transform: translateY(1px); } .ds-pill--excluded { background: #b42318; color: #ffffff; text-decoration: line-through; text-decoration-thickness: 2px; } .ds-pill--excluded:hover { background: #8f1d14; }"
+    },
+    {
+      "name": "Toast",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Notificação flutuante de sucesso/erro no canto da tela — único componente com sombra em repouso, porque está fora do fluxo da página.",
+      "html": "<div class=\"ds-toast\"><span class=\"ds-toast-icon\">✓</span><div class=\"ds-toast-content\"><div class=\"ds-toast-title\">3 julgamentos gravados.</div></div></div>",
+      "css": ".ds-toast { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 12px; padding: 14px 16px; border: 1px solid rgba(0, 83, 75, 0.22); border-radius: 12px; background: #ffffff; color: #112720; font-size: 0.875rem; box-shadow: 0 12px 28px rgba(17, 39, 32, 0.18); } .ds-toast-icon { display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(0, 83, 75, 0.14); color: #00534b; font-weight: 700; } .ds-toast-title { line-height: 1.35; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "O Livro de Registro Oficial",
+    "overview": "O sistema se comporta como um livro de registro cartorial, não como um produto de consumo. O verde institucional funciona como o carimbo de autoridade — aparece em poucos lugares (barra de navegação, botão de ação primária, títulos) mas sempre com o mesmo peso — e o resto da interface é deliberadamente plano: superfícies brancas, bordas finas tingidas de verde no lugar de cinza neutro, e quase nenhuma sombra. Nada decorativo compete com o dado: sem gradiente, sem ilustração, sem ícone que não tenha uma função de navegação ou estado.\n\nÉ uma ferramenta de auditoria de um órgão do Estado de Goiás, então a confiança institucional vem antes do floreio visual — o próprio README já documenta que a paleta e a tipografia seguem o portal oficial do estado, não uma escolha de marca própria. O sistema não tem modo escuro: existe um único tema, claro, comprometido — não uma lacuna a preencher.",
+    "keyCharacteristics": [
+      "Verde institucional como carimbo de autoridade, usado com parcimônia, nunca como plano de fundo generalizado.",
+      "Superfícies planas por padrão; sombra só aparece em elementos que saem do fluxo da página.",
+      "Tipografia de destaque (Montserrat) só existe em peso 700 — não há um corte regular/leve no projeto.",
+      "Bordas e divisores nascem do verde institucional em baixa opacidade, nunca de um cinza neutro puro.",
+      "Um único tema comprometido, sem variante escura."
+    ],
+    "rules": [
+      { "name": "The Tinted Neutral Rule", "body": "Nenhuma borda, divisor ou fundo neutro usa cinza puro — todos derivam do verde institucional em baixa opacidade (8% a 22%). Até o \"neutro\" deste sistema carrega a cor da marca.", "section": "colors" },
+      { "name": "The One Alert Color Rule", "body": "Vermelho é exclusivo de erro e ação destrutiva. Qualquer outro aviso de atenção (como pendência de julgamento) usa o Teal dos Pendentes, não vermelho.", "section": "colors" },
+      { "name": "The Four Card Channels Rule", "body": "A tela inicial tem exatamente quatro cards, e cada um tem seu próprio par cor/hover — Verde Institucional, Verde do Acervo, Verde do Histórico, Teal dos Pendentes — todos token em :root, nenhum hardcoded no seletor do card. Um quinto card ganha seu próprio par, nunca herda um dos quatro.", "section": "colors" },
+      { "name": "The Dashboard Outranks Everything Rule", "body": "Só as telas de Acervo e Histórico usam o Display — o maior heading do sistema não é o <h1> de página nem o título do card, é o cabeçalho do próprio painel de dados. Uma tela nova que não seja um dashboard não herda esse tamanho.", "section": "typography" },
+      { "name": "The Content Outranks the Masthead Rule", "body": "Fora das telas de dashboard, o título dentro do card de conteúdo (Headline, --text-xl) é visualmente maior que o <h1> do cabeçalho da página (Title, --text-lg). A hierarquia grita o que a pessoa vai fazer agora, não o nome do sistema.", "section": "typography" },
+      { "name": "The One-Weight Display Rule", "body": "Montserrat só existe em peso 700 neste projeto. Um título em Montserrat é sempre bold; nunca introduza peso 400/500 dessa família.", "section": "typography" },
+      { "name": "The Overlay-Only Shadow Rule", "body": "Box-shadow é exclusivo de elementos que flutuam por cima da página — toast e o painel/diálogo do acervo. Se o elemento não sai do fluxo normal, ele não recebe sombra.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do manter o Verde Institucional exclusivo para ação primária e identidade fora da tela inicial; dentro dela, cada um dos quatro cards vive só do seu próprio canal.",
+      "Do derivar toda borda e divisor da Borda Institucional tingida — nunca introduzir cinza neutro puro.",
+      "Do reservar box-shadow só para elementos que saem do fluxo normal (toast, painel/diálogo) — nunca num card, botão ou linha de tabela em repouso.",
+      "Do manter Montserrat só para os pontos de identidade em peso 700 — o resto fica na pilha de sistema.",
+      "Do manter 44px de altura mínima em botão, input e select — é um piso de alvo de toque já embutido no sistema."
+    ],
+    "donts": [
+      "Don't introduzir um modo escuro sem uma decisão de produto — hoje existe um único tema, comprometido.",
+      "Don't inventar uma escala de espaçamento em token — ela não existe; use o valor em pixel mais próximo já presente no contexto.",
+      "Don't usar --surface (#e9f5ec): está declarado em :root mas não é referenciado em nenhuma regra do CSS — é um token morto.",
+      "Don't usar vermelho para ênfase neutra ou aviso brando — é exclusivo de erro e ação destrutiva.",
+      "Don't clarear o Verde Institucional para um estado de interação — o único estado de hover/active é escurecer, nunca um tom mais claro.",
+      "Don't hardcodar hex direto num seletor .selection-card-* novo — as quatro cores de card já são token em :root; um quinto card ganha seu próprio par de tokens do mesmo jeito."
+    ]
+  }
+}

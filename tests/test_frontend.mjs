@@ -1329,7 +1329,7 @@ function historicoPage(api, colegiado = 'creg') {
   const loginOnlyCard = document.createElement('div');
   loginOnlyCard.dataset.loginOnly = '';
   document.body.append(loginOnlyCard);
-  ['historicoPanel', 'historicoVazio', 'historicoVazioTexto', 'historicoInicio',
+  ['historicoPanel', 'historicoVazio', 'historicoVazioTexto',
    'historicoTotal', 'historicoAtualizado'].forEach(id => document.add(id, 'div'));
   const erroDiv = document.add('historicoErro', 'div');
   erroDiv.appendChild(document.createElement('p'));
@@ -1516,8 +1516,6 @@ test('a tela diz de quando é a série, com a lista cheia ou vazia', async () =>
   // descobre por que não o encontra.
   const vazia = historicoPage(async () => [], 'cj');
   await vazia.inicializarHistorico();
-  assert.equal(vazia.document.getElementById('historicoInicio').textContent,
-    'Série iniciada em 27/08/2026');
   const texto = vazia.document.getElementById('historicoVazioTexto').textContent;
   assert.match(texto, /a partir de 27\/08\/2026/);
   // Com o artigo: 'A Câmara' e 'O Conselho' não saem do mesmo molde, e sem ele
@@ -1530,8 +1528,6 @@ test('a tela diz de quando é a série, com a lista cheia ou vazia', async () =>
 
   const cheia = historicoPage(async () => sorteiosCreg, 'creg');
   await cheia.inicializarHistorico();
-  assert.equal(cheia.document.getElementById('historicoInicio').textContent,
-    'Série iniciada em 27/08/2026');
   assert.match(cheia.document.getElementById('historicoVazioTexto').textContent,
     /O Conselho Regulador não distribuiu/);
   assert.equal(cheia.document.getElementById('historicoVazio').hidden, true);
