@@ -62,7 +62,6 @@ select 6, 'ERRO',
        'processo SEI da AGR tem 15 dígitos, só dígitos',
        (select count(*) from public.julgados_cj where num_processo !~ '^[0-9]{15}$')
 
-
 -- ── Rótulos ──────────────────────────────────────────────────────────────────
 
 union all
