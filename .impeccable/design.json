@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-03T13:45:00.000Z",
+  "generatedAt": "2026-09-03T13:55:47.608Z",
   "title": "Design System: Sorteador de Processos SEI",
   "extensions": {
     "colorMeta": {
@@ -67,7 +67,7 @@
       { "name": "ease-dashboard-reveal", "value": "480ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Revelação do painel do dashboard/acervo depois de carregar." },
       { "name": "ease-spin", "value": "700ms linear infinite", "purpose": "Rotação do spinner de carregamento." },
       { "name": "ease-press", "value": "120ms ease", "purpose": "translateY(1px) no :active de botões e chips — feedback de \"pressionado\"." },
-      { "name": "pulse-pendencia", "value": "1.8s ease-in-out, 3 iterações", "purpose": "Glow de borda que chama atenção para pendência no card e se acomoda num estado estático — nunca em loop infinito." }
+      { "name": "pulse-pendencia", "value": "1.8s ease-in-out infinite", "purpose": "Glow de borda que pulsa sem parar enquanto houver pendência — some sozinho na próxima carga da página, quando a checagem não achar mais nada pendente." }
     ],
     "breakpoints": [
       { "name": "xs", "value": "480px" },

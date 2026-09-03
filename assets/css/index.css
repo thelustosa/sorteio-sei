@@ -474,12 +474,13 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
    ou sem status (mesmo filtro que julgados.js usa) e só então aplica esta
    classe — o card fica normal enquanto não se sabe se há pendência. O selo
    dá a contagem (essencial pra quem usa leitor de tela: o pulso sozinho não
-   diz nada). A borda/glow pulsa por 3 ciclos e se acomoda no estado estático
-   já declarado abaixo — não fica "respirando" pra sempre. */
+   diz nada). A borda/glow pulsa sem parar enquanto a classe estiver presente
+   — some sozinha na próxima carga da página, quando não houver mais
+   pendência pra reaplicar a classe. */
 .selection-card-records.tem-pendencia {
   border-color: var(--accent-secondary);
   box-shadow: 0 0 0 3px var(--accent-secondary-ring);
-  animation: card-pulso-pendencia 1.8s ease-in-out 3;
+  animation: card-pulso-pendencia 1.8s ease-in-out infinite;
 }
 
 @keyframes card-pulso-pendencia {
