@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fixture visual — Histórico de sorteios</title>
+  <link rel="stylesheet" href="../../assets/css/index.min.css?fixture=10" />
+</head>
+
+<body class="dashboard-page" data-colegiado="creg">
+  <main class="container dashboard-main">
+    <section id="historicoPanel" class="acervo-panel" aria-labelledby="historico-title" hidden>
+      <header class="acervo-header">
+        <div class="acervo-header-main">
+          <div class="acervo-header-title-group">
+            <h2 id="historico-title">Histórico de sorteios</h2>
+            <p class="acervo-subtitle">Rodadas de sorteio do Conselho Regulador, da mais recente para a mais antiga, com os processos de cada uma.</p>
+          </div>
+          <div class="acervo-header-summary">
+            <div class="acervo-scope" aria-label="Escopo do painel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 8v4l3 2"></path><circle cx="12" cy="12" r="9"></circle>
+              </svg>
+              <span id="historicoTotal">Sorteios realizados</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="acervo-table-shell">
+        <div id="historicoErro" class="load-error" role="alert" hidden>
+          <p></p>
+          <button id="btnTentarNovamente" class="button-secondary" type="button">Tentar novamente</button>
+        </div>
+        <div id="historicoVazio" class="empty-state" role="status" hidden>
+          <p id="historicoVazioTexto"></p>
+        </div>
+        <div class="table-scroll" role="region" aria-label="Sorteios fictícios, por data" tabindex="0">
+          <table id="historicoTable" class="historico-table"></table>
+        </div>
+        <footer class="acervo-panel-footer">
+          <span id="historicoInicio" class="historico-inicio"></span>
+          <div class="acervo-updated" role="status" aria-live="polite" aria-atomic="true">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="historicoAtualizado">Carregando…</span>
+          </div>
+        </footer>
+      </div>
+    </section>
+
+    <button id="btnAtualizar" type="button" style="display: none" hidden>Atualizar</button>
+    <div data-login-only></div>
+
+    <dialog id="detalheDialog" class="detalhe-dialog" aria-labelledby="detalheTitulo">
+      <header class="detalhe-header">
+        <div class="detalhe-identidade">
+          <h2 id="detalheTitulo">Processos do sorteio</h2>
+          <p id="detalheResumo" class="detalhe-resumo"></p>
+        </div>
+        <!-- Mesmo par de ações das páginas reais. O historico.js liga o clique
+             nos dois no topo do arquivo: sem o Exportar aqui, o script morria
+             antes de definir inicializarHistorico e a fixture abria em branco. -->
+        <div class="detalhe-acoes">
+          <button id="btnExportarDetalhe" class="nav-action" type="button">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10 2.5v10"></path><path d="m6.5 9 3.5 3.5L13.5 9"></path><path d="M4 13.5v3h12v-3"></path>
+            </svg>
+            <span>Exportar</span>
+          </button>
+          <button id="btnFecharDetalhe" class="nav-action detalhe-fechar" type="button" aria-label="Fechar">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+              <path d="m6 6 8 8"></path><path d="m14 6-8 8"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+      <div id="detalheLoading" class="detalhe-loading" hidden></div>
+      <div id="detalheErro" class="load-error" role="alert" hidden><p></p></div>
+      <div id="detalheCorpo" class="detalhe-corpo">
+        <table id="detalheTable" class="detalhe-table historico-detalhe"></table>
+      </div>
+    </dialog>
+  </main>
+
+  <script>
+    const parametrosFixture = new URLSearchParams(location.search);
+    const modoCj = parametrosFixture.get('colegiado') === 'cj';
+    const largura = Number(parametrosFixture.get('largura'));
+    if (largura >= 320 && largura <= 1100) {
+      document.querySelector('main.container').style.width = `${largura}px`;
+    }
+    if (modoCj) {
+      document.body.dataset.colegiado = 'cj';
+      document.querySelector('.acervo-subtitle').textContent =
+        'Rodadas de sorteio da Câmara de Julgamento, da mais recente para a mais antiga, com os processos de cada uma.';
+    }
+
+    const sorteiosFicticios = [
+      { data_sorteio: '2026-09-02', sorteado_em: '2026-09-02T12:35:00-03:00', processos: 7, destinos: ['CREG2', 'CREG3'], distribuicao: [{ destino: 'CREG2', processos: 4 }, { destino: 'CREG3', processos: 3 }] },
+      { data_sorteio: '2026-09-02', sorteado_em: '2026-09-02T09:10:00-03:00', processos: 34, destinos: ['CREG1', 'CREG4'], distribuicao: [{ destino: 'CREG1', processos: 17 }, { destino: 'CREG4', processos: 17 }] },
+      { data_sorteio: '2026-09-01', sorteado_em: '2026-09-01T16:22:00-03:00', processos: 81, destinos: ['CREG2', 'CREG3', 'CREG4'], distribuicao: [{ destino: 'CREG2', processos: 27 }, { destino: 'CREG3', processos: 27 }, { destino: 'CREG4', processos: 27 }] },
+      { data_sorteio: '2026-09-01', sorteado_em: '2026-09-01T10:05:00-03:00', processos: 1, destinos: ['CREG1'], distribuicao: [{ destino: 'CREG1', processos: 1 }] },
+      { data_sorteio: '2026-09-01', sorteado_em: null, processos: 126, destinos: ['CREG1', 'CREG2', 'CREG3', 'CREG4'], distribuicao: [{ destino: 'CREG1', processos: 32 }, { destino: 'CREG2', processos: 32 }, { destino: 'CREG3', processos: 31 }, { destino: 'CREG4', processos: 31 }] },
+      { data_sorteio: '2026-08-31', sorteado_em: '2026-08-31T17:40:00-03:00', processos: 23, destinos: ['CREG4'], distribuicao: [{ destino: 'CREG4', processos: 23 }] },
+      { data_sorteio: '2026-08-31', sorteado_em: '2026-08-31T14:15:00-03:00', processos: 48, destinos: ['CREG1', 'CREG3', 'CREG4'], distribuicao: [{ destino: 'CREG1', processos: 16 }, { destino: 'CREG3', processos: 16 }, { destino: 'CREG4', processos: 16 }] },
+      { data_sorteio: '2026-08-31', sorteado_em: '2026-08-31T11:30:00-03:00', processos: 15, destinos: ['CREG1', 'CREG4'], distribuicao: [{ destino: 'CREG1', processos: 8 }, { destino: 'CREG4', processos: 7 }] },
+      { data_sorteio: '2026-08-30', sorteado_em: '2026-08-30T15:50:00-03:00', processos: 99, destinos: ['CREG1', 'CREG2', 'CREG3', 'CREG4'], distribuicao: [{ destino: 'CREG1', processos: 25 }, { destino: 'CREG2', processos: 25 }, { destino: 'CREG3', processos: 25 }, { destino: 'CREG4', processos: 24 }] },
+      { data_sorteio: '2026-08-30', sorteado_em: '2026-08-30T08:45:00-03:00', processos: 12, destinos: ['CREG2'], distribuicao: [{ destino: 'CREG2', processos: 12 }] },
+      { data_sorteio: '2026-08-29', sorteado_em: '2026-08-29T18:05:00-03:00', processos: 63, destinos: ['CREG1', 'CREG2', 'CREG4'], distribuicao: [{ destino: 'CREG1', processos: 21 }, { destino: 'CREG2', processos: 21 }, { destino: 'CREG4', processos: 21 }] },
+      { data_sorteio: '2026-08-29', sorteado_em: '2026-08-29T13:20:00-03:00', processos: 4, destinos: ['CREG3'], distribuicao: [{ destino: 'CREG3', processos: 4 }] },
+      { data_sorteio: '2026-08-29', sorteado_em: '2026-08-29T09:00:00-03:00', processos: 72, destinos: ['CREG1', 'CREG2', 'CREG3', 'CREG4'], distribuicao: [{ destino: 'CREG1', processos: 18 }, { destino: 'CREG2', processos: 18 }, { destino: 'CREG3', processos: 18 }, { destino: 'CREG4', processos: 18 }] },
+      { data_sorteio: '2026-08-28', sorteado_em: '2026-08-28T16:48:00-03:00', processos: 28, destinos: ['CREG2', 'CREG3'], distribuicao: [{ destino: 'CREG2', processos: 14 }, { destino: 'CREG3', processos: 14 }] },
+      { data_sorteio: '2026-08-28', sorteado_em: '2026-08-28T14:03:00-03:00', processos: 45, destinos: ['CREG1', 'CREG3'], distribuicao: [{ destino: 'CREG1', processos: 23 }, { destino: 'CREG3', processos: 22 }] },
+      { data_sorteio: '2026-08-28', sorteado_em: '2026-08-28T10:20:00-03:00', processos: 8, destinos: ['CREG4'], distribuicao: [{ destino: 'CREG4', processos: 8 }] },
+      { data_sorteio: '2026-08-27', sorteado_em: '2026-08-27T17:30:00-03:00', processos: 56, destinos: ['CREG1', 'CREG2', 'CREG4'], distribuicao: [{ destino: 'CREG1', processos: 19 }, { destino: 'CREG2', processos: 19 }, { destino: 'CREG4', processos: 18 }] },
+      { data_sorteio: '2026-08-27', sorteado_em: '2026-08-27T14:07:00-03:00', processos: 19, destinos: ['CREG3', 'CREG4'], distribuicao: [{ destino: 'CREG3', processos: 10 }, { destino: 'CREG4', processos: 9 }] },
+      { data_sorteio: '2026-08-27', sorteado_em: '2026-08-27T11:07:00-03:00', processos: 81, destinos: ['CREG2', 'CREG3', 'CREG4'], distribuicao: [{ destino: 'CREG2', processos: 27 }, { destino: 'CREG3', processos: 27 }, { destino: 'CREG4', processos: 27 }] },
+      { data_sorteio: '2026-08-27', sorteado_em: '2026-08-27T08:30:00-03:00', processos: 6, destinos: ['CREG1'], distribuicao: [{ destino: 'CREG1', processos: 6 }] }
+    ];
+
+    // A mesma massa também exercita a Câmara, inclusive a célula mais densa
+    // com cinco cadeiras. O resto é distribuído do começo para o fim, como uma
+    // rodada equilibrada, sem alterar o total de nenhum sorteio.
+    const quantidadesCadeiras = [5, 4, 3, 2, 1];
+    const sorteiosCjFicticios = sorteiosFicticios.map((sorteio, indice) => {
+      const quantidade = Math.min(
+        quantidadesCadeiras[indice % quantidadesCadeiras.length],
+        sorteio.processos
+      );
+      const base = Math.floor(sorteio.processos / quantidade);
+      const resto = sorteio.processos % quantidade;
+      const distribuicao = Array.from({ length: quantidade }, (_, cadeira) => ({
+        destino: `CJ${cadeira + 1}`,
+        processos: base + (cadeira < resto ? 1 : 0)
+      }));
+      return { ...sorteio, destinos: distribuicao.map(item => item.destino), distribuicao };
+    });
+
+    async function api(caminho) {
+      if (caminho === 'rpc/historico_sorteios') {
+        const sorteios = modoCj ? sorteiosCjFicticios : sorteiosFicticios;
+        const limite = Number(parametrosFixture.get('linhas'));
+        return limite > 0 ? sorteios.slice(0, limite) : sorteios;
+      }
+      return [];
+    }
+
+    function criarIndicadorCarregamento(texto) {
+      const elemento = document.createElement('span');
+      elemento.textContent = texto;
+      return elemento;
+    }
+  </script>
+  <script src="../../assets/js/historico.js?fixture=10"></script>
+  <script>inicializarHistorico();</script>
+</body>
+
+</html>

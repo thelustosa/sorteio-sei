@@ -1236,12 +1236,18 @@ $$;
 
 revoke all on function public.historico_marco() from public, anon, authenticated, service_role;
 
+-- O retorno ganhou `distribuicao`; PostgreSQL não permite trocar o tipo de
+-- retorno com CREATE OR REPLACE. O DROP é seguro aqui porque a recriação ocorre
+-- na mesma transação do schema/migração e nenhuma tabela depende da função.
+drop function if exists public.historico_sorteios(text);
+
 create or replace function public.historico_sorteios(p_colegiado text)
 returns table (
   data_sorteio date,
   sorteado_em  timestamptz,
   processos    int,
-  destinos     text[]
+  destinos     text[],
+  distribuicao jsonb
 )
 language plpgsql
 stable
@@ -1260,23 +1266,35 @@ begin
   end if;
 
   return query
-  -- Os destinos saem por extenso, não como contagem: "CREG1, CREG2, CREG4" diz
-  -- quem participou da rodada, e "3" só diz quantos foram.
-  select a.data_distribuicao, a.sorteado_em, count(*)::int,
-         array_agg(distinct a.relator order by a.relator)
-    from public.acervo_cj a
-   where p_colegiado = 'CJ'
-     and a.origem = 'sorteio'
-     and a.data_distribuicao >= marco
-   group by a.data_distribuicao, a.sorteado_em
-   union all
-  select b.data_distribuicao, b.sorteado_em, count(*)::int,
-         array_agg(distinct b.unidade order by b.unidade)
-    from public.acervo_creg b
-   where p_colegiado = 'CREG'
-     and b.origem = 'sorteio'
-     and b.data_distribuicao >= marco
-   group by b.data_distribuicao, b.sorteado_em
+  -- Primeiro contamos cada destino dentro da rodada; depois reunimos essas
+  -- parcelas. Assim `processos`, `destinos` e `distribuicao` nascem da mesma
+  -- agregação e não podem divergir.
+  with linhas as (
+    select a.data_distribuicao as data_sorteio, a.sorteado_em,
+           a.relator as destino
+      from public.acervo_cj a
+     where p_colegiado = 'CJ'
+       and a.origem = 'sorteio'
+       and a.data_distribuicao >= marco
+    union all
+    select b.data_distribuicao, b.sorteado_em, b.unidade
+      from public.acervo_creg b
+     where p_colegiado = 'CREG'
+       and b.origem = 'sorteio'
+       and b.data_distribuicao >= marco
+  ), por_destino as (
+    select l.data_sorteio, l.sorteado_em, l.destino, count(*)::int as processos
+      from linhas l
+     group by l.data_sorteio, l.sorteado_em, l.destino
+  )
+  select d.data_sorteio, d.sorteado_em, sum(d.processos)::int,
+         array_agg(d.destino order by d.destino),
+         jsonb_agg(
+           jsonb_build_object('destino', d.destino, 'processos', d.processos)
+           order by d.destino
+         )
+    from por_destino d
+   group by d.data_sorteio, d.sorteado_em
    -- Mais recente primeiro, que é como um histórico é lido. `nulls last` deixa
    -- a rodada sem carimbo depois da carimbada do mesmo dia, e não antes dela.
    order by 1 desc, 2 desc nulls last;
@@ -1297,8 +1315,11 @@ grant execute on function public.historico_sorteios(text) to authenticated;
 -- destino/decisao. Sem essa tradução, a tela precisaria de dois caminhos para
 -- desenhar a mesma tabela.
 --
--- `is not distinct from` e não `=`: o carimbo das rodadas antigas é nulo, e um
--- `=` com nulo devolveria lista vazia justamente para elas.
+-- O recorte é o MESMO da lista, marco inclusive. Se os dois divergirem, o card
+-- vira uma porta lateral para rodadas que a lista não mostra.
+--
+-- `is not distinct from` e não `=`: o carimbo de uma rodada pode ser nulo, e um
+-- `=` com nulo devolveria lista vazia justamente para ela.
 create or replace function public.processos_sorteio(
   p_colegiado   text,
   p_data        date,
@@ -1347,10 +1368,23 @@ begin
               else 'Não' end,
          null::text
     from public.acervo_cj a
-    left join public.cadeiras_cj c
-           on c.cadeira = a.relator
-          and a.data_distribuicao >= c.desde
-          and (c.ate is null or a.data_distribuicao <= c.ate)
+    -- Uma cadeira pode ter mais de um período cobrindo a mesma data: a chave
+    -- primária é (cadeira, desde) e o índice único só cobre o período EM
+    -- ABERTO, então dois intervalos fechados que se sobrepõem entram sem erro
+    -- nenhum. Num join comum, cada processo daquela cadeira sairia repetido —
+    -- na lista do card e na ata exportada, que a lista alimenta.
+    --
+    -- O lateral devolve no máximo uma linha, sempre: o período que começou por
+    -- último até a data do sorteio, que é o que vigorava nela.
+    left join lateral (
+      select cc.conselheiro
+        from public.cadeiras_cj cc
+       where cc.cadeira = a.relator
+         and a.data_distribuicao >= cc.desde
+         and (cc.ate is null or a.data_distribuicao <= cc.ate)
+       order by cc.desde desc
+       limit 1
+    ) c on true
    where p_colegiado = 'CJ'
      and a.data_distribuicao = p_data
      and a.sorteado_em is not distinct from p_sorteado_em
@@ -1391,4 +1425,3 @@ $$;
 
 revoke all on function public.ping() from public, service_role;
 grant execute on function public.ping() to anon, authenticated;
-

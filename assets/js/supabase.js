@@ -1,5 +1,6 @@
 // Configuração e login do Supabase, compartilhados pelas páginas do sistema
-// (index.html, julgados-cj.html, julgados-creg.html, acervo-cj.html, acervo-creg.html).
+// (index.html, julgados-cj.html, julgados-creg.html, acervo-cj.html, acervo-creg.html
+// e historico.html).
 // Carregue este arquivo antes do script da página.
 //
 // SUPABASE_KEY aceita tanto a chave "publishable" (sb_publishable_...) quanto a
@@ -7,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '717d269752';
+const ASSET_VERSION = '4d50005d20';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um

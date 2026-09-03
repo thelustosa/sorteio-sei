@@ -14,6 +14,14 @@
 -- a antiga precisa sair antes da nova entrar.
 drop function if exists public.historico_sorteios();
 
+-- E a de HOJE, com cinco colunas, também: 20260902130000 alargou o retorno, e
+-- `create or replace` não troca tipo de retorno. Em produção esta linha é
+-- inerte — quando a migração rodou, aquela versão ainda não existia, e produção
+-- não reaplica migração. Ela serve para a bateria, que aplica o schema.sql de
+-- hoje e só depois as migrações: sem o drop, este arquivo pararia em "cannot
+-- change return type" e teria de ficar de fora dos testes.
+drop function if exists public.historico_sorteios(text);
+
 -- ── Histórico de sorteios ────────────────────────────────────────────────────
 -- O que alimenta historico-cj.html e historico-creg.html: as rodadas de sorteio
 -- já realizadas, uma tela por colegiado, como o painel do acervo.

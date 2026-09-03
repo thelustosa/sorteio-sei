@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=717d269752" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=4d50005d20" />
   <script>
     (function () {
       try {
@@ -22,8 +22,8 @@
       } catch (_) {}
     })();
   </script>
-  <script defer src="assets/js/supabase.min.js?v=717d269752"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=717d269752"></script>
+  <script defer src="assets/js/supabase.min.js?v=4d50005d20"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=4d50005d20"></script>
 </head>
 
 <body data-page="sorteio">
@@ -84,7 +84,7 @@
       <div id="sessionLoading" class="session-loading" data-sessao hidden></div>
 
       <div id="modeSelector" data-sessao hidden>
-        <section class="selection-card" aria-labelledby="modeSelectorTitle">
+        <section class="selection-card selection-card-sorteio" aria-labelledby="modeSelectorTitle">
           <div class="selection-copy">
             <h2 id="modeSelectorTitle" tabindex="-1">Sorteio de processos</h2>
             <p class="mode-description">Selecione o colegiado responsável pela nova distribuição.</p>
@@ -103,6 +103,17 @@
           <div class="buttons-wrapper" role="group" aria-label="Colegiado para consulta do acervo">
             <a id="btnAcervoCreg" class="mode-button mode-button-outline" href="./acervo-creg.html">Conselho Regulador (CREG)</a>
             <a id="btnAcervoCj" class="mode-button mode-button-outline" href="./acervo-cj.html">Câmara de Julgamento (CJ)</a>
+          </div>
+        </section>
+
+        <section class="selection-card selection-card-historico" aria-labelledby="historicoSelectorTitle">
+          <div class="selection-copy">
+            <h2 id="historicoSelectorTitle">Histórico de sorteios</h2>
+            <p class="mode-description">Selecione o colegiado para consultar os sorteios já realizados e os processos de cada rodada.</p>
+          </div>
+          <div class="buttons-wrapper" role="group" aria-label="Colegiado para consulta do histórico">
+            <a id="btnHistoricoCreg" class="mode-button mode-button-outline" href="./historico-creg.html">Conselho Regulador (CREG)</a>
+            <a id="btnHistoricoCj" class="mode-button mode-button-outline" href="./historico-cj.html">Câmara de Julgamento (CJ)</a>
           </div>
         </section>
 

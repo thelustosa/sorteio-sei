@@ -21,7 +21,7 @@ const versaoMinificada = ler('assets/js/supabase.min.js')
 assert.equal(versaoMinificada, versao,
   'supabase.min.js carrega páginas com uma versão antiga dos assets');
 
-for (const pagina of ['index.html', 'julgados-cj.html', 'julgados-creg.html', 'acervo-cj.html', 'acervo-creg.html', '404.html']) {
+for (const pagina of PAGINAS) {
   const html = ler(pagina);
   const assets = [...html.matchAll(/(?:href|src)="(assets\/(?:css|js)\/[^"?]+\.min\.(?:css|js))\?v=([^"&]+)"/g)];
   assert.ok(assets.length > 0, `${pagina}: nenhum asset minificado versionado`);
@@ -45,10 +45,19 @@ for (const [recurso, destino] of [
 }
 
 const index = ler('index.html');
+const cssIndex = ler('assets/css/index.css');
 const julgadosCj = ler('julgados-cj.html');
 const julgadosCreg = ler('julgados-creg.html');
 const acervoCj = ler('acervo-cj.html');
 const acervoCreg = ler('acervo-creg.html');
+assert.match(index, /class="selection-card selection-card-sorteio"/,
+  'o card de sorteio precisa ser o primeiro degrau explícito do gradiente');
+assert.match(cssIndex,
+  /\.selection-card-sorteio\s*\{\s*background:\s*#ffffff;\s*\}/,
+  'o sorteio precisa manter o fundo inicial do gradiente');
+assert.match(cssIndex,
+  /\.selection-card-sorteio \.mode-button\s*\{\s*border-color:\s*#00534b;\s*background:\s*#00534b;\s*color:\s*var\(--on-accent\);\s*\}/,
+  'os botões do sorteio precisam usar o primeiro tom do gradiente');
 assert.doesNotMatch(index, /<script[^>]+index\.min\.js/, 'index.js voltou ao carregamento inicial');
 assert.doesNotMatch(julgadosCj, /<script[^>]+julgados\.min\.js/, 'julgados.js voltou ao carregamento inicial');
 assert.doesNotMatch(julgadosCreg, /<script[^>]+julgados-creg\.min\.js/, 'julgados-creg.js voltou ao carregamento inicial');
@@ -59,6 +68,56 @@ assert.ok(acervoCreg.indexOf('class="nav-actions"') < acervoCreg.indexOf('id="bt
   && acervoCreg.indexOf('id="btnExportar"') < acervoCreg.indexOf('</nav>'),
   'Exportar precisa permanecer junto das ações da barra superior (Conselho)');
 
+// O histórico entra pelo mesmo caminho das demais telas autenticadas: o script
+// da página só é buscado depois que a sessão existe. E as duas páginas são
+// gêmeas — mesmo script, colegiados diferentes —, então cada uma precisa dizer
+// qual é o seu, ou as duas mostrariam a Câmara.
+assert.match(index, /class="selection-card selection-card-historico"/,
+  'o card de histórico saiu da tela principal');
+assert.match(cssIndex,
+  /\.selection-card-historico\s*\{\s*background:\s*#f1f7f5;\s*\}/,
+  'o histórico precisa usar o tom intermediário do gradiente entre acervo e registro');
+assert.match(cssIndex,
+  /\.selection-card-historico \.mode-button-outline\s*\{\s*border-color:\s*#16816e;\s*background:\s*#16816e;\s*color:\s*var\(--on-accent\);\s*\}/,
+  'os botões do histórico precisam usar o verde intermediário do gradiente');
+assert.match(cssIndex,
+  /\.selection-card-acervo \.mode-button-outline\s*\{\s*border-color:\s*#0c695c;\s*background:\s*#0c695c;\s*color:\s*var\(--on-accent\);\s*\}/,
+  'os botões do acervo precisam inaugurar o gradiente preenchido');
+for (const [card, cor] of [
+  ['acervo', '#0c695c'],
+  ['historico', '#126b5c'],
+  ['records', '#245f55']
+]) {
+  assert.match(cssIndex, new RegExp(`\\.selection-card-${card} \\.selection-copy h2\\s*\\{\\s*color:\\s*${cor};`),
+    `${card} precisa acompanhar o tom correspondente do gradiente`);
+}
+for (const [pagina, colegiado] of [['historico-cj.html', 'cj'], ['historico-creg.html', 'creg']]) {
+  const html = ler(pagina);
+  assert.doesNotMatch(html, /<script[^>]+historico\.min\.js/,
+    `${pagina}: historico.js voltou ao carregamento inicial`);
+  assert.match(html, new RegExp(`data-colegiado="${colegiado}"`),
+    `${pagina}: sem data-colegiado, o script cai no padrão e mostra o outro colegiado`);
+  // O card da tela principal é a única porta para cada histórico: sem o link, a
+  // página existe e ninguém chega nela.
+  assert.ok(index.includes(`href="./${pagina}"`),
+    `o card de histórico não aponta para ${pagina}`);
+}
+
+// A fixture visual do histórico carrega o historico.js de verdade, e o script
+// resolve todos os elementos no topo do arquivo. Um id que exista nas páginas e
+// falte aqui não dá erro nenhum na CI — a fixture não está em PAGINAS —, mas
+// derruba o script no carregamento e a tela abre em branco, que foi o que
+// aconteceu quando o card do histórico ganhou o botão Exportar.
+const historicoJs = ler('assets/js/historico.js');
+const fixtureHistorico = ler('tests/fixtures/historico-visual.html');
+const idsDoHistorico = [...new Set([...historicoJs.matchAll(/getElementById\('([^']+)'\)/g)]
+  .map(([, id]) => id))];
+assert.ok(idsDoHistorico.length >= 15, 'não achei os getElementById do historico.js: a forma mudou?');
+for (const id of idsDoHistorico) {
+  assert.ok(fixtureHistorico.includes(`id="${id}"`),
+    `historico-visual.html não tem id="${id}": a fixture abre em branco`);
+}
+
 // Renomear uma página e esquecer a entrada correspondente deixa o dashboard em
 // branco: sem a chave, o bootstrap não carrega script nenhum e não reclama.
 const bootstrap = ler('assets/js/bootstrap.js');
@@ -66,7 +125,7 @@ const chavesBootstrap = new Set([...bootstrap
   .slice(bootstrap.indexOf('const PAGINAS'), bootstrap.indexOf('};', bootstrap.indexOf('const PAGINAS')))
   .matchAll(/^ {2}'?([\w-]+)'?:\s*\{/gm)].map(([, chave]) => chave));
 const paginasDoHtml = PAGINAS.map(pagina => ler(pagina).match(/data-page="([^"]+)"/)?.[1]).filter(Boolean);
-assert.ok(paginasDoHtml.length >= 5, 'não achei os data-page das páginas: o atributo mudou?');
+assert.ok(paginasDoHtml.length >= 6, 'não achei os data-page das páginas: o atributo mudou?');
 for (const pagina of paginasDoHtml) {
   assert.ok(chavesBootstrap.has(pagina), `data-page="${pagina}" não tem entrada em PAGINAS no bootstrap.js`);
 }
