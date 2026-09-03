@@ -201,7 +201,7 @@ Três raios cobrem o sistema inteiro: `8px` (controles — botão, input, select
 ### Badges / Pills
 - **Filter Pill** (`.pill`): chip de seleção/exclusão de unidade — fundo Verde Institucional (soft), texto verde; estado `.excluded` inverte para fundo vermelho sólido com texto riscado, o único lugar do sistema onde vermelho vira fundo em vez de texto/borda.
 - **Count Badge** (`.unidade-badge`): pill estática com contagem, fundo Verde Institucional sólido, texto branco.
-- **Pending Badge** (`.pendencias-badge`): pill flutuante (posição absoluta no canto do card) com contagem de sessões pendentes — fundo Teal dos Pendentes, texto branco; o card em que vive ganha uma borda/glow que pulsa por 3 ciclos e se acomoda num estado estático, nunca em loop infinito.
+- **Pending Badge** (`.pendencias-badge`): pill flutuante (posição absoluta no canto do card) com contagem de sessões pendentes — fundo Teal dos Pendentes, texto branco; o card em que vive ganha uma borda/glow que pulsa sem parar enquanto houver pendência. Some sozinha: a checagem roda uma vez por carregamento da página, então o pulso só volta a aparecer se ainda houver algo pendente na próxima vez que a tela abrir.
 
 ### Cards / Containers
 - **Corner Style:** raio de card (12px).
