@@ -44,6 +44,15 @@ def permissoes(cur):
     return [linha[0] for linha in cur.fetchall()]
 
 
+def deve_negar(cur, sql, args=None):
+    try:
+        cur.execute(sql, args)
+    except InsufficientPrivilege:
+        cur.connection.rollback()
+    else:
+        raise AssertionError(f'operacao proibida foi aceita: {sql}')
+
+
 @teste
 def matriz_de_permissoes(cur):
     for nome, esperado in {
@@ -97,6 +106,125 @@ def usuario_nao_altera_permissoes(cur):
             raise AssertionError(f'{comando.split()[0].upper()} deveria falhar')
 
 
+@teste
+def alberto_so_opera_tabelas_creg(cur):
+    autenticar(cur, 'alberto')
+    cur.execute("""insert into public.acervo_creg
+                   (num_processo, unidade, data_distribuicao, origem)
+                   values ('202600029009901', 'CREG1', current_date, 'sorteio')""")
+    cur.connection.rollback()
+
+    autenticar(cur, 'alberto')
+    deve_negar(cur, """insert into public.acervo_cj
+                        (num_processo, relator, data_distribuicao, origem)
+                        values ('202600029009902', 'CJ1', current_date, 'sorteio')""")
+
+    autenticar(cur, 'alberto')
+    cur.execute("select num_processo from public.julgados_cj")
+    assert cur.fetchall() == []
+
+
+@teste
+def terezinha_so_opera_tabelas_cj(cur):
+    autenticar(cur, 'terezinha')
+    cur.execute("""insert into public.acervo_cj
+                   (num_processo, relator, data_distribuicao, origem)
+                   values ('202600029009903', 'CJ1', current_date, 'sorteio')""")
+    cur.connection.rollback()
+
+    autenticar(cur, 'terezinha')
+    deve_negar(cur, """insert into public.acervo_creg
+                        (num_processo, unidade, data_distribuicao, origem)
+                        values ('202600029009904', 'CREG1', current_date, 'sorteio')""")
+
+    autenticar(cur, 'terezinha')
+    cur.execute("select num_processo from public.julgados_creg")
+    assert cur.fetchall() == []
+
+
+@teste
+def lucas_e_sec_agr_operam_tabelas_dos_dois_orgaos(cur):
+    for indice, nome in enumerate(['lucas', 'sec-agr'], start=5):
+        autenticar(cur, nome)
+        cur.execute("""insert into public.acervo_cj
+                       (num_processo, relator, data_distribuicao, origem)
+                       values (%s, 'CJ1', current_date, 'sorteio')""",
+                    (f'2026000290099{indice:02d}',))
+        cur.connection.rollback()
+
+        autenticar(cur, nome)
+        cur.execute("""insert into public.acervo_creg
+                       (num_processo, unidade, data_distribuicao, origem)
+                       values (%s, 'CREG1', current_date, 'sorteio')""",
+                    (f'2026000290099{indice + 2:02d}',))
+        cur.connection.rollback()
+
+
+RPCS = {
+    'CJ': [
+        'select * from public.resumo_acervo_cj()',
+        'select * from public.processos_acervo_cj(null, null)',
+        "select public.registrar_votos('[]'::jsonb)",
+        "select * from public.historico_sorteios('CJ')",
+        "select * from public.processos_sorteio('CJ', current_date, null)",
+    ],
+    'CREG': [
+        'select * from public.resumo_acervo_creg()',
+        'select * from public.processos_acervo_creg(null, null)',
+        "select public.registrar_votos_creg('[]'::jsonb)",
+        "select * from public.historico_sorteios('CREG')",
+        "select * from public.processos_sorteio('CREG', current_date, null)",
+    ],
+}
+
+
+@teste
+def rpcs_so_aceitam_o_orgao_autorizado(cur):
+    for nome, permitidos in {
+        'alberto': ['CREG'],
+        'terezinha': ['CJ'],
+        'lucas': ['CJ', 'CREG'],
+        'sec-agr': ['CJ', 'CREG'],
+    }.items():
+        for orgao, rpcs in RPCS.items():
+            for rpc in rpcs:
+                autenticar(cur, nome)
+                if orgao in permitidos:
+                    cur.execute(rpc)
+                    cur.fetchall()
+                    cur.connection.rollback()
+                else:
+                    deve_negar(cur, rpc)
+
+
+@teste
+def rpcs_preservam_contrato_de_autenticacao_e_colegiado(cur):
+    cur.execute('reset role')
+    cur.execute("select set_config('request.jwt.claims', '', true)")
+    cur.execute('set local role authenticated')
+    try:
+        cur.execute('select * from public.resumo_acervo_cj()')
+    except psycopg2.Error as erro:
+        assert erro.pgcode == '28000'
+        cur.connection.rollback()
+    else:
+        raise AssertionError('RPC anonima deveria exigir autenticacao')
+
+    autenticar(cur, 'alberto')
+    for rpc in [
+        "select * from public.historico_sorteios('OUTRO')",
+        "select * from public.processos_sorteio('OUTRO', current_date, null)",
+    ]:
+        try:
+            cur.execute(rpc)
+        except psycopg2.Error as erro:
+            assert erro.pgcode == '22023'
+            cur.connection.rollback()
+            autenticar(cur, 'alberto')
+        else:
+            raise AssertionError('colegiado desconhecido foi aceito')
+
+
 def preparar_banco():
     PG.rodar_arquivo(RAIZ / 'sql' / 'schema.sql')
     PG.executar("""insert into public.permissoes_usuario (user_id, orgao) values
@@ -106,6 +234,12 @@ def preparar_banco():
                     ('00000000-0000-0000-0000-000000000013', 'CREG'),
                     ('00000000-0000-0000-0000-000000000014', 'CJ'),
                     ('00000000-0000-0000-0000-000000000014', 'CREG');""")
+    PG.executar("""insert into public.julgados_cj
+                  (num_processo, data_sessao)
+                  values ('202600029009911', current_date);
+                  insert into public.julgados_creg
+                  (num_processo, data_sessao)
+                  values ('202600029009912', current_date);""")
 
 
 def main():
