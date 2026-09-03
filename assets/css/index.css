@@ -601,6 +601,40 @@ tbody tr:hover td { background: var(--table-row-hover); }
   #processTable select { font-size: var(--text-base); }
 }
 
+/* Tabela de julgamento: sem largura fixa por coluna, o layout automático
+   dimensiona cada <td> pelo próprio conteúdo — e como VOTOS e STATUS têm
+   textos de tamanhos diferentes, os dois <select> saíam com larguras
+   diferentes e a borda esquerda de cada coluna ficava desalinhada com o
+   cabeçalho acima. table-layout: fixed trava as quatro larguras.
+
+   Nº Processo e Relator têm conteúdo curto (um número ou uma cadeira tipo
+   "CJ3"); dar a eles a mesma largura das colunas de Voto/Status sobrava
+   como um vão vazio entre as duas metades da tabela. Aqui ficam mais
+   estreitos, e a largura que sobra vai para Voto/Status — que têm um
+   <select> com rótulo mais longo ("Selecione o status"). As quatro colunas
+   e o cabeçalho ficam centralizados, para o valor casar com o rótulo acima
+   dele em vez de "flutuar" à esquerda da própria coluna. */
+#julgadosTable { table-layout: fixed; }
+
+#julgadosTable th,
+#julgadosTable td { text-align: center; }
+
+/* As quatro colunas dividem o espaço em partes iguais. Antes Voto/Status
+   ganhavam 30% para o <select> esticar até a borda — mas agora ele tem
+   largura própria (15rem, ver abaixo), e sobrava um vão bem maior ali do
+   que ao redor do texto curto de Nº Processo/Relator. Com partes iguais o
+   respiro em volta de cada valor fica parecido de coluna a coluna. */
+#julgadosTable th { width: 25%; }
+
+/* A regra global de select (mais acima) é width: 100% — pensada para campos
+   empilhados em formulário. Aqui o <select> esticava até a borda da coluna
+   de 30%, e como "Manter"/"Julgado" são bem mais curtos que o rótulo
+   "Selecione o status", sobrava uma faixa vazia entre o texto e a seta.
+   Trava numa largura fixa, que cabe o rótulo mais longo sem sobra, e deixa
+   o text-align: center da célula centralizar a caixa dentro da coluna. */
+#julgadosTable .col-voto select,
+#julgadosTable .col-status select { width: 15rem; max-width: 100%; }
+
 .button-secondary.button-danger {
   border-color: var(--danger);
   color: var(--danger);
