@@ -31,6 +31,58 @@
 -- sorteio grava a cadeira e a importação traduz o nome da planilha pela tabela
 -- cadeiras_cj antes de inserir. Quem é o conselheiro sai do de-para, não daqui
 -- (ver "CJ · Quem ocupa cada cadeira", abaixo).
+create table if not exists public.permissoes_usuario (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  orgao text not null check (orgao in ('CJ', 'CREG')),
+  primary key (user_id, orgao)
+);
+
+alter table public.permissoes_usuario enable row level security;
+
+drop policy if exists "usuario le as proprias permissoes"
+  on public.permissoes_usuario;
+create policy "usuario le as proprias permissoes"
+  on public.permissoes_usuario for select to authenticated
+  using (user_id = (select auth.uid()));
+
+revoke all privileges on table public.permissoes_usuario
+  from anon, authenticated;
+grant select on public.permissoes_usuario to authenticated;
+
+create or replace function public.tem_acesso_orgao(p_orgao text)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.permissoes_usuario p
+     where p.user_id = (select auth.uid())
+       and p.orgao = p_orgao
+  )
+$$;
+
+create or replace function public.orgaos_autorizados()
+returns table (orgao text)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select p.orgao
+    from public.permissoes_usuario p
+   where p.user_id = (select auth.uid())
+   order by p.orgao
+$$;
+
+revoke all on function public.tem_acesso_orgao(text)
+  from public, anon, service_role;
+revoke all on function public.orgaos_autorizados()
+  from public, anon, service_role;
+grant execute on function public.tem_acesso_orgao(text) to authenticated;
+grant execute on function public.orgaos_autorizados() to authenticated;
+
 create table if not exists public.acervo_cj (
   id                bigint generated always as identity primary key,
   num_processo      text        not null,
