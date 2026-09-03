@@ -1843,6 +1843,24 @@ test('ata do CREG agrupa por unidade quando o sorteio tem mais de um destino', a
     'CREG1 (ordem 2 e 4) precisa vir antes da CREG4 (ordem 1 e 3), como na ata oficial');
 });
 
+test('ata do CREG põe a linha sem ordem no fim do grupo, como a tela e a RPC', async () => {
+  const page = historicoPage(async () => [], 'creg');
+  // Gravação que não registrou a ordem: a RPC devolve `order by 1 nulls last, 2`,
+  // e a ata precisa dizer o mesmo. `Number(null) || 0` a colocaria em primeiro.
+  const processos = [
+    { ordem: 2, num_processo: 'P2', destino: 'CREG1', interessado: 'B' },
+    { ordem: null, num_processo: 'P9', destino: 'CREG1', interessado: 'X' },
+    { ordem: null, num_processo: 'P5', destino: 'CREG1', interessado: 'Y' },
+    { ordem: 1, num_processo: 'P1', destino: 'CREG1', interessado: 'A' }
+  ];
+  const texto = new TextDecoder().decode(new Uint8Array(
+    await page.criarDocxDetalhe(processos, '2026-08-27').arrayBuffer()));
+
+  const ordemEncontrada = [...texto.matchAll(/P\d/g)].map(m => m[0]);
+  assert.deepEqual(ordemEncontrada, ['P1', 'P2', 'P5', 'P9'],
+    'sem ordem vai para o fim, com o número do processo como desempate');
+});
+
 test('ata do CJ mantém a ordem de sorteio, sem agrupar por relator', async () => {
   const page = historicoPage(async () => [], 'cj');
   const processos = [
