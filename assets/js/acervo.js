@@ -108,7 +108,14 @@ async function inicializarAcervo() {
 }
 
 function hojeBR() {
-  return new Date().toLocaleDateString('pt-BR');
+  const agora = new Date();
+  return `${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR', {
+    hour: '2-digit', minute: '2-digit'
+  })}`;
+}
+
+function dataHoraBR() {
+  return hojeBR();
 }
 
 // aaaa-mm-dd → dd/mm/aaaa, sem passar por Date: o construtor lê data pura como
@@ -592,7 +599,7 @@ async function carregarAcervo({ carregamentoInicial = false } = {}) {
   acervoTotal.textContent = total === 1
     ? '1 processo aguardando julgamento'
     : `${total} processos aguardando julgamento`;
-  acervoAtualizado.textContent = `Atualizado em: ${hojeBR()}`;
+  acervoAtualizado.textContent = `Atualizado em: ${dataHoraBR()}`;
   acervoVazio.hidden = total > 0;
   return true;
 }

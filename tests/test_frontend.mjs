@@ -1356,6 +1356,41 @@ const sorteiosCj = [
 ];
 
 const linhas = page => page.document.getElementById('historicoTable').children[1].children;
+
+test('acervo and historico panels show the consultation time', async () => {
+  const acervo = acervoPage(async () => [
+    { ordem: 1, faixa: 'Faixa', relator: 'CJ1', processos: 1 }
+  ]);
+  const historico = historicoPage(async () => sorteiosCreg, 'creg');
+
+  await acervo.inicializarAcervo();
+  await historico.inicializarHistorico();
+
+  const formatoAtualizacao = /^Atualizado em: \d{2}\/\d{2}\/\d{4} às \d{2}:\d{2}$/;
+  assert.match(acervo.document.getElementById('acervoAtualizado').textContent, formatoAtualizacao);
+  assert.match(historico.document.getElementById('historicoAtualizado').textContent, formatoAtualizacao);
+});
+
+test('acervo detail and Excel exports show the consultation time', async () => {
+  const dados = [{ ordem: 1, faixa: 'Faixa', relator: 'CJ1', processos: 1 }];
+  const geral = acervoPage(async () => dados);
+  await geral.inicializarAcervo();
+
+  const detalhe = await acervoComDetalhe();
+  await detalhe.abrirDetalhe(celulaDe(detalhe, 0, 1));
+
+  const formatoAtualizacao = /Atualizado em: \d{2}\/\d{2}\/\d{4} às \d{2}:\d{2}/;
+  assert.match(detalhe.document.getElementById('detalheResumo').textContent, formatoAtualizacao);
+
+  const geralTexto = new TextDecoder().decode(new Uint8Array(
+    await geral.criarExcel(dados).arrayBuffer()));
+  assert.match(geralTexto, formatoAtualizacao);
+
+  const detalheTexto = new TextDecoder().decode(new Uint8Array(
+    await detalhe.criarExcelDetalhe(processosFalsos, 'Faixa - CJ1').arrayBuffer()));
+  assert.match(detalheTexto, formatoAtualizacao);
+});
+
 const acaoDe = (page, linha) => linhas(page)[linha].children.at(-1).children[0];
 const dataDe = linha => linha.children[0].children.map(s => s.textContent);
 const destinosDe = linha => linha.children[3].querySelectorAll('.historico-destino').map(item => ({

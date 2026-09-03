@@ -147,6 +147,13 @@ function hojeBR() {
   return new Date().toLocaleDateString('pt-BR');
 }
 
+function dataHoraBR() {
+  const agora = new Date();
+  return `${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR', {
+    hour: '2-digit', minute: '2-digit'
+  })}`;
+}
+
 // aaaa-mm-dd → dd/mm/aaaa, sem passar por Date: o construtor lê data pura como
 // UTC e, em fuso negativo, devolveria o dia anterior.
 function dataBR(iso) {
@@ -371,7 +378,7 @@ async function carregarHistorico({ carregamentoInicial = false } = {}) {
   desenhar(lista);
   const processos = lista.reduce((soma, s) => soma + (Number(s.processos) || 0), 0);
   historicoTotal.textContent = `${quantidadeSorteios(lista.length)} · ${quantidadeProcessos(processos)}`;
-  historicoAtualizado.textContent = `Atualizado em: ${hojeBR()}`;
+  historicoAtualizado.textContent = `Atualizado em: ${dataHoraBR()}`;
   historicoVazio.hidden = lista.length > 0;
   return true;
 }
