@@ -168,17 +168,19 @@ function indexPage({ api = async () => null, aviso = () => {},
     'modeSelector', 'sorteadorContent', 'thRecurso', 'thInteressado', 'pillsContainer', 'txtModo',
     'processEntry', 'processSetupHint', 'processFormMessage', 'resultadoSorteio',
     'sortControls', 'resumoContagem', 'resultadoStatus', 'thUnidadeResult',
-    'modeSelectorTitle', 'resultadoSorteioTitle', 'baixarBackup'].forEach(id => add(id, id.includes('Btn') || id.startsWith('btn') || id === 'createRows' || id === 'sortear' || id === 'baixarBackup' ? 'button' : 'div'));
+    'modeSelectorTitle', 'resultadoSorteioTitle', 'baixarBackup',
+    'cardRegistrarPendencias', 'pendenciasBadge'].forEach(id => add(id, id.includes('Btn') || id.startsWith('btn') || id === 'createRows' || id === 'sortear' || id === 'baixarBackup' ? 'button' : 'div'));
   document.getElementById('sorteadorContent').hidden = true;
   document.getElementById('processEntry').hidden = true;
   document.getElementById('sortear').hidden = true;
   document.getElementById('resultadoSorteio').hidden = true;
+  document.getElementById('pendenciasBadge').hidden = true;
   document.getElementById('numRows').value = '3';
 
   const app = new Function('document', 'window', 'crypto', 'URL', 'Blob', 'setTimeout', 'requestAnimationFrame',
     'SUPABASE_URL', 'SUPABASE_KEY', 'accessToken', 'api', 'criarIndicadorCarregamento', 'alternarBotaoCarregando', 'aviso',
     'CADEIRAS_CJ', 'rotularCadeira',
-    `${source('index.js')}\nreturn { inicializarSorteio };`)(
+    `${source('index.js')}\nreturn { inicializarSorteio, avisarPendenciasDeJulgamento };`)(
     document, { matchMedia: () => ({ matches: true }) }, { getRandomValues: values => values.fill(0) },
     { createObjectURL: () => 'blob:test', revokeObjectURL() {} }, Blob, () => 0,
     callback => callback(), supabaseUrl, supabaseKey, token, api,
@@ -628,6 +630,40 @@ test('move o foco para a modalidade após o login', () => {
   page.inicializarSorteio();
 
   assert.equal(page.document.activeElement, page.document.getElementById('modeSelectorTitle'));
+});
+
+test('avisa no card de pendências quando há julgados sem voto ou status', async () => {
+  const page = indexPage({
+    api: async caminho => caminho.includes('julgados_cj')
+      ? [{ id: 1 }, { id: 2 }]
+      : [{ id: 3 }]
+  });
+  await page.avisarPendenciasDeJulgamento();
+
+  const card = page.document.getElementById('cardRegistrarPendencias');
+  const badge = page.document.getElementById('pendenciasBadge');
+  assert.equal(card.classList.contains('tem-pendencia'), true);
+  assert.equal(badge.hidden, false);
+  assert.equal(badge.textContent, '3 pendentes');
+  assert.equal(badge.getAttribute('aria-label'), '3 sessões aguardando voto e status');
+});
+
+test('sem pendência, o card de julgamento fica sem aviso', async () => {
+  const page = indexPage({ api: async () => [] });
+  await page.avisarPendenciasDeJulgamento();
+
+  const card = page.document.getElementById('cardRegistrarPendencias');
+  const badge = page.document.getElementById('pendenciasBadge');
+  assert.equal(card.classList.contains('tem-pendencia'), false);
+  assert.equal(badge.hidden, true);
+});
+
+test('falha ao checar pendências não quebra a tela, só fica sem o selo', async () => {
+  const page = indexPage({ api: async () => { throw new Error('rede'); } });
+  await page.avisarPendenciasDeJulgamento();
+
+  const card = page.document.getElementById('cardRegistrarPendencias');
+  assert.equal(card.classList.contains('tem-pendencia'), false);
 });
 
 test('move o foco para o título da pauta ao abri-la', () => {
@@ -1293,7 +1329,7 @@ function historicoPage(api, colegiado = 'creg') {
   const loginOnlyCard = document.createElement('div');
   loginOnlyCard.dataset.loginOnly = '';
   document.body.append(loginOnlyCard);
-  ['historicoPanel', 'historicoVazio', 'historicoVazioTexto', 'historicoInicio',
+  ['historicoPanel', 'historicoVazio', 'historicoVazioTexto',
    'historicoTotal', 'historicoAtualizado'].forEach(id => document.add(id, 'div'));
   const erroDiv = document.add('historicoErro', 'div');
   erroDiv.appendChild(document.createElement('p'));
@@ -1480,8 +1516,6 @@ test('a tela diz de quando é a série, com a lista cheia ou vazia', async () =>
   // descobre por que não o encontra.
   const vazia = historicoPage(async () => [], 'cj');
   await vazia.inicializarHistorico();
-  assert.equal(vazia.document.getElementById('historicoInicio').textContent,
-    'Série iniciada em 27/08/2026');
   const texto = vazia.document.getElementById('historicoVazioTexto').textContent;
   assert.match(texto, /a partir de 27\/08\/2026/);
   // Com o artigo: 'A Câmara' e 'O Conselho' não saem do mesmo molde, e sem ele
@@ -1494,8 +1528,6 @@ test('a tela diz de quando é a série, com a lista cheia ou vazia', async () =>
 
   const cheia = historicoPage(async () => sorteiosCreg, 'creg');
   await cheia.inicializarHistorico();
-  assert.equal(cheia.document.getElementById('historicoInicio').textContent,
-    'Série iniciada em 27/08/2026');
   assert.match(cheia.document.getElementById('historicoVazioTexto').textContent,
     /O Conselho Regulador não distribuiu/);
   assert.equal(cheia.document.getElementById('historicoVazio').hidden, true);
