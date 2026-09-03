@@ -109,6 +109,12 @@ const btnExportarDetalhe = document.getElementById('btnExportarDetalhe');
 // clicar noutra rodada deixaria a resposta atrasada chegar por último e
 // sobrescrever o card — título de um sorteio, lista de outro.
 let detalhePedido = 0;
+// Mesmo contador para a lista. Hoje nenhum caminho da tela dispara duas
+// cargas ao mesmo tempo — "Atualizar" fica `disabled` e "Tentar novamente"
+// mora dentro do bloco de erro, que some no início de cada carga —, mas isso
+// depende de dois efeitos colaterais distantes; o contador guarda a regra
+// aqui, onde ela vale: quem chegar atrasado não desenha nada.
+let historicoPedido = 0;
 // O que está aberto no card agora: só o que está nele pode ser exportado, e só
 // depois que a lista chega — nunca a resposta de uma busca que já saiu de foco.
 let detalheAtual = null;
@@ -141,10 +147,6 @@ async function inicializarHistorico() {
   if (loginOnlyCard) loginOnlyCard.hidden = true;
   historicoPanel.hidden = false;
   btnAtualizar.hidden = false;
-}
-
-function hojeBR() {
-  return new Date().toLocaleDateString('pt-BR');
 }
 
 function dataHoraBR() {
@@ -345,6 +347,7 @@ function desenhar(sorteios) {
 }
 
 async function carregarHistorico({ carregamentoInicial = false } = {}) {
+  const pedido = ++historicoPedido;
   historicoErro.hidden = true;
   historicoVazio.hidden = true;
   historicoAtualizado.textContent = 'Carregando…';
@@ -360,6 +363,7 @@ async function carregarHistorico({ carregamentoInicial = false } = {}) {
     });
   } catch (err) {
     if (carregamentoInicial) throw err;
+    if (pedido !== historicoPedido) return false;
     historicoTabela.replaceChildren();
     // O total é do histórico que acabou de sair da tela: mantê-lo anunciaria N
     // sorteios acima de uma tabela vazia.
@@ -369,11 +373,16 @@ async function carregarHistorico({ carregamentoInicial = false } = {}) {
     historicoErro.hidden = false;
     return false;
   } finally {
-    btnAtualizar.disabled = false;
-    btnAtualizar.removeAttribute('aria-busy');
-    historicoPanel.removeAttribute('aria-busy');
+    // Só a carga vigente devolve a tela ao estado ocioso: a atrasada
+    // reabilitaria o botão no meio da carga que a substituiu.
+    if (pedido === historicoPedido) {
+      btnAtualizar.disabled = false;
+      btnAtualizar.removeAttribute('aria-busy');
+      historicoPanel.removeAttribute('aria-busy');
+    }
   }
 
+  if (pedido !== historicoPedido) return false;
   const lista = sorteios || [];
   desenhar(lista);
   const processos = lista.reduce((soma, s) => soma + (Number(s.processos) || 0), 0);
@@ -632,8 +641,21 @@ function processosParaDocx(processos) {
   if (!COL.docx.agrupar) return processos;
   return [...processos].sort((a, b) => {
     const grupo = String(a.destino).localeCompare(String(b.destino), 'pt-BR', { numeric: true });
-    return grupo || ((Number(a.ordem) || 0) - (Number(b.ordem) || 0));
+    if (grupo) return grupo;
+    const ordem = ordemParaDocx(a) - ordemParaDocx(b);
+    if (ordem) return ordem;
+    return String(a.num_processo).localeCompare(String(b.num_processo));
   });
+}
+
+// Linha sem ordem vai para o FIM do seu grupo, com o número do processo como
+// desempate — o mesmo critério do `order by 1 nulls last, 2` da RPC, que é o
+// que a tela e o card já mostram. `Number(null) || 0` a mandaria para a FRENTE
+// das linhas sorteadas, e só a ata do Conselho sairia numa ordem própria.
+function ordemParaDocx(processo) {
+  // `Number(null)` é 0, e não NaN: o nulo precisa sair antes da conversão.
+  const ordem = processo.ordem == null ? NaN : Number(processo.ordem);
+  return Number.isFinite(ordem) ? ordem : Infinity;
 }
 
 // A largura que sobra entre as margens do DOCX_SECAO, em twips. É a régua do
