@@ -298,6 +298,31 @@ async function api(caminho, opcoes = {}) {
   throw Object.assign(new Error(detalhe || `HTTP ${resp.status}`), { status: resp.status });
 }
 
+const ORGAOS_CONHECIDOS = new Set(['CJ', 'CREG']);
+
+async function buscarOrgaosAutorizados() {
+  const linhas = await api('rpc/orgaos_autorizados', {
+    method: 'POST',
+    body: '{}'
+  });
+  return new Set((linhas || [])
+    .map(linha => linha.orgao)
+    .filter(orgao => ORGAOS_CONHECIDOS.has(orgao)));
+}
+
+function aplicarVisibilidadePorOrgao(orgaos, raiz = document) {
+  raiz.querySelectorAll('[data-orgao]').forEach(elemento => {
+    elemento.hidden = !orgaos.has(elemento.dataset.orgao);
+  });
+}
+
+function erroSemPermissao() {
+  return Object.assign(
+    new Error('Seu usuário não possui acesso liberado. Procure o responsável pela manutenção.'),
+    { status: 403, semPermissao: true }
+  );
+}
+
 // Liga o formulário de login padrão da página. Chama aoEntrar() quando der certo.
 // Depende dos ids loginScreen/loginForm/loginEmail/loginSenha/loginErro/btnEntrar/btnSair.
 function ligarLogin(aoEntrar) {

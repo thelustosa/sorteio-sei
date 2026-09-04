@@ -58,6 +58,7 @@ class Node {
   closest(selector) { return this.matches(selector) ? this : this.parentNode?.closest(selector) || null; }
   matches(selector) {
     if (selector.startsWith('.')) return this.classList.contains(selector.slice(1));
+    if (selector === '[data-orgao]') return Object.hasOwn(this.dataset, 'orgao');
     if (selector === '[data-login-only]') return Object.hasOwn(this.dataset, 'loginOnly');
     if (selector === '[data-export-format]') return Object.hasOwn(this.dataset, 'exportFormat');
     if (selector === '[role="menuitem"]') return this.role === 'menuitem';
@@ -129,7 +130,7 @@ class Document {
 const wait = () => new Promise(resolve => setImmediate(resolve));
 const source = file => readFileSync(new URL(`../assets/js/${file}`, import.meta.url), 'utf8');
 
-function supabaseApp(fetch, itensIniciais = {}) {
+function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null) {
   const document = new Document();
   const window = { addEventListener() {} };
   const navigator = {};
@@ -144,12 +145,18 @@ function supabaseApp(fetch, itensIniciais = {}) {
     setItem(chave, valor) { storage.set(chave, String(valor)); },
     removeItem(chave) { storage.delete(chave); }
   };
-  const app = new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'fetch',
-    `${source('supabase.js')}\nreturn {
+  const codigo = apiSubstituta
+    ? `${source('supabase.js').replace('async function api(', 'async function apiOriginal(')}\nconst api = apiSubstituta;`
+    : source('supabase.js');
+  const app = new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'fetch', 'apiSubstituta',
+    `${codigo}\nreturn {
       autenticar, salvarSessao, restaurarSessao, encerrarSessao, revogarSessaoAtual, sair, api, ligarLogin,
+      buscarOrgaosAutorizados: typeof buscarOrgaosAutorizados === 'function' ? buscarOrgaosAutorizados : undefined,
+      aplicarVisibilidadePorOrgao: typeof aplicarVisibilidadePorOrgao === 'function' ? aplicarVisibilidadePorOrgao : undefined,
+      erroSemPermissao: typeof erroSemPermissao === 'function' ? erroSemPermissao : undefined,
       CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento,
       estadoSessao: () => ({ accessToken, refreshToken })
-    };`)(document, window, navigator, location, sessionStorage, fetch);
+    };`)(document, window, navigator, location, sessionStorage, fetch, apiSubstituta);
   return { ...app, document, navegacoes, storage };
 }
 
@@ -382,6 +389,66 @@ test('autenticação envia credenciais e devolve o par de tokens', async () => {
   assert.deepEqual(JSON.parse(requisicao.options.body), {
     email: 'servidora@example.org', password: 'senha'
   });
+});
+
+test('consulta permissões no banco e aceita somente CJ e CREG sem duplicar', async () => {
+  const pedidos = [];
+  const page = supabaseApp(async () => {}, {}, async (caminho, opcoes) => {
+    pedidos.push([caminho, opcoes]);
+    return [{ orgao: 'CREG' }, { orgao: 'CJ' }, { orgao: 'CREG' }, { orgao: 'X' }];
+  });
+
+  assert.equal(typeof page.buscarOrgaosAutorizados, 'function');
+  assert.deepEqual([...await page.buscarOrgaosAutorizados()].sort(), ['CJ', 'CREG']);
+  assert.equal(pedidos[0][0], 'rpc/orgaos_autorizados');
+  assert.equal(pedidos[0][1].method, 'POST');
+  assert.equal(pedidos[0][1].body, '{}');
+});
+
+test('consulta de permissões vazia nega todos os órgãos', async () => {
+  const page = supabaseApp(async () => {}, {}, async () => []);
+
+  assert.equal(typeof page.buscarOrgaosAutorizados, 'function');
+  assert.deepEqual([...await page.buscarOrgaosAutorizados()], []);
+});
+
+test('falha ao consultar permissões é propagada', async () => {
+  const falha = new Error('rede indisponível');
+  const page = supabaseApp(async () => {}, {}, async () => { throw falha; });
+
+  assert.equal(typeof page.buscarOrgaosAutorizados, 'function');
+  await assert.rejects(() => page.buscarOrgaosAutorizados(), falha);
+});
+
+test('visibilidade por permissões oculta somente os controles não autorizados', () => {
+  const page = supabaseApp(async () => {});
+  assert.equal(typeof page.aplicarVisibilidadePorOrgao, 'function');
+  const controleCreg = page.document.createElement('button');
+  controleCreg.dataset.orgao = 'CREG';
+  const controleCj = page.document.createElement('button');
+  controleCj.dataset.orgao = 'CJ';
+  const controleSemOrgao = page.document.createElement('button');
+  page.document.body.append(controleCreg, controleCj, controleSemOrgao);
+
+  page.aplicarVisibilidadePorOrgao(new Set(['CREG']), page.document);
+  assert.equal(controleCreg.hidden, false);
+  assert.equal(controleCj.hidden, true);
+  assert.equal(controleSemOrgao.hidden, false);
+
+  page.aplicarVisibilidadePorOrgao(new Set(['CJ', 'CREG']), page.document);
+  assert.equal(controleCreg.hidden, false);
+  assert.equal(controleCj.hidden, false);
+});
+
+test('erro sem permissão é identificado para bloquear usuário sem órgãos', () => {
+  const page = supabaseApp(async () => {});
+
+  assert.equal(typeof page.erroSemPermissao, 'function');
+  const erro = page.erroSemPermissao();
+
+  assert.equal(erro.status, 403);
+  assert.equal(erro.semPermissao, true);
+  assert.match(erro.message, /não possui acesso liberado/i);
 });
 
 test('401 renova a sessão, conserva a tela e repete a chamada', async () => {
