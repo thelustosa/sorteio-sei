@@ -79,6 +79,30 @@ function inicializarSorteio() {
   }
   modeSelector.hidden = false;
   modeSelectorTitle.focus();
+  avisarPendenciasDeJulgamento();
+}
+
+// Mesmo filtro que julgados.js/julgados-creg.js usam pra achar o que falta
+// votar/status — aqui só a contagem importa, então pede só o id. Roda em
+// paralelo com o resto da tela, sem atrasar nada: se falhar, o card de
+// "Registrar dados faltantes" simplesmente fica sem o aviso.
+async function avisarPendenciasDeJulgamento() {
+  const filtro = 'select=id&or=(voto.is.null,status.is.null)';
+  let cj, creg;
+  try {
+    [cj, creg] = await Promise.all([api(`julgados_cj?${filtro}`), api(`julgados_creg?${filtro}`)]);
+  } catch (_) {
+    return;
+  }
+  const total = (cj?.length || 0) + (creg?.length || 0);
+  if (total === 0) return;
+
+  const card = document.getElementById('cardRegistrarPendencias');
+  const badge = document.getElementById('pendenciasBadge');
+  card.classList.add('tem-pendencia');
+  badge.textContent = `${total} ${total === 1 ? 'pendente' : 'pendentes'}`;
+  badge.setAttribute('aria-label', `${total} ${total === 1 ? 'sessão aguardando' : 'sessões aguardando'} voto e status`);
+  badge.hidden = false;
 }
 
 btnCreg.addEventListener('click', () => {
