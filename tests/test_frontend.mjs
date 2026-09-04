@@ -160,6 +160,46 @@ function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null) {
   return { ...app, document, navegacoes, storage };
 }
 
+function paginaServidaComBundles(fetch) {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const scripts = [...html.matchAll(/<script defer src="(assets\/js\/(?:supabase|bootstrap)\.min\.js)\?v=[^"]+"><\/script>/g)]
+    .map(([, caminho]) => caminho);
+  assert.deepEqual(scripts, [
+    'assets/js/supabase.min.js',
+    'assets/js/bootstrap.min.js'
+  ], 'index.html deve servir supabase antes do bootstrap');
+
+  const document = new Document();
+  document.body.dataset.page = 'acervo-cj';
+  const sessionLoading = document.add('sessionLoading', 'div');
+  sessionLoading.hidden = true;
+  document.add('loginScreen', 'div');
+  document.add('loginForm', 'form');
+  document.add('loginEmail', 'input');
+  document.add('loginSenha', 'input');
+  document.add('loginErro', 'div');
+  document.add('btnEntrar', 'button');
+  document.add('btnSair', 'button');
+  const controleCj = document.createElement('button');
+  controleCj.dataset.orgao = 'CJ';
+  const controleCreg = document.createElement('button');
+  controleCreg.dataset.orgao = 'CREG';
+  document.body.append(controleCj, controleCreg);
+
+  const navegacoes = [];
+  const app = new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'fetch',
+    `${scripts.map(caminho => readFileSync(new URL(`../${caminho}`, import.meta.url), 'utf8')).join('\n')}\nreturn {
+      buscarOrgaosAutorizados: typeof buscarOrgaosAutorizados === 'function' ? buscarOrgaosAutorizados : undefined,
+      aplicarVisibilidadePorOrgao: typeof aplicarVisibilidadePorOrgao === 'function' ? aplicarVisibilidadePorOrgao : undefined,
+      resolverDestinoPermitido: typeof resolverDestinoPermitido === 'function' ? resolverDestinoPermitido : undefined,
+      carregarPaginaAutenticada
+    };`) (
+    document, { inicializarAcervo() {} }, {}, { replace(destino) { navegacoes.push(destino); } },
+    { getItem() { return null; }, setItem() {}, removeItem() {} }, fetch);
+
+  return { app, controleCj, controleCreg, document, navegacoes };
+}
+
 // O de-para das cadeiras mora no supabase.js, que toda página carrega antes do
 // seu próprio script. As telas o enxergam como global; aqui ele é injetado, e
 // vem do arquivo de verdade para que uma divergência apareça como falha.
@@ -449,6 +489,28 @@ test('erro sem permissão é identificado para bloquear usuário sem órgãos', 
   assert.equal(erro.status, 403);
   assert.equal(erro.semPermissao, true);
   assert.match(erro.message, /não possui acesso liberado/i);
+});
+
+test('HTML servido executa os bundles minificados de autorização por órgão', async () => {
+  const requisicoes = [];
+  const page = paginaServidaComBundles(async (url, options) => {
+    requisicoes.push({ url, options });
+    return { ok: true, status: 200, json: async () => [{ orgao: 'CREG' }] };
+  });
+
+  assert.equal(typeof page.app.buscarOrgaosAutorizados, 'function');
+  assert.deepEqual([...await page.app.buscarOrgaosAutorizados()], ['CREG']);
+  assert.match(requisicoes[0].url, /\/rpc\/orgaos_autorizados$/);
+  assert.equal(typeof page.app.aplicarVisibilidadePorOrgao, 'function');
+  page.app.aplicarVisibilidadePorOrgao(new Set(['CREG']));
+  assert.equal(page.controleCj.hidden, true);
+  assert.equal(page.controleCreg.hidden, false);
+  assert.equal(page.app.resolverDestinoPermitido('acervo-cj', new Set(['CREG'])), './acervo-creg.html');
+
+  await page.app.carregarPaginaAutenticada();
+
+  assert.deepEqual(page.navegacoes, ['./acervo-creg.html']);
+  assert.equal(page.document.head.children.length, 0, 'o bundle proibido não pode ser carregado');
 });
 
 test('401 renova a sessão, conserva a tela e repete a chamada', async () => {
