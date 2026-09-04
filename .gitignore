@@ -25,3 +25,6 @@ __pycache__/
 
 # Cache do pytest
 .pytest_cache/
+
+# Configuração pessoal do editor
+.vscode/
