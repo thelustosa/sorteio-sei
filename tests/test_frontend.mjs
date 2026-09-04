@@ -480,6 +480,24 @@ test('visibilidade por permissões oculta somente os controles não autorizados'
   assert.equal(controleCj.hidden, false);
 });
 
+test('grupo com um colegiado só vira coluna única para centralizar o botão', () => {
+  const page = supabaseApp(async () => {});
+  const grupo = page.document.createElement('div');
+  grupo.className = 'buttons-wrapper';
+  const botaoCreg = page.document.createElement('button');
+  botaoCreg.dataset.orgao = 'CREG';
+  const botaoCj = page.document.createElement('button');
+  botaoCj.dataset.orgao = 'CJ';
+  grupo.append(botaoCreg, botaoCj);
+  page.document.body.append(grupo);
+
+  page.aplicarVisibilidadePorOrgao(new Set(['CREG']), page.document);
+  assert.equal(grupo.classList.contains('single-choice'), true);
+
+  page.aplicarVisibilidadePorOrgao(new Set(['CJ', 'CREG']), page.document);
+  assert.equal(grupo.classList.contains('single-choice'), false);
+});
+
 test('erro sem permissão é identificado para bloquear usuário sem órgãos', () => {
   const page = supabaseApp(async () => {});
 
