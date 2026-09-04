@@ -720,11 +720,23 @@ test('move o foco para a lista após o login', async () => {
 // aparecem é a função resumo_acervo_cj. Estes testes fixam esse contrato e os
 // três estados da tela — matriz, vazio e falha.
 
-function bootstrapPage(inicializar, pagina = 'acervo-cj') {
+function bootstrapPage(inicializar, pagina = 'acervo-cj', {
+  buscarOrgaos = async () => new Set([pagina.endsWith('creg') ? 'CREG' : 'CJ']),
+  aplicarVisibilidade = () => {},
+  erroPermissao = () => Object.assign(new Error('sem permissão'), { semPermissao: true }),
+  encerrar = () => {},
+  carregar = async () => {},
+  location = { replace() {} }
+} = {}) {
   const document = new Document();
   document.body.dataset.page = pagina;
   const sessionLoading = document.add('sessionLoading', 'div');
   sessionLoading.hidden = true;
+  const loginScreen = document.add('loginScreen', 'div');
+  loginScreen.hidden = true;
+  const loginErro = document.add('loginErro', 'div');
+  const btnSair = document.add('btnSair', 'button');
+  btnSair.hidden = false;
   let aoEntrar;
   // As chaves são os data-page do <body>, os mesmos de PAGINAS no bootstrap.js.
   const inicializadores = {
@@ -737,14 +749,134 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj') {
     'historico-creg': 'inicializarHistorico'
   };
 
-  new Function('document', 'window', 'ASSET_VERSION', 'carregarScript',
-    'criarIndicadorCarregamento', 'ligarLogin', source('bootstrap.js'))(
-    document, { [inicializadores[pagina]]: inicializar }, 'teste', async () => {},
+  const app = new Function('document', 'window', 'location', 'ASSET_VERSION', 'carregarScript',
+    'criarIndicadorCarregamento', 'ligarLogin', 'buscarOrgaosAutorizados',
+    'aplicarVisibilidadePorOrgao', 'erroSemPermissao', 'encerrarSessao',
+    `${source('bootstrap.js')}\nreturn {
+      resolverDestinoPermitido: typeof resolverDestinoPermitido === 'function' ? resolverDestinoPermitido : undefined,
+      carregarPaginaAutenticada
+    };`)(
+    document, { [inicializadores[pagina]]: inicializar }, location, 'teste', carregar,
     texto => { const estado = document.createElement('div'); estado.textContent = texto; return estado; },
-    callback => { aoEntrar = callback; });
+    callback => { aoEntrar = callback; }, buscarOrgaos, aplicarVisibilidade, erroPermissao, encerrar);
 
-  return { sessionLoading, iniciar: () => aoEntrar() };
+  return { ...app, sessionLoading, loginScreen, loginErro, btnSair, iniciar: () => aoEntrar() };
 }
+
+test('redireciona páginas de órgão para o equivalente permitido', () => {
+  const page = bootstrapPage(async () => {});
+
+  assert.equal(typeof page.resolverDestinoPermitido, 'function');
+  assert.equal(page.resolverDestinoPermitido('acervo-cj', new Set(['CREG'])), './acervo-creg.html');
+  assert.equal(page.resolverDestinoPermitido('julgados-creg', new Set(['CJ'])), './julgados-cj.html');
+  assert.equal(page.resolverDestinoPermitido('historico-cj', new Set(['CREG'])), './historico-creg.html');
+  assert.equal(page.resolverDestinoPermitido('acervo-cj', new Set(['CJ', 'CREG'])), null);
+  assert.equal(page.resolverDestinoPermitido('sorteio', new Set(['CJ'])), null);
+});
+
+test('autoriza antes de carregar o módulo da página', async () => {
+  let responder;
+  let scriptsCarregados = 0;
+  const page = bootstrapPage(async () => {}, 'acervo-cj', {
+    buscarOrgaos: () => new Promise(resolve => { responder = resolve; }),
+    carregar: async () => { scriptsCarregados++; }
+  });
+
+  const carregamento = page.iniciar();
+  await wait();
+  assert.equal(typeof responder, 'function', 'o gate deve iniciar a consulta de permissões');
+  assert.equal(scriptsCarregados, 0, 'não pode carregar módulo antes da autorização');
+
+  responder(new Set(['CJ']));
+  await carregamento;
+  assert.equal(scriptsCarregados, 1);
+});
+
+test('redireciona URL proibida sem carregar seu módulo', async () => {
+  const destinos = [];
+  let scriptsCarregados = 0;
+  const page = bootstrapPage(async () => {}, 'historico-cj', {
+    buscarOrgaos: async () => new Set(['CREG']),
+    carregar: async () => { scriptsCarregados++; },
+    location: { replace(destino) { destinos.push(destino); } }
+  });
+
+  await page.iniciar();
+
+  assert.deepEqual(destinos, ['./historico-creg.html']);
+  assert.equal(scriptsCarregados, 0);
+});
+
+test('nega usuário sem órgãos antes de carregar o módulo', async () => {
+  let encerrou = 0;
+  let scriptsCarregados = 0;
+  const page = bootstrapPage(async () => {}, 'acervo-cj', {
+    buscarOrgaos: async () => new Set(),
+    encerrar: () => { encerrou++; },
+    carregar: async () => { scriptsCarregados++; }
+  });
+
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    await page.iniciar();
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(encerrou, 1);
+  assert.equal(page.loginScreen.hidden, false);
+  assert.equal(page.btnSair.hidden, true);
+  assert.match(page.loginErro.textContent, /sem permissão/i);
+  assert.equal(scriptsCarregados, 0);
+});
+
+test('falha ao consultar permissões preserva a sessão e permite tentar novamente', async () => {
+  let tentativas = 0;
+  let encerrou = 0;
+  let scriptsCarregados = 0;
+  const page = bootstrapPage(async () => {}, 'acervo-cj', {
+    buscarOrgaos: async () => {
+      tentativas++;
+      if (tentativas === 1) throw new Error('rede indisponível');
+      return new Set(['CJ']);
+    },
+    encerrar: () => { encerrou++; },
+    carregar: async () => { scriptsCarregados++; }
+  });
+
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    await page.iniciar();
+    assert.equal(page.sessionLoading.children.length, 1,
+      'falha de rede deve manter o estado de carregamento com retentativa');
+    const tentarNovamente = page.sessionLoading.children[0].children[1];
+    assert.equal(tentarNovamente.textContent, 'Tentar novamente');
+    tentarNovamente.click();
+    await wait();
+    await wait();
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(encerrou, 0);
+  assert.equal(page.loginScreen.hidden, true);
+  assert.equal(page.btnSair.hidden, false);
+  assert.equal(scriptsCarregados, 1);
+});
+
+test('a navegação por órgão marca os oito controles relevantes', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const controles = [...html.matchAll(/<(?:button|a)\b[^>]*(?:id="btn(?:Creg|Cj)"|href="\.\/(?:acervo|historico|julgados)-(?:cj|creg)\.html")[^>]*>/g)]
+    .map(([controle]) => controle);
+  const orgaos = controles.map(controle => controle.match(/data-orgao="(CJ|CREG)"/)?.[1]);
+
+  assert.equal(controles.length, 8);
+  assert.equal(orgaos.filter(orgao => orgao === 'CJ').length, 4);
+  assert.equal(orgaos.filter(orgao => orgao === 'CREG').length, 4);
+  assert.equal(orgaos.every(Boolean), true, 'nenhum destino CJ/CREG pode ficar sem data-orgao');
+});
 
 test('bootstrap mantém o loading geral até a inicialização assíncrona terminar', async () => {
   let concluir;
