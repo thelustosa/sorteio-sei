@@ -143,6 +143,24 @@ def terezinha_so_opera_tabelas_cj(cur):
 
 
 @teste
+def sem_acesso_nao_opera_nem_le_tabelas_protegidas(cur):
+    autenticar(cur, 'sem-acesso')
+    deve_negar(cur, """insert into public.acervo_cj
+                        (num_processo, relator, data_distribuicao, origem)
+                        values ('202600029009913', 'CJ1', current_date, 'sorteio')""")
+
+    autenticar(cur, 'sem-acesso')
+    deve_negar(cur, """insert into public.acervo_creg
+                        (num_processo, unidade, data_distribuicao, origem)
+                        values ('202600029009914', 'CREG1', current_date, 'sorteio')""")
+
+    for tabela in ['julgados_cj', 'julgados_creg']:
+        autenticar(cur, 'sem-acesso')
+        cur.execute(f'select num_processo from public.{tabela}')
+        assert cur.fetchall() == []
+
+
+@teste
 def lucas_e_sec_agr_operam_tabelas_dos_dois_orgaos(cur):
     for indice, nome in enumerate(['lucas', 'sec-agr'], start=5):
         autenticar(cur, nome)
@@ -158,6 +176,18 @@ def lucas_e_sec_agr_operam_tabelas_dos_dois_orgaos(cur):
                        values (%s, 'CREG1', current_date, 'sorteio')""",
                     (f'2026000290099{indice + 2:02d}',))
         cur.connection.rollback()
+
+
+@teste
+def lucas_e_sec_agr_leem_julgados_dos_dois_orgaos(cur):
+    for nome in ['lucas', 'sec-agr']:
+        for tabela, esperado in [
+            ('julgados_cj', [('202600029009911',)]),
+            ('julgados_creg', [('202600029009912',)]),
+        ]:
+            autenticar(cur, nome)
+            cur.execute(f'select num_processo from public.{tabela} order by num_processo')
+            assert cur.fetchall() == esperado
 
 
 RPCS = {
@@ -185,6 +215,7 @@ def rpcs_so_aceitam_o_orgao_autorizado(cur):
         'terezinha': ['CJ'],
         'lucas': ['CJ', 'CREG'],
         'sec-agr': ['CJ', 'CREG'],
+        'sem-acesso': [],
     }.items():
         for orgao, rpcs in RPCS.items():
             for rpc in rpcs:
