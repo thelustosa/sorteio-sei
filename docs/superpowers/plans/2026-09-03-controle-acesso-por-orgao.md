@@ -745,7 +745,10 @@ script de orquestração, para não reconstruir ou truncar o SQL:
 
 ```javascript
 const arquivo = await tools.exec_command({
-  cmd: 'Get-Content -Raw supabase\\migrations\\20260903160000_controle_acesso_por_orgao.sql',
+  // -Encoding UTF8 é obrigatório: sem ele o PowerShell 5.1 lê pelo codepage
+  // ANSI e o arquivo chega ao banco com todo acento corrompido — foi o que
+  // aconteceu aqui, e a migration 20260904131343 teve de recriar as 8 RPCs.
+  cmd: 'Get-Content -Raw -Encoding UTF8 supabase\\migrations\\20260903160000_controle_acesso_por_orgao.sql',
   workdir: 'C:\\Users\\leonardo.amichi\\Documents\\sorteio-sei-auth'
 });
 await tools.mcp__codex_apps__supabase_apply_migration({

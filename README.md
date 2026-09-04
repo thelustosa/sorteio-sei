@@ -134,6 +134,22 @@ eram iterações que os arquivos de hoje consolidam, e saíram. O ledger de ante
 está inteiro, com o SQL que rodou, em
 `supabase_migrations.ledger_backup_20260902`.
 
+O SQL tem de chegar ao banco em UTF-8. No Windows PowerShell 5.1 o
+`Get-Content -Raw` lê pelo codepage ANSI do sistema, não pelo do arquivo: um
+`.sql` com acento vira mojibake silencioso — o SQL roda, mas os literais entram
+corrompidos. Foi assim que a 20260904110552 gravou a lista branca de votos do
+CREG com "Aprovação" e "Extinção" corrompidos, e a 20260904131343 teve de
+recriar as oito RPCs. Leia sempre com `Get-Content -Raw -Encoding UTF8` (ou
+`node -e "process.stdout.write(require('fs').readFileSync(f,'utf8'))"`), e
+depois de aplicar confira que nada acentuado se quebrou:
+
+```sql
+select p.proname
+  from pg_proc p
+ where p.pronamespace = 'public'::regnamespace
+   and p.prosrc ~ 'Ã[©£¡§ºª´¨]|â€';   -- tem de vir vazio
+```
+
 Documentação: este README, mais um documento por colegiado —
 [`FLUXO-CJ.md`](FLUXO-CJ.md), o fluxo completo da Câmara de Julgamento, do
 sorteio ao julgamento registrado, com as regras, as tabelas, a API e o
