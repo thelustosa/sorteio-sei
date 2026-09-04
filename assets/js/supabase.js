@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '8d9e9b0641';
+const ASSET_VERSION = '7e2a0c3355';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -305,7 +305,13 @@ async function buscarOrgaosAutorizados() {
     method: 'POST',
     body: '{}'
   });
-  return new Set((linhas || [])
+  // Um 200 com corpo ilegível vira null em api(). Sem esta checagem o conjunto
+  // vazio resultante seria lido como "sem permissão", e um usuário autorizado
+  // acabaria deslogado em vez de ver o erro com "Tentar novamente".
+  if (!Array.isArray(linhas)) {
+    throw new Error('Não foi possível verificar suas permissões de acesso.');
+  }
+  return new Set(linhas
     .map(linha => linha.orgao)
     .filter(orgao => ORGAOS_CONHECIDOS.has(orgao)));
 }

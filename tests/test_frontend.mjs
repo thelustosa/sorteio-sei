@@ -454,6 +454,17 @@ test('consulta de permissões vazia nega todos os órgãos', async () => {
   assert.deepEqual([...await page.buscarOrgaosAutorizados()], []);
 });
 
+test('resposta ilegível na consulta de permissões falha em vez de negar acesso', async () => {
+  // api() devolve null quando o corpo de um 200 não é JSON. Tratar isso como
+  // conjunto vazio deslogaria um usuário autorizado por uma falha de
+  // transporte; o erro leva à tela com "Tentar novamente".
+  const page = supabaseApp(async () => {}, {}, async () => null);
+
+  assert.equal(typeof page.buscarOrgaosAutorizados, 'function');
+  await assert.rejects(() => page.buscarOrgaosAutorizados(),
+    /não foi possível verificar suas permissões/i);
+});
+
 test('falha ao consultar permissões é propagada', async () => {
   const falha = new Error('rede indisponível');
   const page = supabaseApp(async () => {}, {}, async () => { throw falha; });
@@ -840,7 +851,7 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
   buscarOrgaos = async () => new Set([pagina.endsWith('creg') ? 'CREG' : 'CJ']),
   aplicarVisibilidade = () => {},
   erroPermissao = () => Object.assign(new Error('sem permissão'), { semPermissao: true }),
-  encerrar = () => {},
+  encerrarSessaoNoServidor = async () => {},
   carregar = async () => {},
   location = { replace() {} }
 } = {}) {
@@ -867,14 +878,15 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
 
   const app = new Function('document', 'window', 'location', 'ASSET_VERSION', 'carregarScript',
     'criarIndicadorCarregamento', 'ligarLogin', 'buscarOrgaosAutorizados',
-    'aplicarVisibilidadePorOrgao', 'erroSemPermissao', 'encerrarSessao',
+    'aplicarVisibilidadePorOrgao', 'erroSemPermissao', 'sair',
     `${source('bootstrap.js')}\nreturn {
       resolverDestinoPermitido: typeof resolverDestinoPermitido === 'function' ? resolverDestinoPermitido : undefined,
       carregarPaginaAutenticada
     };`)(
     document, { [inicializadores[pagina]]: inicializar }, location, 'teste', carregar,
     texto => { const estado = document.createElement('div'); estado.textContent = texto; return estado; },
-    callback => { aoEntrar = callback; }, buscarOrgaos, aplicarVisibilidade, erroPermissao, encerrar);
+    callback => { aoEntrar = callback; }, buscarOrgaos, aplicarVisibilidade, erroPermissao,
+    encerrarSessaoNoServidor);
 
   return { ...app, sessionLoading, loginScreen, loginErro, btnSair, iniciar: () => aoEntrar() };
 }
@@ -923,12 +935,12 @@ test('redireciona URL proibida sem carregar seu módulo', async () => {
   assert.equal(scriptsCarregados, 0);
 });
 
-test('nega usuário sem órgãos antes de carregar o módulo', async () => {
+test('nega usuário sem órgãos, revoga a sessão e não carrega o módulo', async () => {
   let encerrou = 0;
   let scriptsCarregados = 0;
   const page = bootstrapPage(async () => {}, 'acervo-cj', {
     buscarOrgaos: async () => new Set(),
-    encerrar: () => { encerrou++; },
+    encerrarSessaoNoServidor: async () => { encerrou++; },
     carregar: async () => { scriptsCarregados++; }
   });
 
@@ -940,7 +952,7 @@ test('nega usuário sem órgãos antes de carregar o módulo', async () => {
     console.error = originalConsoleError;
   }
 
-  assert.equal(encerrou, 1);
+  assert.equal(encerrou, 1, 'a negativa deve revogar a sessão no servidor, não só apagá-la da aba');
   assert.equal(page.loginScreen.hidden, false);
   assert.equal(page.btnSair.hidden, true);
   assert.match(page.loginErro.textContent, /sem permissão/i);
@@ -957,7 +969,7 @@ test('falha ao consultar permissões preserva a sessão e permite tentar novamen
       if (tentativas === 1) throw new Error('rede indisponível');
       return new Set(['CJ']);
     },
-    encerrar: () => { encerrou++; },
+    encerrarSessaoNoServidor: async () => { encerrou++; },
     carregar: async () => { scriptsCarregados++; }
   });
 

@@ -86,7 +86,11 @@ async function carregarPaginaAutenticada() {
   } catch (err) {
     console.error(err);
     if (err.semPermissao) {
-      encerrarSessao();
+      // sair() revoga o refresh token no servidor antes de limpar a aba; com
+      // encerrarSessao() sozinho, o token recém-emitido no login seguiria
+      // válido até expirar. Falha de rede na revogação não muda a tela: o
+      // finally de sair() já descartou as credenciais desta aba.
+      await sair().catch(() => {});
       document.getElementById('loginScreen').hidden = false;
       document.getElementById('btnSair').hidden = true;
       document.getElementById('loginErro').textContent = err.message;
