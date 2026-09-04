@@ -58,6 +58,7 @@ class Node {
   closest(selector) { return this.matches(selector) ? this : this.parentNode?.closest(selector) || null; }
   matches(selector) {
     if (selector.startsWith('.')) return this.classList.contains(selector.slice(1));
+    if (selector === '[data-orgao]') return Object.hasOwn(this.dataset, 'orgao');
     if (selector === '[data-login-only]') return Object.hasOwn(this.dataset, 'loginOnly');
     if (selector === '[data-export-format]') return Object.hasOwn(this.dataset, 'exportFormat');
     if (selector === '[role="menuitem"]') return this.role === 'menuitem';
@@ -129,7 +130,7 @@ class Document {
 const wait = () => new Promise(resolve => setImmediate(resolve));
 const source = file => readFileSync(new URL(`../assets/js/${file}`, import.meta.url), 'utf8');
 
-function supabaseApp(fetch, itensIniciais = {}) {
+function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null) {
   const document = new Document();
   const window = { addEventListener() {} };
   const navigator = {};
@@ -144,13 +145,59 @@ function supabaseApp(fetch, itensIniciais = {}) {
     setItem(chave, valor) { storage.set(chave, String(valor)); },
     removeItem(chave) { storage.delete(chave); }
   };
-  const app = new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'fetch',
-    `${source('supabase.js')}\nreturn {
+  const codigo = apiSubstituta
+    ? `${source('supabase.js').replace('async function api(', 'async function apiOriginal(')}\nconst api = apiSubstituta;`
+    : source('supabase.js');
+  const app = new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'fetch', 'apiSubstituta',
+    `${codigo}\nreturn {
       autenticar, salvarSessao, restaurarSessao, encerrarSessao, revogarSessaoAtual, sair, api, ligarLogin,
+      buscarOrgaosAutorizados: typeof buscarOrgaosAutorizados === 'function' ? buscarOrgaosAutorizados : undefined,
+      aplicarVisibilidadePorOrgao: typeof aplicarVisibilidadePorOrgao === 'function' ? aplicarVisibilidadePorOrgao : undefined,
+      erroSemPermissao: typeof erroSemPermissao === 'function' ? erroSemPermissao : undefined,
       CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento,
       estadoSessao: () => ({ accessToken, refreshToken })
-    };`)(document, window, navigator, location, sessionStorage, fetch);
+    };`)(document, window, navigator, location, sessionStorage, fetch, apiSubstituta);
   return { ...app, document, navegacoes, storage };
+}
+
+function paginaServidaComBundles(fetch) {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const scripts = [...html.matchAll(/<script defer src="(assets\/js\/(?:supabase|bootstrap)\.min\.js)\?v=[^"]+"><\/script>/g)]
+    .map(([, caminho]) => caminho);
+  assert.deepEqual(scripts, [
+    'assets/js/supabase.min.js',
+    'assets/js/bootstrap.min.js'
+  ], 'index.html deve servir supabase antes do bootstrap');
+
+  const document = new Document();
+  document.body.dataset.page = 'acervo-cj';
+  const sessionLoading = document.add('sessionLoading', 'div');
+  sessionLoading.hidden = true;
+  document.add('loginScreen', 'div');
+  document.add('loginForm', 'form');
+  document.add('loginEmail', 'input');
+  document.add('loginSenha', 'input');
+  document.add('loginErro', 'div');
+  document.add('btnEntrar', 'button');
+  document.add('btnSair', 'button');
+  const controleCj = document.createElement('button');
+  controleCj.dataset.orgao = 'CJ';
+  const controleCreg = document.createElement('button');
+  controleCreg.dataset.orgao = 'CREG';
+  document.body.append(controleCj, controleCreg);
+
+  const navegacoes = [];
+  const app = new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'fetch',
+    `${scripts.map(caminho => readFileSync(new URL(`../${caminho}`, import.meta.url), 'utf8')).join('\n')}\nreturn {
+      buscarOrgaosAutorizados: typeof buscarOrgaosAutorizados === 'function' ? buscarOrgaosAutorizados : undefined,
+      aplicarVisibilidadePorOrgao: typeof aplicarVisibilidadePorOrgao === 'function' ? aplicarVisibilidadePorOrgao : undefined,
+      resolverDestinoPermitido: typeof resolverDestinoPermitido === 'function' ? resolverDestinoPermitido : undefined,
+      carregarPaginaAutenticada
+    };`) (
+    document, { inicializarAcervo() {} }, {}, { replace(destino) { navegacoes.push(destino); } },
+    { getItem() { return null; }, setItem() {}, removeItem() {} }, fetch);
+
+  return { app, controleCj, controleCreg, document, navegacoes };
 }
 
 // O de-para das cadeiras mora no supabase.js, que toda página carrega antes do
@@ -384,6 +431,117 @@ test('autenticação envia credenciais e devolve o par de tokens', async () => {
   assert.deepEqual(JSON.parse(requisicao.options.body), {
     email: 'servidora@example.org', password: 'senha'
   });
+});
+
+test('consulta permissões no banco e aceita somente CJ e CREG sem duplicar', async () => {
+  const pedidos = [];
+  const page = supabaseApp(async () => {}, {}, async (caminho, opcoes) => {
+    pedidos.push([caminho, opcoes]);
+    return [{ orgao: 'CREG' }, { orgao: 'CJ' }, { orgao: 'CREG' }, { orgao: 'X' }];
+  });
+
+  assert.equal(typeof page.buscarOrgaosAutorizados, 'function');
+  assert.deepEqual([...await page.buscarOrgaosAutorizados()].sort(), ['CJ', 'CREG']);
+  assert.equal(pedidos[0][0], 'rpc/orgaos_autorizados');
+  assert.equal(pedidos[0][1].method, 'POST');
+  assert.equal(pedidos[0][1].body, '{}');
+});
+
+test('consulta de permissões vazia nega todos os órgãos', async () => {
+  const page = supabaseApp(async () => {}, {}, async () => []);
+
+  assert.equal(typeof page.buscarOrgaosAutorizados, 'function');
+  assert.deepEqual([...await page.buscarOrgaosAutorizados()], []);
+});
+
+test('resposta ilegível na consulta de permissões falha em vez de negar acesso', async () => {
+  // api() devolve null quando o corpo de um 200 não é JSON. Tratar isso como
+  // conjunto vazio deslogaria um usuário autorizado por uma falha de
+  // transporte; o erro leva à tela com "Tentar novamente".
+  const page = supabaseApp(async () => {}, {}, async () => null);
+
+  assert.equal(typeof page.buscarOrgaosAutorizados, 'function');
+  await assert.rejects(() => page.buscarOrgaosAutorizados(),
+    /não foi possível verificar suas permissões/i);
+});
+
+test('falha ao consultar permissões é propagada', async () => {
+  const falha = new Error('rede indisponível');
+  const page = supabaseApp(async () => {}, {}, async () => { throw falha; });
+
+  assert.equal(typeof page.buscarOrgaosAutorizados, 'function');
+  await assert.rejects(() => page.buscarOrgaosAutorizados(), falha);
+});
+
+test('visibilidade por permissões oculta somente os controles não autorizados', () => {
+  const page = supabaseApp(async () => {});
+  assert.equal(typeof page.aplicarVisibilidadePorOrgao, 'function');
+  const controleCreg = page.document.createElement('button');
+  controleCreg.dataset.orgao = 'CREG';
+  const controleCj = page.document.createElement('button');
+  controleCj.dataset.orgao = 'CJ';
+  const controleSemOrgao = page.document.createElement('button');
+  page.document.body.append(controleCreg, controleCj, controleSemOrgao);
+
+  page.aplicarVisibilidadePorOrgao(new Set(['CREG']), page.document);
+  assert.equal(controleCreg.hidden, false);
+  assert.equal(controleCj.hidden, true);
+  assert.equal(controleSemOrgao.hidden, false);
+
+  page.aplicarVisibilidadePorOrgao(new Set(['CJ', 'CREG']), page.document);
+  assert.equal(controleCreg.hidden, false);
+  assert.equal(controleCj.hidden, false);
+});
+
+test('grupo com um colegiado só vira coluna única para centralizar o botão', () => {
+  const page = supabaseApp(async () => {});
+  const grupo = page.document.createElement('div');
+  grupo.className = 'buttons-wrapper';
+  const botaoCreg = page.document.createElement('button');
+  botaoCreg.dataset.orgao = 'CREG';
+  const botaoCj = page.document.createElement('button');
+  botaoCj.dataset.orgao = 'CJ';
+  grupo.append(botaoCreg, botaoCj);
+  page.document.body.append(grupo);
+
+  page.aplicarVisibilidadePorOrgao(new Set(['CREG']), page.document);
+  assert.equal(grupo.classList.contains('single-choice'), true);
+
+  page.aplicarVisibilidadePorOrgao(new Set(['CJ', 'CREG']), page.document);
+  assert.equal(grupo.classList.contains('single-choice'), false);
+});
+
+test('erro sem permissão é identificado para bloquear usuário sem órgãos', () => {
+  const page = supabaseApp(async () => {});
+
+  assert.equal(typeof page.erroSemPermissao, 'function');
+  const erro = page.erroSemPermissao();
+
+  assert.equal(erro.status, 403);
+  assert.equal(erro.semPermissao, true);
+  assert.match(erro.message, /não possui acesso liberado/i);
+});
+
+test('HTML servido executa os bundles minificados de autorização por órgão', async () => {
+  const requisicoes = [];
+  const page = paginaServidaComBundles(async (url, options) => {
+    requisicoes.push({ url, options });
+    return { ok: true, status: 200, json: async () => [{ orgao: 'CREG' }] };
+  });
+
+  assert.equal(typeof page.app.buscarOrgaosAutorizados, 'function');
+  assert.deepEqual([...await page.app.buscarOrgaosAutorizados()], ['CREG']);
+  assert.match(requisicoes[0].url, /\/rpc\/orgaos_autorizados$/);
+  assert.equal(typeof page.app.aplicarVisibilidadePorOrgao, 'function');
+  page.app.aplicarVisibilidadePorOrgao(new Set(['CREG']));
+  assert.equal(page.controleCj.hidden, true);
+  assert.equal(page.controleCreg.hidden, false);
+  assert.equal(page.app.resolverDestinoPermitido('acervo-cj', new Set(['CREG'])), './acervo-creg.html');
+
+  await page.app.carregarPaginaAutenticada();
+
+  assert.deepEqual(page.navegacoes, ['./acervo-creg.html']);
+  assert.equal(page.document.head.children.length, 0, 'o bundle proibido não pode ser carregado');
 });
 
 test('401 renova a sessão, conserva a tela e repete a chamada', async () => {
@@ -689,11 +847,23 @@ test('move o foco para a lista após o login', async () => {
 // aparecem é a função resumo_acervo_cj. Estes testes fixam esse contrato e os
 // três estados da tela — matriz, vazio e falha.
 
-function bootstrapPage(inicializar, pagina = 'acervo-cj') {
+function bootstrapPage(inicializar, pagina = 'acervo-cj', {
+  buscarOrgaos = async () => new Set([pagina.endsWith('creg') ? 'CREG' : 'CJ']),
+  aplicarVisibilidade = () => {},
+  erroPermissao = () => Object.assign(new Error('sem permissão'), { semPermissao: true }),
+  encerrarSessaoNoServidor = async () => {},
+  carregar = async () => {},
+  location = { replace() {} }
+} = {}) {
   const document = new Document();
   document.body.dataset.page = pagina;
   const sessionLoading = document.add('sessionLoading', 'div');
   sessionLoading.hidden = true;
+  const loginScreen = document.add('loginScreen', 'div');
+  loginScreen.hidden = true;
+  const loginErro = document.add('loginErro', 'div');
+  const btnSair = document.add('btnSair', 'button');
+  btnSair.hidden = false;
   let aoEntrar;
   // As chaves são os data-page do <body>, os mesmos de PAGINAS no bootstrap.js.
   const inicializadores = {
@@ -706,14 +876,135 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj') {
     'historico-creg': 'inicializarHistorico'
   };
 
-  new Function('document', 'window', 'ASSET_VERSION', 'carregarScript',
-    'criarIndicadorCarregamento', 'ligarLogin', source('bootstrap.js'))(
-    document, { [inicializadores[pagina]]: inicializar }, 'teste', async () => {},
+  const app = new Function('document', 'window', 'location', 'ASSET_VERSION', 'carregarScript',
+    'criarIndicadorCarregamento', 'ligarLogin', 'buscarOrgaosAutorizados',
+    'aplicarVisibilidadePorOrgao', 'erroSemPermissao', 'sair',
+    `${source('bootstrap.js')}\nreturn {
+      resolverDestinoPermitido: typeof resolverDestinoPermitido === 'function' ? resolverDestinoPermitido : undefined,
+      carregarPaginaAutenticada
+    };`)(
+    document, { [inicializadores[pagina]]: inicializar }, location, 'teste', carregar,
     texto => { const estado = document.createElement('div'); estado.textContent = texto; return estado; },
-    callback => { aoEntrar = callback; });
+    callback => { aoEntrar = callback; }, buscarOrgaos, aplicarVisibilidade, erroPermissao,
+    encerrarSessaoNoServidor);
 
-  return { sessionLoading, iniciar: () => aoEntrar() };
+  return { ...app, sessionLoading, loginScreen, loginErro, btnSair, iniciar: () => aoEntrar() };
 }
+
+test('redireciona páginas de órgão para o equivalente permitido', () => {
+  const page = bootstrapPage(async () => {});
+
+  assert.equal(typeof page.resolverDestinoPermitido, 'function');
+  assert.equal(page.resolverDestinoPermitido('acervo-cj', new Set(['CREG'])), './acervo-creg.html');
+  assert.equal(page.resolverDestinoPermitido('julgados-creg', new Set(['CJ'])), './julgados-cj.html');
+  assert.equal(page.resolverDestinoPermitido('historico-cj', new Set(['CREG'])), './historico-creg.html');
+  assert.equal(page.resolverDestinoPermitido('acervo-cj', new Set(['CJ', 'CREG'])), null);
+  assert.equal(page.resolverDestinoPermitido('sorteio', new Set(['CJ'])), null);
+});
+
+test('autoriza antes de carregar o módulo da página', async () => {
+  let responder;
+  let scriptsCarregados = 0;
+  const page = bootstrapPage(async () => {}, 'acervo-cj', {
+    buscarOrgaos: () => new Promise(resolve => { responder = resolve; }),
+    carregar: async () => { scriptsCarregados++; }
+  });
+
+  const carregamento = page.iniciar();
+  await wait();
+  assert.equal(typeof responder, 'function', 'o gate deve iniciar a consulta de permissões');
+  assert.equal(scriptsCarregados, 0, 'não pode carregar módulo antes da autorização');
+
+  responder(new Set(['CJ']));
+  await carregamento;
+  assert.equal(scriptsCarregados, 1);
+});
+
+test('redireciona URL proibida sem carregar seu módulo', async () => {
+  const destinos = [];
+  let scriptsCarregados = 0;
+  const page = bootstrapPage(async () => {}, 'historico-cj', {
+    buscarOrgaos: async () => new Set(['CREG']),
+    carregar: async () => { scriptsCarregados++; },
+    location: { replace(destino) { destinos.push(destino); } }
+  });
+
+  await page.iniciar();
+
+  assert.deepEqual(destinos, ['./historico-creg.html']);
+  assert.equal(scriptsCarregados, 0);
+});
+
+test('nega usuário sem órgãos, revoga a sessão e não carrega o módulo', async () => {
+  let encerrou = 0;
+  let scriptsCarregados = 0;
+  const page = bootstrapPage(async () => {}, 'acervo-cj', {
+    buscarOrgaos: async () => new Set(),
+    encerrarSessaoNoServidor: async () => { encerrou++; },
+    carregar: async () => { scriptsCarregados++; }
+  });
+
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    await page.iniciar();
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(encerrou, 1, 'a negativa deve revogar a sessão no servidor, não só apagá-la da aba');
+  assert.equal(page.loginScreen.hidden, false);
+  assert.equal(page.btnSair.hidden, true);
+  assert.match(page.loginErro.textContent, /sem permissão/i);
+  assert.equal(scriptsCarregados, 0);
+});
+
+test('falha ao consultar permissões preserva a sessão e permite tentar novamente', async () => {
+  let tentativas = 0;
+  let encerrou = 0;
+  let scriptsCarregados = 0;
+  const page = bootstrapPage(async () => {}, 'acervo-cj', {
+    buscarOrgaos: async () => {
+      tentativas++;
+      if (tentativas === 1) throw new Error('rede indisponível');
+      return new Set(['CJ']);
+    },
+    encerrarSessaoNoServidor: async () => { encerrou++; },
+    carregar: async () => { scriptsCarregados++; }
+  });
+
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    await page.iniciar();
+    assert.equal(page.sessionLoading.children.length, 1,
+      'falha de rede deve manter o estado de carregamento com retentativa');
+    const tentarNovamente = page.sessionLoading.children[0].children[1];
+    assert.equal(tentarNovamente.textContent, 'Tentar novamente');
+    tentarNovamente.click();
+    await wait();
+    await wait();
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(encerrou, 0);
+  assert.equal(page.loginScreen.hidden, true);
+  assert.equal(page.btnSair.hidden, false);
+  assert.equal(scriptsCarregados, 1);
+});
+
+test('a navegação por órgão marca os oito controles relevantes', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const controles = [...html.matchAll(/<(?:button|a)\b[^>]*(?:id="btn(?:Creg|Cj)"|href="\.\/(?:acervo|historico|julgados)-(?:cj|creg)\.html")[^>]*>/g)]
+    .map(([controle]) => controle);
+  const orgaos = controles.map(controle => controle.match(/data-orgao="(CJ|CREG)"/)?.[1]);
+
+  assert.equal(controles.length, 8);
+  assert.equal(orgaos.filter(orgao => orgao === 'CJ').length, 4);
+  assert.equal(orgaos.filter(orgao => orgao === 'CREG').length, 4);
+  assert.equal(orgaos.every(Boolean), true, 'nenhum destino CJ/CREG pode ficar sem data-orgao');
+});
 
 test('bootstrap mantém o loading geral até a inicialização assíncrona terminar', async () => {
   let concluir;
