@@ -49,11 +49,23 @@ class Postgres:
 
         self.executar("""create role anon; create role authenticated; create role service_role;
                         create schema auth;
+                        create table auth.users (
+                          id uuid primary key,
+                          email text not null unique
+                        );
+                        insert into auth.users (id, email) values
+                          ('00000000-0000-0000-0000-000000000001', 'secretaria@goias.gov.br'),
+                          ('00000000-0000-0000-0000-000000000011', 'alberto.estrela@goias.gov.br'),
+                          ('00000000-0000-0000-0000-000000000012', 'terezinha.bueno@goias.gov.br'),
+                          ('00000000-0000-0000-0000-000000000013', 'lucas.coelho@goias.gov.br'),
+                          ('00000000-0000-0000-0000-000000000014', 'sec-agr@goias.gov.br'),
+                          ('00000000-0000-0000-0000-000000000015', 'sem-acesso@goias.gov.br');
                         create function auth.uid() returns uuid language sql stable
                         set search_path = '' as $$
                           select (nullif(current_setting('request.jwt.claims', true), '')::jsonb
                                   ->> 'sub')::uuid
                         $$;""")
+        self.executar('grant usage on schema auth to authenticated')
         return self
 
     def derrubar(self):

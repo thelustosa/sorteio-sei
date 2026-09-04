@@ -4,6 +4,8 @@
 const PAGINAS = {
   sorteio: { arquivo: 'index.min.js', iniciar: 'inicializarSorteio', texto: 'Preparando o sorteio…' },
   'julgados-cj': {
+    orgao: 'CJ',
+    familia: 'julgados',
     arquivo: 'julgados.min.js',
     iniciar: 'inicializarJulgados',
     texto: 'Preparando as pautas…',
@@ -12,24 +14,41 @@ const PAGINAS = {
   // A tela do Conselho é gêmea da da Câmara e mostra o mesmo indicador dentro
   // da própria lista, então carrega pelo mesmo caminho.
   'julgados-creg': {
+    orgao: 'CREG',
+    familia: 'julgados',
     arquivo: 'julgados-creg.min.js',
     iniciar: 'inicializarJulgadosCreg',
     texto: 'Preparando as sessões…',
     carregamentoLocal: true
   },
-  'acervo-cj': { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' },
+  'acervo-cj': { orgao: 'CJ', familia: 'acervo', arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' },
   // Mesmo script para os dois colegiados: quem escolhe o par de funções do
   // banco é o data-colegiado do <body> (ver COLEGIADOS em acervo.js).
-  'acervo-creg': { arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' },
-  'historico-cj': { arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Preparando o histórico…' },
+  'acervo-creg': { orgao: 'CREG', familia: 'acervo', arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' },
+  'historico-cj': { orgao: 'CJ', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Preparando o histórico…' },
   // Mesmo script para os dois colegiados, como o painel do acervo: quem escolhe
   // o vocabulário e a sigla que vai ao banco é o data-colegiado do <body>
   // (ver COLEGIADOS em historico.js).
-  'historico-creg': { arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Preparando o histórico…' }
+  'historico-creg': { orgao: 'CREG', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Preparando o histórico…' }
+};
+
+const DESTINOS = {
+  CJ: { acervo: './acervo-cj.html', julgados: './julgados-cj.html', historico: './historico-cj.html' },
+  CREG: { acervo: './acervo-creg.html', julgados: './julgados-creg.html', historico: './historico-creg.html' }
 };
 
 const paginaAtual = PAGINAS[document.body.dataset.page];
 const sessionLoading = document.getElementById('sessionLoading');
+
+function resolverDestinoPermitido(paginaId, orgaos) {
+  const pagina = PAGINAS[paginaId];
+  if (!pagina?.orgao || orgaos.has(pagina.orgao)) return null;
+
+  for (const orgao of ['CJ', 'CREG']) {
+    if (orgaos.has(orgao)) return DESTINOS[orgao][pagina.familia] || null;
+  }
+  return null;
+}
 
 async function carregarPaginaAutenticada() {
   if (!paginaAtual) return;
@@ -40,6 +59,17 @@ async function carregarPaginaAutenticada() {
   }
 
   try {
+    const orgaos = await buscarOrgaosAutorizados();
+    if (!(orgaos instanceof Set) || orgaos.size === 0) throw erroSemPermissao();
+
+    const destino = resolverDestinoPermitido(document.body.dataset.page, orgaos);
+    if (destino) {
+      location.replace(destino);
+      return;
+    }
+    if (paginaAtual.orgao && !orgaos.has(paginaAtual.orgao)) throw erroSemPermissao();
+
+    aplicarVisibilidadePorOrgao(orgaos);
     await carregarScript(`assets/js/${paginaAtual.arquivo}?v=${ASSET_VERSION}`);
     // Julgados já apresenta o andamento dentro da própria lista. A chamada
     // monta esse indicador de forma síncrona antes de devolver a promessa;
@@ -55,6 +85,19 @@ async function carregarPaginaAutenticada() {
     sessionLoading.replaceChildren();
   } catch (err) {
     console.error(err);
+    if (err.semPermissao) {
+      // sair() revoga o refresh token no servidor antes de limpar a aba; com
+      // encerrarSessao() sozinho, o token recém-emitido no login seguiria
+      // válido até expirar. Falha de rede na revogação não muda a tela: o
+      // finally de sair() já descartou as credenciais desta aba.
+      await sair().catch(() => {});
+      document.getElementById('loginScreen').hidden = false;
+      document.getElementById('btnSair').hidden = true;
+      document.getElementById('loginErro').textContent = err.message;
+      sessionLoading.hidden = true;
+      sessionLoading.replaceChildren();
+      return;
+    }
     // Se o carregamento local falhar, o erro volta ao contêiner geral para não
     // depender do estado parcial que a página conseguiu montar.
     sessionLoading.hidden = false;
