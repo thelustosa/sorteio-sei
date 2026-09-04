@@ -466,7 +466,12 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
   gap: 10px;
 }
 
-#modeSelector .buttons-wrapper.single-choice { grid-template-columns: 1fr; }
+#modeSelector .buttons-wrapper.single-choice {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+}
+
+#modeSelector .buttons-wrapper.single-choice .mode-button { width: min(100%, 320px); }
 
 #modeSelector .mode-button { width: 100%; }
 

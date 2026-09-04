@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '5a63e1c85c';
+const ASSET_VERSION = '3381eed4f1';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -313,6 +313,14 @@ async function buscarOrgaosAutorizados() {
 function aplicarVisibilidadePorOrgao(orgaos, raiz = document) {
   raiz.querySelectorAll('[data-orgao]').forEach(elemento => {
     elemento.hidden = !orgaos.has(elemento.dataset.orgao);
+  });
+
+  // Quem só tem um colegiado veria o botão restante preso à metade esquerda da
+  // grade de dois, com um vazio do lado. A classe troca a grade por uma coluna
+  // só e centraliza a escolha única.
+  raiz.querySelectorAll('.buttons-wrapper').forEach(grupo => {
+    const visiveis = [...grupo.children].filter(botao => !botao.hidden);
+    grupo.classList.toggle('single-choice', visiveis.length === 1);
   });
 }
 
