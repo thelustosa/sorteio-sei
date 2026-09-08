@@ -184,6 +184,101 @@ O sistema é estruturalmente plano: a separação entre superfícies vem quase s
 ### Named Rules
 **The Overlay-Only Shadow Rule.** Box-shadow é exclusivo de elementos que flutuam por cima da página — toast e o painel/diálogo do acervo. Se o elemento não sai do fluxo normal, ele não recebe sombra.
 
+## Motion
+
+O movimento aqui é confirmação, não decoração: ele diz que algo foi registrado,
+que uma tela virou, que uma consulta está em andamento. Nenhuma animação existe
+para chamar atenção — coerente com um sistema que a PRODUCT.md descreve como
+ferramenta de auditoria antes de superfície de marca.
+
+### Durações
+
+Não há token de duração; os valores estão escritos em cada regra, e formam uma
+escala curta e estável que trabalho novo deve reusar em vez de inventar um
+número intermediário:
+
+- **110–160ms** — resposta direta ao ponteiro: `transform` no `:active` (120ms),
+  `background`/`border` em botão, chip e link de navegação (140–160ms).
+- **180ms** — troca de vista dentro da mesma página (`view-fade-in`, em
+  `#modeSelector`, `#sorteadorContent`, `#detalheCorpo`) e a entrada do
+  indicador de carregamento (`spinner-fade-in`).
+- **220ms** — entrada do toast (`toast-enter`, com `translateY(-12px)`).
+- **250ms** — a transição entre páginas (padrão da UA, ver abaixo).
+- **480ms** — `dashboard-reveal`, a entrada do painel do acervo já preenchido.
+  É a animação mais longa do sistema e acontece uma vez por carregamento.
+- **700–750ms** — rotação de spinner (`loading-spin`, `spin`).
+- **1.8s** — `card-pulso-pendencia`, o único laço infinito, e só enquanto houver
+  sessão sem voto ou status.
+
+Curvas: `ease` para interação, `ease-out` para entrada, `linear` para rotação, e
+`cubic-bezier(0.16, 1, 0.3, 1)` no `dashboard-reveal` — a única com desaceleração
+pronunciada, porque é a única que carrega peso.
+
+### Transição entre páginas
+
+`@view-transition { navigation: auto }` liga a transição de documento cruzado nas
+oito telas. O cross-fade padrão sozinho não serve aqui, porque as telas
+compartilham a mesma moldura institucional e um fade de documento inteiro
+dissolve justamente o que não muda. Então três peças saem do grupo `root` e
+ganham nome próprio:
+
+| Elemento | `view-transition-name` |
+|---|---|
+| `.page-header-wrapper` | `moldura-cabecalho` |
+| `.green-bar` | `moldura-barra` |
+| `.page-footer` | `moldura-rodape` |
+
+Cada uma morfa de uma posição para a outra em vez de dissolver — o masthead tem
+altura diferente por tela (8px de diferença no desktop, 23px em 390px) e sem os
+nomes essa diferença aparecia como um salto com a faixa duplicada. Dentro delas
+o texto muda, e para não haver dois textos legíveis ao mesmo tempo o cross-fade
+vira revezamento: `moldura-sai` (110ms) apaga o antigo, `moldura-entra` (140ms,
+com 110ms de atraso) acende o novo. Como o retrato inclui o fundo, o
+`::view-transition-group` de cada peça recebe a cor da faixa — sem isso a barra
+verde pisca no meio da troca.
+
+Um `location.replace` — a correção de rota do `bootstrap.js`, que manda quem só
+tem um colegiado para a tela certa — não é destino: `redirecionarSemTransicao`
+marca a navegação e o documento seguinte chama `skipTransition()`. Correção de
+rota não ganha cerimônia de troca de página.
+
+### Indicadores de carregamento
+
+O indicador tem um contrato de tempo próprio, em `supabase.js`:
+`ATRASO_DO_INDICADOR` (150ms, espelhado no `animation-delay` do
+`spinner-fade-in`) e `TEMPO_MINIMO_DO_INDICADOR` (600ms). Resposta abaixo do
+atraso não acende nada; acima dele, o indicador fica até completar o mínimo. Os
+dois valores juntos eliminam tanto o piscar quanto o lampejo pela metade.
+
+Onde o indicador aparece importa tanto quanto quando: `.session-loading` cobre o
+que existe antes da tela (permissão, download do script), e cada tela monta a
+própria moldura de forma síncrona e põe o indicador dentro dela —
+`.painel-carregando` no lugar da tabela do acervo/histórico, `#pautasContainer`
+na lista de julgados, `.detalhe-loading` no card de processos.
+
+### Movimento reduzido
+
+`prefers-reduced-motion: reduce` desliga tudo: spinner, toast, pulso de
+pendência, `backdrop-filter` do diálogo, `transform` de `:active`, as trocas de
+vista — e a transição entre páginas, que é a única que `animation: none` não
+alcança e precisa de `@view-transition { navigation: none }`.
+
+### Named Rules
+
+**The Frame Stays Rule.** O que é igual em todas as telas — o brasão, a barra
+verde, a faixa do rodapé — nunca dissolve numa troca de página: ganha
+`view-transition-name` e morfa. Um elemento novo de moldura entra na mesma
+regra, com nome próprio e a cor de fundo no `::view-transition-group`.
+
+**The Indicator Earns Its Entrance Rule.** Todo indicador de carregamento passa
+por `aguardarIndicador`: ou não aparece, ou fica tempo de ser lido. Meio termo —
+acender e apagar dentro da própria animação de entrada — é pior que animação
+nenhuma.
+
+**The Arrival Has a Name Rule.** Uma transição de página precisa aterrissar num
+lugar identificável. Tela que busca dados mostra a própria moldura com o título
+e o indicador dentro dela, nunca um spinner solto sobre página em branco.
+
 ## Shapes
 
 Três raios cobrem o sistema inteiro: `8px` (controles — botão, input, select, chip de navegação), `12px` (cards, tabelas, painéis, diálogos) e `999px` (pill — badges, chips de filtro, botões grandes de seleção de modo). Bordas são sempre 1px e sempre a Borda Institucional tingida de verde (ver Colors) — nunca uma borda mais grossa ou de cor neutra pura.
@@ -237,5 +332,8 @@ Três raios cobrem o sistema inteiro: `8px` (controles — botão, input, select
 - **Don't** inventar uma escala de espaçamento em token — ela não existe; use o valor em pixel mais próximo já presente no contexto.
 - **Don't** usar `--surface` (`#e9f5ec`): está declarado em `:root` mas não é referenciado em nenhuma regra do CSS — é um token morto, não faz parte da paleta ativa (candidato a limpeza, não a reuso).
 - **Don't** usar vermelho para ênfase neutra ou aviso brando — é exclusivo de erro e ação destrutiva; pendência usa o Teal dos Pendentes.
+- **Don't** dar `view-transition-name` a um elemento sem pintar a cor de fundo
+  dele no `::view-transition-group` correspondente — o retrato inclui o fundo, e
+  o revezamento faz a faixa piscar (ver Motion).
 - **Don't** clarear o Verde Institucional para um estado de interação — o único estado de hover/active do verde primário é escurecer (`--accent-hover`), nunca um tom mais claro.
 - **Don't** hardcodar hex direto num seletor `.selection-card-*` novo — as quatro cores de card já são token em `:root` (`--accent`, `--accent-secondary`, `--accent-acervo`, `--accent-historico`); um quinto card ganha seu próprio par de tokens do mesmo jeito, nunca um valor solto.

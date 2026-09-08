@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '7e2a0c3355';
+const ASSET_VERSION = 'fcc93a20ea';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -227,6 +227,31 @@ function criarIndicadorCarregamento(texto) {
   return estado;
 }
 
+// Quanto tempo o indicador leva para entrar na tela e quanto tempo fica, em ms.
+// Os dois valores são um par: o primeiro copia o `animation-delay` de
+// spinner-fade-in (ver .detalhe-loading .loading-state em index.css, que um
+// teste compara com esta constante), e o segundo só faz sentido em relação a
+// ele.
+//
+// O atraso existe para que uma resposta rápida não acenda o spinner à toa. Mas
+// resolvia só metade do problema: passado o atraso, o indicador aparecia e —
+// numa consulta que voltava logo depois — sumia antes de terminar de surgir. O
+// lampejo lê pior do que animação nenhuma, e era o que separava o card do
+// histórico (uma rodada, resposta imediata) do card do acervo (o acervo
+// inteiro, resposta lenta o bastante para o spinner se firmar).
+const ATRASO_DO_INDICADOR = 150;
+const TEMPO_MINIMO_DO_INDICADOR = 600;
+
+// Segura o indicador até ele ter sido visto de fato. Chame com o instante em
+// que o indicador foi montado, logo antes de escondê-lo.
+function aguardarIndicador(inicio) {
+  const decorrido = Date.now() - inicio;
+  // Nada chegou a aparecer, ou o indicador já cumpriu o tempo: esconder agora
+  // não pisca nada, e esperar seria atrasar a tela sem motivo.
+  if (decorrido < ATRASO_DO_INDICADOR || decorrido >= TEMPO_MINIMO_DO_INDICADOR) return Promise.resolve();
+  return new Promise(resolve => setTimeout(resolve, TEMPO_MINIMO_DO_INDICADOR - decorrido));
+}
+
 function alternarBotaoCarregando(botao, carregando, texto) {
   if (!botao) return;
 
@@ -339,6 +364,32 @@ function erroSemPermissao() {
 
 // Liga o formulário de login padrão da página. Chama aoEntrar() quando der certo.
 // Depende dos ids loginScreen/loginForm/loginEmail/loginSenha/loginErro/btnEntrar/btnSair.
+// Um `location.replace` não é uma troca de página que a pessoa pediu: é uma
+// correção de rota — bootstrap.js manda quem só tem um colegiado para a tela do
+// colegiado certo. Animar isso como navegação daria a uma parada técnica a mesma
+// cerimônia de um destino, e quem cai nela veria dois cross-fades e dois
+// indicadores para uma intenção só. A marca atravessa a navegação pelo
+// sessionStorage porque quem precisa dela é o documento seguinte, não este.
+const PULAR_TRANSICAO = 'sorteio-sei.pular-transicao';
+
+function redirecionarSemTransicao(destino) {
+  try { sessionStorage.setItem(PULAR_TRANSICAO, '1'); } catch (_) {}
+  location.replace(destino);
+}
+
+// Registrado aqui, e não numa página específica, porque supabase.js é o
+// primeiro script de toda tela — `pagereveal` dispara depois dos scripts
+// `defer` e antes do primeiro quadro, que é a única janela em que dá para
+// cancelar a transição que o navegador já preparou.
+window.addEventListener('pagereveal', evento => {
+  let pular = false;
+  try {
+    pular = sessionStorage.getItem(PULAR_TRANSICAO) === '1';
+    if (pular) sessionStorage.removeItem(PULAR_TRANSICAO);
+  } catch (_) {}
+  if (pular) evento.viewTransition?.skipTransition();
+});
+
 function ligarLogin(aoEntrar) {
   const loginScreen = document.getElementById('loginScreen');
   const loginForm = document.getElementById('loginForm');

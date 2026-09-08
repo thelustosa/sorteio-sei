@@ -9,7 +9,7 @@
   <title>Acervo não julgado — Conselho Regulador | Sorteio de Processos SEI</title>
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=7e2a0c3355" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=fcc93a20ea" />
   <script>
     (function () {
       try {
@@ -19,8 +19,21 @@
       } catch (_) {}
     })();
   </script>
-  <script defer src="assets/js/supabase.min.js?v=7e2a0c3355"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=7e2a0c3355"></script>
+  <!-- A transição entre páginas segura a tela atual, intacta, até o primeiro
+       render da próxima: em 4G lento isso deu 1,36s sem sinal nenhum de que o
+       clique foi registrado. Com o documento já no cache de prefetch a espera
+       desaparece e a transição começa na hora.
+
+       A lista é explícita, e não um `where: {href_matches}`: o padrão parseia
+       sem erro mas não gera candidato nenhum (conferido pelo domínio Preload do
+       DevTools, com preloading habilitado e sem holdback). `moderate` busca no
+       hover, não de saída — quem abre uma tela só não paga pelas outras. E
+       prefetch não executa script: nenhuma chamada ao banco sai daqui. -->
+  <script type="speculationrules">
+    {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
+  </script>
+  <script defer src="assets/js/supabase.min.js?v=fcc93a20ea"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=fcc93a20ea"></script>
 </head>
 
 <body class="dashboard-page" data-page="acervo-creg" data-colegiado="creg">
@@ -129,6 +142,10 @@
       </header>
 
       <div class="acervo-table-shell">
+        <!-- O indicador ocupa o lugar da tabela enquanto os dados não chegam.
+             A moldura ao redor — título, escopo, rodapé — já está na tela: é
+             nela que a transição de página aterrissa. -->
+        <div id="painelCarregando" class="painel-carregando" hidden></div>
         <div id="acervoErro" class="load-error" role="alert" hidden>
           <p></p>
           <button id="btnTentarNovamente" class="button-secondary" type="button">Tentar novamente</button>

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-03T13:55:47.608Z",
+  "generatedAt": "2026-09-08T10:20:55.634Z",
   "title": "Design System: Sorteador de Processos SEI",
   "extensions": {
     "colorMeta": {
@@ -8,74 +8,254 @@
         "role": "primary",
         "displayName": "Verde Institucional",
         "canonical": "#00534b",
-        "tonalRamp": ["#001a17", "#00332e", "#004941", "#00534b", "#1a6f66", "#4d9089", "#99c4bf", "#e0f0ee"]
+        "tonalRamp": [
+          "#001a17",
+          "#00332e",
+          "#004941",
+          "#00534b",
+          "#1a6f66",
+          "#4d9089",
+          "#99c4bf",
+          "#e0f0ee"
+        ]
       },
       "pending-teal": {
         "role": "secondary",
         "displayName": "Teal dos Pendentes",
         "canonical": "#2f7668",
-        "tonalRamp": ["#0e2622", "#194840", "#245f55", "#2f7668", "#4f9184", "#7fb2a8", "#bcd8d1", "#e8f3f0"]
+        "tonalRamp": [
+          "#0e2622",
+          "#194840",
+          "#245f55",
+          "#2f7668",
+          "#4f9184",
+          "#7fb2a8",
+          "#bcd8d1",
+          "#e8f3f0"
+        ]
       },
       "acervo-green": {
         "role": "tertiary",
         "displayName": "Verde do Acervo",
         "canonical": "#0c695c",
-        "tonalRamp": ["#03211d", "#063b33", "#094f45", "#0c695c", "#2d8579", "#5ba89c", "#96cec4", "#e2f3f0"]
+        "tonalRamp": [
+          "#03211d",
+          "#063b33",
+          "#094f45",
+          "#0c695c",
+          "#2d8579",
+          "#5ba89c",
+          "#96cec4",
+          "#e2f3f0"
+        ]
       },
       "historico-green": {
         "role": "tertiary",
         "displayName": "Verde do Histórico",
         "canonical": "#16816e",
-        "tonalRamp": ["#052924", "#0c473d", "#116457", "#16816e", "#3a9e8c", "#72bcae", "#addad0", "#e3f3f0"]
+        "tonalRamp": [
+          "#052924",
+          "#0c473d",
+          "#116457",
+          "#16816e",
+          "#3a9e8c",
+          "#72bcae",
+          "#addad0",
+          "#e3f3f0"
+        ]
       },
-      "surface-historico": { "role": "neutral", "displayName": "Superfície do Histórico", "canonical": "#f1f7f5" },
+      "surface-historico": {
+        "role": "neutral",
+        "displayName": "Superfície do Histórico",
+        "canonical": "#f1f7f5"
+      },
       "alert-red": {
         "role": "tertiary",
         "displayName": "Vermelho de Alerta",
         "canonical": "#b42318",
-        "tonalRamp": ["#390b07", "#5c120c", "#8f1d14", "#b42318", "#c95147", "#dd8a80", "#f0c3bd", "#faeae7"]
+        "tonalRamp": [
+          "#390b07",
+          "#5c120c",
+          "#8f1d14",
+          "#b42318",
+          "#c95147",
+          "#dd8a80",
+          "#f0c3bd",
+          "#faeae7"
+        ]
       },
       "positive-green": {
         "role": "tertiary",
         "displayName": "Verde Positivo",
         "canonical": "#16816e",
-        "tonalRamp": ["#052924", "#0c473d", "#116457", "#16816e", "#3a9e8c", "#72bcae", "#addad0", "#e3f3f0"]
+        "tonalRamp": [
+          "#052924",
+          "#0c473d",
+          "#116457",
+          "#16816e",
+          "#3a9e8c",
+          "#72bcae",
+          "#addad0",
+          "#e3f3f0"
+        ]
       },
-      "neutral-bg": { "role": "neutral", "displayName": "Fundo Neutro", "canonical": "#f4f7f5" },
-      "neutral-surface": { "role": "neutral", "displayName": "Superfície Branca", "canonical": "#ffffff" },
-      "institutional-panel": { "role": "neutral", "displayName": "Painel Institucional", "canonical": "#e9f3ef" },
-      "neutral-text": { "role": "neutral", "displayName": "Texto Principal", "canonical": "#112720" },
-      "neutral-muted": { "role": "neutral", "displayName": "Texto Secundário", "canonical": "#556b63" },
-      "neutral-border": { "role": "neutral", "displayName": "Borda Institucional", "canonical": "rgba(0, 83, 75, 0.16)" },
-      "on-accent": { "role": "neutral", "displayName": "Texto sobre Acento", "canonical": "#ffffff" }
+      "neutral-bg": {
+        "role": "neutral",
+        "displayName": "Fundo Neutro",
+        "canonical": "#f4f7f5"
+      },
+      "neutral-surface": {
+        "role": "neutral",
+        "displayName": "Superfície Branca",
+        "canonical": "#ffffff"
+      },
+      "institutional-panel": {
+        "role": "neutral",
+        "displayName": "Painel Institucional",
+        "canonical": "#e9f3ef"
+      },
+      "neutral-text": {
+        "role": "neutral",
+        "displayName": "Texto Principal",
+        "canonical": "#112720"
+      },
+      "neutral-muted": {
+        "role": "neutral",
+        "displayName": "Texto Secundário",
+        "canonical": "#556b63"
+      },
+      "neutral-border": {
+        "role": "neutral",
+        "displayName": "Borda Institucional",
+        "canonical": "rgba(0, 83, 75, 0.16)"
+      },
+      "on-accent": {
+        "role": "neutral",
+        "displayName": "Texto sobre Acento",
+        "canonical": "#ffffff"
+      }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display", "purpose": "Título do painel do Acervo/Histórico (.acervo-header-title-group h2), branco sobre a barra verde — o maior texto do sistema, exclusivo das duas telas de dashboard." },
-      "headline": { "displayName": "Headline", "purpose": "Título dentro do card de conteúdo principal (.card h2/h3) — maior que o <h1> da página fora das telas de dashboard." },
-      "title": { "displayName": "Title", "purpose": "H1 do cabeçalho institucional da página, deliberadamente mais discreto que o Headline." },
-      "body": { "displayName": "Body", "purpose": "Texto corrido padrão do sistema." },
-      "label": { "displayName": "Label", "purpose": "Texto de botão, badge, rótulo de formulário e navegação — sempre em negrito, 0,8125rem a 0,875rem." }
+      "display": {
+        "displayName": "Display",
+        "purpose": "Título do painel do Acervo/Histórico (.acervo-header-title-group h2), branco sobre a barra verde — o maior texto do sistema, exclusivo das duas telas de dashboard."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Título dentro do card de conteúdo principal (.card h2/h3) — maior que o <h1> da página fora das telas de dashboard."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "H1 do cabeçalho institucional da página, deliberadamente mais discreto que o Headline."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Texto corrido padrão do sistema."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Texto de botão, badge, rótulo de formulário e navegação — sempre em negrito, 0,8125rem a 0,875rem."
+      }
     },
     "shadows": [
-      { "name": "toast", "value": "0 12px 28px rgba(17, 39, 32, 0.18)", "purpose": "Notificação flutuante fixa no canto da tela." },
-      { "name": "panel", "value": "0 12px 32px rgba(17, 39, 32, 0.09)", "purpose": "Painel/diálogo sobreposto do acervo — mais suave que o toast por cobrir mais área." },
-      { "name": "badge", "value": "0 2px 6px rgba(17, 39, 32, 0.22)", "purpose": "Selo flutuante (ex.: contagem de pendências) sobre a borda de um card." }
+      {
+        "name": "toast",
+        "value": "0 12px 28px rgba(17, 39, 32, 0.18)",
+        "purpose": "Notificação flutuante fixa no canto da tela."
+      },
+      {
+        "name": "panel",
+        "value": "0 12px 32px rgba(17, 39, 32, 0.09)",
+        "purpose": "Painel/diálogo sobreposto do acervo — mais suave que o toast por cobrir mais área."
+      },
+      {
+        "name": "badge",
+        "value": "0 2px 6px rgba(17, 39, 32, 0.22)",
+        "purpose": "Selo flutuante (ex.: contagem de pendências) sobre a borda de um card."
+      }
     ],
     "motion": [
-      { "name": "ease-interaction", "value": "160ms ease", "purpose": "Transição padrão de background/border em botões, chips e links de navegação." },
-      { "name": "ease-toast-enter", "value": "220ms ease-out", "purpose": "Entrada de um toast (translateY + opacidade)." },
-      { "name": "ease-dashboard-reveal", "value": "480ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Revelação do painel do dashboard/acervo depois de carregar." },
-      { "name": "ease-spin", "value": "700ms linear infinite", "purpose": "Rotação do spinner de carregamento." },
-      { "name": "ease-press", "value": "120ms ease", "purpose": "translateY(1px) no :active de botões e chips — feedback de \"pressionado\"." },
-      { "name": "pulse-pendencia", "value": "1.8s ease-in-out infinite", "purpose": "Glow de borda que pulsa sem parar enquanto houver pendência — some sozinho na próxima carga da página, quando a checagem não achar mais nada pendente." }
+      {
+        "name": "ease-interaction",
+        "value": "160ms ease",
+        "purpose": "Transição padrão de background/border em botões, chips e links de navegação."
+      },
+      {
+        "name": "ease-press",
+        "value": "120ms ease",
+        "purpose": "translateY(1px) no :active de botões e chips — feedback de \"pressionado\"."
+      },
+      {
+        "name": "ease-view-fade",
+        "value": "180ms ease-out",
+        "purpose": "Troca de vista dentro da mesma página (#modeSelector, #sorteadorContent, #detalheCorpo)."
+      },
+      {
+        "name": "ease-spinner-enter",
+        "value": "180ms ease-out 150ms backwards",
+        "purpose": "Entrada do indicador de carregamento. O atraso de 150ms é espelhado em ATRASO_DO_INDICADOR (supabase.js); um teste compara os dois."
+      },
+      {
+        "name": "ease-toast-enter",
+        "value": "220ms ease-out",
+        "purpose": "Entrada de um toast (translateY + opacidade)."
+      },
+      {
+        "name": "page-transition",
+        "value": "250ms (padrão da UA)",
+        "purpose": "@view-transition { navigation: auto } nas oito telas. Cabeçalho, barra verde e rodapé têm view-transition-name próprio e morfam em vez de dissolver."
+      },
+      {
+        "name": "moldura-sai",
+        "value": "110ms ease-out both",
+        "purpose": "Saída do texto antigo dentro da moldura nomeada — primeira metade do revezamento que evita dois textos legíveis ao mesmo tempo."
+      },
+      {
+        "name": "moldura-entra",
+        "value": "140ms ease-out 110ms both",
+        "purpose": "Entrada do texto novo dentro da moldura nomeada — segunda metade do revezamento."
+      },
+      {
+        "name": "ease-dashboard-reveal",
+        "value": "480ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Revelação do painel do dashboard/acervo depois de carregar."
+      },
+      {
+        "name": "ease-spin",
+        "value": "700ms linear infinite",
+        "purpose": "Rotação do spinner de carregamento."
+      },
+      {
+        "name": "pulse-pendencia",
+        "value": "1.8s ease-in-out infinite",
+        "purpose": "Glow de borda que pulsa sem parar enquanto houver pendência — some sozinho na próxima carga da página, quando a checagem não achar mais nada pendente."
+      }
     ],
     "breakpoints": [
-      { "name": "xs", "value": "480px" },
-      { "name": "sm", "value": "600px" },
-      { "name": "sm-alt", "value": "620px" },
-      { "name": "md", "value": "768px" },
-      { "name": "lg", "value": "880px" },
-      { "name": "xl", "value": "981px" }
+      {
+        "name": "xs",
+        "value": "480px"
+      },
+      {
+        "name": "sm",
+        "value": "600px"
+      },
+      {
+        "name": "sm-alt",
+        "value": "620px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "880px"
+      },
+      {
+        "name": "xl",
+        "value": "981px"
+      }
     ]
   },
   "components": [
@@ -147,13 +327,56 @@
       "Um único tema comprometido, sem variante escura."
     ],
     "rules": [
-      { "name": "The Tinted Neutral Rule", "body": "Nenhuma borda, divisor ou fundo neutro usa cinza puro — todos derivam do verde institucional em baixa opacidade (8% a 22%). Até o \"neutro\" deste sistema carrega a cor da marca.", "section": "colors" },
-      { "name": "The One Alert Color Rule", "body": "Vermelho é exclusivo de erro e ação destrutiva. Qualquer outro aviso de atenção (como pendência de julgamento) usa o Teal dos Pendentes, não vermelho.", "section": "colors" },
-      { "name": "The Four Card Channels Rule", "body": "A tela inicial tem exatamente quatro cards, e cada um tem seu próprio par cor/hover — Verde Institucional, Verde do Acervo, Verde do Histórico, Teal dos Pendentes — todos token em :root, nenhum hardcoded no seletor do card. Um quinto card ganha seu próprio par, nunca herda um dos quatro.", "section": "colors" },
-      { "name": "The Dashboard Outranks Everything Rule", "body": "Só as telas de Acervo e Histórico usam o Display — o maior heading do sistema não é o <h1> de página nem o título do card, é o cabeçalho do próprio painel de dados. Uma tela nova que não seja um dashboard não herda esse tamanho.", "section": "typography" },
-      { "name": "The Content Outranks the Masthead Rule", "body": "Fora das telas de dashboard, o título dentro do card de conteúdo (Headline, --text-xl) é visualmente maior que o <h1> do cabeçalho da página (Title, --text-lg). A hierarquia grita o que a pessoa vai fazer agora, não o nome do sistema.", "section": "typography" },
-      { "name": "The One-Weight Display Rule", "body": "Montserrat só existe em peso 700 neste projeto. Um título em Montserrat é sempre bold; nunca introduza peso 400/500 dessa família.", "section": "typography" },
-      { "name": "The Overlay-Only Shadow Rule", "body": "Box-shadow é exclusivo de elementos que flutuam por cima da página — toast e o painel/diálogo do acervo. Se o elemento não sai do fluxo normal, ele não recebe sombra.", "section": "elevation" }
+      {
+        "name": "The Tinted Neutral Rule",
+        "body": "Nenhuma borda, divisor ou fundo neutro usa cinza puro — todos derivam do verde institucional em baixa opacidade (8% a 22%). Até o \"neutro\" deste sistema carrega a cor da marca.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Alert Color Rule",
+        "body": "Vermelho é exclusivo de erro e ação destrutiva. Qualquer outro aviso de atenção (como pendência de julgamento) usa o Teal dos Pendentes, não vermelho.",
+        "section": "colors"
+      },
+      {
+        "name": "The Four Card Channels Rule",
+        "body": "A tela inicial tem exatamente quatro cards, e cada um tem seu próprio par cor/hover — Verde Institucional, Verde do Acervo, Verde do Histórico, Teal dos Pendentes — todos token em :root, nenhum hardcoded no seletor do card. Um quinto card ganha seu próprio par, nunca herda um dos quatro.",
+        "section": "colors"
+      },
+      {
+        "name": "The Dashboard Outranks Everything Rule",
+        "body": "Só as telas de Acervo e Histórico usam o Display — o maior heading do sistema não é o <h1> de página nem o título do card, é o cabeçalho do próprio painel de dados. Uma tela nova que não seja um dashboard não herda esse tamanho.",
+        "section": "typography"
+      },
+      {
+        "name": "The Content Outranks the Masthead Rule",
+        "body": "Fora das telas de dashboard, o título dentro do card de conteúdo (Headline, --text-xl) é visualmente maior que o <h1> do cabeçalho da página (Title, --text-lg). A hierarquia grita o que a pessoa vai fazer agora, não o nome do sistema.",
+        "section": "typography"
+      },
+      {
+        "name": "The One-Weight Display Rule",
+        "body": "Montserrat só existe em peso 700 neste projeto. Um título em Montserrat é sempre bold; nunca introduza peso 400/500 dessa família.",
+        "section": "typography"
+      },
+      {
+        "name": "The Overlay-Only Shadow Rule",
+        "body": "Box-shadow é exclusivo de elementos que flutuam por cima da página — toast e o painel/diálogo do acervo. Se o elemento não sai do fluxo normal, ele não recebe sombra.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Frame Stays Rule",
+        "body": "O que é igual em todas as telas — o brasão, a barra verde, a faixa do rodapé — nunca dissolve numa troca de página: ganha view-transition-name e morfa. Um elemento novo de moldura entra na mesma regra, com nome próprio e a cor de fundo no ::view-transition-group.",
+        "section": "motion"
+      },
+      {
+        "name": "The Indicator Earns Its Entrance Rule",
+        "body": "Todo indicador de carregamento passa por aguardarIndicador: ou não aparece, ou fica tempo de ser lido. Acender e apagar dentro da própria animação de entrada é pior que animação nenhuma.",
+        "section": "motion"
+      },
+      {
+        "name": "The Arrival Has a Name Rule",
+        "body": "Uma transição de página precisa aterrissar num lugar identificável. Tela que busca dados mostra a própria moldura com o título e o indicador dentro dela, nunca um spinner solto sobre página em branco.",
+        "section": "motion"
+      }
     ],
     "dos": [
       "Do manter o Verde Institucional exclusivo para ação primária e identidade fora da tela inicial; dentro dela, cada um dos quatro cards vive só do seu próprio canal.",

@@ -95,6 +95,8 @@ const historicoAtualizado = document.getElementById('historicoAtualizado');
 const btnAtualizar = document.getElementById('btnAtualizar');
 const btnTentarNovamente = document.getElementById('btnTentarNovamente');
 const loginOnlyCard = document.querySelector('[data-login-only]');
+const painelCarregando = document.getElementById('painelCarregando');
+const tabelaScroll = document.querySelector('.table-scroll');
 const detalheDialog = document.getElementById('detalheDialog');
 const detalheTitulo = document.getElementById('detalheTitulo');
 const detalheResumo = document.getElementById('detalheResumo');
@@ -133,15 +135,45 @@ detalheDialog.addEventListener('click', evento => {
   if (evento.target === detalheDialog) detalheDialog.close();
 });
 
+
+// ── A moldura do painel, antes dos dados ─────────────────────────────────────
+// A transição entre páginas (@view-transition, em index.css) entrega o quadro
+// que existir no primeiro render da tela nova. Sem isto ela entregava um
+// spinner centralizado numa página em branco: a animação vendia chegada e
+// abria uma sala de espera. Agora o que ela entrega é o painel com nome —
+// título, escopo, rodapé — e o indicador apenas onde a tabela vai ficar.
+
+function mostrarMolduraDoPainel() {
+  if (loginOnlyCard) loginOnlyCard.hidden = true;
+  historicoPanel.hidden = false;
+  if (tabelaScroll) tabelaScroll.hidden = true;
+  painelCarregando.replaceChildren(criarIndicadorCarregamento('Carregando o histórico…'));
+  painelCarregando.hidden = false;
+}
+
+// O erro do carregamento inicial quem mostra é o bootstrap, dentro do card de
+// sessão — e esse card só aparece com o painel fora da tela. Devolver os dois
+// ao estado anterior é o que mantém a mensagem visível.
+function esconderMolduraDoPainel() {
+  historicoPanel.hidden = true;
+  if (loginOnlyCard) loginOnlyCard.hidden = false;
+  revelarTabela();
+}
+
+function revelarTabela() {
+  painelCarregando.hidden = true;
+  painelCarregando.replaceChildren();
+  if (tabelaScroll) tabelaScroll.hidden = false;
+}
+
 async function inicializarHistorico() {
+  mostrarMolduraDoPainel();
+
   const carregado = await carregarHistorico({ carregamentoInicial: true });
   if (!carregado) return;
 
-  // Troca atômica: o loading geral sai e o painel entra já completo.
-  // "Atualizar" só aparece junto com a lista — revelado antes, ele redesenharia
-  // uma tabela ainda escondida e o clique "funcionaria" sem nada mudar na tela.
-  if (loginOnlyCard) loginOnlyCard.hidden = true;
-  historicoPanel.hidden = false;
+  // "Atualizar" só aparece junto com a lista: revelado com a moldura, ele
+  // redesenharia uma tabela que ainda não existe.
   btnAtualizar.hidden = false;
 }
 
@@ -358,7 +390,10 @@ async function carregarHistorico({ carregamentoInicial = false } = {}) {
       body: JSON.stringify({ p_colegiado: COL.sigla })
     });
   } catch (err) {
-    if (carregamentoInicial) throw err;
+    if (carregamentoInicial) {
+      esconderMolduraDoPainel();
+      throw err;
+    }
     if (pedido !== historicoPedido) return false;
     historicoTabela.replaceChildren();
     // O total é do histórico que acabou de sair da tela: mantê-lo anunciaria N
@@ -379,6 +414,7 @@ async function carregarHistorico({ carregamentoInicial = false } = {}) {
   }
 
   if (pedido !== historicoPedido) return false;
+  revelarTabela();
   const lista = sorteios || [];
   desenhar(lista);
   const processos = lista.reduce((soma, s) => soma + (Number(s.processos) || 0), 0);
@@ -411,6 +447,9 @@ async function abrirDetalhe(botao) {
   detalheCorpo.hidden = true;
   detalheLoading.hidden = false;
   detalheLoading.replaceChildren(criarIndicadorCarregamento('Carregando processos…'));
+  // De quando o indicador entrou: aguardarIndicador o segura até ele ter sido
+  // visto, em vez de deixá-lo piscar quando a resposta volta logo.
+  const montadoEm = Date.now();
   btnExportarDetalhe.disabled = true;
   // showModal antes da busca: o card aparece com o loading em vez de a tela
   // ficar parada sem resposta ao clique.
@@ -429,6 +468,7 @@ async function abrirDetalhe(botao) {
       })
     });
   } catch (err) {
+    await aguardarIndicador(montadoEm);
     if (pedido !== detalhePedido) return;
     detalheLoading.hidden = true;
     detalheLoading.replaceChildren();
@@ -439,6 +479,7 @@ async function abrirDetalhe(botao) {
     return;
   }
 
+  await aguardarIndicador(montadoEm);
   if (pedido !== detalhePedido) return;
   detalheLoading.hidden = true;
   detalheLoading.replaceChildren();
