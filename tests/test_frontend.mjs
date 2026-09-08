@@ -132,7 +132,13 @@ const source = file => readFileSync(new URL(`../assets/js/${file}`, import.meta.
 
 function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null) {
   const document = new Document();
-  const window = { addEventListener() {} };
+  const ouvintes = new Map();
+  const window = {
+    addEventListener(tipo, ouvinte) {
+      if (!ouvintes.has(tipo)) ouvintes.set(tipo, []);
+      ouvintes.get(tipo).push(ouvinte);
+    }
+  };
   const navigator = {};
   const navegacoes = [];
   const location = {
@@ -154,10 +160,12 @@ function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null) {
       buscarOrgaosAutorizados: typeof buscarOrgaosAutorizados === 'function' ? buscarOrgaosAutorizados : undefined,
       aplicarVisibilidadePorOrgao: typeof aplicarVisibilidadePorOrgao === 'function' ? aplicarVisibilidadePorOrgao : undefined,
       erroSemPermissao: typeof erroSemPermissao === 'function' ? erroSemPermissao : undefined,
-      CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento,
+      CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicador,
+      redirecionarSemTransicao,
       estadoSessao: () => ({ accessToken, refreshToken })
     };`)(document, window, navigator, location, sessionStorage, fetch, apiSubstituta);
-  return { ...app, document, navegacoes, storage };
+  return { ...app, document, navegacoes, storage,
+    dispararPagereveal: evento => ouvintes.get('pagereveal')?.forEach(ouvinte => ouvinte(evento)) };
 }
 
 function paginaServidaComBundles(fetch) {
@@ -194,7 +202,8 @@ function paginaServidaComBundles(fetch) {
       resolverDestinoPermitido: typeof resolverDestinoPermitido === 'function' ? resolverDestinoPermitido : undefined,
       carregarPaginaAutenticada
     };`) (
-    document, { inicializarAcervo() {} }, {}, { replace(destino) { navegacoes.push(destino); } },
+    document, { inicializarAcervo() {}, addEventListener() {} }, {},
+    { replace(destino) { navegacoes.push(destino); } },
     { getItem() { return null; }, setItem() {}, removeItem() {} }, fetch);
 
   return { app, controleCj, controleCreg, document, navegacoes };
@@ -203,7 +212,7 @@ function paginaServidaComBundles(fetch) {
 // O de-para das cadeiras mora no supabase.js, que toda página carrega antes do
 // seu próprio script. As telas o enxergam como global; aqui ele é injetado, e
 // vem do arquivo de verdade para que uma divergência apareça como falha.
-const { CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento } = supabaseApp(async () => {});
+const { CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicador } = supabaseApp(async () => {});
 
 function indexPage({ api = async () => null, aviso = () => {},
   supabaseUrl = 'url', supabaseKey = 'key', token = 'token' } = {}) {
@@ -878,7 +887,7 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
 
   const app = new Function('document', 'window', 'location', 'ASSET_VERSION', 'carregarScript',
     'criarIndicadorCarregamento', 'ligarLogin', 'buscarOrgaosAutorizados',
-    'aplicarVisibilidadePorOrgao', 'erroSemPermissao', 'sair',
+    'aplicarVisibilidadePorOrgao', 'erroSemPermissao', 'sair', 'redirecionarSemTransicao',
     `${source('bootstrap.js')}\nreturn {
       resolverDestinoPermitido: typeof resolverDestinoPermitido === 'function' ? resolverDestinoPermitido : undefined,
       carregarPaginaAutenticada
@@ -886,10 +895,64 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
     document, { [inicializadores[pagina]]: inicializar }, location, 'teste', carregar,
     texto => { const estado = document.createElement('div'); estado.textContent = texto; return estado; },
     callback => { aoEntrar = callback; }, buscarOrgaos, aplicarVisibilidade, erroPermissao,
-    encerrarSessaoNoServidor);
+    encerrarSessaoNoServidor, destino => location.replace(destino));
 
   return { ...app, sessionLoading, loginScreen, loginErro, btnSair, iniciar: () => aoEntrar() };
 }
+
+// O carregamento geral cobre o que acontece antes de a tela existir: a consulta
+// de permissões e o download do script dela. As telas de julgados eram exceção
+// — mostram o andamento dentro da própria lista — mas essa lista só é montada
+// DEPOIS da consulta, e no intervalo a página ficava literalmente vazia.
+test('julgados também mostra o carregamento geral até a permissão voltar', async () => {
+  let responder;
+  const page = bootstrapPage(async () => {}, 'julgados-cj', {
+    buscarOrgaos: () => new Promise(resolve => { responder = resolve; })
+  });
+
+  const carregamento = page.iniciar();
+  await wait();
+  assert.equal(page.sessionLoading.hidden, false,
+    'sem isto a transição entre páginas aterrissa numa página em branco');
+  assert.equal(page.sessionLoading.children.length, 1);
+
+  responder(new Set(['CJ']));
+  await carregamento;
+  assert.equal(page.sessionLoading.hidden, true,
+    'a lista de pautas assume o andamento a partir daqui');
+  assert.equal(page.sessionLoading.children.length, 0);
+});
+
+// Um `location.replace` é correção de rota, não destino: animá-lo daria a uma
+// parada técnica a cerimônia de uma troca de página, e quem cai nela veria dois
+// cross-fades e dois indicadores para uma intenção só.
+test('redirecionamento por permissão não anima a troca de página', () => {
+  const app = supabaseApp(async () => {});
+
+  app.redirecionarSemTransicao('./acervo-cj.html');
+  assert.deepEqual(app.navegacoes, ['./acervo-cj.html']);
+  assert.equal(app.storage.get('sorteio-sei.pular-transicao'), '1',
+    'a marca precisa atravessar a navegação: quem a lê é o documento seguinte');
+
+  let puladas = 0;
+  const evento = () => ({ viewTransition: { skipTransition() { puladas++; } } });
+  app.dispararPagereveal(evento());
+  assert.equal(puladas, 1, 'o documento seguinte cancela a transição já preparada');
+  assert.equal(app.storage.get('sorteio-sei.pular-transicao'), undefined,
+    'a marca é de uso único');
+
+  app.dispararPagereveal(evento());
+  assert.equal(puladas, 1, 'uma navegação normal continua animando');
+});
+
+test('sem suporte a transição de página o redirecionamento não quebra', () => {
+  const app = supabaseApp(async () => {});
+  app.redirecionarSemTransicao('./historico-creg.html');
+  // Firefox ainda não faz transição entre documentos: `pagereveal` chega sem
+  // viewTransition, e o redirecionamento não pode depender dela para funcionar.
+  assert.doesNotThrow(() => app.dispararPagereveal({}));
+  assert.deepEqual(app.navegacoes, ['./historico-creg.html']);
+});
 
 test('redireciona páginas de órgão para o equivalente permitido', () => {
   const page = bootstrapPage(async () => {});
@@ -1006,33 +1069,34 @@ test('a navegação por órgão marca os oito controles relevantes', () => {
   assert.equal(orgaos.every(Boolean), true, 'nenhum destino CJ/CREG pode ficar sem data-orgao');
 });
 
-test('bootstrap mantém o loading geral até a inicialização assíncrona terminar', async () => {
-  let concluir;
-  const page = bootstrapPage(() => new Promise(resolve => { concluir = resolve; }));
-  const carregamento = page.iniciar();
-  await wait();
+// A entrega do andamento é um bastão, não um cobertor: o carregamento geral
+// cobre o que existe antes da tela (permissão, download do script) e passa a
+// vez no instante em que o inicializador monta a moldura da tela — o que os
+// quatro fazem de forma síncrona, antes de buscar dado algum. Segurá-lo além
+// disso deixaria dois indicadores na tela ao mesmo tempo.
+test('o carregamento geral passa a vez assim que a tela monta a própria moldura', async () => {
+  for (const pagina of ['sorteio', 'julgados-cj', 'acervo-cj', 'historico-cj']) {
+    let concluir;
+    let visivelQuandoATelaMontou = null;
+    // A função roda dentro de page.iniciar(), quando `page` já existe.
+    const page = bootstrapPage(() => {
+      // Aqui dentro é o instante em que a tela monta a moldura dela.
+      visivelQuandoATelaMontou = !page.sessionLoading.hidden;
+      return new Promise(resolve => { concluir = resolve; });
+    }, pagina);
+    const carregamento = page.iniciar();
+    await wait();
 
-  assert.equal(page.sessionLoading.hidden, false);
-  assert.equal(page.sessionLoading.children.length, 1);
+    assert.equal(page.sessionLoading.hidden, true,
+      `${pagina}: o indicador geral não pode competir com o da própria tela`);
+    assert.equal(page.sessionLoading.children.length, 0, pagina);
 
-  concluir();
-  await carregamento;
-  assert.equal(page.sessionLoading.hidden, true,
-    'o loading não pode sair enquanto dados e interface ainda estão sendo preparados');
-});
-
-test('julgados prioriza o loading menor enquanto busca as pautas', async () => {
-  let concluir;
-  const page = bootstrapPage(() => new Promise(resolve => { concluir = resolve; }), 'julgados-cj');
-  const carregamento = page.iniciar();
-  await wait();
-
-  assert.equal(page.sessionLoading.hidden, true,
-    'o loading geral não pode competir com o indicador local das pautas');
-  assert.equal(page.sessionLoading.children.length, 0);
-
-  concluir();
-  await carregamento;
+    concluir();
+    await carregamento;
+    assert.equal(page.sessionLoading.hidden, true, pagina);
+    assert.equal(visivelQuandoATelaMontou, true,
+      `${pagina}: o indicador geral precisa estar na tela até a moldura existir`);
+  }
 });
 
 test('julgados recupera o loading geral para apresentar falha de inicialização', async () => {
@@ -1095,13 +1159,20 @@ function acervoPage(api, { imprimir = () => {}, colegiado = 'cj' } = {}) {
   detalheErro.appendChild(document.createElement('p'));
   document.add('btnFecharDetalhe', 'button');
   document.add('btnExportarDetalhe', 'button');
+  const painelCarregando = document.add('painelCarregando', 'div');
+  painelCarregando.hidden = true;
+  // A tabela e seu contêiner rolável: a moldura entra antes dos dados e é este
+  // contêiner que sai do ar enquanto o indicador ocupa o lugar dele.
+  const tabelaScroll = document.createElement('div');
+  tabelaScroll.className = 'table-scroll';
+  document.body.append(tabelaScroll);
   document.getElementById('acervoPanel').hidden = true;
   document.getElementById('btnAtualizar').hidden = true;  // como no acervo-cj.html
 
-  const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento',
+  const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador',
     `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, criarExcelDetalhe, dadosTabulares, abrirDetalhe, exportarDetalhe };`)(
-    document, { print: imprimir }, api, criarIndicadorCarregamento);
-  return { document, loginOnlyCard, dialog, ...app };
+    document, { print: imprimir }, api, criarIndicadorCarregamento, aguardarIndicador);
+  return { document, loginOnlyCard, dialog, painelCarregando, tabelaScroll, ...app };
 }
 
 const celulas = linha => linha.children.map(c => c.textContent);
@@ -1144,25 +1215,38 @@ test('acervo monta as colunas a partir dos relatores que o banco devolve', async
     'o painel não pode permanecer ocupado depois da resposta');
 });
 
-test('acervo só revela o dashboard depois que os dados estão prontos', async () => {
+// A moldura do painel entra antes dos dados, e a tabela só depois. Quem decide
+// isso é a transição entre páginas: ela entrega o quadro que existir no
+// primeiro render, e um spinner centralizado numa página em branco é uma sala
+// de espera onde deveria haver chegada. O painel com nome — título, escopo,
+// rodapé — é um destino; a tabela preenche depois, dentro dele.
+test('acervo entrega a moldura do painel antes dos dados, e a tabela só depois', async () => {
   let responder;
   const page = acervoPage(() => new Promise(resolve => { responder = resolve; }));
   const inicializacao = page.inicializarAcervo();
   await wait();
 
-  assert.equal(page.document.getElementById('acervoPanel').hidden, true,
-    'cabeçalho e rodapé do dashboard não devem aparecer sem os dados');
-  assert.equal(page.loginOnlyCard.hidden, false,
-    'o contêiner do loading geral precisa permanecer visível');
+  assert.equal(page.document.getElementById('acervoPanel').hidden, false,
+    'a moldura do painel é o que a transição entre páginas entrega');
+  assert.equal(page.loginOnlyCard.hidden, true,
+    'o loading geral sai: quem indica andamento agora é o indicador do painel');
+  assert.equal(page.painelCarregando.hidden, false);
+  assert.equal(page.painelCarregando.children[0].children[1].textContent, 'Carregando o acervo…');
+  assert.equal(page.tabelaScroll.hidden, true,
+    'a tabela fica fora do ar enquanto o indicador ocupa o lugar dela');
+  assert.equal(page.document.getElementById('btnAtualizar').hidden, true,
+    'Atualizar redesenharia uma tabela que ainda não existe');
+  assert.equal(page.document.getElementById('exportMenu').hidden, true);
 
   responder([
     { ordem: 1, faixa: 'Até 15 dias', relator: 'Dorivan de Souza Lima', processos: 1 }
   ]);
   await inicializacao;
 
+  assert.equal(page.painelCarregando.hidden, true);
+  assert.equal(page.painelCarregando.children.length, 0);
+  assert.equal(page.tabelaScroll.hidden, false);
   assert.equal(page.document.getElementById('acervoPanel').hidden, false);
-  assert.equal(page.loginOnlyCard.hidden, true,
-    'o loading geral deve sair junto com a entrada do dashboard completo');
   assert.equal(page.document.getElementById('btnAtualizar').hidden, false);
   assert.equal(page.document.getElementById('exportMenu').hidden, false);
 });
@@ -1607,6 +1691,37 @@ test('o card abre em estado de loading antes da resposta da API', async () => {
     'o corpo com a tabela entra após o carregamento');
 });
 
+// O indicador de carregamento é combinado com o CSS: entra em 150ms
+// (spinner-fade-in) e, uma vez na tela, fica um tempo mínimo. Sem esse mínimo o
+// card de uma consulta rápida — o do histórico, que pede uma rodada só —
+// acendia e apagava o spinner no mesmo piscar, enquanto o do acervo, mais
+// lento, o mostrava por inteiro: a mesma tela parecia ter animações
+// diferentes.
+
+test('resposta mais rápida que a entrada do indicador não atrasa o card', async () => {
+  const inicio = Date.now();
+  await aguardarIndicador(Date.now());
+  assert.ok(Date.now() - inicio < 100,
+    'nada chegou a aparecer na tela: esperar só atrasaria o card');
+});
+
+test('indicador que já apareceu fica o tempo mínimo antes de sair', async () => {
+  const inicio = Date.now();
+  // 200ms de consulta: passou dos 150ms da entrada, então o spinner está na
+  // tela e some no meio da animação se o card não o segurar.
+  await aguardarIndicador(Date.now() - 200);
+  const espera = Date.now() - inicio;
+  assert.ok(espera >= 300, `o indicador precisa completar o mínimo; esperou ${espera}ms`);
+  assert.ok(espera < 700, `a espera não pode ultrapassar o mínimo; esperou ${espera}ms`);
+});
+
+test('indicador que já cumpriu o mínimo sai assim que os dados chegam', async () => {
+  const inicio = Date.now();
+  await aguardarIndicador(Date.now() - 5000);
+  assert.ok(Date.now() - inicio < 100,
+    'consulta longa já mostrou o indicador por tempo de sobra');
+});
+
 // ── Histórico de sorteios ────────────────────────────────────────────────────
 // Uma tela por colegiado, como o painel do acervo. A lista vem pronta e
 // ordenada do banco (historico_sorteios); esta tela desenha uma linha por
@@ -1643,14 +1758,21 @@ function historicoPage(api, colegiado = 'creg') {
   detalheErro.appendChild(document.createElement('p'));
   document.add('btnFecharDetalhe', 'button');
   document.add('btnExportarDetalhe', 'button');
+  const painelCarregando = document.add('painelCarregando', 'div');
+  painelCarregando.hidden = true;
+  // A tabela e seu contêiner rolável: a moldura entra antes dos dados e é este
+  // contêiner que sai do ar enquanto o indicador ocupa o lugar dele.
+  const tabelaScroll = document.createElement('div');
+  tabelaScroll.className = 'table-scroll';
+  document.body.append(tabelaScroll);
   document.getElementById('historicoPanel').hidden = true;
   document.getElementById('btnAtualizar').hidden = true;  // como nas páginas
 
-  const app = new Function('document', 'api', 'criarIndicadorCarregamento',
+  const app = new Function('document', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador',
     `${source('historico.js')}\nreturn { inicializarHistorico, carregarHistorico, abrirDetalhe,
       criarDocxDetalhe, exportarDetalheDocx };`)(
-    document, api, criarIndicadorCarregamento);
-  return { document, loginOnlyCard, dialog, ...app };
+    document, api, criarIndicadorCarregamento, aguardarIndicador);
+  return { document, loginOnlyCard, dialog, painelCarregando, tabelaScroll, ...app };
 }
 
 // A série começa em 27/08/2026, para os dois colegiados: o primeiro sorteio
@@ -1839,20 +1961,25 @@ test('cada página pede ao banco o histórico do seu colegiado', async () => {
   ]);
 });
 
-test('histórico só revela o painel depois que os dados estão prontos', async () => {
+test('histórico entrega a moldura do painel antes dos dados, como o acervo', async () => {
   let responder;
   const page = historicoPage(() => new Promise(resolve => { responder = resolve; }), 'creg');
   const carregamento = page.inicializarHistorico();
   await wait();
 
-  assert.equal(page.document.getElementById('historicoPanel').hidden, true);
+  assert.equal(page.document.getElementById('historicoPanel').hidden, false);
+  assert.equal(page.painelCarregando.hidden, false);
+  assert.equal(page.painelCarregando.children[0].children[1].textContent, 'Carregando o histórico…');
+  assert.equal(page.tabelaScroll.hidden, true);
   assert.equal(page.document.getElementById('btnAtualizar').hidden, true,
-    'Atualizar redesenharia uma tabela ainda escondida');
+    'Atualizar redesenharia uma tabela que ainda não existe');
 
   responder(sorteiosCreg);
   await carregamento;
 
   assert.equal(page.loginOnlyCard.hidden, true);
+  assert.equal(page.painelCarregando.hidden, true);
+  assert.equal(page.tabelaScroll.hidden, false);
   assert.equal(page.document.getElementById('historicoPanel').hidden, false);
   assert.equal(page.document.getElementById('btnAtualizar').hidden, false);
 });

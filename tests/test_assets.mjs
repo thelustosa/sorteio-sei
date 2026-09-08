@@ -144,6 +144,37 @@ for (const chave of chavesBootstrap) {
   assert.ok(paginasDoHtml.includes(chave), `PAGINAS["${chave}"] no bootstrap.js não corresponde a página nenhuma`);
 }
 
+// O rótulo da barra verde nasce no HTML e é reescrito pelo script da página —
+// mas só depois de os dados chegarem. Se os dois discordarem, a barra mostra a
+// palavra errada até lá, e com a transição entre páginas isso virou meio segundo
+// de "Pautas pendentes" na tela do Conselho, que fala em sessões. O default do
+// HTML tem de ser um dos valores que o próprio script escreve.
+const arquivoDoScript = new Map([...bootstrap.matchAll(
+  /'?([\w-]+)'?:\s*\{[^}]*?arquivo:\s*'([\w-]+)\.min\.js'/gs)]
+  .map(([, chave, arquivo]) => [chave, `${arquivo}.js`]));
+assert.ok(arquivoDoScript.size >= 6, 'não achei o par data-page/arquivo em PAGINAS');
+
+let rotulosConferidos = 0;
+for (const pagina of PAGINAS) {
+  const html = ler(pagina);
+  const chave = html.match(/data-page="([^"]+)"/)?.[1];
+  const estatico = html.match(/id="txtModo">([^<]*)</)?.[1];
+  const script = arquivoDoScript.get(chave);
+  if (!chave || estatico === undefined || !script) continue;
+
+  const escritos = [...ler(`assets/js/${script}`)
+    .matchAll(/txtModo\.textContent\s*=\s*'([^']+)'/g)].map(([, valor]) => valor);
+  // Páginas cujo script nunca mexe no rótulo não têm com o que divergir.
+  if (escritos.length === 0) continue;
+
+  assert.ok(escritos.includes(estatico),
+    `${pagina}: a barra nasce com "${estatico}", mas ${script} só escreve ${
+      escritos.map(v => `"${v}"`).join(', ')} — o rótulo pisca até os dados chegarem`);
+  rotulosConferidos++;
+}
+assert.ok(rotulosConferidos >= 3,
+  `esperava conferir o rótulo de pelo menos 3 páginas, conferi ${rotulosConferidos}`);
+
 const css = ler('assets/css/index.css');
 // O seletor pode vir sozinho ou em lista, e a var pode trazer fallback — o que
 // importa é a regra que o bloco aplica, não a forma exata de escrevê-la.
@@ -209,5 +240,19 @@ assert.match(rodapeImpresso, /display:\s*block/,
   'o rodapé impresso não pode voltar a ser flex');
 assert.match(rodapeImpresso, /padding:\s*\d+px\s+\d+px\s+[1-9]\d*px/,
   'o rodapé impresso precisa de padding-bottom, senão o Firefox corta a data');
+
+// O card de detalhe segura o indicador de carregamento até ele ter aparecido de
+// fato (aguardarIndicador, em supabase.js), e para isso precisa saber em quanto
+// tempo o CSS o coloca na tela. O atraso mora nos dois arquivos; divergir faria
+// o JS soltar o indicador no meio da animação de entrada — o lampejo que a
+// espera existe para evitar.
+const atrasoNoJs = Number(ler('assets/js/supabase.js')
+  .match(/const ATRASO_DO_INDICADOR = (\d+);/)?.[1]);
+assert.ok(atrasoNoJs, 'ATRASO_DO_INDICADOR não encontrado em supabase.js');
+const entradaDoIndicador = cssIndex.match(
+  /\.detalhe-loading \.loading-state,[^{]*\{\s*animation: spinner-fade-in \d+ms [^\d]*(\d+)ms backwards;/);
+assert.ok(entradaDoIndicador, 'não achei o animation-delay de spinner-fade-in no CSS');
+assert.equal(Number(entradaDoIndicador[1]), atrasoNoJs,
+  'ATRASO_DO_INDICADOR divergiu do animation-delay de spinner-fade-in');
 
 console.log('assets: minificação, lazy load e versão por hash coerentes ✓');

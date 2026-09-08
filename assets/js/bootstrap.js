@@ -8,8 +8,7 @@ const PAGINAS = {
     familia: 'julgados',
     arquivo: 'julgados.min.js',
     iniciar: 'inicializarJulgados',
-    texto: 'Preparando as pautas…',
-    carregamentoLocal: true
+    texto: 'Preparando as pautas…'
   },
   // A tela do Conselho é gêmea da da Câmara e mostra o mesmo indicador dentro
   // da própria lista, então carrega pelo mesmo caminho.
@@ -18,8 +17,7 @@ const PAGINAS = {
     familia: 'julgados',
     arquivo: 'julgados-creg.min.js',
     iniciar: 'inicializarJulgadosCreg',
-    texto: 'Preparando as sessões…',
-    carregamentoLocal: true
+    texto: 'Preparando as sessões…'
   },
   'acervo-cj': { orgao: 'CJ', familia: 'acervo', arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' },
   // Mesmo script para os dois colegiados: quem escolhe o par de funções do
@@ -53,10 +51,14 @@ function resolverDestinoPermitido(paginaId, orgaos) {
 async function carregarPaginaAutenticada() {
   if (!paginaAtual) return;
 
-  if (!paginaAtual.carregamentoLocal) {
-    sessionLoading.hidden = false;
-    sessionLoading.replaceChildren(criarIndicadorCarregamento(paginaAtual.texto));
-  }
+  // O indicador geral cobre o que acontece antes de a tela existir: a consulta
+  // de permissões e o download do script dela. Antes ele era suprimido nas
+  // telas de julgados, que mostram o andamento dentro da própria lista — só que
+  // essa lista só é montada DEPOIS da consulta de permissões, e no intervalo a
+  // página ficava literalmente vazia (`main.innerText === ''`), que é o quadro
+  // em que a transição entre páginas aterrissava.
+  sessionLoading.hidden = false;
+  sessionLoading.replaceChildren(criarIndicadorCarregamento(paginaAtual.texto));
 
   try {
     const orgaos = await buscarOrgaosAutorizados();
@@ -64,25 +66,21 @@ async function carregarPaginaAutenticada() {
 
     const destino = resolverDestinoPermitido(document.body.dataset.page, orgaos);
     if (destino) {
-      location.replace(destino);
+      redirecionarSemTransicao(destino);
       return;
     }
     if (paginaAtual.orgao && !orgaos.has(paginaAtual.orgao)) throw erroSemPermissao();
 
     aplicarVisibilidadePorOrgao(orgaos);
     await carregarScript(`assets/js/${paginaAtual.arquivo}?v=${ASSET_VERSION}`);
-    // Julgados já apresenta o andamento dentro da própria lista. A chamada
-    // monta esse indicador de forma síncrona antes de devolver a promessa;
-    // então o loading geral pode sair sem deixar um quadro vazio ou competir
-    // com o indicador menor.
+    // Toda tela monta a própria moldura de forma síncrona antes de buscar dado
+    // algum — a lista de pautas, o painel do acervo/histórico, o seletor de
+    // modalidade — e põe o próprio indicador dentro dela. Então o indicador
+    // geral sai aqui, sem deixar quadro vazio e sem competir com o menor.
     const inicializacao = window[paginaAtual.iniciar]();
-    if (paginaAtual.carregamentoLocal) {
-      sessionLoading.hidden = true;
-      sessionLoading.replaceChildren();
-    }
-    await inicializacao;
     sessionLoading.hidden = true;
     sessionLoading.replaceChildren();
+    await inicializacao;
   } catch (err) {
     console.error(err);
     if (err.semPermissao) {

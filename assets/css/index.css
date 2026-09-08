@@ -111,7 +111,70 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html.has-session #loginScreen { display: none !important; }
+/* Transição entre páginas. As oito telas compartilham a mesma moldura — o
+   brasão do Estado, a barra verde, a faixa do rodapé — e um cross-fade de
+   documento inteiro dissolve justamente o que NÃO muda: durante os 250ms o
+   cabeçalho de uma página aparece somado ao da outra, ilegível, e a barra verde
+   desliza (8px no desktop, 23px em 390px) porque o masthead de cada tela quebra
+   em um número diferente de linhas.
+
+   Nomear as três peças as tira do grupo `root`: elas passam a MORFAR de uma
+   posição para a outra, dentro de uma faixa que continua na tela, e só o
+   conteúdo — o que de fato muda entre as telas — faz cross-fade. É o mesmo
+   princípio do livro de registro: a folha vira, o carimbo fica. */
 @view-transition { navigation: auto; }
+
+.page-header-wrapper { view-transition-name: moldura-cabecalho; }
+.green-bar { view-transition-name: moldura-barra; }
+.page-footer { view-transition-name: moldura-rodape; }
+
+/* `view-transition-name` faz do elemento um contexto de empilhamento, e a barra
+   passou a conter o menu de exportação em vez de deixá-lo subir até a raiz: com
+   a barra em `static`, o painel — que vem depois no DOM — passava por cima e só
+   uma fatia do menu aparecia abaixo dela. Posicionar a barra devolve a ordem de
+   pintura que existia antes dos nomes. O 20 é o mesmo do próprio menu; o que
+   precisa ficar acima da barra (toast, skip-link) vive na casa dos milhares. */
+.green-bar { position: relative; z-index: 20; }
+
+/* Sem isto o navegador estica o retrato antigo até a altura do novo, e o texto
+   do cabeçalho aparece esmagado no meio do morph. `object-fit: none` mantém
+   cada retrato no tamanho em que foi tirado, ancorado no topo. */
+::view-transition-old(moldura-cabecalho),
+::view-transition-new(moldura-cabecalho),
+::view-transition-old(moldura-rodape),
+::view-transition-new(moldura-rodape) {
+  height: 100%;
+  object-fit: none;
+  object-position: top center;
+}
+
+/* Dentro da moldura o texto muda — o nome da tela na barra, o título, a frase
+   do rodapé — e o cross-fade padrão sobrepõe os dois: por 250ms a pessoa lê
+   duas frases empilhadas, o que em 390px fica ilegível. Um revezamento resolve:
+   o texto antigo sai primeiro, o novo entra depois, e em nenhum quadro existem
+   dois ao mesmo tempo. A faixa em volta segue morfando sem interrupção — quem
+   reveza é só o conteúdo dela. */
+::view-transition-old(moldura-cabecalho),
+::view-transition-old(moldura-barra),
+::view-transition-old(moldura-rodape) {
+  animation: moldura-sai 110ms ease-out both;
+}
+
+::view-transition-new(moldura-cabecalho),
+::view-transition-new(moldura-barra),
+::view-transition-new(moldura-rodape) {
+  animation: moldura-entra 140ms ease-out 110ms both;
+}
+
+/* O revezamento acima apaga o retrato antigo antes de acender o novo, e o
+   retrato inclui o fundo: sem isto a faixa verde some por um instante no meio
+   da troca — o carimbo piscando, que é justamente o que não pode acontecer.
+   O grupo é o contêiner que morfa de uma posição para a outra; pintar o fundo
+   NELE mantém a faixa sólida do começo ao fim, e quem reveza é só o texto. */
+::view-transition-group(moldura-cabecalho) { background: var(--surface-raised); }
+::view-transition-group(moldura-barra),
+::view-transition-group(moldura-rodape) { background: var(--accent); }
+
 html { min-width: 320px; }
 
 body {
@@ -845,6 +908,7 @@ tbody tr:hover td { background: var(--table-row-hover); }
 
 .session-loading .loading-state,
 .detalhe-loading .loading-state,
+.painel-carregando .loading-state,
 #pautasContainer .loading-state {
   animation: spinner-fade-in 180ms ease-out 150ms backwards;
 }
@@ -972,7 +1036,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-panel);
-  animation: dashboard-reveal 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .acervo-header {
@@ -1152,6 +1215,20 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   border-radius: 0 0 var(--radius-card) var(--radius-card);
   background: var(--surface-raised);
 }
+
+/* A entrada de 480ms pertence aos DADOS, não à moldura. Enquanto o painel
+   inteiro só aparecia depois da resposta, uma coisa era a outra; agora a moldura
+   entra antes, junto com a transição de página, e animá-la de novo empilharia
+   duas chegadas seguidas para depois a tabela surgir sem nenhuma. Aqui a moldura
+   chega quieta e é a tabela que assenta. */
+.acervo-table-shell .table-scroll:not([hidden]) {
+  animation: dashboard-reveal 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Sem crescer, o indicador deixava o rodapé do painel no meio da altura e um
+   vão branco embaixo dele — a moldura só fica igual à da tabela se o que ocupa
+   o lugar dela ocupar também o espaço dela. */
+.acervo-table-shell .painel-carregando { flex: 1 1 auto; }
 
 .acervo-table-shell .empty-state {
   margin: 0;
@@ -1400,7 +1477,19 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   place-items: center;
 }
 
-.detalhe-loading .loading-state {
+/* O mesmo indicador, no lugar da tabela enquanto o painel do acervo/histórico
+   busca os dados. A moldura do painel — título, escopo, rodapé — já está na
+   tela: é ela que a transição de página entrega, e não um spinner solto no
+   meio de uma página em branco. */
+.painel-carregando {
+  display: grid;
+  min-height: clamp(220px, 38vh, 360px);
+  padding: 40px 20px;
+  place-items: center;
+}
+
+.detalhe-loading .loading-state,
+.painel-carregando .loading-state {
   width: auto;
   min-height: 0;
   flex-direction: column;
@@ -1413,7 +1502,8 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   text-align: center;
 }
 
-.detalhe-loading .loading-spinner {
+.detalhe-loading .loading-spinner,
+.painel-carregando .loading-spinner {
   width: 40px;
   height: 40px;
   border-width: 3px;
@@ -1855,6 +1945,8 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes toast-enter { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes moldura-sai { to { opacity: 0; } }
+@keyframes moldura-entra { from { opacity: 0; } }
 @keyframes dashboard-reveal {
   from { opacity: 0.72; clip-path: inset(0 0 7% 0); transform: translateY(12px); }
   to { opacity: 1; clip-path: inset(0 0 0 0); transform: translateY(0); }
@@ -2257,12 +2349,16 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     display: block !important;
   }
 
+  .acervo-panel,
+  .acervo-table-shell .table-scroll {
+    animation: none !important;
+  }
+
   .acervo-panel {
     overflow: visible !important;
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
-    animation: none !important;
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;
@@ -2557,10 +2653,17 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+
+  /* A transição entre páginas é a única animação do projeto que `animation:
+     none` não alcança: ela não nasce de uma regra de animação, nasce da regra
+     @view-transition. Desligar a navegação é o que de fato a apaga — os
+     pseudo-elementos nem chegam a ser criados. */
+  @view-transition { navigation: none; }
   .loading-spinner { animation: none; }
   .toast { animation: none; }
   .session-loading .loading-state,
   .detalhe-loading .loading-state,
+  .painel-carregando .loading-state,
   #pautasContainer .loading-state { animation: none; }
   #modeSelector:not([hidden]),
   #sorteadorContent:not([hidden]),
@@ -2575,7 +2678,8 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .pill,
   .pauta-card { transition: none; }
 
-  .acervo-panel { animation: none; }
+  .acervo-panel,
+  .acervo-table-shell .table-scroll { animation: none; }
   .selection-card-records.tem-pendencia { animation: none; }
   .acervo-table td.acervo-detalhe { transition: none; }
   .detalhe-dialog::backdrop { backdrop-filter: none; -webkit-backdrop-filter: none; }
