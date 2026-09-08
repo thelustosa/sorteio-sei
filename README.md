@@ -38,6 +38,14 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 - **Travamento de Recurso Inteligente** (CREG): Define automaticamente o campo de recurso como "Não se aplica" e o desabilita caso o assunto selecionado não seja "Auto de Infração".
 - **Defesa no lugar de Recurso** (CJ): na Câmara de Julgamento a 6ª coluna registra se o autuado apresentou **Defesa** (Sim/Não) — é esse o dado que os julgados herdam do acervo. Recurso é conceito do Conselho Regulador e só aparece no modo CREG.
 - **Exportação da Ata em Word**: geração automática da ata de distribuição em formato Word (`.doc`), nomeada dinamicamente (`Sorteio_CREG_18.08.2026.doc`). A ata traz as mesmas colunas da tela — ordem, processo, assunto, recurso (ou defesa, na CJ) e unidade sorteada — para que quem lê o documento consiga conferir a repartição por assunto sem abrir o sistema.
+- **Painel Administrativo**: área restrita a administradores, em [admin.html](admin.html), para corrigir o que já foi gravado — o que antes só se resolvia com SQL direto no banco. Cobre os dois colegiados, com seletor de órgão dentro da própria página, e navega **por data**: a sessão do dia tal, ou a rodada de sorteio do dia tal. A busca não é por número de processo de propósito — quando é o próprio número que está errado, procurar por ele não acha nada, e corrigi-lo é uma das operações do painel.
+
+  Cada operação tem porta própria no banco, com allowlist de campos e validação: corrigir voto, status, data da sessão e número da pauta (inclusive **desfazer**, voltando um campo a vazio, que a tela de julgamentos não permite por desenho); corrigir a distribuição gravada pelo sorteio; religar um julgado ao acervo; e corrigir o número do processo. **Corrigir** e **redistribuir** são ações distintas e é essa a diferença que importa: a correção propaga aos julgados que copiaram a distribuição, porque o erro foi copiado junto; a redistribuição não propaga, porque o julgado registra quem de fato levou o processo à mesa e reescrever isso apagaria história.
+
+  Nada grava em um passo: a confirmação mostra o que muda de quê para quê e, na correção de acervo, quais julgados vão junto. Toda alteração deixa uma linha em `auditoria_admin` com autor, horário, motivo e os valores anterior e posterior — uma linha por registro tocado, na mesma transação. A tabela é append-only por construção: não existe política de INSERT nela, nem para o administrador; quem grava são as funções `SECURITY DEFINER`.
+
+  O papel de administrador é por órgão, numa coluna `papel` de `permissoes_usuario`, e é concedido por operação privilegiada de banco — não há tela de gestão de usuários. A secretaria de cada colegiado continua exatamente com o acesso que já tinha.
+
 - **Registro de Julgamentos**: página própria onde a secretaria abre uma pauta e preenche o voto e o status de cada processo julgado. Os processos chegam sozinhos das pautas publicadas pela AGR, e cada preenchimento guarda quem fez e quando.
 - **Histórico de Sorteios**: card na tela principal com um botão por colegiado, que abre [historico-creg.html](historico-creg.html) ou [historico-cj.html](historico-cj.html). A lista traz uma rodada por linha, da mais recente para a mais antiga, com a data (e o dia da semana), o horário, quantos processos entraram e para quais cadeiras ou unidades foram — cada destino com a sua parcela ao lado, e a soma dessas parcelas é o total da linha. Clicar em **Ver processos** abre a rodada inteira: ordem, número do processo, cadeira ou unidade sorteada (com o conselheiro da época, na Câmara), assunto, defesa ou recurso e, no Conselho, o interessado. Clicar num destino abre o mesmo card já filtrado por ele — "o que foi para a CJ3 nesta rodada" sem passar os olhos pela lista inteira.
 
@@ -77,6 +85,7 @@ endereço não existe. Todo o resto está agrupado por natureza.
 ├── acervo-creg.html        painel do acervo (Conselho) — mesmo acervo.js
 ├── historico-cj.html       histórico de sorteios (Câmara)
 ├── historico-creg.html     histórico de sorteios (Conselho) — mesmo historico.js
+├── admin.html              painel administrativo (os dois colegiados, seletor dentro)
 ├── 404.html                página de endereço inexistente
 │
 ├── assets/
@@ -89,6 +98,7 @@ endereço não existe. Todo o resto está agrupado por natureza.
 │   │   ├── julgados-creg.js  o mesmo, para o Conselho Regulador
 │   │   ├── acervo.js       fonte do painel do acervo dos dois colegiados
 │   │   ├── historico.js    fonte do histórico de sorteios dos dois colegiados
+│   │   ├── admin.js        fonte do painel administrativo dos dois colegiados
 │   │   ├── supabase.js     configuração, login e chamadas — usado pelas duas páginas
 │   │   └── *.min.js        versões otimizadas servidas pelo site
 │   ├── fonts/              Montserrat em .woff2 e a licença OFL

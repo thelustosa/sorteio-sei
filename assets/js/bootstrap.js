@@ -27,7 +27,12 @@ const PAGINAS = {
   // Mesmo script para os dois colegiados, como o painel do acervo: quem escolhe
   // o vocabulário e a sigla que vai ao banco é o data-colegiado do <body>
   // (ver COLEGIADOS em historico.js).
-  'historico-creg': { orgao: 'CREG', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Preparando o histórico…' }
+  'historico-creg': { orgao: 'CREG', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Preparando o histórico…' },
+  // A primeira página sem órgão fixo: o painel administrativo atende os dois
+  // colegiados e traz o seletor dentro dele. Por isso não entra por `orgao`,
+  // que é o que redireciona quem abre a URL do colegiado errado, e sim por
+  // `exigeAdmin` — quem decide se ela abre é o papel, não a página.
+  admin: { exigeAdmin: true, arquivo: 'admin.min.js', iniciar: 'inicializarAdmin', texto: 'Preparando o painel…' }
 };
 
 const DESTINOS = {
@@ -72,12 +77,26 @@ async function carregarPaginaAutenticada() {
     if (paginaAtual.orgao && !orgaos.has(paginaAtual.orgao)) throw erroSemPermissao();
 
     aplicarVisibilidadePorOrgao(orgaos);
+
+    // O papel de administrador custa uma consulta a mais, então só é buscado
+    // onde muda alguma coisa: no próprio painel, e na tela inicial, que decide
+    // se mostra o link para ele. As outras páginas seguem com uma consulta só.
+    let orgaosAdmin = new Set();
+    if (paginaAtual.exigeAdmin || document.querySelector('[data-admin]')) {
+      orgaosAdmin = await buscarOrgaosAdministrados();
+      if (paginaAtual.exigeAdmin && orgaosAdmin.size === 0) throw erroSemPermissao();
+      aplicarVisibilidadeAdmin(orgaosAdmin);
+    }
+
     await carregarScript(`assets/js/${paginaAtual.arquivo}?v=${ASSET_VERSION}`);
     // Toda tela monta a própria moldura de forma síncrona antes de buscar dado
     // algum — a lista de pautas, o painel do acervo/histórico, o seletor de
     // modalidade — e põe o próprio indicador dentro dela. Então o indicador
     // geral sai aqui, sem deixar quadro vazio e sem competir com o menor.
-    const inicializacao = window[paginaAtual.iniciar]();
+    // O painel recebe os órgãos que pode administrar — é o que monta o seletor,
+    // e é dado que só o bootstrap tem. As demais telas ignoram o argumento:
+    // quem escolhe o colegiado nelas é o data-colegiado do <body>.
+    const inicializacao = window[paginaAtual.iniciar](orgaosAdmin);
     sessionLoading.hidden = true;
     sessionLoading.replaceChildren();
     await inicializacao;

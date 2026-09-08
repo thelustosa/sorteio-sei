@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#00534b" />
+  <meta name="description"
+    content="Painel administrativo do Sorteio de Processos SEI: correção auditável de registros de sorteio e de sessões de julgamento da AGR." />
+  <title>Painel Administrativo — Sorteio de Processos SEI</title>
+  <link rel="preconnect" href="https://giipnmpfclfudkzflwsv.supabase.co" crossorigin />
+  <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
+  <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="icon" href="assets/img/favicon.png" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=b680488c4f" />
+  <script>
+    (function () {
+      try {
+        if (sessionStorage.getItem('sorteio-sei.access-token')) {
+          document.documentElement.classList.add('has-session');
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <script type="speculationrules">
+    {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
+  </script>
+  <script defer src="assets/js/supabase.min.js?v=b680488c4f"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=b680488c4f"></script>
+</head>
+
+<body data-page="admin">
+  <a class="skip-link" href="#conteudo-principal">Pular para o conteúdo principal</a>
+  <div class="page-header-wrapper">
+    <div class="container">
+      <header>
+        <div class="logo">
+          <img src="assets/img/logo_header.png" alt="Governo de Goiás" width="120" height="55" />
+        </div>
+        <div class="header-copy">
+          <p class="institution-name">Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</p>
+          <h1>Painel Administrativo</h1>
+          <p class="lead">Correção dos registros de sorteio e das sessões de julgamento. Toda alteração fica registrada.</p>
+        </div>
+      </header>
+    </div>
+  </div>
+
+  <nav class="green-bar" aria-label="Navegação do sistema">
+    <div class="container">
+      <span id="txtModo">Manutenção de dados</span>
+      <div class="nav-actions">
+        <a id="btnVoltarInicio" class="nav-action" href="./index.html" data-sessao hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15.5 10h-11"></path>
+            <path d="m8.5 6-4 4 4 4"></path>
+          </svg>
+          <span>Início</span>
+        </a>
+        <button id="btnVoltar" class="nav-action" type="button" hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15.5 10h-11"></path>
+            <path d="m8.5 6-4 4 4 4"></path>
+          </svg>
+          <span>Voltar</span>
+        </button>
+        <button id="btnSair" class="nav-action" type="button" hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"></path>
+            <path d="m11 7 3 3-3 3"></path>
+            <path d="M14 10H8"></path>
+          </svg>
+          <span>Sair</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="conteudo-principal" class="container pb-36" tabindex="-1">
+    <div class="card">
+      <div id="loginScreen">
+        <h2>Acesso restrito</h2>
+        <p>Identifique-se para acessar o painel administrativo.</p>
+        <form id="loginForm">
+          <label for="loginEmail">E-mail</label>
+          <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
+          <label for="loginSenha">Senha</label>
+          <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+          <button id="btnEntrar" type="submit">Entrar</button>
+          <div id="loginErro" role="alert" aria-live="assertive"></div>
+        </form>
+      </div>
+
+      <div id="sessionLoading" class="session-loading" data-sessao hidden></div>
+
+      <div id="adminPainel" data-sessao hidden>
+        <!-- O seletor é montado por admin.js a partir dos órgãos que ESTE
+             usuário administra: quem é admin só do Conselho não vê a opção da
+             Câmara, e com um órgão só o seletor nem aparece. -->
+        <section id="seletorOrgaoCard" class="selection-card selection-card-records"
+          aria-labelledby="seletorOrgaoTitulo" hidden>
+          <div class="selection-copy">
+            <h2 id="seletorOrgaoTitulo" tabindex="-1">Órgão</h2>
+            <p class="mode-description">Selecione o colegiado cujos registros serão consultados ou corrigidos.</p>
+          </div>
+          <div id="seletorOrgao" class="buttons-wrapper" role="group" aria-label="Colegiado a administrar">
+            <button class="mode-button mode-button-outline" type="button" data-orgao-admin="CREG" hidden>Conselho Regulador (CREG)</button>
+            <button class="mode-button mode-button-outline" type="button" data-orgao-admin="CJ" hidden>Câmara de Julgamento (CJ)</button>
+          </div>
+        </section>
+
+        <div id="abas" class="admin-abas" role="tablist" aria-label="Áreas do painel">
+          <button id="abaSessoes" class="admin-aba" type="button" role="tab" data-aba="sessoes"
+            aria-selected="true" aria-controls="painelConteudo">Sessões</button>
+          <button id="abaSorteios" class="admin-aba" type="button" role="tab" data-aba="sorteios"
+            aria-selected="false" aria-controls="painelConteudo">Sorteios</button>
+          <button id="abaAuditoria" class="admin-aba" type="button" role="tab" data-aba="auditoria"
+            aria-selected="false" aria-controls="painelConteudo">Auditoria</button>
+        </div>
+
+        <div id="painelConteudo" class="acervo-table-shell" role="tabpanel" tabindex="-1">
+          <header class="acervo-header">
+            <div class="acervo-header-main">
+              <h2 id="painelTitulo" class="acervo-subtitle" tabindex="-1">Sessões de julgamento</h2>
+              <p id="painelDescricao" class="mode-description">Selecione a data da sessão para ver e corrigir os processos julgados.</p>
+            </div>
+          </header>
+
+          <div id="painelCarregando" class="painel-carregando" hidden></div>
+          <div id="painelErro" class="load-error" role="alert" hidden>
+            <p></p>
+            <button id="btnTentarNovamente" class="button-secondary" type="button">Tentar novamente</button>
+          </div>
+          <div id="painelVazio" class="empty-state" role="status" hidden>
+            <div class="empty-state-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 8v4l3 2"></path><circle cx="12" cy="12" r="9"></circle>
+              </svg>
+            </div>
+            <div>
+              <h3 id="painelVazioTitulo">Nada para mostrar</h3>
+              <p id="painelVazioTexto"></p>
+            </div>
+          </div>
+
+          <div class="table-scroll" role="region" aria-labelledby="painelTitulo" tabindex="0">
+            <table id="painelTable" class="historico-table"></table>
+          </div>
+
+          <footer class="acervo-panel-footer">
+            <div class="acervo-updated" role="status" aria-live="polite" aria-atomic="true">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span id="painelStatus">Carregando…</span>
+            </div>
+          </footer>
+        </div>
+      </div>
+
+      <!-- Edição e confirmação no mesmo <dialog> nativo do painel do acervo e do
+           histórico: modo modal, fechamento por Escape e devolução do foco sem
+           acessibilidade escrita à mão.
+
+           São duas etapas dentro dele. A primeira é o formulário; a segunda
+           mostra o que muda de quê para quê e, na correção de acervo, quais
+           julgados vão junto. Nada é gravado antes da segunda. -->
+      <dialog id="edicaoDialog" class="detalhe-dialog" aria-labelledby="edicaoTitulo">
+        <header class="detalhe-header">
+          <div class="detalhe-identidade">
+            <h2 id="edicaoTitulo">Corrigir registro</h2>
+            <p id="edicaoResumo" class="detalhe-resumo"></p>
+          </div>
+          <div class="detalhe-acoes">
+            <button id="btnFecharEdicao" class="nav-action detalhe-fechar" type="button" aria-label="Fechar">
+              <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+                <path d="m6 6 8 8"></path><path d="m14 6-8 8"></path>
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="detalhe-corpo">
+          <form id="edicaoForm">
+            <div id="edicaoEtapaCampos">
+              <div id="edicaoCampos" class="admin-campos"></div>
+              <label for="edicaoMotivo">Motivo da alteração <span class="small">(opcional, fica no registro)</span></label>
+              <input id="edicaoMotivo" type="text" maxlength="200" placeholder="Ex.: ata da sessão confere Anular">
+            </div>
+
+            <div id="edicaoEtapaConfirmacao" hidden>
+              <p class="mode-description">Confira a alteração antes de gravar.</p>
+              <ul id="edicaoDelta" class="admin-delta"></ul>
+              <div id="edicaoImpacto" class="admin-impacto" hidden>
+                <h3 id="edicaoImpactoTitulo">Julgados que serão alterados junto</h3>
+                <ul id="edicaoImpactoLista"></ul>
+              </div>
+            </div>
+
+            <div id="edicaoErro" class="load-error" role="alert" hidden><p></p></div>
+
+            <div class="table-toolbar">
+              <button id="btnCancelarEdicao" class="button-secondary" type="button">Cancelar</button>
+              <button id="btnAvancarEdicao" type="submit">Revisar alteração</button>
+            </div>
+          </form>
+        </div>
+      </dialog>
+    </div>
+  </main>
+
+  <footer class="page-footer">
+    <div class="footer-container">
+      <div class="logo footer-logo">
+        <img src="assets/img/logo_footer.png" alt="Estado de Goiás" width="104" height="48" />
+      </div>
+      <p class="footer-info">
+        Área restrita a administradores. Correção de registros já gravados pelo sorteio<br>
+        ou vindos das pautas publicadas pela AGR, com autor, horário e valor anterior guardados.
+      </p>
+      <div class="footer-meta">
+        <div class="footer-version">Versão 3.8</div>
+        <p class="footer-credit">Desenvolvido por <strong>Lucas Lustosa Coelho e Leonardo Ferreira Amichi</strong>.</p>
+      </div>
+    </div>
+  </footer>
+
+</body>
+
+</html>
