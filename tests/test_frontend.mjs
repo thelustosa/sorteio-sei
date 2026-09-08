@@ -59,6 +59,9 @@ class Node {
   matches(selector) {
     if (selector.startsWith('.')) return this.classList.contains(selector.slice(1));
     if (selector === '[data-orgao]') return Object.hasOwn(this.dataset, 'orgao');
+    if (selector === '[data-orgao-admin]') return Object.hasOwn(this.dataset, 'orgaoAdmin');
+    if (selector === '[data-aba]') return Object.hasOwn(this.dataset, 'aba');
+    if (selector === '[data-admin]') return Object.hasOwn(this.dataset, 'admin');
     if (selector === '[data-login-only]') return Object.hasOwn(this.dataset, 'loginOnly');
     if (selector === '[data-export-format]') return Object.hasOwn(this.dataset, 'exportFormat');
     if (selector === '[role="menuitem"]') return this.role === 'menuitem';
@@ -2357,4 +2360,456 @@ test('falha ao exportar a ata avisa dentro do próprio card', async () => {
   const erro = page.document.getElementById('detalheErro');
   assert.equal(erro.hidden, false);
   assert.match(erro.children[0].textContent, /Não foi possível gerar o arquivo.*download bloqueado/);
+});
+
+// ── Painel administrativo ────────────────────────────────────────────────────
+// A tela é a primeira que grava por cima de dado alheio, então o que os testes
+// perseguem é o que a distingue das outras: quem enxerga o painel, que a
+// gravação exige duas etapas, e que o corpo enviado ao banco carrega SÓ o que
+// de fato mudou — mandar campo intocado junto reescreveria valor que ninguém
+// pediu para mexer.
+function adminPage({ api = async () => null, aviso = () => {} } = {}) {
+  const document = new Document();
+  const avisos = [];
+  const registrarAviso = (texto, tipo) => { avisos.push({ texto, tipo }); aviso(texto, tipo); };
+
+  ['seletorOrgaoCard', 'seletorOrgao', 'abas', 'adminPainel', 'painelConteudo', 'painelTitulo',
+   'painelDescricao', 'painelCarregando', 'painelErro', 'painelVazio', 'painelVazioTitulo',
+   'painelVazioTexto', 'painelStatus', 'edicaoResumo', 'edicaoTitulo', 'edicaoCampos',
+   'edicaoEtapaCampos', 'edicaoEtapaConfirmacao', 'edicaoDelta', 'edicaoImpacto',
+   'edicaoImpactoLista', 'edicaoErro'].forEach(id => document.add(id, 'div'));
+  ['btnTentarNovamente', 'btnVoltar', 'btnAvancarEdicao', 'btnCancelarEdicao',
+   'btnFecharEdicao'].forEach(id => document.add(id, 'button'));
+  document.add('painelTable', 'table');
+  document.add('edicaoMotivo', 'input');
+
+  const dialogo = document.add('edicaoDialog', 'dialog');
+  dialogo.aberto = false;
+  dialogo.showModal = () => { dialogo.aberto = true; };
+  dialogo.close = () => { dialogo.aberto = false; dialogo.dispatch('close'); };
+
+  const form = document.add('edicaoForm', 'form');
+  // O <form> real resolve elements[nome]; aqui a busca é pelos descendentes,
+  // que é o que o navegador faz por baixo.
+  form.elements = new Proxy({}, {
+    get(_, nome) {
+      return document.getElementById('edicaoCampos')
+        .descendants().find(no => no.name === nome) || undefined;
+    }
+  });
+
+  document.getElementById('painelErro').appendChild(document.createElement('p'));
+  document.getElementById('edicaoErro').appendChild(document.createElement('p'));
+
+  const seletor = document.getElementById('seletorOrgao');
+  ['CREG', 'CJ'].forEach(orgao => {
+    const botao = document.createElement('button');
+    botao.dataset.orgaoAdmin = orgao;
+    botao.hidden = true;
+    seletor.appendChild(botao);
+  });
+  const abas = document.getElementById('abas');
+  ['sessoes', 'sorteios', 'auditoria'].forEach(nome => {
+    const botao = document.createElement('button');
+    botao.dataset.aba = nome;
+    abas.appendChild(botao);
+  });
+  document.body.append(seletor, abas, document.getElementById('edicaoCampos'));
+
+  const app = new Function('document', 'api', 'aviso', 'criarIndicadorCarregamento',
+    'alternarBotaoCarregando', 'rotularCadeira',
+    `${source('admin.js')}\nreturn { inicializarAdmin, VOCABULARIO };`)(
+    document, api, registrarAviso, () => document.createElement('div'), () => {}, rotularCadeira);
+
+  const botaoDeOrgao = orgao => seletor.children.find(b => b.dataset.orgaoAdmin === orgao);
+  const botaoDeAba = nome => abas.children.find(b => b.dataset.aba === nome);
+  const linhasDaTabela = () => document.getElementById('painelTable').children[1]?.children || [];
+  const acao = (indice, rotulo) => {
+    const celula = linhasDaTabela()[indice].children.at(-1);
+    return celula.children[0].children.find(b => b.textContent === rotulo);
+  };
+  const campo = nome => document.getElementById('edicaoCampos')
+    .descendants().find(no => no.name === nome);
+
+  return { ...app, document, avisos, dialogo, form, botaoDeOrgao, botaoDeAba,
+           linhasDaTabela, acao, campo };
+}
+
+const SESSOES = [{ data_sessao: '2026-07-09', pauta: 24, processos: 2, pendentes: 1 }];
+const PROCESSOS_SESSAO = [
+  { id: 41, num_processo: '202600000000001', pauta: 24, voto: 'Manter', status: 'Julgado',
+    destino: 'CJ3', data_distribuicao: '2026-06-18', acervo_id: 7,
+    atualizado_por: null, atualizado_em: null }
+];
+const SORTEIOS = [{ data_distribuicao: '2026-06-18', sorteado_em: null, origem: 'sorteio',
+                    processos: 1, destinos: ['CJ3'] }];
+const PROCESSOS_ACERVO = [
+  { id: 7, ordem: 1, num_processo: '202600000000001', destino: 'CJ3',
+    assunto: 'Auto de Infração', decisao: 'Sim', interessado: null,
+    origem: 'sorteio', julgados: 1 }
+];
+
+function apiDoPainel(chamadas, respostas = {}) {
+  return async (caminho, opcoes) => {
+    chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+    if (caminho in respostas) {
+      const resposta = respostas[caminho];
+      return typeof resposta === 'function' ? resposta() : resposta;
+    }
+    if (caminho === 'rpc/admin_sessoes') return SESSOES;
+    if (caminho === 'rpc/admin_processos_sessao') return PROCESSOS_SESSAO;
+    if (caminho === 'rpc/admin_sorteios') return SORTEIOS;
+    if (caminho === 'rpc/admin_processos_acervo') return PROCESSOS_ACERVO;
+    if (caminho === 'rpc/admin_julgados_do_acervo') {
+      return [{ id: 41, num_processo: '202600000000001', data_sessao: '2026-07-09',
+                pauta: 24, voto: 'Manter', status: 'Julgado', destino: 'CJ3',
+                data_distribuicao: '2026-06-18' }];
+    }
+    return { alterados: {}, propagados: [] };
+  };
+}
+
+test('o seletor mostra so os orgaos que o usuario administra', async () => {
+  const page = adminPage({ api: apiDoPainel([]) });
+  await page.inicializarAdmin(new Set(['CREG']));
+
+  assert.equal(page.botaoDeOrgao('CREG').hidden, false);
+  assert.equal(page.botaoDeOrgao('CJ').hidden, true,
+    'quem administra só o Conselho não pode ver a opção da Câmara');
+  assert.equal(page.document.getElementById('seletorOrgaoCard').hidden, true,
+    'com um órgão só, o seletor não é escolha');
+});
+
+test('com os dois orgaos o seletor aparece e comeca pela Camara', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas) });
+  await page.inicializarAdmin(new Set(['CJ', 'CREG']));
+
+  assert.equal(page.document.getElementById('seletorOrgaoCard').hidden, false);
+  assert.equal(chamadas[0].corpo.p_colegiado, 'CJ');
+
+  page.botaoDeOrgao('CREG').dispatch('click');
+  await wait();
+  assert.equal(chamadas.at(-1).corpo.p_colegiado, 'CREG',
+    'trocar de órgão tem de recarregar a lista pelo colegiado novo');
+});
+
+test('cada aba consulta a sua propria porta do banco', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  assert.equal(chamadas.at(-1).caminho, 'rpc/admin_sessoes');
+
+  page.botaoDeAba('sorteios').dispatch('click');
+  await wait();
+  assert.equal(chamadas.at(-1).caminho, 'rpc/admin_sorteios');
+
+  page.botaoDeAba('auditoria').dispatch('click');
+  await wait();
+  assert.equal(chamadas.at(-1).caminho, 'rpc/admin_auditoria');
+});
+
+test('a navegacao e por data: abrir a sessao pede os processos daquele dia', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+
+  page.acao(0, 'Abrir').dispatch('click');
+  await wait();
+
+  assert.equal(chamadas.at(-1).caminho, 'rpc/admin_processos_sessao');
+  assert.equal(chamadas.at(-1).corpo.p_data_sessao, '2026-07-09');
+  assert.equal(page.document.getElementById('btnVoltar').hidden, false);
+});
+
+test('gravar exige duas etapas: a primeira so monta a confirmacao', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir').dispatch('click');
+  assert.equal(page.dialogo.aberto, true);
+
+  page.campo('voto').value = 'Anular';
+  const antes = chamadas.length;
+  page.form.dispatch('submit');
+  await wait();
+
+  assert.equal(chamadas.length, antes, 'a primeira etapa não pode gravar nada');
+  assert.equal(page.document.getElementById('edicaoEtapaConfirmacao').hidden, false);
+  assert.match(page.document.getElementById('edicaoDelta').children[0].textContent,
+    /Voto: Manter → Anular/);
+});
+
+test('o corpo enviado leva so o campo que mudou', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir').dispatch('click');
+  page.campo('voto').value = 'Anular';
+  page.document.getElementById('edicaoMotivo').value = 'ata confere Anular';
+  page.form.dispatch('submit');
+  await wait();
+  page.form.dispatch('submit');
+  await wait();
+
+  const gravacao = chamadas.find(c => c.caminho === 'rpc/admin_corrigir_julgado_cj');
+  assert.deepEqual(gravacao.corpo.p_campos, { voto: 'Anular' },
+    'status, pauta e data não mudaram: mandá-los junto reescreveria valor intocado');
+  assert.equal(gravacao.corpo.p_id, 41);
+  assert.equal(gravacao.corpo.p_motivo, 'ata confere Anular');
+  assert.equal(page.dialogo.aberto, false);
+  assert.equal(page.avisos.at(-1).tipo, 'sucesso');
+});
+
+test('deixar o campo em branco desfaz o registro, com null explicito', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir').dispatch('click');
+  page.campo('status').value = '';
+  page.form.dispatch('submit');
+  await wait();
+  page.form.dispatch('submit');
+  await wait();
+
+  const gravacao = chamadas.find(c => c.caminho === 'rpc/admin_corrigir_julgado_cj');
+  assert.deepEqual(gravacao.corpo.p_campos, { status: null },
+    'chave presente com null é o que o banco lê como "apagar"');
+});
+
+test('confirmar sem ter mudado nada e recusado antes de sair da tela', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir').dispatch('click');
+  const antes = chamadas.length;
+  page.form.dispatch('submit');
+  await wait();
+
+  assert.equal(chamadas.length, antes);
+  assert.equal(page.document.getElementById('edicaoErro').hidden, false);
+  assert.match(page.document.getElementById('edicaoErro').children[0].textContent,
+    /Nenhuma alteração/);
+});
+
+test('corrigir o acervo mostra os julgados que vao junto; redistribuir nao', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('sorteios').dispatch('click');
+  await wait();
+  page.acao(0, 'Abrir').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir').dispatch('click');
+  page.campo('relator').value = 'CJ4';
+  page.form.dispatch('submit');
+  await wait();
+
+  assert.equal(page.document.getElementById('edicaoImpacto').hidden, false);
+  assert.match(page.document.getElementById('edicaoImpactoLista').children[0].textContent,
+    /Sessão de 09\/07\/2026/);
+
+  page.dialogo.close();
+  page.acao(0, 'Redistribuir').dispatch('click');
+  page.campo('relator').value = 'CJ4';
+  page.form.dispatch('submit');
+  await wait();
+
+  assert.equal(page.document.getElementById('edicaoImpacto').hidden, true,
+    'redistribuição preserva os julgados: listá-los sugeriria o contrário');
+});
+
+test('corrigir e redistribuir batem em portas diferentes do banco', async () => {
+  for (const [rotulo, porta] of [['Corrigir', 'rpc/admin_corrigir_acervo_cj'],
+                                 ['Redistribuir', 'rpc/admin_redistribuir_cj']]) {
+    const chamadas = [];
+    const page = adminPage({ api: apiDoPainel(chamadas) });
+    await page.inicializarAdmin(new Set(['CJ']));
+    page.botaoDeAba('sorteios').dispatch('click');
+    await wait();
+    page.acao(0, 'Abrir').dispatch('click');
+    await wait();
+
+    page.acao(0, rotulo).dispatch('click');
+    page.campo('relator').value = 'CJ4';
+    page.form.dispatch('submit');
+    await wait();
+    page.form.dispatch('submit');
+    await wait();
+
+    assert.ok(chamadas.some(c => c.caminho === porta),
+      `${rotulo} deveria chamar ${porta}`);
+  }
+});
+
+test('cadeira fora do padrao e recusada antes de chegar ao banco', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('sorteios').dispatch('click');
+  await wait();
+  page.acao(0, 'Abrir').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir').dispatch('click');
+  page.campo('relator').value = 'CREG1';
+  const antes = chamadas.length;
+  page.form.dispatch('submit');
+  await wait();
+
+  assert.equal(chamadas.length, antes);
+  assert.match(page.document.getElementById('edicaoErro').children[0].textContent,
+    /Relator inválido/);
+});
+
+test('o numero do processo e corrigivel de dentro da sessao, com escopo', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Nº').dispatch('click');
+  page.campo('num_novo').value = '202600000009999';
+  page.campo('escopo').value = 'tudo';
+  page.form.dispatch('submit');
+  await wait();
+  page.form.dispatch('submit');
+  await wait();
+
+  const gravacao = chamadas.find(c => c.caminho === 'rpc/admin_corrigir_processo_cj');
+  assert.equal(gravacao.corpo.p_num_atual, '202600000000001');
+  assert.equal(gravacao.corpo.p_num_novo, '202600000009999');
+  assert.equal(gravacao.corpo.p_escopo, 'tudo');
+});
+
+test('numero com menos de 15 digitos nem sai da tela', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Nº').dispatch('click');
+  page.campo('num_novo').value = '12345';
+  const antes = chamadas.length;
+  page.form.dispatch('submit');
+  await wait();
+
+  assert.equal(chamadas.length, antes);
+  assert.match(page.document.getElementById('edicaoErro').children[0].textContent, /15 dígitos/);
+});
+
+test('erro do banco vira aviso e mantem o dialogo aberto para corrigir', async () => {
+  const chamadas = [];
+  const page = adminPage({
+    api: apiDoPainel(chamadas, {
+      'rpc/admin_corrigir_julgado_cj': () => {
+        throw new Error('acesso administrativo ao orgao CJ nao autorizado');
+      }
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir').dispatch('click');
+  page.campo('voto').value = 'Anular';
+  page.form.dispatch('submit');
+  await wait();
+  page.form.dispatch('submit');
+  await wait();
+
+  assert.equal(page.dialogo.aberto, true, 'fechar apagaria o que a pessoa digitou');
+  assert.equal(page.avisos.at(-1).tipo, 'erro');
+  assert.match(page.document.getElementById('edicaoErro').children[0].textContent,
+    /nao autorizado/);
+});
+
+test('falha ao carregar a lista oferece nova tentativa em vez de tela vazia', async () => {
+  let falhar = true;
+  const chamadas = [];
+  const page = adminPage({
+    api: apiDoPainel(chamadas, {
+      'rpc/admin_sessoes': () => {
+        if (falhar) throw new Error('sem rede');
+        return SESSOES;
+      }
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+
+  assert.equal(page.document.getElementById('painelErro').hidden, false);
+  assert.match(page.document.getElementById('painelErro').children[0].textContent, /sem rede/);
+
+  falhar = false;
+  page.document.getElementById('btnTentarNovamente').dispatch('click');
+  await wait();
+  assert.equal(page.document.getElementById('painelErro').hidden, true);
+  assert.equal(page.linhasDaTabela().length, 1);
+});
+
+test('a lista vazia explica o que falta, e nao fica em branco', async () => {
+  const page = adminPage({ api: apiDoPainel([], { 'rpc/admin_sessoes': [] }) });
+  await page.inicializarAdmin(new Set(['CJ']));
+
+  assert.equal(page.document.getElementById('painelVazio').hidden, false);
+  assert.match(page.document.getElementById('painelVazioTexto').textContent, /pauta da AGR/);
+});
+
+test('o Conselho usa o proprio vocabulario no formulario', async () => {
+  const chamadas = [];
+  const page = adminPage({
+    api: apiDoPainel(chamadas, {
+      'rpc/admin_processos_acervo': [{ id: 9, ordem: 1, num_processo: '202600000000002',
+        destino: 'CREG2', assunto: 'Requerimento', decisao: 'Com recurso',
+        interessado: 'Fulano', origem: 'sorteio', julgados: 0 }],
+      'rpc/admin_sorteios': [{ data_distribuicao: '2026-06-18', sorteado_em: null,
+        origem: 'sorteio', processos: 1, destinos: ['CREG2'] }]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CREG']));
+  page.botaoDeAba('sorteios').dispatch('click');
+  await wait();
+  page.acao(0, 'Abrir').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir').dispatch('click');
+  assert.ok(page.campo('unidade'), 'no Conselho o destino é a unidade, não o relator');
+  assert.ok(page.campo('recurso'), 'a 6ª coluna do Conselho é Recurso, não Defesa');
+  assert.ok(page.campo('interessado'), 'interessado só existe no Conselho');
+  assert.equal(page.campo('defesa'), undefined);
+
+  page.campo('unidade').value = 'CREG3';
+  page.form.dispatch('submit');
+  await wait();
+  page.form.dispatch('submit');
+  await wait();
+  assert.ok(chamadas.some(c => c.caminho === 'rpc/admin_corrigir_acervo_creg'));
+});
+
+test('o painel so entra em cena para quem tem papel de administrador', () => {
+  const bootstrap = readFileSync(new URL('../assets/js/bootstrap.js', import.meta.url), 'utf8');
+  assert.match(bootstrap, /exigeAdmin: true/,
+    'admin.html precisa entrar por papel, e não por órgão');
+  assert.match(bootstrap, /paginaAtual\.exigeAdmin && orgaosAdmin\.size === 0\) throw erroSemPermissao/,
+    'sem papel de administrador, o módulo não pode carregar');
+
+  const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(index, /data-admin/, 'o cartão do painel na tela inicial precisa do marcador');
+  assert.match(index, /id="cardAdmin"[^>]*hidden/,
+    'o cartão nasce escondido: só aparece depois da consulta de papel');
 });

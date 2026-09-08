@@ -2692,3 +2692,96 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .pill:active,
   .pauta-card:hover { transform: none; }
 }
+
+/* ── Painel administrativo ───────────────────────────────────────────────────
+   Reaproveita o vocabulário visual já existente — card, tabela do histórico,
+   dialog de detalhe, toast — e acrescenta só o que não tinha equivalente: as
+   abas, a grade do formulário de correção e a lista do "de → para". */
+.admin-abas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-aba {
+  padding: 10px 16px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 8px 8px 0 0;
+  background: none;
+  color: var(--muted);
+  font: 700 var(--text-base) / 1.2 'Montserrat', ui-sans-serif, sans-serif;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.admin-aba:hover { background: var(--accent-soft); color: var(--accent); }
+
+.admin-aba[aria-selected='true'] {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+}
+
+.admin-acoes { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+
+.admin-acao {
+  padding: 6px 12px;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.admin-campos { display: grid; gap: 14px; margin-bottom: 18px; }
+.admin-campo { display: grid; gap: 6px; }
+.admin-campo label { margin: 0; }
+.admin-campo .form-hint { margin: 0; }
+
+/* O "de → para" da confirmação e da auditoria. Sem marcador de lista: cada item
+   é um fato, não um passo de enumeração. */
+.admin-delta {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.admin-delta li {
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  background: var(--accent-soft);
+  font-size: var(--text-base);
+  line-height: 1.45;
+}
+
+.admin-delta-compacta { margin: 0; gap: 4px; }
+.admin-delta-compacta li {
+  padding: 4px 8px;
+  border-left-width: 2px;
+  font-size: var(--text-sm);
+}
+
+/* Os julgados que a correção alcança. Fica em destaque de atenção, e não de
+   sucesso: é o efeito colateral que a pessoa precisa ver antes de confirmar. */
+.admin-impacto {
+  margin: 18px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--danger-border);
+  border-radius: 10px;
+  background: var(--danger-soft);
+}
+
+.admin-impacto h3 {
+  margin: 0 0 8px;
+  color: var(--danger-panel-text);
+  font-size: var(--text-base);
+}
+
+.admin-impacto ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.admin-impacto li { font-size: var(--text-sm); line-height: 1.45; }
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-aba { transition: none; }
+}
