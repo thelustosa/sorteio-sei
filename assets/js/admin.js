@@ -50,6 +50,44 @@ const OPERACOES_LEGIVEIS = {
   corrigir_processo: 'Correção do número do processo'
 };
 
+// A auditoria é lida por quem opera o sistema, não por quem o escreveu: nome de
+// tabela e chave de coluna do banco não dizem nada a uma secretária executiva.
+const TABELAS_LEGIVEIS = {
+  julgados_cj: 'Julgado', julgados_creg: 'Julgado',
+  acervo_cj: 'Distribuição', acervo_creg: 'Distribuição'
+};
+
+const CAMPOS_LEGIVEIS = {
+  voto: 'Voto',
+  status: 'Status',
+  pauta: 'Número da pauta',
+  data_sessao: 'Data da sessão',
+  data_distribuicao: 'Data da distribuição',
+  num_processo: 'Número do processo',
+  assunto: 'Assunto',
+  ordem: 'Ordem no sorteio',
+  interessado: 'Interessado',
+  defesa: 'Defesa',
+  recurso: 'Recurso',
+  relator: 'Relator',
+  unidade: 'Unidade'
+};
+
+// De onde veio a linha da distribuição: o valor cru do banco em minúsculas
+// aparecia dentro de um selo, ao lado de datas já formatadas.
+const ORIGENS_LEGIVEIS = {
+  sorteio: 'Sorteio eletrônico',
+  ata: 'Ata publicada'
+};
+
+const campoLegivel = nome => CAMPOS_LEGIVEIS[nome] || nome;
+
+// "5 sessão(ões) registrada(s)" pede que a pessoa monte a frase de cabeça, e a
+// contagem que resolveria isso já está ali do lado.
+function plural(quantidade, singular, plural) {
+  return `${quantidade} ${quantidade === 1 ? singular : plural}`;
+}
+
 const seletorOrgaoCard = document.getElementById('seletorOrgaoCard');
 const seletorOrgao = document.getElementById('seletorOrgao');
 const abas = document.getElementById('abas');
@@ -63,7 +101,13 @@ const painelErro = document.getElementById('painelErro');
 const painelVazio = document.getElementById('painelVazio');
 const painelVazioTitulo = document.getElementById('painelVazioTitulo');
 const painelVazioTexto = document.getElementById('painelVazioTexto');
+const painelErroDetalhe = document.getElementById('painelErroDetalhe');
 const painelStatus = document.getElementById('painelStatus');
+const painelHint = document.getElementById('painelHint');
+const tabelaInstrucao = document.getElementById('tabelaInstrucao');
+const painelTabelaWrap = document.querySelector('.admin-table-wrap');
+const painelStatusBloco = document.querySelector('.admin-panel-status');
+const adminOrgaoAtual = document.getElementById('adminOrgaoAtual');
 const btnTentarNovamente = document.getElementById('btnTentarNovamente');
 const btnVoltar = document.getElementById('btnVoltar');
 
@@ -79,6 +123,7 @@ const edicaoDelta = document.getElementById('edicaoDelta');
 const edicaoImpacto = document.getElementById('edicaoImpacto');
 const edicaoImpactoLista = document.getElementById('edicaoImpactoLista');
 const edicaoErro = document.getElementById('edicaoErro');
+const edicaoEtapaRotulo = document.getElementById('edicaoEtapaRotulo');
 const btnAvancar = document.getElementById('btnAvancarEdicao');
 const btnCancelar = document.getElementById('btnCancelarEdicao');
 const btnFecharEdicao = document.getElementById('btnFecharEdicao');
@@ -136,10 +181,30 @@ function celula(conteudo, tag = 'td', classe = '') {
   return el;
 }
 
-function botaoDeLinha(rotulo, aoClicar, { secundario = true } = {}) {
+function badge(rotulo, tom = 'neutro') {
+  const elemento = document.createElement('span');
+  elemento.className = `admin-badge admin-badge-${tom}`;
+  elemento.textContent = rotulo;
+  return elemento;
+}
+
+// Um travessão dentro de um selo parece campo quebrado, e no selo de status a
+// ausência ainda herdava a cor de alerta — a falta de registro era pintada como
+// se fosse um aviso. Sem valor, sai texto simples.
+function valorOuSelo(valor, tom) {
+  if (vazio(valor)) {
+    const traco = document.createElement('span');
+    traco.className = 'sem-valor';
+    traco.textContent = '—';
+    return traco;
+  }
+  return badge(String(valor), tom);
+}
+
+function botaoDeLinha(rotulo, aoClicar, { tom = 'secundario' } = {}) {
   const botao = document.createElement('button');
   botao.type = 'button';
-  botao.className = secundario ? 'button-secondary admin-acao' : 'admin-acao';
+  botao.className = `admin-acao admin-acao-${tom}`;
   botao.textContent = rotulo;
   botao.addEventListener('click', aoClicar);
   return botao;
@@ -153,7 +218,14 @@ function celulaDeAcoes(botoes) {
 }
 
 // ── Moldura ──────────────────────────────────────────────────────────────────
-function estado({ carregando = false, erro = '', vazioTitulo = '', vazioTexto = '' } = {}) {
+// O ponto do rodapé é o único sinal de cor do painel: deixá-lo verde ao lado de
+// "não foi possível carregar" faz a cor contradizer o texto justamente nos dois
+// estados em que ela teria algo a dizer.
+function situacao(estadoAtual) {
+  if (painelStatusBloco) painelStatusBloco.dataset.estado = estadoAtual;
+}
+
+function estado({ carregando = false, erro = '', detalhe = '', vazioTitulo = '', vazioTexto = '' } = {}) {
   painelCarregando.hidden = !carregando;
   if (carregando) {
     painelCarregando.replaceChildren(criarIndicadorCarregamento('Carregando…'));
@@ -162,7 +234,13 @@ function estado({ carregando = false, erro = '', vazioTitulo = '', vazioTexto = 
   }
 
   painelErro.hidden = !erro;
-  if (erro) painelErro.querySelector('p').textContent = erro;
+  if (erro) {
+    painelErro.querySelector('p').textContent = erro;
+    // O detalhe técnico ajuda quem for investigar, mas não pode ocupar o lugar
+    // da frase que diz o que fazer agora.
+    painelErroDetalhe.textContent = detalhe ? `Detalhe técnico: ${detalhe}` : '';
+    painelErroDetalhe.hidden = !detalhe;
+  }
 
   painelVazio.hidden = !vazioTitulo;
   if (vazioTitulo) {
@@ -173,10 +251,35 @@ function estado({ carregando = false, erro = '', vazioTitulo = '', vazioTexto = 
   painelConteudo.setAttribute('aria-busy', String(carregando));
 }
 
+// Uma coluna é ou um rótulo, ou `{ rotulo, eixo }`. Três eixos, e cada um
+// responde a uma pergunta diferente que a pessoa faz na tabela:
+//
+//   (padrão)  texto que se lê — alinha à esquerda, onde o olho começa.
+//   'numero'  valor que se compara entre linhas (pauta, contagem, ordem,
+//             hora) — alinha à direita, para as unidades ficarem no mesmo
+//             eixo vertical; é o que torna 9 e 29 comparáveis de relance.
+//   'centro'  rótulo curto e fechado (selo de estado, código de cadeira) —
+//             centraliza, porque não há dígito para alinhar nem leitura
+//             corrida para ancorar.
+//
+// O eixo vai para o cabeçalho e para a célula ao mesmo tempo: cabeçalho e dado
+// em eixos diferentes fazem a tabela parecer torta mesmo estando correta.
+const rotuloDaColuna = coluna => (typeof coluna === 'string' ? coluna : coluna.rotulo);
+const eixoDaColuna = coluna => (typeof coluna === 'string' ? '' : coluna.eixo || '');
+const CLASSES_DE_EIXO = Object.freeze({
+  numero: 'col-numero',
+  centro: 'col-centro',
+  acoes: 'col-acoes'
+});
+const classeDoEixo = coluna => {
+  const eixo = eixoDaColuna(coluna);
+  return CLASSES_DE_EIXO[eixo] || '';
+};
+
 function cabecalho(colunas) {
   const thead = document.createElement('thead');
   const tr = document.createElement('tr');
-  colunas.forEach(coluna => tr.appendChild(celula(coluna, 'th')));
+  colunas.forEach(coluna => tr.appendChild(celula(rotuloDaColuna(coluna), 'th', classeDoEixo(coluna))));
   thead.appendChild(tr);
   return thead;
 }
@@ -185,18 +288,39 @@ function desenhar(colunas, linhas) {
   const tbody = document.createElement('tbody');
   linhas.forEach(celulas => {
     const tr = document.createElement('tr');
-    celulas.forEach(c => tr.appendChild(c));
+    celulas.forEach((c, indice) => {
+      c.dataset.label = rotuloDaColuna(colunas[indice]);
+      const classe = classeDoEixo(colunas[indice]);
+      if (classe) c.classList.add(classe);
+      tr.appendChild(c);
+    });
     tbody.appendChild(tr);
   });
   painelTabela.replaceChildren(cabecalho(colunas), tbody);
+  medirRolagem();
+}
+
+// A dica e a parada de tabulação só aparecem quando há de fato o que rolar.
+function medirRolagem() {
+  if (!painelTabelaWrap) return;
+  const rolavel = painelTabelaWrap.scrollWidth > painelTabelaWrap.clientWidth + 1;
+  painelTabelaWrap.dataset.rolavel = rolavel ? 'sim' : 'nao';
+  painelTabelaWrap.tabIndex = rolavel ? 0 : -1;
+  tabelaInstrucao.hidden = !rolavel;
+}
+
+function definirVisaoTabela(visao) {
+  painelTabela.dataset.visao = visao;
+  painelTabela.dataset.orgao = orgao;
 }
 
 // ── Seleção de órgão e de aba ────────────────────────────────────────────────
 function selecionarOrgao(novo) {
   orgao = novo;
+  adminOrgaoAtual.textContent = VOCABULARIO[orgao].nome;
   seletorOrgao.querySelectorAll('[data-orgao-admin]').forEach(botao => {
     botao.setAttribute('aria-pressed', String(botao.dataset.orgaoAdmin === orgao));
-    botao.classList.toggle('mode-button-outline', botao.dataset.orgaoAdmin !== orgao);
+    botao.classList.toggle('is-selected', botao.dataset.orgaoAdmin === orgao);
   });
   detalhe = null;
   return carregar();
@@ -205,10 +329,31 @@ function selecionarOrgao(novo) {
 function selecionarAba(nova) {
   aba = nova;
   abas.querySelectorAll('[data-aba]').forEach(botao => {
-    botao.setAttribute('aria-selected', String(botao.dataset.aba === aba));
+    const selecionada = botao.dataset.aba === aba;
+    botao.setAttribute('aria-selected', String(selecionada));
+    botao.setAttribute('tabindex', selecionada ? '0' : '-1');
+    if (selecionada) painelConteudo.setAttribute('aria-labelledby', botao.id);
   });
   detalhe = null;
   return carregar();
+}
+
+function navegarAbas(evento) {
+  const botoes = [...abas.querySelectorAll('[data-aba]')];
+  const atual = evento.currentTarget || evento.target;
+  const indice = botoes.indexOf(atual);
+  if (indice < 0) return;
+
+  let destino;
+  if (evento.key === 'ArrowRight') destino = (indice + 1) % botoes.length;
+  else if (evento.key === 'ArrowLeft') destino = (indice - 1 + botoes.length) % botoes.length;
+  else if (evento.key === 'Home') destino = 0;
+  else if (evento.key === 'End') destino = botoes.length - 1;
+  else return;
+
+  evento.preventDefault();
+  botoes[destino].focus();
+  selecionarAba(botoes[destino].dataset.aba);
 }
 
 // ── Carregamento ─────────────────────────────────────────────────────────────
@@ -223,12 +368,23 @@ async function carregar() {
     const linhas = await buscar();
     if (meu !== pedido) return;
     estado({});
+    situacao('ok');
     pintar(linhas);
   } catch (err) {
     if (meu !== pedido) return;
     painelTabela.replaceChildren();
+    medirRolagem();
     painelStatus.textContent = 'Não foi possível carregar.';
-    estado({ erro: `Não foi possível carregar os dados (${err.message}).` });
+    situacao('erro');
+    // Mesmo motivo do estado vazio: não há sessão carregada para abrir.
+    painelHint.textContent = '';
+    // O molde antigo era `carregar os dados (${err.message})`, e a mensagem da
+    // exceção costuma começar do mesmo jeito: a pessoa lia a mesma frase duas
+    // vezes e nenhuma delas dizia o que fazer.
+    estado({
+      erro: 'Não foi possível carregar os dados. Verifique sua conexão e tente novamente.',
+      detalhe: err.message
+    });
   }
 }
 
@@ -265,55 +421,84 @@ function pintar(linhas) {
   return pintarAuditoria(linhas);
 }
 
-function tituloDoPainel(titulo, descricao) {
+function tituloDoPainel(titulo, descricao, dica) {
   painelTitulo.textContent = titulo;
   painelDescricao.textContent = descricao;
+  painelHint.textContent = dica;
 }
 
-function semRegistros(titulo, texto) {
+// `dica` é o que sobra no rodapé quando não há registro. Vazia por padrão:
+// "Abra uma sessão para consultar seus processos" convida a abrir algo que a
+// própria tela acaba de dizer que não existe. Uma dica que continua verdadeira
+// sem registro nenhum — como a da auditoria — é passada explicitamente.
+function semRegistros(titulo, texto, dica = '') {
   painelTabela.replaceChildren();
+  medirRolagem();
   painelStatus.textContent = 'Nada a exibir.';
+  situacao('vazio');
+  painelHint.textContent = dica;
   estado({ vazioTitulo: titulo, vazioTexto: texto });
 }
 
 function pintarSessoes(linhas) {
+  definirVisaoTabela('sessoes');
   tituloDoPainel('Sessões de julgamento',
-    'Selecione a data da sessão para corrigir voto, status, pauta ou a própria data.');
+    'Selecione a data da sessão para corrigir voto, status, pauta ou a própria data.',
+    'Abra uma sessão para consultar seus processos.');
   if (!linhas.length) {
     return semRegistros('Nenhuma sessão registrada',
       'Assim que uma pauta da AGR for sincronizada, ela aparece aqui.');
   }
 
-  desenhar(['Data', 'Pauta', 'Processos', 'Pendentes', ''], linhas.map(linha => [
+  const colunas = [
+    { rotulo: 'Data', eixo: 'centro' },
+    { rotulo: 'Ações', eixo: 'acoes' },
+    { rotulo: 'Pauta', eixo: 'centro' },
+    { rotulo: 'Processos', eixo: 'centro' },
+    { rotulo: 'Pendentes', eixo: 'centro' }
+  ];
+
+  desenhar(colunas, linhas.map(linha => [
     celula(dataBR(linha.data_sessao), 'td', 'historico-data'),
-    celula(ou(linha.pauta), 'td', 'historico-numero'),
-    celula(linha.processos, 'td', 'historico-numero'),
-    celula(linha.pendentes ? String(linha.pendentes) : '—', 'td', 'historico-numero'),
-    celulaDeAcoes([botaoDeLinha('Abrir', () => {
+    celulaDeAcoes([botaoDeLinha('Abrir sessão', () => {
       detalhe = { tipo: 'sessao', data: String(linha.data_sessao).slice(0, 10), pauta: linha.pauta };
       carregar();
-    })])
+    }, { tom: 'primario' })]),
+    celula(ou(linha.pauta), 'td', 'historico-numero'),
+    celula(linha.processos, 'td', 'historico-numero'),
+    celula(linha.pendentes
+      ? badge(plural(linha.pendentes, 'pendente', 'pendentes'), 'alerta')
+      : badge('Em dia', 'sucesso'))
   ]));
-  painelStatus.textContent = `${linhas.length} sessão(ões) registrada(s).`;
+  painelStatus.textContent = `${plural(linhas.length, 'sessão registrada', 'sessões registradas')}.`;
 }
 
+// Aba, título, botão e rodapé diziam sorteio, distribuição e rodada para o mesmo
+// registro. "Distribuição" é o termo que cobre os dois casos: a linha pode ter
+// vindo do sorteio eletrônico ou de uma ata publicada, e chamar de sorteio a que
+// veio da ata seria falso.
 function pintarSorteios(linhas) {
+  definirVisaoTabela('sorteios');
   tituloDoPainel('Distribuições registradas',
-    'Selecione a data da rodada para corrigir a distribuição de um processo.');
+    'Selecione a data da distribuição para corrigir como um processo foi distribuído.',
+    'Abra uma distribuição para consultar seus processos.');
   if (!linhas.length) {
     return semRegistros('Nenhuma distribuição registrada',
       'O acervo deste colegiado ainda está vazio.');
   }
 
-  desenhar(['Data', 'Hora', 'Origem', 'Processos', 'Destinos', ''], linhas.map(linha => [
+  const colunas = [
+    { rotulo: 'Data', eixo: 'centro' },
+    { rotulo: 'Ações', eixo: 'acoes' },
+    { rotulo: 'Hora', eixo: 'centro' },
+    { rotulo: 'Origem', eixo: 'centro' },
+    { rotulo: 'Processos', eixo: 'centro' },
+    { rotulo: 'Destinos', eixo: 'centro' }
+  ];
+
+  desenhar(colunas, linhas.map(linha => [
     celula(dataBR(linha.data_distribuicao), 'td', 'historico-data'),
-    celula(linha.sorteado_em
-      ? new Date(linha.sorteado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-      : '—', 'td', 'historico-hora'),
-    celula(ou(linha.origem)),
-    celula(linha.processos, 'td', 'historico-numero'),
-    celula((linha.destinos || []).join(', ')),
-    celulaDeAcoes([botaoDeLinha('Abrir', () => {
+    celulaDeAcoes([botaoDeLinha('Abrir distribuição', () => {
       detalhe = {
         tipo: 'sorteio',
         data: String(linha.data_distribuicao).slice(0, 10),
@@ -321,52 +506,79 @@ function pintarSorteios(linhas) {
         origem: linha.origem || null
       };
       carregar();
-    })])
+    }, { tom: 'primario' })]),
+    celula(linha.sorteado_em
+      ? new Date(linha.sorteado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+      : '—', 'td', 'historico-hora'),
+    celula(badge(ORIGENS_LEGIVEIS[linha.origem] || ou(linha.origem), 'neutro')),
+    celula(linha.processos, 'td', 'historico-numero'),
+    celula((linha.destinos || []).join(', '))
   ]));
-  painelStatus.textContent = `${linhas.length} rodada(s) registrada(s).`;
+  painelStatus.textContent =
+    `${plural(linhas.length, 'distribuição registrada', 'distribuições registradas')}.`;
 }
 
 function pintarProcessosDaSessao(linhas) {
+  definirVisaoTabela('processos-sessao');
   const v = VOCABULARIO[orgao];
   tituloDoPainel(`Sessão de ${dataBR(detalhe.data)}`,
-    'Corrija voto, status, pauta ou a data da sessão. Religar refaz o vínculo com o acervo.');
+    'Corrija voto, status, pauta ou a data da sessão. Religar refaz o vínculo com o acervo.',
+    'Escolha uma ação na linha do processo que precisa de ajuste.');
   if (!linhas.length) {
     return semRegistros('Nenhum processo nesta sessão',
       'A sessão não tem processos registrados.');
   }
 
-  desenhar(['Processo', v.destino, 'Voto', 'Status', 'Atualizado por', ''], linhas.map(linha => {
+  const colunas = [
+    { rotulo: 'Processo', eixo: 'centro' },
+    { rotulo: 'Ações', eixo: 'acoes' },
+    { rotulo: v.destino, eixo: 'centro' },
+    { rotulo: 'Voto', eixo: 'centro' },
+    { rotulo: 'Status', eixo: 'centro' },
+    'Atualizado por'
+  ];
+
+  desenhar(colunas, linhas.map(linha => {
     const destino = celula(ou(linha.destino));
     if (orgao === 'CJ') rotularCadeira(destino, linha.destino);
     return [
       celula(linha.num_processo, 'td', 'historico-numero'),
-      destino,
-      celula(ou(linha.voto)),
-      celula(ou(linha.status)),
-      celula(linha.atualizado_por ? `${linha.atualizado_por} · ${dataHoraBR(linha.atualizado_em)}` : '—',
-        'td', 'small'),
       celulaDeAcoes([
-        botaoDeLinha('Corrigir', () => abrirCorrecaoDeJulgado(linha)),
-        botaoDeLinha('Nº', () => abrirCorrecaoDeNumero(linha.num_processo)),
-        botaoDeLinha('Religar', () => religarJulgado(linha))
-      ])
+        botaoDeLinha('Corrigir dados', () => abrirCorrecaoDeJulgado(linha), { tom: 'primario' }),
+        botaoDeLinha('Corrigir número', () => abrirCorrecaoDeNumero(linha.num_processo)),
+        botaoDeLinha('Religar ao acervo', () => religarJulgado(linha))
+      ]),
+      destino,
+      celula(valorOuSelo(linha.voto, 'info')),
+      celula(valorOuSelo(linha.status, linha.status === 'Julgado' ? 'sucesso' : 'alerta')),
+      celula(linha.atualizado_por ? `${linha.atualizado_por} · ${dataHoraBR(linha.atualizado_em)}` : '—',
+        'td', 'small')
     ];
   }));
-  painelStatus.textContent = `${linhas.length} processo(s) nesta sessão.`;
+  painelStatus.textContent = `${plural(linhas.length, 'processo', 'processos')} nesta sessão.`;
 }
 
 function pintarProcessosDoSorteio(linhas) {
+  definirVisaoTabela('processos-sorteio');
   const v = VOCABULARIO[orgao];
   tituloDoPainel(`Distribuição de ${dataBR(detalhe.data)}`,
-    'Corrigir propaga a mudança aos julgados que a copiaram. Redistribuir não — o julgado guarda quem levou o processo à mesa.');
+    'Corrigir alcança também os julgados que copiaram este processo; redistribuir, não.',
+    'Escolha uma ação na linha do processo que precisa de ajuste.');
   if (!linhas.length) {
-    return semRegistros('Nenhum processo nesta rodada',
-      'A rodada não tem processos registrados.');
+    return semRegistros('Nenhum processo nesta distribuição',
+      'A distribuição não tem processos registrados.');
   }
 
-  const colunas = ['Ordem', 'Processo', v.destino, 'Assunto', v.decisao];
-  if (VOCABULARIO[orgao].temInteressado) colunas.push('Interessado');
-  colunas.push('Julgados', '');
+  const colunas = [
+    { rotulo: 'Ordem', eixo: 'centro' },
+    { rotulo: 'Processo', eixo: 'centro' },
+    { rotulo: 'Ações', eixo: 'acoes' },
+    { rotulo: v.destino, eixo: 'centro' },
+    'Assunto',
+    { rotulo: v.decisao, eixo: 'centro' }
+  ];
+  if (v.temInteressado) colunas.push('Interessado');
+  colunas.push({ rotulo: 'Julgados', eixo: 'centro' });
 
   desenhar(colunas, linhas.map(linha => {
     const destino = celula(ou(linha.destino));
@@ -374,28 +586,32 @@ function pintarProcessosDoSorteio(linhas) {
     const celulas = [
       celula(ou(linha.ordem), 'td', 'historico-numero'),
       celula(linha.num_processo, 'td', 'historico-numero'),
+      celulaDeAcoes([
+        botaoDeLinha('Corrigir dados', () => abrirAlteracaoDeAcervo(linha, 'corrigir'), { tom: 'primario' }),
+        botaoDeLinha('Redistribuir', () => abrirAlteracaoDeAcervo(linha, 'redistribuir')),
+        botaoDeLinha('Corrigir número', () => abrirCorrecaoDeNumero(linha.num_processo))
+      ]),
       destino,
       celula(ou(linha.assunto)),
       celula(ou(linha.decisao))
     ];
     if (v.temInteressado) celulas.push(celula(ou(linha.interessado)));
     celulas.push(celula(linha.julgados, 'td', 'historico-numero'));
-    celulas.push(celulaDeAcoes([
-      botaoDeLinha('Corrigir', () => abrirAlteracaoDeAcervo(linha, 'corrigir')),
-      botaoDeLinha('Redistribuir', () => abrirAlteracaoDeAcervo(linha, 'redistribuir')),
-      botaoDeLinha('Nº', () => abrirCorrecaoDeNumero(linha.num_processo))
-    ]));
     return celulas;
   }));
-  painelStatus.textContent = `${linhas.length} processo(s) nesta rodada.`;
+  painelStatus.textContent = `${plural(linhas.length, 'processo', 'processos')} nesta distribuição.`;
 }
 
 function pintarAuditoria(linhas) {
+  definirVisaoTabela('auditoria');
   tituloDoPainel('Auditoria das correções',
-    'Cada linha é um registro alterado por este painel, com o valor anterior e o posterior.');
+    'Somente consulta: cada linha é um registro já alterado por este painel, com o valor anterior e o posterior.',
+    'Nenhuma linha pode ser alterada aqui.');
   if (!linhas.length) {
+    // Continua verdadeiro com a lista vazia: a auditoria nunca aceita edição.
     return semRegistros('Nenhuma correção registrada',
-      'Assim que uma alteração for gravada, ela aparece aqui.');
+      'Assim que uma alteração for gravada, ela aparece aqui.',
+      'Nenhuma linha pode ser alterada aqui.');
   }
 
   desenhar(['Quando', 'Operação', 'Registro', 'Alteração', 'Motivo', 'Quem'], linhas.map(linha => {
@@ -403,19 +619,21 @@ function pintarAuditoria(linhas) {
     mudancas.className = 'admin-delta admin-delta-compacta';
     Object.keys(linha.depois || {}).forEach(campo => {
       const item = document.createElement('li');
-      item.textContent = `${campo}: ${legivel(linha.antes?.[campo])} → ${legivel(linha.depois?.[campo])}`;
+      item.textContent =
+        `${campoLegivel(campo)}: ${legivel(linha.antes?.[campo])} → ${legivel(linha.depois?.[campo])}`;
       mudancas.appendChild(item);
     });
+    const registro = `${TABELAS_LEGIVEIS[linha.tabela] || linha.tabela} nº ${linha.registro_id}`;
     return [
       celula(dataHoraBR(linha.feito_em), 'td', 'small'),
       celula(OPERACOES_LEGIVEIS[linha.operacao] || linha.operacao),
-      celula(`${linha.tabela} #${linha.registro_id}`, 'td', 'small'),
+      celula(registro, 'td', 'small'),
       celula(mudancas),
       celula(ou(linha.motivo), 'td', 'small'),
       celula(ou(linha.feito_por), 'td', 'small')
     ];
   }));
-  painelStatus.textContent = `${linhas.length} correção(ões) listada(s).`;
+  painelStatus.textContent = `${plural(linhas.length, 'correção listada', 'correções listadas')}.`;
 }
 
 // ── Diálogo de edição ────────────────────────────────────────────────────────
@@ -493,11 +711,13 @@ function abrirDialogo({ titulo, resumo, campos, montarDelta, impacto, gravar }) 
   edicaoImpactoLista.replaceChildren();
   edicaoEtapaCampos.hidden = false;
   edicaoEtapaConfirmacao.hidden = true;
+  edicaoEtapaRotulo.textContent = 'Etapa 1 de 2';
   btnAvancar.textContent = 'Revisar alteração';
   btnAvancar.disabled = false;
 
   dialogo.showModal();
-  edicaoCampos.querySelector('input, select')?.focus();
+  // Religar ao acervo não tem campo nenhum: ali o foco vai para a ação.
+  (edicaoCampos.querySelector('input, select') || edicaoMotivo).focus();
 }
 
 function mostrarErroNoDialogo(mensagem) {
@@ -549,7 +769,12 @@ async function avancar() {
 
     edicaoEtapaCampos.hidden = true;
     edicaoEtapaConfirmacao.hidden = false;
+    edicaoEtapaRotulo.textContent = 'Etapa 2 de 2';
     btnAvancar.textContent = 'Confirmar e gravar';
+    // Sem isto o foco cai no <body>: o bloco que o continha acabou de ser
+    // escondido. Quem usa teclado ou leitor de tela não era avisado de que o
+    // formulário virou revisão — justo na etapa que existe para ser lida.
+    edicaoEtapaConfirmacao.focus();
     return;
   }
 
@@ -810,6 +1035,11 @@ function inicializarAdmin(orgaosAdmin) {
 
   abas.querySelectorAll('[data-aba]').forEach(botao => {
     botao.addEventListener('click', () => selecionarAba(botao.dataset.aba));
+    botao.addEventListener('keydown', navegarAbas);
+    const selecionada = botao.dataset.aba === aba;
+    botao.setAttribute('aria-selected', String(selecionada));
+    botao.setAttribute('tabindex', selecionada ? '0' : '-1');
+    if (selecionada) painelConteudo.setAttribute('aria-labelledby', botao.id);
   });
 
   btnVoltar.addEventListener('click', () => {
@@ -817,6 +1047,10 @@ function inicializarAdmin(orgaosAdmin) {
     carregar();
   });
   btnTentarNovamente.addEventListener('click', () => carregar());
+  // A tabela cabe ou não conforme a largura da janela, então a dica de rolagem
+  // acompanha a medição real — não o breakpoint. O guard existe porque este
+  // arquivo também roda no escopo isolado dos testes, sem o global do navegador.
+  if (typeof window !== 'undefined') window.addEventListener('resize', medirRolagem);
 
   edicaoForm.addEventListener('submit', evento => {
     evento.preventDefault();

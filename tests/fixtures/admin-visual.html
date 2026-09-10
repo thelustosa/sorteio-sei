@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fixture visual do painel administrativo</title>
+  <style>
+    html, body, iframe { box-sizing: border-box; width: 100%; height: 100%; margin: 0; border: 0; }
+    body { overflow: hidden; background: #f4f7f5; }
+  </style>
+</head>
+<body>
+  <!-- Carrega o HTML de produção e troca somente as portas externas por dados
+       determinísticos. Assim a revisão visual enxerga exatamente a estrutura
+       que será publicada, sem depender de credenciais ou do banco remoto. -->
+  <script>
+    const frame = document.createElement('iframe');
+    frame.id = 'aplicacao';
+    frame.title = 'Painel administrativo em dados de demonstração';
+    const parametros = new URLSearchParams(location.search);
+    const viewport = parametros.get('viewport');
+    if (viewport === 'mobile') {
+      document.body.style.display = 'grid';
+      document.body.style.placeItems = 'start center';
+      document.body.style.overflow = 'auto';
+      document.body.style.padding = '24px';
+      frame.style.width = '390px';
+      frame.style.height = '844px';
+      frame.style.boxShadow = '0 18px 50px rgba(17,39,32,.22)';
+    } else if (viewport === 'tablet') {
+      document.body.style.display = 'grid';
+      document.body.style.placeItems = 'start center';
+      document.body.style.overflow = 'auto';
+      document.body.style.padding = '24px';
+      frame.style.width = '768px';
+      frame.style.height = '920px';
+      frame.style.boxShadow = '0 18px 50px rgba(17,39,32,.18)';
+    }
+
+    // Densidade e formato dos dados reais da AGR: pautas na casa das dezenas,
+    // sessões de 10 a 29 processos, e uma sessão recém-sincronizada em que voto,
+    // status e autoria ainda estão todos vazios — que é o caso que mais estressa
+    // o alinhamento das colunas, porque a linha inteira vira travessão.
+    const SESSOES = [
+      { data_sessao: '2026-09-03', pauta: 32, processos: 29, pendentes: 29 },
+      { data_sessao: '2026-08-27', pauta: 31, processos: 19, pendentes: 19 },
+      { data_sessao: '2026-08-20', pauta: 30, processos: 17, pendentes: 0 },
+      { data_sessao: '2026-08-13', pauta: 29, processos: 20, pendentes: 0 },
+      { data_sessao: '2026-08-06', pauta: 28, processos: 17, pendentes: 0 },
+      { data_sessao: '2026-07-30', pauta: 27, processos: 10, pendentes: 0 },
+      { data_sessao: '2026-07-23', pauta: 26, processos: 12, pendentes: 0 }
+    ];
+    const PROCESSOS = [
+      { id: 41, num_processo: '202600029002147', pauta: 32, voto: null, status: null, destino: null, data_distribuicao: '2026-08-18', acervo_id: 7, atualizado_por: null, atualizado_em: null },
+      { id: 42, num_processo: '202600029002154', pauta: 32, voto: null, status: null, destino: null, data_distribuicao: '2026-08-18', acervo_id: 8, atualizado_por: null, atualizado_em: null },
+      { id: 43, num_processo: '202600029002155', pauta: 32, voto: null, status: null, destino: null, data_distribuicao: '2026-08-18', acervo_id: 9, atualizado_por: null, atualizado_em: null },
+      { id: 44, num_processo: '202600029002203', pauta: 32, voto: null, status: null, destino: 'CJ5', data_distribuicao: '2026-08-25', acervo_id: 10, atualizado_por: null, atualizado_em: null },
+      { id: 45, num_processo: '202600029002240', pauta: 32, voto: null, status: null, destino: 'CJ3', data_distribuicao: '2026-08-25', acervo_id: 11, atualizado_por: null, atualizado_em: null },
+      { id: 46, num_processo: '202600029002243', pauta: 32, voto: null, status: null, destino: 'CJ2', data_distribuicao: '2026-08-25', acervo_id: 12, atualizado_por: null, atualizado_em: null },
+      { id: 47, num_processo: '202600029002306', pauta: 32, voto: 'Manter', status: 'Julgado', destino: 'CJ3', data_distribuicao: '2026-08-25', acervo_id: 13, atualizado_por: 'sec-agr@goias.gov.br', atualizado_em: '2026-09-03T17:42:00-03:00' }
+    ];
+    const SORTEIOS = [
+      { data_distribuicao: '2026-09-01', sorteado_em: '2026-09-01T10:34:00-03:00', origem: 'sorteio', processos: 16, destinos: ['CJ1', 'CJ2', 'CJ3', 'CJ4'] },
+      { data_distribuicao: '2026-08-25', sorteado_em: '2026-08-25T14:08:00-03:00', origem: 'sorteio', processos: 12, destinos: ['CJ1', 'CJ2', 'CJ3', 'CJ4'] },
+      { data_distribuicao: '2026-08-20', sorteado_em: null, origem: 'ata', processos: 4, destinos: ['CJ2', 'CJ4'] }
+    ];
+    const ACERVO = [
+      { id: 7, ordem: 1, num_processo: '202600000000001', destino: 'CJ3', assunto: 'Auto de Infração', decisao: 'Com defesa', origem: 'sorteio', julgados: 1 },
+      { id: 8, ordem: 2, num_processo: '202600000000128', destino: 'CJ1', assunto: 'Recurso administrativo', decisao: 'Sem defesa', origem: 'sorteio', julgados: 0 },
+      { id: 9, ordem: 3, num_processo: '202600000000244', destino: 'CJ4', assunto: 'Fiscalização de serviços', decisao: 'Com defesa', origem: 'sorteio', julgados: 2 }
+    ];
+    const AUDITORIA = [
+      { feito_em: '2026-09-08T10:22:00-03:00', operacao: 'corrigir_julgado', tabela: 'julgados_cj', registro_id: 41, antes: { voto: 'Vista' }, depois: { voto: 'Manter' }, motivo: 'Ata da sessão confirma o voto', feito_por: 'sec-agr@goias.gov.br' },
+      { feito_em: '2026-09-07T15:40:00-03:00', operacao: 'redistribuir', tabela: 'acervo_cj', registro_id: 8, antes: { relator: 'CJ3' }, depois: { relator: 'CJ1' }, motivo: 'Impedimento registrado', feito_por: 'lucas.coelho@goias.gov.br' },
+      { feito_em: '2026-09-06T09:18:00-03:00', operacao: 'corrigir_processo', tabela: 'acervo_cj', registro_id: 7, antes: { num_processo: '202600000000010' }, depois: { num_processo: '202600000000001' }, motivo: 'Correção de digitação', feito_por: 'sec-agr@goias.gov.br' }
+    ];
+
+    frame.addEventListener('load', () => {
+      const win = frame.contentWindow;
+      const doc = frame.contentDocument;
+      if (parametros.get('view') === 'login') return;
+      doc.documentElement.classList.add('has-session');
+      doc.getElementById('loginScreen').hidden = true;
+      doc.getElementById('sessionLoading').hidden = true;
+      doc.getElementById('btnSair').hidden = false;
+      doc.getElementById('btnVoltarInicio').hidden = false;
+
+      win.criarIndicadorCarregamento = texto => {
+        const estado = doc.createElement('div');
+        estado.className = 'loading-state';
+        estado.textContent = texto;
+        return estado;
+      };
+      win.alternarBotaoCarregando = () => {};
+      // Mesma semântica de assets/js/supabase.js: o texto continua sendo "CJ3" e
+      // o nome do conselheiro só aparece no title e no aria-label. Reescrever o
+      // texto aqui fazia a revisão visual mostrar uma coluna de relator que
+      // ninguém vê em produção.
+      win.rotularCadeira = (elemento, cadeira) => {
+        const nomes = {
+          CJ1: 'Marcelo Ferreira Sabino', CJ2: 'Deusdete Cardoso Belém',
+          CJ3: 'Dorivan de Souza Lima', CJ4: 'Paulo Henrique Oliveira Marques',
+          CJ5: 'Lorena Patricia de Oliveira'
+        };
+        const nome = nomes[cadeira];
+        if (!nome) return elemento;
+        elemento.title = nome;
+        elemento.setAttribute('aria-label', `${cadeira} — ${nome}`);
+        return elemento;
+      };
+      win.aviso = () => {};
+      win.api = async caminho => {
+        if (caminho === 'rpc/admin_sessoes' && parametros.get('view') === 'vazio') return [];
+        if (caminho === 'rpc/admin_sessoes' && parametros.get('view') === 'erro') {
+          throw new Error('não foi possível consultar o serviço');
+        }
+        if (caminho === 'rpc/admin_sessoes') return SESSOES;
+        if (caminho === 'rpc/admin_processos_sessao') return PROCESSOS;
+        if (caminho === 'rpc/admin_sorteios') return SORTEIOS;
+        if (caminho === 'rpc/admin_processos_acervo') return ACERVO;
+        if (caminho === 'rpc/admin_auditoria') return AUDITORIA;
+        if (caminho === 'rpc/admin_julgados_do_acervo') return PROCESSOS.slice(0, 2);
+        return { alterados: {}, propagados: [] };
+      };
+
+      const script = doc.createElement('script');
+      script.src = 'assets/js/admin.js';
+      script.onload = async () => {
+        await win.inicializarAdmin(new win.Set(['CJ', 'CREG']));
+        const modo = parametros.get('view') || 'sessoes';
+        if (modo === 'sorteios' || modo === 'auditoria') {
+          doc.querySelector(`[data-aba="${modo}"]`).click();
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        if (modo === 'processos' || modo === 'dialogo' || modo === 'confirmacao') {
+          [...doc.querySelectorAll('.admin-acao')].find(botao => botao.textContent === 'Abrir sessão').click();
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        if (modo === 'dialogo' || modo === 'confirmacao') {
+          [...doc.querySelectorAll('.admin-acao')].find(botao => botao.textContent === 'Corrigir dados').click();
+        }
+        if (modo === 'confirmacao') {
+          doc.getElementById('campo-voto').value = 'Anular';
+          doc.getElementById('edicaoForm').requestSubmit();
+        }
+      };
+      doc.body.appendChild(script);
+    }, { once: true });
+
+    fetch('../../admin.html')
+      .then(resposta => {
+        if (!resposta.ok) throw new Error(`falha ao carregar admin.html (${resposta.status})`);
+        return resposta.text();
+      })
+      .then(html => {
+        // A estrutura e o CSS continuam sendo os de produção, mas nenhum bundle
+        // real roda antes das portas determinísticas acima serem instaladas.
+        const seguro = html
+          .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+          .replace('<head>', '<head><base href="../../">');
+        frame.srcdoc = seguro;
+        document.body.prepend(frame);
+      })
+      .catch(erro => {
+        document.body.textContent = `Não foi possível montar a fixture visual: ${erro.message}`;
+      });
+  </script>
+</body>
+</html>

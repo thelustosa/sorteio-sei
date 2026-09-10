@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-08T10:20:55.634Z",
+  "generatedAt": "2026-09-10T11:49:44.773Z",
   "title": "Design System: Sorteador de Processos SEI",
   "extensions": {
     "colorMeta": {
@@ -133,6 +133,30 @@
         "role": "neutral",
         "displayName": "Texto sobre Acento",
         "canonical": "#ffffff"
+      },
+      "pending-teal-soft": {
+        "role": "secondary",
+        "displayName": "Teal dos Pendentes (fundo)",
+        "canonical": "rgba(47, 118, 104, 0.09)",
+        "note": "Fundo do canal de atenção — selo de pendência e caixa de propagação."
+      },
+      "pending-teal-border": {
+        "role": "secondary",
+        "displayName": "Teal dos Pendentes (borda)",
+        "canonical": "rgba(47, 118, 104, 0.26)",
+        "note": "Borda do canal de atenção."
+      },
+      "pending-teal-text": {
+        "role": "secondary",
+        "displayName": "Teal dos Pendentes (texto)",
+        "canonical": "#1f544b",
+        "note": "Texto sobre o fundo do canal de atenção; tom escurecido para manter contraste AA."
+      },
+      "neutral-muted-strong": {
+        "role": "neutral",
+        "displayName": "Texto Secundário Forte",
+        "canonical": "#60746b",
+        "note": "Texto pequeno (12–13px) que precisa segurar contraste no próprio tamanho: cabeçalho de tabela, placeholder e rótulo estrutural em caixa alta."
       }
     },
     "typographyMeta": {
@@ -155,6 +179,10 @@
       "label": {
         "displayName": "Label",
         "purpose": "Texto de botão, badge, rótulo de formulário e navegação — sempre em negrito, 0,8125rem a 0,875rem."
+      },
+      "numeral": {
+        "displayName": "Numeral",
+        "purpose": "Número de processo SEI nas tabelas — quinze dígitos comparados linha a linha só se leem rápido com avanço fixo. Única justificativa para uma quarta família no projeto."
       }
     },
     "shadows": [
@@ -376,6 +404,51 @@
         "name": "The Arrival Has a Name Rule",
         "body": "Uma transição de página precisa aterrissar num lugar identificável. Tela que busca dados mostra a própria moldura com o título e o indicador dentro dela, nunca um spinner solto sobre página em branco.",
         "section": "motion"
+      },
+      {
+        "name": "The Teal Is a Channel, Not a Tint Rule",
+        "section": "Colors",
+        "body": "O Teal dos Pendentes só aparece onde há pendência ou propagação de uma correção. Não é cor de sobrancelha, rótulo estrutural nem borda decorativa — rótulo pequeno usa o Texto Secundário."
+      },
+      {
+        "name": "The Absence Is Not a State Rule",
+        "section": "Colors",
+        "body": "Valor ausente sai como travessão em texto simples, nunca dentro de um selo. Selo comunica estado registrado; travessão dentro dele parece campo quebrado."
+      },
+      {
+        "name": "The Two-Weight Rule",
+        "section": "Typography",
+        "body": "O sistema vive em dois pesos: 400 para corpo, 700 para tudo que é estrutural. 750 e 800 são sintéticos e indistinguíveis do 700 ao lado dele. Mais presença se ganha com tamanho, caixa ou cor."
+      },
+      {
+        "name": "The Numeral Exception Rule",
+        "section": "Typography",
+        "body": "A monoespaçada é só para o número de processo. Data, hora e contagem ficam na pilha de sistema com font-variant-numeric: tabular-nums."
+      },
+      {
+        "name": "The Affordance Must Be True Rule",
+        "section": "Elevation & Depth",
+        "body": "Uma sombra que anuncia conteúdo escondido só existe quando há conteúdo escondido. Vale para todo sinal de rolagem: a dica de deslize e a parada de tabulação seguem a mesma medição e somem juntas."
+      },
+      {
+        "name": "The Three Radii Rule",
+        "section": "Shapes",
+        "body": "Use --radius-control, --radius-card ou --radius-pill, nunca um pixel solto. Um valor a um ou dois pixels de um degrau existente é erro, não decisão. 50% para círculo é forma, não um quarto degrau."
+      },
+      {
+        "name": "The Field Is a Field Rule",
+        "section": "Shapes",
+        "body": "Todo controle de formulário — inclusive input[type=date] e number — usa a mesma borda de 1px tingida, o mesmo raio de controle e o mesmo padding 8px 10px. A lista de seletores é explícita: um tipo novo precisa ser acrescentado a ela ou cai no controle cru do navegador."
+      },
+      {
+        "name": "The Action Follows Identity Rule",
+        "section": "Components",
+        "body": "Nas tabelas administrativas, Ações vem imediatamente depois do identificador da linha — Data ou Processo — e usa a classe semântica .col-acoes, nunca :last-child. Sob table-layout: fixed, listas usam trilhos iguais e detalhes reservam uma proporção maior para os botões, mantendo cabeçalho, conteúdo e ações no mesmo eixo."
+      },
+      {
+        "name": "The Numeric Axis Rule",
+        "section": "Components",
+        "body": "O eixo visual depende da visão, mas sempre vale para th e td juntos: métricas de lista-resumo centralizam em trilhos iguais; texto de leitura longa alinha à esquerda; número, código e estado curtos podem centralizar com tabular-nums quando isso melhora a comparação."
       }
     ],
     "dos": [

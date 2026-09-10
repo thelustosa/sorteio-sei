@@ -72,6 +72,14 @@
   --accent-secondary-hover: #245f55;
   --accent-secondary-ring: rgba(47, 118, 104, 0.2);
   --accent-secondary-ring-strong: rgba(47, 118, 104, 0.38);
+  /* O canal de atenção do sistema. A One Alert Color Rule do DESIGN.md reserva
+     o vermelho para erro e ação destrutiva, e manda todo aviso de atenção —
+     pendência, propagação de uma correção — usar o Teal dos Pendentes. Estes
+     três derivados existem para que esse canal tenha fundo, borda e texto
+     próprios sem que ninguém precise inventar uma quarta família de cor. */
+  --accent-secondary-soft: rgba(47, 118, 104, 0.09);
+  --accent-secondary-border: rgba(47, 118, 104, 0.26);
+  --accent-secondary-text: #1f544b;
   --muted-records: #3f665c;
   /* As outras duas cores da progressão de quatro cards da tela inicial (ver
      comentário abaixo, em .selection-card-acervo/.selection-card-historico) —
@@ -591,10 +599,15 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
 
 #modeSelector .mode-button { width: 100%; }
 
+/* A lista é explícita de propósito — um `input` sem tipo casado aqui herdaria o
+   controle cru do navegador. Foi o que aconteceu com `date`, que só existe no
+   painel administrativo e por isso ficou anos fora desta lista, aparecendo com
+   borda cinza de 2px e canto reto ao lado de campos com a borda institucional. */
 input[type='text'],
 input[type='email'],
 input[type='password'],
 input[type='number'],
+input[type='date'],
 select {
   width: 100%;
   padding: 8px 10px;
@@ -604,6 +617,18 @@ select {
   color: var(--text);
   line-height: 1.3;
 }
+
+/* O seletor de calendário nativo herda a cor do texto do sistema, que não é a
+   do projeto; e em Chromium o campo de data ganha um recuo interno próprio que
+   desalinha o valor em relação aos campos vizinhos da mesma grade. */
+input[type='date'] { appearance: none; -webkit-appearance: none; }
+input[type='date']::-webkit-datetime-edit { padding: 0; }
+input[type='date']::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.55;
+  filter: grayscale(1);
+}
+input[type='date']:hover::-webkit-calendar-picker-indicator { opacity: 0.9; }
 
 input::placeholder { color: var(--muted-strong); opacity: 1; }
 select option { background: var(--surface-raised); color: var(--text); }
@@ -2694,94 +2719,810 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 }
 
 /* ── Painel administrativo ───────────────────────────────────────────────────
-   Reaproveita o vocabulário visual já existente — card, tabela do histórico,
-   dialog de detalhe, toast — e acrescenta só o que não tinha equivalente: as
-   abas, a grade do formulário de correção e a lista do "de → para". */
-.admin-abas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 18px 0 0;
-  border-bottom: 1px solid var(--border);
+   Área de trabalho própria: o painel não é mais um formulário dentro de um
+   card genérico. Contexto, navegação, dados e confirmação formam camadas
+   distintas, com densidade suficiente para uso diário sem perder legibilidade. */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }
 
+.admin-page .container { width: min(1280px, calc(100% - 40px)); }
+.admin-main { display: flex; align-items: flex-start; padding-top: 28px; }
+.admin-shell { width: 100%; min-width: 0; }
+html:not(.has-session) .admin-page > .green-bar { display: none; }
+
+/* Rótulo estrutural, não canal de cor: o Teal dos Pendentes é a cor de uma
+   coisa só — pendência e propagação —, então a sobrancelha fica no texto
+   secundário e devolve o teal ao seu canal. */
+.admin-eyebrow,
+.admin-context-label,
+.admin-dialog-step {
+  color: var(--muted-strong);
+  font-family: 'Montserrat', ui-sans-serif, sans-serif;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+/* Login: a explicação de segurança e o formulário dividem uma peça compacta;
+   em telas largas nenhuma caixa vazia envolve o conteúdo. */
+.admin-page #loginScreen.admin-login {
+  display: grid;
+  width: min(940px, 100%);
+  min-height: 390px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
+  align-items: stretch;
+  gap: 0;
+  margin: 0 auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+  text-align: left;
+}
+
+.admin-login-intro {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(34px, 5vw, 58px);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.admin-login-intro .admin-eyebrow { color: var(--on-accent-icon); }
+.admin-login-symbol {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  margin: 18px 0 22px;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: var(--radius-card);
+  background: rgba(255,255,255,.1);
+  color: var(--on-accent);
+  place-items: center;
+}
+.admin-login-symbol svg { width: 30px; height: 30px; }
+.admin-page #loginScreen .admin-login-intro h2 {
+  max-width: 15ch;
+  margin: 0;
+  color: var(--on-accent);
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  letter-spacing: -0.025em;
+  line-height: 1.18;
+}
+.admin-page #loginScreen .admin-login-intro p {
+  max-width: 45ch;
+  margin: 14px 0 0;
+  color: var(--on-accent-muted);
+  font-size: var(--text-base);
+}
+.admin-login-assurances {
+  display: grid;
+  gap: 9px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--on-accent-muted);
+  font-size: var(--text-sm);
+}
+.admin-login-assurances li { display: flex; align-items: center; gap: 9px; }
+.admin-login-assurances li span {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: rgba(255,255,255,.14);
+  color: var(--on-accent-icon);
+  font-weight: 700;
+  place-items: center;
+}
+
+.admin-login-form-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(34px, 5vw, 54px);
+}
+.admin-login-form-card h2 { margin: 7px 0 0; color: var(--text); font-size: var(--text-xl); }
+.admin-page #loginScreen .admin-login-form-card > p {
+  margin: 8px 0 24px;
+  color: var(--muted);
+  font-size: var(--text-base);
+}
+.admin-page #loginForm { width: 100%; gap: 11px; }
+.admin-page #loginForm label { margin: 0 0 -4px; }
+.admin-page #loginForm input { background: var(--surface-subtle); }
+.admin-page #loginForm input:focus { background: var(--surface-raised); }
+.admin-page #loginForm #btnEntrar { margin-top: 5px; }
+.admin-session-loading {
+  min-height: 390px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+}
+
+/* Contexto operacional */
+.admin-workspace { display: grid; min-width: 0; gap: 14px; }
+.admin-commandbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 15px 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+}
+.admin-command-context { display: flex; min-width: 0; align-items: center; gap: 12px; }
+.admin-command-context > div { display: grid; min-width: 0; gap: 2px; }
+.admin-command-context strong {
+  overflow: hidden;
+  color: var(--text);
+  font: 700 var(--text-md) / 1.25 'Montserrat', ui-sans-serif, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-command-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-card);
+  background: var(--accent-soft);
+  color: var(--accent);
+  place-items: center;
+}
+.admin-command-icon svg { width: 22px; height: 22px; }
+.admin-command-actions { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 12px; }
+
+/* O nome do colegiado escolhido já está à esquerda, na mesma linha. O seletor
+   por extenso repetia essa informação a poucos centímetros dela, então aqui
+   ficam só os códigos — o nome completo de cada um vive no aria-label. */
+.admin-org-switcher { min-width: 0; }
+.admin-org-switcher > div {
+  display: flex;
+  min-width: 0;
+  gap: 5px;
+  padding: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-control);
+}
+.admin-org-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.admin-org-button:hover { background: var(--surface-raised); color: var(--accent); }
+.admin-org-button.is-selected {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--accent);
+}
+.admin-org-code { font-size: var(--text-sm); letter-spacing: .05em; }
+
+/* Abas em uma barra segmentada: o estado ativo usa forma e cor, não apenas a
+   linha inferior que antes se perdia entre o seletor e a tabela. */
+.admin-abas {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: rgba(255,255,255,.72);
+}
 .admin-aba {
-  padding: 10px 16px;
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
   border: 0;
-  border-bottom: 3px solid transparent;
-  border-radius: 8px 8px 0 0;
-  background: none;
+  border-radius: var(--radius-control);
+  background: transparent;
   color: var(--muted);
   font: 700 var(--text-base) / 1.2 'Montserrat', ui-sans-serif, sans-serif;
   cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+  transition: color 150ms ease, background-color 150ms ease;
 }
-
+.admin-aba svg { width: 18px; height: 18px; flex: 0 0 auto; }
 .admin-aba:hover { background: var(--accent-soft); color: var(--accent); }
-
 .admin-aba[aria-selected='true'] {
-  border-bottom-color: var(--accent);
-  color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.admin-aba[aria-selected='true']:focus-visible { outline-color: var(--accent-hover); }
+
+/* Painel de dados */
+.admin-panel {
+  display: flex;
+  min-width: 0;
+  min-height: 360px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+}
+.admin-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 24px 26px 21px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-subtle);
+}
+.admin-panel-heading { min-width: 0; }
+.admin-panel-heading h2 {
+  margin: 5px 0 0;
+  color: var(--text);
+  font-family: 'Montserrat', ui-sans-serif, sans-serif;
+  font-size: clamp(1.2rem, 2vw, 1.55rem);
+  letter-spacing: -.02em;
+  line-height: 1.25;
+}
+.admin-panel-heading p { max-width: 72ch; margin: 7px 0 0; color: var(--muted); font-size: var(--text-base); }
+
+/* Quem decide se aparece é a medição de rolagem em admin.js, pelo atributo
+   `hidden` — não o breakpoint, que não sabe se a tabela coube ou não. */
+.admin-scroll-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 16px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-control);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+.admin-scroll-hint::before { content: '↔'; color: var(--accent); font-size: 1.1rem; }
+.admin-table-wrap { flex: 1 1 auto; background: var(--surface-raised); }
+.admin-table-wrap:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+/* Cada visão declara proporções próprias abaixo. O layout fixo impede que um
+   e-mail ou um grupo de botões redistribua todas as colunas de uma linha para
+   outra; o padding comum continua sendo o intervalo visual entre os campos. */
+.admin-table {
+  width: 100%;
+  min-width: 880px;
+  margin: 0;
+  border: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 0;
+  background: var(--surface-raised);
+  table-layout: fixed;
 }
 
-.admin-acoes { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+/* A ação vem imediatamente depois do identificador da linha. Nas listagens
+   simples as colunas têm a mesma largura; nos detalhes ela recebe o espaço dos
+   três botões sem empurrar os dados para posições imprevisíveis. */
+.admin-table[data-visao='sessoes'] thead th { width: 20%; }
+.admin-table[data-visao='sorteios'] thead th { width: 16.6667%; }
 
-.admin-acao {
-  padding: 6px 12px;
-  font-size: var(--text-sm);
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(1) { width: 17%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(2) { width: 34%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(3) { width: 9%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(4) { width: 10%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(5) { width: 12%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(6) { width: 18%; }
+
+.admin-table[data-visao='processos-sorteio'] thead th:nth-child(1) { width: 7%; }
+.admin-table[data-visao='processos-sorteio'] thead th:nth-child(2) { width: 16%; }
+.admin-table[data-visao='processos-sorteio'] thead th:nth-child(3) { width: 34%; }
+.admin-table[data-visao='processos-sorteio'] thead th:nth-child(4) { width: 9%; }
+.admin-table[data-visao='processos-sorteio'] thead th:nth-child(5) { width: 15%; }
+.admin-table[data-visao='processos-sorteio'] thead th:nth-child(6) { width: 10%; }
+
+/* O Conselho acrescenta "Interessado" antes de "Julgados". Sem a variante,
+   os 9% restantes eram divididos entre as duas e cortavam ambos os rótulos. */
+.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(1) { width: 6%; }
+.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(2) { width: 14%; }
+.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(3) { width: 32%; }
+.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(4) { width: 8%; }
+.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(5) { width: 12%; }
+.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(6) { width: 10%; }
+.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(7) { width: 12%; }
+.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(8) { width: 6%; }
+
+.admin-table[data-visao='auditoria'] thead th:nth-child(1) { width: 15%; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(2) { width: 14%; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(3) { width: 16%; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(4) { width: 21%; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(5) { width: 18%; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(6) { width: 16%; }
+
+/* O layout automático reparte a largura pelo conteúdo, e nisso uma coluna de
+   texto longo pode espremer a vizinha até ela quebrar linha. O piso em `ch` diz
+   quanto cada uma precisa para não quebrar, sem congelar a distribuição das
+   demais — é uma garantia mínima, não uma largura fixa. */
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(6) { min-width: 22ch; }
+.admin-table[data-visao='sorteios'] thead th:nth-child(6) { min-width: 18ch; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(4) { min-width: 22ch; }
+.admin-table[data-visao='auditoria'] thead th:last-child { min-width: 20ch; }
+
+/* Carimbo de data e hora e identificador de registro são unidades: "08/09/2026
+   10:22" partido em duas linhas deixa de se ler como um instante. Proibir a
+   quebra é mais fiel que adivinhar uma largura — o layout automático passa a
+   contar a linha inteira como largura mínima da coluna e a reserva sozinho. */
+.admin-table[data-visao='auditoria'] tbody td:nth-child(1),
+.admin-table[data-visao='auditoria'] tbody td:nth-child(3) { white-space: nowrap; }
+.admin-table[data-visao='sessoes'] { min-width: 660px; }
+.admin-table[data-visao='sorteios'] { min-width: 780px; }
+.admin-table[data-visao='processos-sessao'] { min-width: 1080px; }
+.admin-table[data-visao='processos-sorteio'] { min-width: 1180px; }
+.admin-table[data-visao='auditoria'] { min-width: 1080px; }
+
+.admin-table thead th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  height: 46px;
+  padding: 10px 13px;
+  border: 0;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--surface-control);
+  color: var(--muted-strong);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: .055em;
+  text-align: left;
+  text-transform: uppercase;
   white-space: nowrap;
 }
+.admin-table thead th:first-child,
+.admin-table tbody td:first-child { padding-left: 24px; }
+.admin-table thead th:last-child,
+.admin-table tbody td:last-child { padding-right: 20px; }
 
-.admin-campos { display: grid; gap: 14px; margin-bottom: 18px; }
-.admin-campo { display: grid; gap: 6px; }
-.admin-campo label { margin: 0; }
-.admin-campo .form-hint { margin: 0; }
+/* Três eixos, e o cabeçalho sempre acompanha a célula — cabeçalho e dado em
+   eixos diferentes fazem a tabela parecer torta mesmo estando correta. */
 
-/* O "de → para" da confirmação e da auditoria. Sem marcador de lista: cada item
-   é um fato, não um passo de enumeração. */
-.admin-delta {
-  margin: 12px 0 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 8px;
+/* Número que se compara entre linhas: alinhado à direita, para as unidades
+   caírem no mesmo eixo vertical. É o que torna 9 e 29 comparáveis de relance —
+   centralizados, cada um começa num lugar diferente. */
+.admin-table th.col-numero,
+.admin-table td.col-numero { text-align: right; font-variant-numeric: tabular-nums; }
+.admin-table td.col-numero .admin-badge { margin-left: auto; }
+
+/* Rótulo curto e fechado — selo de estado, código de cadeira: não há dígito para
+   alinhar nem leitura corrida para ancorar, então centraliza. */
+.admin-table th.col-centro,
+.admin-table td.col-centro { text-align: center; }
+.admin-table th.col-acoes,
+.admin-table td.col-acoes { text-align: center; }
+.admin-table tbody td {
+  height: 62px;
+  padding: 11px 13px;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: var(--text-base);
+  line-height: 1.4;
+  text-align: left;
+  vertical-align: middle;
+}
+.admin-table tbody tr:last-child td { border-bottom: 0; }
+.admin-table tbody tr:hover td { background: var(--table-row-hover); }
+.admin-table .historico-data,
+.admin-table .historico-numero { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.admin-table td.historico-numero:first-child,
+.admin-table td:nth-child(2).historico-numero { font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace; letter-spacing: .015em; }
+.admin-table .small { color: var(--muted); }
+/* Ausência de registro é ausência, não estado: um travessão dentro de um selo
+   parece campo quebrado, e no selo de status herdava ainda a cor de alerta. */
+.admin-table .sem-valor { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.admin-acoes { display: flex; flex-wrap: nowrap; justify-content: center; gap: 6px; }
+.admin-acao {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.admin-acao:hover { border-color: var(--accent); background: var(--accent-soft); }
+.admin-acao-primario { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.admin-acao-primario:hover { border-color: var(--accent-hover); background: var(--accent-hover); }
+
+.admin-badge {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--surface-control);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.admin-badge-sucesso { border-color: rgba(22,129,110,.22); background: rgba(22,129,110,.09); color: #0b6656; }
+/* Pendência é exatamente o caso que a One Alert Color Rule nomeia para o Teal
+   dos Pendentes — era o único lugar do painel com uma família âmbar própria. */
+.admin-badge-alerta {
+  border-color: var(--accent-secondary-border);
+  background: var(--accent-secondary-soft);
+  color: var(--accent-secondary-text);
+}
+.admin-badge-info { border-color: var(--border); background: var(--accent-soft); color: var(--accent); }
+
+.admin-panel-footer {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 20px 11px 24px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-subtle);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.admin-panel-status { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; }
+.admin-panel-hint { text-align: right; }
+
+/* O ponto era fixo em --status-positive: um verde de saúde ao lado de "não foi
+   possível carregar" e de "nada a exibir", os dois únicos estados em que a cor
+   teria algo a dizer. */
+.admin-panel-status[data-estado='erro'] .status-dot {
+  background: var(--danger);
+  box-shadow: 0 0 0 4px var(--danger-soft);
+}
+.admin-panel-status[data-estado='vazio'] .status-dot {
+  background: var(--muted);
+  box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
+/* O painel tem 360px de altura mínima e o estado ocupava só a primeira faixa,
+   deixando o resto morto. Aqui ele toma o espaço livre e se centra nele. */
+.admin-state {
+  display: flex;
+  min-height: 220px;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 32px 26px;
+  border: 0;
+  text-align: center;
+}
+.admin-state.empty-state { flex-direction: column; gap: 14px; }
+.admin-state.load-error { flex-direction: column; gap: 16px; }
+.admin-state.load-error p { margin: 0; max-width: 52ch; }
+/* O detalhe técnico é apoio, não o alerta: em vermelho e negrito ele competia
+   com a frase que diz o que fazer. */
+.admin-state.load-error .form-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+/* Diálogo: campos respiram em duas colunas e as ações ficam sempre no mesmo
+   lugar, mesmo quando a lista de impacto exige rolagem. */
+.admin-dialog { width: min(50rem, calc(100vw - 32px)); }
+.admin-dialog .detalhe-header { padding: 20px 24px; }
+.admin-dialog .detalhe-header h2 { margin-top: 4px; font-size: var(--text-xl); }
+.admin-dialog .admin-dialog-step { color: #b8dbd1; }
+/* A altura mínima mantém as duas etapas próximas em tamanho: sem ela o diálogo
+   encolhia 189px ao avançar e se recentrava, deslizando o título e o botão de
+   fechar para baixo do cursor de quem acabou de clicar. */
+.admin-dialog .detalhe-corpo { min-height: 340px; padding: 24px 24px 0; }
+.admin-dialog form { display: flex; min-height: 0; flex-direction: column; }
+.admin-campos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.admin-campo { display: grid; min-width: 0; align-content: start; gap: 7px; }
+.admin-campo label { margin: 0; color: var(--text); font-size: var(--text-base); font-weight: 700; }
+.admin-campo label .small { color: var(--muted); font-weight: 500; }
+.admin-campo input,
+.admin-campo select { background: var(--surface-subtle); }
+.admin-campo input:focus,
+.admin-campo select:focus { background: var(--surface-raised); }
+.admin-campo .form-hint { margin: 0; }
+.admin-campo-largo { grid-column: 1 / -1; }
+/* Vive fora da grade dos campos, porque acompanha as duas etapas — e é ele que
+   carrega o respiro, já que o bloco acima dele muda de uma etapa para a outra. */
+.admin-campo-motivo { margin-top: 18px; }
+#edicaoEtapaConfirmacao:focus { outline: none; }
+
+.admin-review-intro {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 15px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-subtle);
+}
+.admin-review-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--accent-soft-strong);
+  color: var(--accent);
+  place-items: center;
+}
+.admin-review-icon svg { width: 19px; height: 19px; }
+.admin-review-intro h3 { margin: 0; color: var(--text); font-size: var(--text-base); }
+.admin-review-intro p { margin: 2px 0 0; color: var(--muted); font-size: var(--text-sm); }
+
+/* Sem a borda lateral de 3px: além de ser o traço que o detector do projeto
+   sinaliza como tique de interface gerada, ela gastava o Teal dos Pendentes
+   como enfeite num item que não é pendência nenhuma. */
+.admin-delta {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
 .admin-delta li {
-  padding: 10px 12px;
-  border-left: 3px solid var(--accent);
-  border-radius: 0 8px 8px 0;
-  background: var(--accent-soft);
+  padding: 11px 13px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
   font-size: var(--text-base);
   line-height: 1.45;
 }
-
-.admin-delta-compacta { margin: 0; gap: 4px; }
+.admin-delta-compacta { margin: 0; gap: 5px; }
 .admin-delta-compacta li {
-  padding: 4px 8px;
-  border-left-width: 2px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-subtle);
   font-size: var(--text-sm);
 }
 
-/* Os julgados que a correção alcança. Fica em destaque de atenção, e não de
-   sucesso: é o efeito colateral que a pessoa precisa ver antes de confirmar. */
+/* Propagação não é erro: é atenção, e o canal de atenção do sistema é o Teal
+   dos Pendentes, não uma família âmbar só desta tela. */
 .admin-impacto {
-  margin: 18px 0 0;
+  margin: 16px 0 0;
   padding: 14px 16px;
-  border: 1px solid var(--danger-border);
-  border-radius: 10px;
-  background: var(--danger-soft);
+  border: 1px solid var(--accent-secondary-border);
+  border-radius: var(--radius-card);
+  background: var(--accent-secondary-soft);
+}
+.admin-impacto h3 { margin: 0 0 8px; color: var(--accent-secondary-text); font-size: var(--text-base); }
+.admin-impacto ul { display: grid; gap: 4px; margin: 0; padding-left: 18px; }
+.admin-impacto li { color: var(--accent-secondary-text); font-size: var(--text-sm); line-height: 1.45; }
+.admin-dialog-error { margin: 16px 0 0; padding: 12px 14px; border-radius: var(--radius-control); background: var(--danger-soft); }
+.admin-dialog-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 22px -24px 0;
+  padding: 15px 24px;
+  border-top: 1px solid var(--border-subtle);
+  background: rgba(255,255,255,.96);
+  backdrop-filter: blur(8px);
 }
 
-.admin-impacto h3 {
-  margin: 0 0 8px;
-  color: var(--danger-panel-text);
-  font-size: var(--text-base);
+@media screen and (max-width: 960px) {
+  .admin-commandbar { align-items: flex-start; flex-direction: column; }
+  .admin-command-actions { width: 100%; justify-content: space-between; }
+  .admin-org-switcher { flex: 1 1 auto; }
+  .admin-org-switcher > div { justify-content: flex-end; }
+  .admin-panel-hint { display: none; }
+
+  .admin-table[data-visao]:not([data-visao='auditoria']) {
+    display: block;
+    min-width: 0;
+    padding: 12px;
+    background: var(--surface-control);
+  }
+  .admin-table[data-visao]:not([data-visao='auditoria']) thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody {
+    display: grid;
+    gap: 12px;
+  }
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody tr {
+    display: grid;
+    overflow: hidden;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) 184px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-card);
+    background: var(--surface-raised);
+  }
+  /* No cartão a largura passa a ser da grade, então o alinhamento central da
+     tabela larga não tem mais sentido: tudo lê da esquerda. */
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody td.col-centro,
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody td.col-numero { text-align: left; }
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody td.col-numero .admin-badge { margin-left: 0; }
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody td {
+    display: block;
+    min-width: 0;
+    height: auto;
+    padding: 8px 14px;
+    border: 0;
+    background: var(--surface-raised);
+    text-align: left;
+  }
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody td:first-child {
+    padding-top: 13px;
+    padding-left: 14px;
+  }
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody td::before {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: .055em;
+    line-height: 1.3;
+    text-transform: uppercase;
+  }
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody td.col-acoes {
+    position: static;
+    display: flex;
+    width: auto;
+    min-width: 184px;
+    flex-direction: column;
+    justify-content: center;
+    grid-column: 3;
+    grid-row: 1 / span 20;
+    padding: 13px;
+    border-left: 1px solid var(--border-subtle);
+    box-shadow: none;
+    text-align: left;
+  }
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody tr:hover td,
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody tr:hover td.col-acoes {
+    background: var(--surface-raised);
+  }
+  .admin-acoes { align-items: stretch; flex-direction: column; }
+  .admin-acao { width: 100%; }
 }
 
-.admin-impacto ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
-.admin-impacto li { font-size: var(--text-sm); line-height: 1.45; }
+@media screen and (max-width: 720px) {
+  .admin-page .container { width: min(100% - 24px, 1280px); }
+  .admin-main { padding-top: 16px; }
+  .admin-page #loginScreen.admin-login { grid-template-columns: 1fr; }
+  .admin-login-intro { padding: 28px; }
+  .admin-login-symbol { width: 46px; height: 46px; margin: 14px 0 18px; }
+  .admin-login-assurances { margin-top: 18px; }
+  .admin-login-form-card { padding: 28px; }
+  .admin-commandbar { padding: 13px; }
+  .admin-command-actions { align-items: stretch; flex-direction: column; }
+  .admin-org-switcher > div { justify-content: stretch; }
+  .admin-org-button { flex: 1 1 0; justify-content: center; }
+  .admin-abas { width: 100%; }
+  .admin-aba { min-width: 0; flex: 1 1 0; padding-inline: 10px; }
+  .admin-panel-header { padding: 20px; }
+  .admin-panel-footer { padding-inline: 18px; }
+  .admin-dialog .detalhe-header { padding: 17px 18px; }
+  .admin-dialog .detalhe-corpo { padding: 20px 18px 0; }
+  .admin-campos { grid-template-columns: 1fr; gap: 13px; }
+  .admin-dialog-actions { margin-inline: -18px; padding: 13px 18px; }
+}
+
+@media screen and (max-width: 480px) {
+  .admin-page #txtModo { display: none; }
+  .admin-page .green-bar .container { justify-content: flex-end; }
+  .admin-login-intro,
+  .admin-login-form-card { padding: 20px; }
+  .admin-login-symbol { width: 40px; height: 40px; margin: 10px 0 14px; }
+  .admin-login-symbol svg { width: 24px; height: 24px; }
+  .admin-page #loginScreen .admin-login-intro h2 { max-width: none; font-size: 1.35rem; }
+  .admin-page #loginScreen .admin-login-intro p { margin-top: 8px; font-size: var(--text-sm); }
+  .admin-login-assurances { display: none; }
+  .admin-page #loginScreen .admin-login-form-card > p { margin-bottom: 16px; }
+  .admin-command-context strong { white-space: normal; }
+  .admin-command-icon { display: none; }
+  /* Só os códigos cabem lado a lado mesmo a 390px — empilhar era herança de
+     quando cada botão carregava o nome completo do colegiado. */
+  .admin-org-button { flex: 1 1 0; }
+  .admin-aba { gap: 5px; padding-inline: 6px; font-size: var(--text-sm); }
+  .admin-aba svg { width: 16px; height: 16px; }
+  .admin-panel-header { padding: 18px 16px; }
+  .admin-panel-heading p { font-size: var(--text-sm); }
+  .admin-panel-footer { padding-inline: 16px; }
+  .admin-dialog { width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
+  .admin-dialog .detalhe-header { align-items: center; flex-direction: row; gap: 12px; }
+  .admin-dialog .detalhe-acoes { width: auto; }
+  .admin-dialog .detalhe-resumo { font-size: var(--text-xs); line-height: 1.4; }
+  .admin-dialog-actions { align-items: stretch; flex-direction: column-reverse; }
+  .admin-dialog-actions button { width: 100%; }
+
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody tr {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody td:not(.col-acoes) {
+    display: grid;
+    grid-template-columns: 104px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+  }
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody td:not(.col-acoes)::before {
+    margin-bottom: 0;
+  }
+  /* O selo é item de grade aqui e, sem isto, estica à largura toda da célula —
+     deixa de parecer etiqueta de estado e passa a parecer campo preenchido. */
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody td .admin-badge {
+    justify-self: start;
+  }
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody td.col-acoes {
+    width: 100%;
+    min-width: 0;
+    grid-column: 1;
+    grid-row: auto;
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .admin-aba { transition: none; }
+  .admin-aba,
+  .admin-acao { transition: none; }
+}
+
+@media (pointer: coarse) {
+  .admin-aba,
+  .admin-org-button,
+  .admin-acao { min-height: 44px; }
 }
