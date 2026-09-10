@@ -2373,11 +2373,12 @@ function adminPage({ api = async () => null, aviso = () => {} } = {}) {
   const avisos = [];
   const registrarAviso = (texto, tipo) => { avisos.push({ texto, tipo }); aviso(texto, tipo); };
 
-  ['seletorOrgaoCard', 'seletorOrgao', 'abas', 'adminPainel', 'painelConteudo', 'painelTitulo',
+  ['seletorOrgaoCard', 'seletorOrgao', 'adminOrgaoAtual', 'abas', 'adminPainel', 'painelConteudo', 'painelTitulo',
    'painelDescricao', 'painelCarregando', 'painelErro', 'painelVazio', 'painelVazioTitulo',
-   'painelVazioTexto', 'painelStatus', 'edicaoResumo', 'edicaoTitulo', 'edicaoCampos',
+   'painelVazioTexto', 'painelErroDetalhe', 'painelStatus', 'painelHint', 'tabelaInstrucao',
+   'edicaoResumo', 'edicaoTitulo', 'edicaoCampos',
    'edicaoEtapaCampos', 'edicaoEtapaConfirmacao', 'edicaoDelta', 'edicaoImpacto',
-   'edicaoImpactoLista', 'edicaoErro'].forEach(id => document.add(id, 'div'));
+   'edicaoImpactoLista', 'edicaoErro', 'edicaoEtapaRotulo'].forEach(id => document.add(id, 'div'));
   ['btnTentarNovamente', 'btnVoltar', 'btnAvancarEdicao', 'btnCancelarEdicao',
    'btnFecharEdicao'].forEach(id => document.add(id, 'button'));
   document.add('painelTable', 'table');
@@ -2411,6 +2412,7 @@ function adminPage({ api = async () => null, aviso = () => {} } = {}) {
   const abas = document.getElementById('abas');
   ['sessoes', 'sorteios', 'auditoria'].forEach(nome => {
     const botao = document.createElement('button');
+    botao.id = `aba-${nome}`;
     botao.dataset.aba = nome;
     abas.appendChild(botao);
   });
@@ -2425,7 +2427,7 @@ function adminPage({ api = async () => null, aviso = () => {} } = {}) {
   const botaoDeAba = nome => abas.children.find(b => b.dataset.aba === nome);
   const linhasDaTabela = () => document.getElementById('painelTable').children[1]?.children || [];
   const acao = (indice, rotulo) => {
-    const celula = linhasDaTabela()[indice].children.at(-1);
+    const celula = linhasDaTabela()[indice].children.find(c => c.dataset.label === 'Ações');
     return celula.children[0].children.find(b => b.textContent === rotulo);
   };
   const campo = nome => document.getElementById('edicaoCampos')
@@ -2487,11 +2489,14 @@ test('com os dois orgaos o seletor aparece e comeca pela Camara', async () => {
 
   assert.equal(page.document.getElementById('seletorOrgaoCard').hidden, false);
   assert.equal(chamadas[0].corpo.p_colegiado, 'CJ');
+  assert.equal(page.document.getElementById('adminOrgaoAtual').textContent, 'Câmara de Julgamento',
+    'o contexto do colegiado precisa continuar visível fora do seletor');
 
   page.botaoDeOrgao('CREG').dispatch('click');
   await wait();
   assert.equal(chamadas.at(-1).corpo.p_colegiado, 'CREG',
     'trocar de órgão tem de recarregar a lista pelo colegiado novo');
+  assert.equal(page.document.getElementById('adminOrgaoAtual').textContent, 'Conselho Regulador');
 });
 
 test('cada aba consulta a sua propria porta do banco', async () => {
@@ -2507,6 +2512,122 @@ test('cada aba consulta a sua propria porta do banco', async () => {
   page.botaoDeAba('auditoria').dispatch('click');
   await wait();
   assert.equal(chamadas.at(-1).caminho, 'rpc/admin_auditoria');
+  assert.equal(page.document.getElementById('painelConteudo').getAttribute('aria-labelledby'),
+    page.botaoDeAba('auditoria').id,
+    'o painel precisa anunciar qual aba lhe dá nome');
+  assert.equal(page.document.getElementById('painelHint').textContent,
+    'Nenhuma linha pode ser alterada aqui.',
+    'a auditoria não deve sugerir uma ação que suas linhas não oferecem');
+  // O texto da dica deixou de ser escrito pelo JS e passou a viver no HTML —
+  // quem a mostra agora é a medição de rolagem real, não a aba. O que continua
+  // sendo decisão de runtime é a visão da tabela, e é dela que dependem a
+  // ausência de coluna fixa e o formato tabular que a auditoria mantém.
+  assert.equal(page.document.getElementById('painelTable').dataset.visao, 'auditoria',
+    'a auditoria não vira cartão nem ganha coluna de ações fixa');
+});
+
+test('abas administrativas seguem o padrao de teclado e mantem um unico foco', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+
+  assert.equal(page.botaoDeAba('sessoes').getAttribute('tabindex'), '0');
+  assert.equal(page.botaoDeAba('sorteios').getAttribute('tabindex'), '-1');
+  assert.equal(page.botaoDeAba('auditoria').getAttribute('tabindex'), '-1');
+
+  page.botaoDeAba('sessoes').dispatch('keydown', { key: 'ArrowRight' });
+  await wait();
+  assert.equal(page.document.activeElement, page.botaoDeAba('sorteios'));
+  assert.equal(page.botaoDeAba('sorteios').getAttribute('aria-selected'), 'true');
+  assert.equal(page.botaoDeAba('sorteios').getAttribute('tabindex'), '0');
+  assert.equal(chamadas.at(-1).caminho, 'rpc/admin_sorteios');
+
+  page.botaoDeAba('sorteios').dispatch('keydown', { key: 'End' });
+  await wait();
+  assert.equal(page.document.activeElement, page.botaoDeAba('auditoria'));
+
+  page.botaoDeAba('auditoria').dispatch('keydown', { key: 'Home' });
+  await wait();
+  assert.equal(page.document.activeElement, page.botaoDeAba('sessoes'));
+});
+
+test('tabela administrativa explica a rolagem e mantem as acoes acessiveis', () => {
+  const html = readFileSync(new URL('../admin.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../assets/css/index.css', import.meta.url), 'utf8');
+
+  assert.match(html, /class="table-scroll admin-table-wrap"[^>]*aria-describedby="tabelaInstrucao"/);
+  // A dica descreve a rolagem, e só ela: quando a tabela vira cartão não há o
+  // que explicar — a pessoa está vendo o cartão. Quem liga e desliga a dica é a
+  // medição de rolagem real em admin.js, não o breakpoint.
+  assert.match(html, /id="tabelaInstrucao"[^>]*hidden[^>]*>[^<]*Deslize horizontalmente/i);
+  assert.match(css, /\.admin-table-wrap:focus-visible\s*\{[^}]*outline:/s);
+  assert.match(css, /\.admin-table\s*\{[^}]*table-layout:\s*fixed/s,
+    'larguras previsíveis impedem que o conteúdo abra vãos diferentes entre colunas');
+  assert.match(css,
+    /\.admin-table th\.col-acoes,\s*\.admin-table td\.col-acoes\s*\{[^}]*text-align:\s*center/s,
+    'cabeçalho e botões devem compartilhar o centro da coluna');
+  assert.match(css,
+    /\.admin-table\[data-visao='processos-sorteio'\]\[data-orgao='CREG'\][^}]+nth-child\(7\)[^{]*\{[^}]*width:/s,
+    'o interessado do CREG precisa de uma faixa própria, sem comprimir os cabeçalhos finais');
+  assert.match(css,
+    /@media screen and \(max-width: 960px\)[\s\S]*?\.admin-table\[data-visao[^}]+tbody tr\s*\{[^}]*display:\s*grid/s);
+  assert.match(css,
+    /@media screen and \(max-width: 960px\)[\s\S]*?tbody td\.col-acoes\s*\{[^}]*grid-column:\s*3/s,
+    'a posição responsiva precisa seguir a função da célula, não sua ordem no DOM');
+});
+
+test('tabelas administrativas nomeiam a coluna e as operacoes sem abreviacoes ambiguas', async () => {
+  const page = adminPage({ api: apiDoPainel([]) });
+  await page.inicializarAdmin(new Set(['CJ']));
+
+  const cabecalho = page.document.getElementById('painelTable').children[0].children[0];
+  assert.equal(page.document.getElementById('painelTable').dataset.visao, 'sessoes');
+  assert.equal(page.linhasDaTabela()[0].children[0].dataset.label, 'Data');
+  assert.equal(page.linhasDaTabela()[0].children[1].dataset.label, 'Ações');
+  assert.deepEqual(cabecalho.children.map(celula => celula.textContent),
+    ['Data', 'Ações', 'Pauta', 'Processos', 'Pendentes'],
+    'a ação deve ficar junto do identificador da linha, não isolada na borda direita');
+  assert.ok([0, 2, 3, 4].every(indice => cabecalho.children[indice].classList.contains('col-centro')),
+    'as cinco colunas da listagem devem formar eixos visuais equidistantes');
+  assert.ok(cabecalho.children[1].classList.contains('col-acoes'));
+
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+  assert.equal(page.document.getElementById('painelTable').dataset.visao, 'processos-sessao');
+  const cabecalhoDetalhe = page.document.getElementById('painelTable').children[0].children[0];
+  assert.deepEqual(cabecalhoDetalhe.children.map(celula => celula.textContent),
+    ['Processo', 'Ações', 'Relator', 'Voto', 'Status', 'Atualizado por']);
+  const botoes = page.linhasDaTabela()[0].children[1].children[0].children;
+  assert.deepEqual(botoes.map(botao => botao.textContent),
+    ['Corrigir dados', 'Corrigir número', 'Religar ao acervo']);
+});
+
+test('tabela administrativa identifica o colegiado para dimensionar colunas exclusivas', async () => {
+  const page = adminPage({ api: apiDoPainel([]) });
+  await page.inicializarAdmin(new Set(['CJ', 'CREG']));
+
+  const tabela = page.document.getElementById('painelTable');
+  assert.equal(tabela.dataset.orgao, 'CJ');
+
+  page.botaoDeOrgao('CREG').dispatch('click');
+  await wait();
+  assert.equal(tabela.dataset.orgao, 'CREG',
+    'o CREG precisa reservar espaço para a coluna adicional de interessado');
+});
+
+test('pendencias e estados importantes aparecem como sinais visuais, nao como numeros soltos', async () => {
+  const page = adminPage({ api: apiDoPainel([]) });
+  await page.inicializarAdmin(new Set(['CJ']));
+
+  const pendencias = page.linhasDaTabela()[0].children[4].children[0];
+  assert.equal(pendencias.textContent, '1 pendente');
+  assert.ok(pendencias.classList.contains('admin-badge-alerta'));
+
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+  const status = page.linhasDaTabela()[0].children[4].children[0];
+  assert.equal(status.textContent, 'Julgado');
+  assert.ok(status.classList.contains('admin-badge-sucesso'));
 });
 
 test('a navegacao e por data: abrir a sessao pede os processos daquele dia', async () => {
@@ -2514,7 +2635,7 @@ test('a navegacao e por data: abrir a sessao pede os processos daquele dia', asy
   const page = adminPage({ api: apiDoPainel(chamadas) });
   await page.inicializarAdmin(new Set(['CJ']));
 
-  page.acao(0, 'Abrir').dispatch('click');
+  page.acao(0, 'Abrir sessão').dispatch('click');
   await wait();
 
   assert.equal(chamadas.at(-1).caminho, 'rpc/admin_processos_sessao');
@@ -2526,11 +2647,12 @@ test('gravar exige duas etapas: a primeira so monta a confirmacao', async () => 
   const chamadas = [];
   const page = adminPage({ api: apiDoPainel(chamadas) });
   await page.inicializarAdmin(new Set(['CJ']));
-  page.acao(0, 'Abrir').dispatch('click');
+  page.acao(0, 'Abrir sessão').dispatch('click');
   await wait();
 
-  page.acao(0, 'Corrigir').dispatch('click');
+  page.acao(0, 'Corrigir dados').dispatch('click');
   assert.equal(page.dialogo.aberto, true);
+  assert.equal(page.document.getElementById('edicaoEtapaRotulo').textContent, 'Etapa 1 de 2');
 
   page.campo('voto').value = 'Anular';
   const antes = chamadas.length;
@@ -2539,18 +2661,26 @@ test('gravar exige duas etapas: a primeira so monta a confirmacao', async () => 
 
   assert.equal(chamadas.length, antes, 'a primeira etapa não pode gravar nada');
   assert.equal(page.document.getElementById('edicaoEtapaConfirmacao').hidden, false);
+  assert.equal(page.document.getElementById('edicaoEtapaRotulo').textContent, 'Etapa 2 de 2');
   assert.match(page.document.getElementById('edicaoDelta').children[0].textContent,
     /Voto: Manter → Anular/);
+});
+
+test('confirmacao movel preserva a identificacao do registro', () => {
+  const css = readFileSync(new URL('../assets/css/index.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(css,
+    /\.admin-dialog \.detalhe-resumo\s*\{\s*display:\s*none;?\s*\}/,
+    'a segunda etapa precisa continuar dizendo qual processo sera alterado');
 });
 
 test('o corpo enviado leva so o campo que mudou', async () => {
   const chamadas = [];
   const page = adminPage({ api: apiDoPainel(chamadas) });
   await page.inicializarAdmin(new Set(['CJ']));
-  page.acao(0, 'Abrir').dispatch('click');
+  page.acao(0, 'Abrir sessão').dispatch('click');
   await wait();
 
-  page.acao(0, 'Corrigir').dispatch('click');
+  page.acao(0, 'Corrigir dados').dispatch('click');
   page.campo('voto').value = 'Anular';
   page.document.getElementById('edicaoMotivo').value = 'ata confere Anular';
   page.form.dispatch('submit');
@@ -2571,10 +2701,10 @@ test('deixar o campo em branco desfaz o registro, com null explicito', async () 
   const chamadas = [];
   const page = adminPage({ api: apiDoPainel(chamadas) });
   await page.inicializarAdmin(new Set(['CJ']));
-  page.acao(0, 'Abrir').dispatch('click');
+  page.acao(0, 'Abrir sessão').dispatch('click');
   await wait();
 
-  page.acao(0, 'Corrigir').dispatch('click');
+  page.acao(0, 'Corrigir dados').dispatch('click');
   page.campo('status').value = '';
   page.form.dispatch('submit');
   await wait();
@@ -2590,10 +2720,10 @@ test('confirmar sem ter mudado nada e recusado antes de sair da tela', async () 
   const chamadas = [];
   const page = adminPage({ api: apiDoPainel(chamadas) });
   await page.inicializarAdmin(new Set(['CJ']));
-  page.acao(0, 'Abrir').dispatch('click');
+  page.acao(0, 'Abrir sessão').dispatch('click');
   await wait();
 
-  page.acao(0, 'Corrigir').dispatch('click');
+  page.acao(0, 'Corrigir dados').dispatch('click');
   const antes = chamadas.length;
   page.form.dispatch('submit');
   await wait();
@@ -2610,10 +2740,10 @@ test('corrigir o acervo mostra os julgados que vao junto; redistribuir nao', asy
   await page.inicializarAdmin(new Set(['CJ']));
   page.botaoDeAba('sorteios').dispatch('click');
   await wait();
-  page.acao(0, 'Abrir').dispatch('click');
+  page.acao(0, 'Abrir distribuição').dispatch('click');
   await wait();
 
-  page.acao(0, 'Corrigir').dispatch('click');
+  page.acao(0, 'Corrigir dados').dispatch('click');
   page.campo('relator').value = 'CJ4';
   page.form.dispatch('submit');
   await wait();
@@ -2633,14 +2763,14 @@ test('corrigir o acervo mostra os julgados que vao junto; redistribuir nao', asy
 });
 
 test('corrigir e redistribuir batem em portas diferentes do banco', async () => {
-  for (const [rotulo, porta] of [['Corrigir', 'rpc/admin_corrigir_acervo_cj'],
+  for (const [rotulo, porta] of [['Corrigir dados', 'rpc/admin_corrigir_acervo_cj'],
                                  ['Redistribuir', 'rpc/admin_redistribuir_cj']]) {
     const chamadas = [];
     const page = adminPage({ api: apiDoPainel(chamadas) });
     await page.inicializarAdmin(new Set(['CJ']));
     page.botaoDeAba('sorteios').dispatch('click');
     await wait();
-    page.acao(0, 'Abrir').dispatch('click');
+    page.acao(0, 'Abrir distribuição').dispatch('click');
     await wait();
 
     page.acao(0, rotulo).dispatch('click');
@@ -2661,10 +2791,10 @@ test('cadeira fora do padrao e recusada antes de chegar ao banco', async () => {
   await page.inicializarAdmin(new Set(['CJ']));
   page.botaoDeAba('sorteios').dispatch('click');
   await wait();
-  page.acao(0, 'Abrir').dispatch('click');
+  page.acao(0, 'Abrir distribuição').dispatch('click');
   await wait();
 
-  page.acao(0, 'Corrigir').dispatch('click');
+  page.acao(0, 'Corrigir dados').dispatch('click');
   page.campo('relator').value = 'CREG1';
   const antes = chamadas.length;
   page.form.dispatch('submit');
@@ -2679,10 +2809,10 @@ test('o numero do processo e corrigivel de dentro da sessao, com escopo', async 
   const chamadas = [];
   const page = adminPage({ api: apiDoPainel(chamadas) });
   await page.inicializarAdmin(new Set(['CJ']));
-  page.acao(0, 'Abrir').dispatch('click');
+  page.acao(0, 'Abrir sessão').dispatch('click');
   await wait();
 
-  page.acao(0, 'Nº').dispatch('click');
+  page.acao(0, 'Corrigir número').dispatch('click');
   page.campo('num_novo').value = '202600000009999';
   page.campo('escopo').value = 'tudo';
   page.form.dispatch('submit');
@@ -2700,10 +2830,10 @@ test('numero com menos de 15 digitos nem sai da tela', async () => {
   const chamadas = [];
   const page = adminPage({ api: apiDoPainel(chamadas) });
   await page.inicializarAdmin(new Set(['CJ']));
-  page.acao(0, 'Abrir').dispatch('click');
+  page.acao(0, 'Abrir sessão').dispatch('click');
   await wait();
 
-  page.acao(0, 'Nº').dispatch('click');
+  page.acao(0, 'Corrigir número').dispatch('click');
   page.campo('num_novo').value = '12345';
   const antes = chamadas.length;
   page.form.dispatch('submit');
@@ -2723,10 +2853,10 @@ test('erro do banco vira aviso e mantem o dialogo aberto para corrigir', async (
     })
   });
   await page.inicializarAdmin(new Set(['CJ']));
-  page.acao(0, 'Abrir').dispatch('click');
+  page.acao(0, 'Abrir sessão').dispatch('click');
   await wait();
 
-  page.acao(0, 'Corrigir').dispatch('click');
+  page.acao(0, 'Corrigir dados').dispatch('click');
   page.campo('voto').value = 'Anular';
   page.form.dispatch('submit');
   await wait();
@@ -2753,7 +2883,13 @@ test('falha ao carregar a lista oferece nova tentativa em vez de tela vazia', as
   await page.inicializarAdmin(new Set(['CJ']));
 
   assert.equal(page.document.getElementById('painelErro').hidden, false);
-  assert.match(page.document.getElementById('painelErro').children[0].textContent, /sem rede/);
+  // A frase principal diz o que fazer; a mensagem crua da exceção desceu para a
+  // linha de detalhe técnico, porque ela costumava ecoar a própria frase — "não
+  // foi possível carregar os dados (não foi possível consultar o serviço)".
+  assert.match(page.document.getElementById('painelErro').children[0].textContent,
+    /tente novamente/i);
+  assert.match(page.document.getElementById('painelErroDetalhe').textContent,
+    /sem rede/, 'o detalhe técnico continua disponível para quem for investigar');
 
   falhar = false;
   page.document.getElementById('btnTentarNovamente').dispatch('click');
@@ -2784,10 +2920,10 @@ test('o Conselho usa o proprio vocabulario no formulario', async () => {
   await page.inicializarAdmin(new Set(['CREG']));
   page.botaoDeAba('sorteios').dispatch('click');
   await wait();
-  page.acao(0, 'Abrir').dispatch('click');
+  page.acao(0, 'Abrir distribuição').dispatch('click');
   await wait();
 
-  page.acao(0, 'Corrigir').dispatch('click');
+  page.acao(0, 'Corrigir dados').dispatch('click');
   assert.ok(page.campo('unidade'), 'no Conselho o destino é a unidade, não o relator');
   assert.ok(page.campo('recurso'), 'a 6ª coluna do Conselho é Recurso, não Defesa');
   assert.ok(page.campo('interessado'), 'interessado só existe no Conselho');
