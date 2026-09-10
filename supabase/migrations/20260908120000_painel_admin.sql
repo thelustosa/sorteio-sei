@@ -271,7 +271,16 @@ begin
 end;
 $$;
 
-create or replace function public.admin_processos_sessao(p_colegiado text, p_data_sessao date)
+-- Uma data pode carregar duas pautas, e admin_sessoes devolve uma linha para
+-- cada uma. Sem o número, as duas linhas abriam a MESMA tabela — com o total
+-- somado das duas contradizendo a contagem da linha clicada.
+--
+-- O drop existe porque o parâmetro novo muda a assinatura: `create or replace`
+-- criaria uma sobrecarga e deixaria a versão de duas casas no banco.
+drop function if exists public.admin_processos_sessao(text, date);
+
+create or replace function public.admin_processos_sessao(
+  p_colegiado text, p_data_sessao date, p_pauta int default null)
 returns table (id bigint, num_processo text, pauta int, voto text, status text,
                destino text, data_distribuicao date, acervo_id bigint,
                atualizado_por text, atualizado_em timestamptz)
@@ -284,17 +293,21 @@ begin
   perform public.admin_exigir(p_colegiado);
 
   return query
+  -- `is not distinct from`, como no carimbo de admin_processos_acervo: a pauta
+  -- pode ser nula, e um `=` com nulo esvaziaria justamente a sessão sem número.
   select j.id, j.num_processo, j.pauta, j.voto, j.status, j.relator,
          j.data_distribuicao, j.acervo_id, j.atualizado_por, j.atualizado_em
     from public.julgados_cj j
    where p_colegiado = 'CJ'
      and j.data_sessao = p_data_sessao
+     and j.pauta is not distinct from p_pauta
    union all
   select k.id, k.num_processo, k.pauta, k.voto, k.status, k.unidade,
          k.data_distribuicao, k.acervo_id, k.atualizado_por, k.atualizado_em
     from public.julgados_creg k
    where p_colegiado = 'CREG'
      and k.data_sessao = p_data_sessao
+     and k.pauta is not distinct from p_pauta
    order by 2;
 end;
 $$;
@@ -430,14 +443,14 @@ end;
 $$;
 
 revoke all on function public.admin_sessoes(text) from public, anon, service_role;
-revoke all on function public.admin_processos_sessao(text, date) from public, anon, service_role;
+revoke all on function public.admin_processos_sessao(text, date, int) from public, anon, service_role;
 revoke all on function public.admin_sorteios(text) from public, anon, service_role;
 revoke all on function public.admin_processos_acervo(text, date, timestamptz, text)
   from public, anon, service_role;
 revoke all on function public.admin_julgados_do_acervo(text, bigint) from public, anon, service_role;
 revoke all on function public.admin_auditoria(text, int, bigint) from public, anon, service_role;
 grant execute on function public.admin_sessoes(text) to authenticated;
-grant execute on function public.admin_processos_sessao(text, date) to authenticated;
+grant execute on function public.admin_processos_sessao(text, date, int) to authenticated;
 grant execute on function public.admin_sorteios(text) to authenticated;
 grant execute on function public.admin_processos_acervo(text, date, timestamptz, text) to authenticated;
 grant execute on function public.admin_julgados_do_acervo(text, bigint) to authenticated;
@@ -489,7 +502,7 @@ begin
   end if;
 
   if p_campos ? 'data_sessao' then
-    if p_campos ->> 'data_sessao' is null then
+    if nullif(p_campos ->> 'data_sessao', '') is null then
       raise exception 'a data da sessao nao pode ficar vazia' using errcode = '22023';
     end if;
     if (p_campos ->> 'data_sessao')::date > current_date then
@@ -497,8 +510,10 @@ begin
     end if;
   end if;
 
-  if p_campos ? 'pauta' and p_campos ->> 'pauta' is not null
-     and (p_campos ->> 'pauta')::int <= 0 then
+  -- coalesce, e não uma segunda condição depois do `and`: o Postgres não
+  -- garante ordem de avaliação entre os operandos, e ''::int ESTOURA em vez de
+  -- recusar com mensagem. Aqui o vazio já virou null antes de qualquer cast.
+  if p_campos ? 'pauta' and coalesce(nullif(p_campos ->> 'pauta', '')::int, 1) <= 0 then
     raise exception 'numero de pauta invalido: %', p_campos ->> 'pauta' using errcode = '22023';
   end if;
 
@@ -510,14 +525,17 @@ begin
 
   begin
     update public.julgados_cj j
+       -- nullif como em registrar_votos: a validação acima já trata '' como
+       -- ausência, e sem ele o UPDATE gravava a string vazia literal — um voto
+       -- em branco que passa pela allowlist e vira selo vazio em todo painel.
        set voto        = case when p_campos ? 'voto'
-                              then p_campos ->> 'voto' else j.voto end,
+                              then nullif(p_campos ->> 'voto', '') else j.voto end,
            status      = case when p_campos ? 'status'
-                              then p_campos ->> 'status' else j.status end,
+                              then nullif(p_campos ->> 'status', '') else j.status end,
            data_sessao = case when p_campos ? 'data_sessao'
                               then (p_campos ->> 'data_sessao')::date else j.data_sessao end,
            pauta       = case when p_campos ? 'pauta'
-                              then (p_campos ->> 'pauta')::int else j.pauta end,
+                              then nullif(p_campos ->> 'pauta', '')::int else j.pauta end,
            atualizado_em  = now(),
            atualizado_por = public.auth_email()
      where j.id = p_id
@@ -573,7 +591,7 @@ begin
   end if;
 
   if p_campos ? 'data_sessao' then
-    if p_campos ->> 'data_sessao' is null then
+    if nullif(p_campos ->> 'data_sessao', '') is null then
       raise exception 'a data da sessao nao pode ficar vazia' using errcode = '22023';
     end if;
     if (p_campos ->> 'data_sessao')::date > current_date then
@@ -581,8 +599,10 @@ begin
     end if;
   end if;
 
-  if p_campos ? 'pauta' and p_campos ->> 'pauta' is not null
-     and (p_campos ->> 'pauta')::int <= 0 then
+  -- coalesce, e não uma segunda condição depois do `and`: o Postgres não
+  -- garante ordem de avaliação entre os operandos, e ''::int ESTOURA em vez de
+  -- recusar com mensagem. Aqui o vazio já virou null antes de qualquer cast.
+  if p_campos ? 'pauta' and coalesce(nullif(p_campos ->> 'pauta', '')::int, 1) <= 0 then
     raise exception 'numero de pauta invalido: %', p_campos ->> 'pauta' using errcode = '22023';
   end if;
 
@@ -593,14 +613,17 @@ begin
 
   begin
     update public.julgados_creg k
+       -- nullif como em registrar_votos: a validação acima já trata '' como
+       -- ausência, e sem ele o UPDATE gravava a string vazia literal — um voto
+       -- em branco que passa pela allowlist e vira selo vazio em todo painel.
        set voto        = case when p_campos ? 'voto'
-                              then p_campos ->> 'voto' else k.voto end,
+                              then nullif(p_campos ->> 'voto', '') else k.voto end,
            status      = case when p_campos ? 'status'
-                              then p_campos ->> 'status' else k.status end,
+                              then nullif(p_campos ->> 'status', '') else k.status end,
            data_sessao = case when p_campos ? 'data_sessao'
                               then (p_campos ->> 'data_sessao')::date else k.data_sessao end,
            pauta       = case when p_campos ? 'pauta'
-                              then (p_campos ->> 'pauta')::int else k.pauta end,
+                              then nullif(p_campos ->> 'pauta', '')::int else k.pauta end,
            atualizado_em  = now(),
            atualizado_por = public.auth_email()
      where k.id = p_id
