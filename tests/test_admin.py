@@ -302,6 +302,64 @@ def corrigir_julgado_desfaz_campo_com_null_explicito(cur):
 
 
 @teste
+def corrigir_julgado_trata_string_vazia_como_ausencia(cur):
+    """O JSON pode trazer "" onde o cliente mandaria null.
+
+    A validação já usava nullif e deixava passar; o UPDATE gravava a string
+    literal. Um voto '' passa pela allowlist, não colide com nenhum CHECK, e
+    vira selo vazio em todo painel que lê a coluna.
+    """
+    _, _, julgado_id = cenario_cj(cur)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    cur.execute("""select public.admin_corrigir_julgado_cj(
+                     %s, '{"voto":"","status":"","pauta":""}'::jsonb, null)""",
+                (julgado_id,))
+    cur.execute('reset role')
+    assert julgado(cur, 'julgados_cj', julgado_id, 'voto, status, pauta') == (None, None, None)
+
+
+@teste
+def corrigir_julgado_creg_trata_string_vazia_como_ausencia(cur):
+    _, _, julgado_id = cenario_creg(cur)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    cur.execute("""select public.admin_corrigir_julgado_creg(
+                     %s, '{"voto":"","status":""}'::jsonb, null)""", (julgado_id,))
+    cur.execute('reset role')
+    assert julgado(cur, 'julgados_creg', julgado_id, 'voto, status') == (None, None)
+
+
+@teste
+def corrigir_julgado_recusa_data_vazia_com_a_mensagem_certa(cur):
+    """A data em branco tem recusa própria; sem o nullif ela estourava no cast."""
+    _, _, julgado_id = cenario_cj(cur)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    deve_falhar(cur, """select public.admin_corrigir_julgado_cj(
+                          %s, '{"data_sessao":""}'::jsonb, null)""",
+                (julgado_id,), codigo='22023')
+
+
+@teste
+def corrigir_julgado_preserva_rotulo_longo_do_conselho(cur):
+    """'Indeferimento' e 'Prejudicado' passam de 10 caracteres.
+
+    O painel truncava todo campo em 10 antes de comparar, e via alteração onde
+    não houve. Aqui a garantia é do lado do banco: o rótulo entra e sai inteiro.
+    """
+    _, _, julgado_id = cenario_creg(cur)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    cur.execute("""select public.admin_corrigir_julgado_creg(
+                     %s, '{"voto":"Indeferimento","status":"Prejudicado"}'::jsonb, null)""",
+                (julgado_id,))
+    cur.execute('reset role')
+    assert julgado(cur, 'julgados_creg', julgado_id,
+                   'voto, status') == ('Indeferimento', 'Prejudicado')
+
+
+@teste
 def corrigir_julgado_recusa_campo_fora_da_allowlist(cur):
     _, _, julgado_id = cenario_cj(cur)
     cur.connection.commit()
@@ -690,9 +748,45 @@ def processos_da_sessao_trazem_id_e_vinculo(cur):
     cur.connection.commit()
     autenticar(cur, 'lucas')
     cur.execute("""select id, num_processo, destino, acervo_id
-                     from public.admin_processos_sessao('CJ', date '2026-09-10')
+                     from public.admin_processos_sessao('CJ', date '2026-09-10', 24)
                     where id = %s""", (julgado_id,))
     assert cur.fetchone() == (julgado_id, num, 'CJ3', acervo_id)
+
+
+@teste
+def processos_da_sessao_separam_as_pautas_do_mesmo_dia(cur):
+    """admin_sessoes devolve uma linha por (data, pauta).
+
+    Filtrando só pela data, as duas linhas abriam a MESMA tabela — com o total
+    das duas contradizendo a contagem da linha clicada.
+    """
+    _, _, primeiro = cenario_cj(cur, data_sessao='2026-09-17', pauta=40)
+    _, _, segundo = cenario_cj(cur, data_sessao='2026-09-17', pauta=41)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+
+    cur.execute("""select id from public.admin_processos_sessao('CJ', date '2026-09-17', 40)""")
+    assert [linha[0] for linha in cur.fetchall()] == [primeiro]
+    cur.execute("""select id from public.admin_processos_sessao('CJ', date '2026-09-17', 41)""")
+    assert [linha[0] for linha in cur.fetchall()] == [segundo]
+
+    cur.execute("""select count(*) from public.admin_sessoes('CJ')
+                    where data_sessao = date '2026-09-17'""")
+    assert cur.fetchone()[0] == 2, 'a lista continua mostrando as duas pautas'
+
+
+@teste
+def processos_da_sessao_alcancam_a_sessao_sem_pauta(cur):
+    """`is not distinct from`, e não `=`: com `=` a sessão sem número sumiria."""
+    _, _, sem_numero = cenario_cj(cur, data_sessao='2026-09-24', pauta=None)
+    _, _, com_numero = cenario_cj(cur, data_sessao='2026-09-24', pauta=42)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+
+    cur.execute("""select id from public.admin_processos_sessao('CJ', date '2026-09-24', null)""")
+    assert [linha[0] for linha in cur.fetchall()] == [sem_numero]
+    cur.execute("""select id from public.admin_processos_sessao('CJ', date '2026-09-24', 42)""")
+    assert [linha[0] for linha in cur.fetchall()] == [com_numero]
 
 
 @teste

@@ -82,9 +82,17 @@ async function carregarPaginaAutenticada() {
     // onde muda alguma coisa: no próprio painel, e na tela inicial, que decide
     // se mostra o link para ele. As outras páginas seguem com uma consulta só.
     let orgaosAdmin = new Set();
-    if (paginaAtual.exigeAdmin || document.querySelector('[data-admin]')) {
+    if (paginaAtual.exigeAdmin) {
       orgaosAdmin = await buscarOrgaosAdministrados();
-      if (paginaAtual.exigeAdmin && orgaosAdmin.size === 0) throw erroSemPermissao();
+      if (orgaosAdmin.size === 0) throw erroSemPermissao();
+      aplicarVisibilidadeAdmin(orgaosAdmin);
+    } else if (document.querySelector('[data-admin]')) {
+      // Fora do painel a consulta decide UMA coisa: se um atalho opcional
+      // aparece. Sem o catch, uma falha nela — RPC indisponível, ambiente sem a
+      // migração aplicada — trocava a tela inicial inteira pelo erro de
+      // carregamento. Sem resposta, o atalho fica escondido, que é o mesmo
+      // estado de quem não administra nada.
+      orgaosAdmin = await buscarOrgaosAdministrados().catch(() => new Set());
       aplicarVisibilidadeAdmin(orgaosAdmin);
     }
 

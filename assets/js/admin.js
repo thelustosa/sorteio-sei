@@ -60,6 +60,10 @@ const TABELAS_LEGIVEIS = {
 const CAMPOS_LEGIVEIS = {
   voto: 'Voto',
   status: 'Status',
+  // Toda religação observa acervo_id, e uma correção de data pode mexer nele
+  // por baixo: sem rótulo, a operação mais comum da auditoria era a única que
+  // aparecia com nome de coluna de banco.
+  acervo_id: 'Distribuição vinculada',
   pauta: 'Número da pauta',
   data_sessao: 'Data da sessão',
   data_distribuicao: 'Data da distribuição',
@@ -74,9 +78,12 @@ const CAMPOS_LEGIVEIS = {
 };
 
 // De onde veio a linha da distribuição: o valor cru do banco em minúsculas
-// aparecia dentro de um selo, ao lado de datas já formatadas.
+// aparecia dentro de um selo, ao lado de datas já formatadas. São os três
+// valores que as checks admitem — a Câmara aceita sorteio e planilha, o
+// Conselho aceita também ata —, e faltar um deles devolve o selo ao valor cru.
 const ORIGENS_LEGIVEIS = {
   sorteio: 'Sorteio eletrônico',
+  planilha: 'Planilha importada',
   ata: 'Ata publicada'
 };
 
@@ -137,6 +144,11 @@ let detalhe = null;
 // trocar de aba durante uma consulta lenta não pode repintar a tabela errada.
 let pedido = 0;
 let dialogoAtual = null;
+// avancar() é assíncrono nas DUAS etapas, e o <form> aceita submit por Enter
+// além do clique no botão. Sem esta trava, um segundo submit durante a consulta
+// de impacto reentrava com `delta` já preenchido e caía direto na gravação: a
+// etapa de confirmação era pulada justamente na operação que propaga.
+let avancando = false;
 
 // ── Formatação ───────────────────────────────────────────────────────────────
 // aaaa-mm-dd → dd/mm/aaaa sem passar por Date: o construtor lê data pura como
@@ -392,8 +404,10 @@ function buscar() {
   const corpo = extra => JSON.stringify({ p_colegiado: orgao, ...extra });
 
   if (detalhe?.tipo === 'sessao') {
+    // A pauta vai junto porque a lista agrupa por (data, pauta): sem ela, duas
+    // pautas do mesmo dia abriam a mesma tabela, com o total das duas.
     return api('rpc/admin_processos_sessao', {
-      method: 'POST', body: corpo({ p_data_sessao: detalhe.data })
+      method: 'POST', body: corpo({ p_data_sessao: detalhe.data, p_pauta: detalhe.pauta ?? null })
     });
   }
   if (detalhe?.tipo === 'sorteio') {
@@ -521,7 +535,7 @@ function pintarSorteios(linhas) {
 function pintarProcessosDaSessao(linhas) {
   definirVisaoTabela('processos-sessao');
   const v = VOCABULARIO[orgao];
-  tituloDoPainel(`Sessão de ${dataBR(detalhe.data)}`,
+  tituloDoPainel(`Sessão de ${dataBR(detalhe.data)}${vazio(detalhe.pauta) ? '' : ` · pauta ${detalhe.pauta}`}`,
     'Corrija voto, status, pauta ou a data da sessão. Religar refaz o vínculo com o acervo.',
     'Escolha uma ação na linha do processo que precisa de ajuste.');
   if (!linhas.length) {
@@ -699,8 +713,8 @@ function valorDoCampo(nome) {
   return campo ? campo.value.trim() : '';
 }
 
-function abrirDialogo({ titulo, resumo, campos, montarDelta, impacto, gravar }) {
-  dialogoAtual = { montarDelta, impacto, gravar, delta: null };
+function abrirDialogo({ titulo, resumo, campos, montarDelta, impacto, gravar, mensagem }) {
+  dialogoAtual = { montarDelta, impacto, gravar, mensagem, delta: null };
 
   edicaoTitulo.textContent = titulo;
   edicaoResumo.textContent = resumo;
@@ -726,7 +740,16 @@ function mostrarErroNoDialogo(mensagem) {
 }
 
 async function avancar() {
-  if (!dialogoAtual) return;
+  if (!dialogoAtual || avancando) return;
+  avancando = true;
+  try {
+    await passo();
+  } finally {
+    avancando = false;
+  }
+}
+
+async function passo() {
   edicaoErro.hidden = true;
 
   // Etapa 1 → 2: monta o delta e mostra a confirmação.
@@ -743,7 +766,6 @@ async function avancar() {
       return;
     }
 
-    dialogoAtual.delta = delta;
     edicaoDelta.replaceChildren(...delta.map(({ rotulo, antes, depois }) => {
       const item = document.createElement('li');
       item.textContent = `${rotulo}: ${legivel(antes)} → ${legivel(depois)}`;
@@ -751,6 +773,10 @@ async function avancar() {
     }));
 
     if (dialogoAtual.impacto) {
+      // O botão vira indicador durante a consulta: rotulado "Revisar alteração"
+      // e clicável, ele dizia que a etapa 1 ainda não terminou enquanto a
+      // resposta vinha.
+      alternarBotaoCarregando(btnAvancar, true, 'Verificando…');
       try {
         const afetados = await dialogoAtual.impacto();
         if (afetados.length) {
@@ -764,9 +790,14 @@ async function avancar() {
       } catch (_) {
         // O preview é informativo: falhar nele não impede a confirmação, e
         // inventar "nenhum julgado afetado" seria pior que omiti-lo.
+      } finally {
+        alternarBotaoCarregando(btnAvancar, false, 'Revisar alteração');
       }
     }
 
+    // Só aqui a etapa 1 está de fato concluída: marcar o delta antes da espera
+    // acima deixava a etapa 2 alcançável enquanto a tela ainda mostrava a 1.
+    dialogoAtual.delta = delta;
     edicaoEtapaCampos.hidden = true;
     edicaoEtapaConfirmacao.hidden = false;
     edicaoEtapaRotulo.textContent = 'Etapa 2 de 2';
@@ -780,10 +811,16 @@ async function avancar() {
 
   // Etapa 2: grava.
   alternarBotaoCarregando(btnAvancar, true, 'Gravando…');
+  const descrever = dialogoAtual.mensagem;
   try {
-    await dialogoAtual.gravar(edicaoMotivo.value.trim() || null);
+    // O que o gatilho de derivação fez por baixo da correção só é sabido depois
+    // da escrita — é o que a função devolve em `alterados` e `propagados`, e o
+    // motivo de a migração dizer que "nada é silencioso". Descartar o retorno
+    // deixava a divergência para aparecer em verificacao_cj.sql, que é
+    // exatamente o que ela existe para evitar.
+    const resultado = await dialogoAtual.gravar(edicaoMotivo.value.trim() || null);
     dialogo.close();
-    aviso('Alteração gravada.', 'sucesso');
+    aviso((descrever && descrever(resultado)) || 'Alteração gravada.', 'sucesso');
     await carregar();
   } catch (err) {
     mostrarErroNoDialogo(err.message);
@@ -801,7 +838,10 @@ function abrirCorrecaoDeJulgado(linha) {
     campoSelecao({ nome: 'status', rotulo: 'Status', valor: linha.status, opcoes: v.status }),
     campoTexto({
       nome: 'data_sessao', rotulo: 'Data da sessão', tipo: 'date', valor: detalhe.data,
-      dica: 'Mudar a data pode religar o julgado a outra distribuição; a confirmação mostra se isso acontecer.'
+      // Quem religa é o gatilho de derivação, DURANTE a escrita: na confirmação
+      // isso ainda não aconteceu. Quem informa é o aviso de gravação, montado
+      // com o `alterados` que a função devolve.
+      dica: 'Mudar a data pode religar o julgado a outra distribuição; o aviso da gravação diz se isso aconteceu.'
     }),
     campoTexto({ nome: 'pauta', rotulo: 'Número da pauta', tipo: 'number', valor: linha.pauta,
       atributos: { min: '1', step: '1' } })
@@ -814,23 +854,29 @@ function abrirCorrecaoDeJulgado(linha) {
 
   abrirDialogo({
     titulo: 'Corrigir julgado',
-    resumo: `Processo ${linha.num_processo} · sessão de ${dataBR(detalhe.data)}`,
+    resumo: `Processo ${linha.num_processo} · sessão de ${dataBR(detalhe.data)}`
+      + (vazio(detalhe.pauta) ? '' : `, pauta ${detalhe.pauta}`),
     campos,
     montarDelta() {
       const alterados = {};
       const delta = [];
-      const comparar = (nome, rotulo, converter) => {
+      const comparar = (nome, rotulo, normalizar) => {
         const bruto = valorDoCampo(nome);
-        const novo = bruto === '' ? null : converter(bruto);
-        const antigo = vazio(original[nome]) ? null : converter(String(original[nome]).slice(0, 10));
+        const novo = bruto === '' ? null : normalizar(bruto);
+        const antigo = vazio(original[nome]) ? null : normalizar(String(original[nome]));
         if (novo === antigo) return;
         alterados[nome] = novo;
         delta.push({ rotulo, antes: antigo, depois: novo });
       };
 
+      // O corte em 10 põe carimbo do banco e <input type="date"> na mesma
+      // unidade, e é SÓ da data. Aplicado a todos os campos, truncava
+      // 'Indeferimento' em 'Indeferime' e o painel via alteração onde não
+      // houve: a confirmação exibia uma mudança inventada e a gravação
+      // reescrevia atualizado_por por uma edição que ninguém fez.
       comparar('voto', 'Voto', String);
       comparar('status', 'Status', String);
-      comparar('data_sessao', 'Data da sessão', String);
+      comparar('data_sessao', 'Data da sessão', valor => String(valor).slice(0, 10));
       comparar('pauta', 'Número da pauta', Number);
 
       if (alterados.data_sessao === null) {
@@ -844,7 +890,10 @@ function abrirCorrecaoDeJulgado(linha) {
         method: 'POST',
         body: JSON.stringify({ p_id: linha.id, p_campos: this.alterados, p_motivo: motivo })
       });
-    }
+    },
+    mensagem: resultado => resultado?.alterados?.acervo_id
+      ? 'Alteração gravada. A data nova religou o julgado a outra distribuição.'
+      : null
   });
 }
 
@@ -950,6 +999,15 @@ function abrirAlteracaoDeAcervo(linha, modo) {
         method: 'POST',
         body: JSON.stringify({ p_id: linha.id, p_campos: this.alterados, p_motivo: motivo })
       });
+    },
+    // Na correção, o preview da etapa 2 lista quem PODE ir junto e este aviso
+    // diz quem foi. Na redistribuição a lista é sempre vazia de propósito, e
+    // o aviso cai no texto padrão.
+    mensagem(resultado) {
+      const quantos = Array.isArray(resultado?.propagados) ? resultado.propagados.length : 0;
+      return quantos
+        ? `Alteração gravada. ${plural(quantos, 'julgado seguiu', 'julgados seguiram')} a correção.`
+        : null;
     }
   });
 }
