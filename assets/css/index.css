@@ -351,8 +351,14 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
   background: var(--surface-raised);
 }
 
+/* .selection-card entra junto porque o título de um card de seleção é dele, não
+   do lugar onde ele está: o painel administrativo mora fora da caixa branca e
+   o seu h2 caía na fonte crua do navegador, 24px com 20px de margem, ao lado de
+   quatro títulos em Montserrat 22px sem margem nenhuma. As cores de canal
+   continuam ganhando daqui pela especificidade (.selection-card-x .selection-copy h2). */
 .card h2,
-.card h3 {
+.card h3,
+.selection-card h2 {
   margin: 0;
   color: var(--accent);
   font-family: 'Montserrat', ui-sans-serif, sans-serif;
@@ -559,6 +565,69 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
   50% { box-shadow: 0 0 0 7px var(--accent-secondary-ring-strong); }
 }
 
+/* O painel administrativo é o único card da tela inicial que NÃO é um dos
+   quatro caminhos: ele corrige o que os outros gravaram, e quem o enxerga é só
+   quem administra. Por isso vive fora da caixa branca que agrupa os quatro —
+   ali dentro ele se lia como um quinto canal de mesmo peso, e a tela passa a
+   prometer cinco escolhas onde há quatro.
+
+   Fora dela ele muda de chão: a caixa é branca, a página é --bg (#f4f7f5), e o
+   tingido --surface-subtle (#f8fbfa) que serve de fundo sobre branco fica a
+   quatro pontos do fundo da página — o card sumiria. Então aqui ele assume a
+   superfície branca, que é justamente como a própria caixa se destaca da
+   página. É a mesma relação, um nível acima.
+
+   A largura é dele: uma coluna, encostada à direita pelo margin-left auto, com
+   a borda direita no mesmo eixo da caixa dos quatro. Estreito e deslocado é o
+   que diz 'secundário' sem precisar de rótulo — e no canto superior direito,
+   acima da caixa, ele é a primeira coisa à mão de quem entra para corrigir
+   algo, sem disputar a coluna com os quatro caminhos do dia a dia. */
+#cardAdmin {
+  width: min(100%, 460px);
+  /* O mesmo 18px de respiro que separa os quatro cards entre si. */
+  margin-bottom: 18px;
+  margin-left: auto;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  background: var(--surface-raised);
+}
+
+/* Ele saiu de #modeSelector, então precisa voltar a acompanhar a tela de que
+   saiu: enquanto o seletor de modalidade estiver escondido — o sorteio tomou a
+   tela, ou a sessão ainda não abriu — o atalho some junto.
+
+   Por que no CSS e não no JS: o atributo hidden deste card já tem dono, o
+   bootstrap, que decide a permissão. Um segundo dono no index.js para decidir a
+   tela faria os dois disputarem o mesmo atributo, e quem perdesse o último
+   turno venceria. Aqui as duas condições se compõem sem nenhuma delas escrever
+   por cima da outra. */
+main:not(:has(#modeSelector:not([hidden]))) #cardAdmin { display: none; }
+
+/* A canaleta direita. A caixa é min(1100px, 96%) centralizada, então a folga de
+   cada lado é (tela - 1100) / 2: 170px num monitor de 1440, 410px num de 1920.
+   O card pede 300px mais 28px de afastamento, e só a partir daqui isso cabe sem
+   encostar na caixa nem sair da tela.
+
+   Absoluto, e não uma coluna na grade: uma coluna empurraria a caixa dos quatro
+   para a esquerda para abrir espaço, e ela tem de continuar centralizada e com
+   a mesma largura. Fora do fluxo, ele ocupa uma margem que já existia vazia e
+   não move nada.
+
+   top: 24px porque o elemento se posiciona pela caixa de PREENCHIMENTO do main,
+   cuja borda fica 24px acima do topo da caixa branca — é o padding-top do main.
+   É esse valor que alinha os dois topos. */
+@media screen and (min-width: 1760px) {
+  main.container { position: relative; }
+
+  #cardAdmin {
+    position: absolute;
+    top: 24px;
+    left: calc(100% + 28px);
+    width: 300px;
+    margin: 0;
+  }
+}
+
 .pendencias-badge {
   position: absolute;
   top: -10px;
@@ -583,21 +652,25 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
   line-height: 1.5;
 }
 
-#modeSelector .buttons-wrapper {
+#modeSelector .buttons-wrapper,
+#cardAdmin .buttons-wrapper {
   display: grid;
   width: 100%;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
-#modeSelector .buttons-wrapper.single-choice {
+#modeSelector .buttons-wrapper.single-choice,
+#cardAdmin .buttons-wrapper.single-choice {
   grid-template-columns: minmax(0, 1fr);
   justify-items: center;
 }
 
-#modeSelector .buttons-wrapper.single-choice .mode-button { width: min(100%, 320px); }
+#modeSelector .buttons-wrapper.single-choice .mode-button,
+#cardAdmin .buttons-wrapper.single-choice .mode-button { width: min(100%, 320px); }
 
-#modeSelector .mode-button { width: 100%; }
+#modeSelector .mode-button,
+#cardAdmin .mode-button { width: 100%; }
 
 /* A lista é explícita de propósito — um `input` sem tipo casado aqui herdaria o
    controle cru do navegador. Foi o que aconteceu com `date`, que só existe no
@@ -939,6 +1012,7 @@ tbody tr:hover td { background: var(--table-row-hover); }
 }
 
 #modeSelector:not([hidden]),
+#cardAdmin:not([hidden]),
 #sorteadorContent:not([hidden]),
 #resultadoSorteio:not([hidden]),
 #listaPautas:not([hidden]),
@@ -2012,6 +2086,14 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 }
 
 @media screen and (max-width: 980px) {
+  /* Abaixo daqui a página é uma coluna só, e 'canto superior direito' deixa de
+     existir: o que sobra do deslocamento é a ORDEM, e ela inverteria a
+     hierarquia — a porta de manutenção chegaria antes dos quatro caminhos do
+     dia a dia. Então aqui ele desce para depois da caixa, que é o mesmo que
+     dizia no desktop, pelos meios que a largura ainda permite. */
+  main.container { display: flex; flex-direction: column; }
+  #cardAdmin { order: 1; margin-top: 18px; margin-bottom: 0; }
+
   #processTable {
     display: block;
     width: 100%;
@@ -2242,7 +2324,8 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     padding: 20px;
   }
 
-  #modeSelector .buttons-wrapper { grid-template-columns: 1fr; }
+  #modeSelector .buttons-wrapper,
+  #cardAdmin .buttons-wrapper { grid-template-columns: 1fr; }
   .acervo-header-summary { width: 100%; align-items: stretch; }
   .acervo-scope { max-width: 100%; justify-content: flex-start; white-space: normal; }
 }

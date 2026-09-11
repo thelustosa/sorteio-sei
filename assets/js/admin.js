@@ -117,6 +117,7 @@ const painelStatusBloco = document.querySelector('.admin-panel-status');
 const adminOrgaoAtual = document.getElementById('adminOrgaoAtual');
 const btnTentarNovamente = document.getElementById('btnTentarNovamente');
 const btnVoltar = document.getElementById('btnVoltar');
+const btnVoltarInicio = document.getElementById('btnVoltarInicio');
 
 const dialogo = document.getElementById('edicaoDialog');
 const edicaoForm = document.getElementById('edicaoForm');
@@ -371,7 +372,15 @@ function navegarAbas(evento) {
 // ── Carregamento ─────────────────────────────────────────────────────────────
 async function carregar() {
   const meu = ++pedido;
+  // Os dois botões de volta se revezam, como em julgados.js: dentro de um
+  // detalhe quem volta é o Voltar (para a lista), e fora dele o Início (para o
+  // index.html). Uma saída de cada vez, a de dentro com precedência.
+  //
+  // O Início existia no admin.html desde o começo, mas nascia hidden e nada
+  // aqui o revelava — o painel era a única tela do sistema sem caminho de volta
+  // à inicial, e só o botão do navegador tirava a pessoa de lá.
   btnVoltar.hidden = !detalhe;
+  btnVoltarInicio.hidden = !!detalhe;
   estado({ carregando: true });
   painelTabela.replaceChildren();
   painelStatus.textContent = 'Carregando…';

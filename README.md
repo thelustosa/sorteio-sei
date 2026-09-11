@@ -144,6 +144,14 @@ eram iterações que os arquivos de hoje consolidam, e saíram. O ledger de ante
 está inteiro, com o SQL que rodou, em
 `supabase_migrations.ledger_backup_20260902`.
 
+Em 11/09/2026 foi a vez do painel admin: o ledger guardava três linhas
+(`painel_admin`, `painel_admin_comentarios` e a correção do mesmo dia) para o
+`20260908120000_painel_admin.sql`, que o commit 1f46615 já tinha consolidado num
+arquivo só — e a correção nunca chegara ao banco, porque EDITAR um arquivo já
+aplicado não reaplica nada. As três viraram uma, sob a versão do arquivo, com os
+statements das três preservados na ordem; o ledger de antes está em
+`supabase_migrations.ledger_backup_20260911`.
+
 O SQL tem de chegar ao banco em UTF-8. No Windows PowerShell 5.1 o
 `Get-Content -Raw` lê pelo codepage ANSI do sistema, não pelo do arquivo: um
 `.sql` com acento vira mojibake silencioso — o SQL roda, mas os literais entram
