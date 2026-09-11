@@ -2379,7 +2379,7 @@ function adminPage({ api = async () => null, aviso = () => {} } = {}) {
    'edicaoResumo', 'edicaoTitulo', 'edicaoCampos',
    'edicaoEtapaCampos', 'edicaoEtapaConfirmacao', 'edicaoDelta', 'edicaoImpacto',
    'edicaoImpactoLista', 'edicaoErro', 'edicaoEtapaRotulo'].forEach(id => document.add(id, 'div'));
-  ['btnTentarNovamente', 'btnVoltar', 'btnAvancarEdicao', 'btnCancelarEdicao',
+  ['btnTentarNovamente', 'btnVoltar', 'btnVoltarInicio', 'btnAvancarEdicao', 'btnCancelarEdicao',
    'btnFecharEdicao'].forEach(id => document.add(id, 'button'));
   document.add('painelTable', 'table');
   document.add('edicaoMotivo', 'input');
@@ -2641,6 +2641,31 @@ test('a navegacao e por data: abrir a sessao pede os processos daquele dia', asy
   assert.equal(chamadas.at(-1).caminho, 'rpc/admin_processos_sessao');
   assert.equal(chamadas.at(-1).corpo.p_data_sessao, '2026-07-09');
   assert.equal(page.document.getElementById('btnVoltar').hidden, false);
+});
+
+test('da lista do painel da para voltar ao inicio; dentro de um detalhe quem volta e o Voltar', async () => {
+  const page = adminPage({ api: apiDoPainel([]) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  const inicio = page.document.getElementById('btnVoltarInicio');
+  const voltar = page.document.getElementById('btnVoltar');
+
+  // Na lista: a única saída da tela é o Início, e ele precisa estar à vista —
+  // era o que faltava, e deixava o painel sem caminho de volta ao index.html.
+  assert.equal(inicio.hidden, false, 'sem o Início a tela não tem saída');
+  assert.equal(voltar.hidden, true, 'não há detalhe aberto para o Voltar desfazer');
+
+  // Dentro de um detalhe os dois trocam de lugar, como em julgados.js: uma
+  // volta de cada vez, e a de dentro tem precedência sobre a de fora.
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+  assert.equal(voltar.hidden, false);
+  assert.equal(inicio.hidden, true);
+
+  // E ao fechar o detalhe o Início reassume.
+  voltar.dispatch('click');
+  await wait();
+  assert.equal(inicio.hidden, false);
+  assert.equal(voltar.hidden, true);
 });
 
 test('gravar exige duas etapas: a primeira so monta a confirmacao', async () => {
