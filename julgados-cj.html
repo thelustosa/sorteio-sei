@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=cd4cc76604" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=6700f9d2c0" />
   <script>
     (function () {
       try {
@@ -35,8 +35,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=cd4cc76604"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=cd4cc76604"></script>
+  <script defer src="assets/js/supabase.min.js?v=6700f9d2c0"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=6700f9d2c0"></script>
 </head>
 
 <body data-page="julgados-cj">
@@ -87,19 +87,37 @@
   </nav>
 
   <main id="conteudo-principal" class="container pb-36" tabindex="-1">
-    <div class="card">
-      <div id="loginScreen">
-        <h2>Acesso restrito</h2>
-        <p>Identifique-se para registrar os julgamentos.</p>
-        <form id="loginForm">
-          <label for="loginEmail">E-mail</label>
-          <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
-          <label for="loginSenha">Senha</label>
-          <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
-          <button id="btnEntrar" type="submit">Entrar</button>
-          <div id="loginErro" role="alert" aria-live="assertive"></div>
-        </form>
-      </div>
+    <div class="card login-host">
+      <section id="loginScreen" class="app-login" data-login-art="julgados-cj" aria-labelledby="loginTitulo">
+        <div class="app-login-intro">
+          <span class="app-login-eyebrow">Deliberações da Câmara</span>
+          <div class="app-login-symbol" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 5h16v23H8zM12 5V3h8v2M12 11h8M12 16h8"></path><path d="m12 22 2.5 2.5L20 19"></path>
+            </svg>
+          </div>
+          <h2 id="loginTitulo">Da pauta ao registro final</h2>
+          <p>Complete voto e status dos processos julgados pela Câmara sem perder o vínculo com a pauta.</p>
+          <ul class="app-login-assurances">
+            <li><span aria-hidden="true">✓</span>Pendências organizadas por pauta</li>
+            <li><span aria-hidden="true">✓</span>Defesa, voto e status no mesmo fluxo</li>
+          </ul>
+        </div>
+
+        <div class="app-login-form-card">
+          <span class="app-login-eyebrow">Registro de julgamento</span>
+          <h2>Entrar nas pautas da CJ</h2>
+          <p>Identifique-se para completar os julgamentos pendentes.</p>
+          <form id="loginForm">
+            <label for="loginEmail">E-mail</label>
+            <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
+            <label for="loginSenha">Senha</label>
+            <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+            <button id="btnEntrar" type="submit">Registrar julgamentos</button>
+            <div id="loginErro" role="alert" aria-live="assertive"></div>
+          </form>
+        </div>
+      </section>
 
       <div id="sessionLoading" class="session-loading" data-sessao hidden></div>
 

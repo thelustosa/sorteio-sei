@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=cd4cc76604" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=6700f9d2c0" />
   <script>
     (function () {
       try {
@@ -35,8 +35,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./acervo-cj.html", "./acervo-creg.html", "./historico-cj.html", "./historico-creg.html", "./julgados-cj.html", "./julgados-creg.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=cd4cc76604"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=cd4cc76604"></script>
+  <script defer src="assets/js/supabase.min.js?v=6700f9d2c0"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=6700f9d2c0"></script>
 </head>
 
 <body data-page="sorteio">
@@ -107,19 +107,38 @@
       </div>
     </section>
 
-    <div class="card">
-      <div id="loginScreen">
-        <h2>Acesso restrito</h2>
-        <p>Identifique-se para realizar o sorteio de processos.</p>
-        <form id="loginForm">
-          <label for="loginEmail">E-mail</label>
-          <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
-          <label for="loginSenha">Senha</label>
-          <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
-          <button id="btnEntrar" type="submit">Entrar</button>
-          <div id="loginErro" role="alert" aria-live="assertive"></div>
-        </form>
-      </div>
+    <div class="card login-host">
+      <section id="loginScreen" class="app-login" data-login-art="sorteio" aria-labelledby="loginTitulo">
+        <div class="app-login-intro">
+          <span class="app-login-eyebrow">Nova distribuição</span>
+          <div class="app-login-symbol" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="16" cy="6" r="3"></circle><circle cx="7" cy="24" r="3"></circle><circle cx="25" cy="24" r="3"></circle>
+              <path d="M14 8.5 8.5 21M18 8.5 23.5 21M10 24h12"></path>
+            </svg>
+          </div>
+          <h2 id="loginTitulo">Distribuição justa, resultado auditável</h2>
+          <p>Prepare um novo sorteio entre as unidades do colegiado com equilíbrio e rastreabilidade.</p>
+          <ul class="app-login-assurances">
+            <li><span aria-hidden="true">✓</span>Balanceamento por quantidade e assunto</li>
+            <li><span aria-hidden="true">✓</span>Resultado registrado com autor e horário</li>
+          </ul>
+        </div>
+
+        <div class="app-login-form-card">
+          <span class="app-login-eyebrow">Identificação institucional</span>
+          <h2>Entrar para sortear</h2>
+          <p>Use suas credenciais para iniciar uma distribuição.</p>
+          <form id="loginForm">
+            <label for="loginEmail">E-mail</label>
+            <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
+            <label for="loginSenha">Senha</label>
+            <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+            <button id="btnEntrar" type="submit">Acessar sorteio</button>
+            <div id="loginErro" role="alert" aria-live="assertive"></div>
+          </form>
+        </div>
+      </section>
 
       <div id="sessionLoading" class="session-loading" data-sessao hidden></div>
 

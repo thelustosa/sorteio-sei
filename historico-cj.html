@@ -9,7 +9,7 @@
   <title>Histórico de sorteios — Câmara de Julgamento | Sorteio de Processos SEI</title>
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=cd4cc76604" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=6700f9d2c0" />
   <script>
     (function () {
       try {
@@ -32,8 +32,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=cd4cc76604"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=cd4cc76604"></script>
+  <script defer src="assets/js/supabase.min.js?v=6700f9d2c0"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=6700f9d2c0"></script>
 </head>
 
 <body class="dashboard-page" data-page="historico-cj" data-colegiado="cj">
@@ -83,19 +83,37 @@
   </nav>
 
   <main id="conteudo-principal" class="container dashboard-main" tabindex="-1">
-    <div class="card" data-login-only>
-      <div id="loginScreen">
-        <h2>Acesso restrito</h2>
-        <p>Identifique-se para consultar o histórico.</p>
-        <form id="loginForm">
-          <label for="loginEmail">E-mail</label>
-          <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
-          <label for="loginSenha">Senha</label>
-          <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
-          <button id="btnEntrar" type="submit">Entrar</button>
-          <div id="loginErro" role="alert" aria-live="assertive"></div>
-        </form>
-      </div>
+    <div class="card login-host" data-login-only>
+      <section id="loginScreen" class="app-login" data-login-art="historico-cj" aria-labelledby="loginTitulo">
+        <div class="app-login-intro">
+          <span class="app-login-eyebrow">Memória da Câmara</span>
+          <div class="app-login-symbol" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="16" cy="16" r="11"></circle><path d="M16 9v7l5 3M7 6l-3 4m21-4 3 4"></path>
+            </svg>
+          </div>
+          <h2 id="loginTitulo">Cada distribuição permanece consultável</h2>
+          <p>Reveja as rodadas da Câmara de Julgamento e os processos destinados em cada sorteio.</p>
+          <ul class="app-login-assurances">
+            <li><span aria-hidden="true">✓</span>Rodadas ordenadas da mais recente à mais antiga</li>
+            <li><span aria-hidden="true">✓</span>Detalhamento completo por processo</li>
+          </ul>
+        </div>
+
+        <div class="app-login-form-card">
+          <span class="app-login-eyebrow">Arquivo cronológico</span>
+          <h2>Consultar histórico da CJ</h2>
+          <p>Entre para localizar e exportar distribuições anteriores.</p>
+          <form id="loginForm">
+            <label for="loginEmail">E-mail</label>
+            <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
+            <label for="loginSenha">Senha</label>
+            <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+            <button id="btnEntrar" type="submit">Consultar memória da CJ</button>
+            <div id="loginErro" role="alert" aria-live="assertive"></div>
+          </form>
+        </div>
+      </section>
 
       <div id="sessionLoading" class="session-loading" data-sessao hidden></div>
     </div>
