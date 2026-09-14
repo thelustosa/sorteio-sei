@@ -28,8 +28,10 @@ export const PAGINAS = ['index.html', 'julgados-cj.html', 'julgados-creg.html',
 
 const ler = caminho => readFileSync(join(RAIZ, caminho), 'utf8');
 // Zera a própria versão antes de hashear, senão o valor gravado mudaria o hash
-// que acabou de ser calculado.
-const semVersao = texto => texto.replace(/ASSET_VERSION = '[^']*'/, "ASSET_VERSION = ''");
+// que acabou de ser calculado. Também descarta o \r: o .gitattributes fixa LF,
+// mas um editor no Windows ainda pode regravar o arquivo com CRLF sem que o
+// git status acuse nada — e o hash local divergiria do runner do Actions.
+const semVersao = texto => texto.replace(/\r\n/g, '\n').replace(/ASSET_VERSION = '[^']*'/, "ASSET_VERSION = ''");
 
 export function calcularVersao() {
   const conteudo = FONTES.map(caminho => semVersao(ler(caminho))).join('\n');
