@@ -164,7 +164,7 @@ function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null) {
       aplicarVisibilidadePorOrgao: typeof aplicarVisibilidadePorOrgao === 'function' ? aplicarVisibilidadePorOrgao : undefined,
       erroSemPermissao: typeof erroSemPermissao === 'function' ? erroSemPermissao : undefined,
       CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicador,
-      redirecionarSemTransicao,
+      alternarBotaoCarregando, redirecionarSemTransicao,
       estadoSessao: () => ({ accessToken, refreshToken })
     };`)(document, window, navigator, location, sessionStorage, fetch, apiSubstituta);
   return { ...app, document, navegacoes, storage,
@@ -215,7 +215,8 @@ function paginaServidaComBundles(fetch) {
 // O de-para das cadeiras mora no supabase.js, que toda página carrega antes do
 // seu próprio script. As telas o enxergam como global; aqui ele é injetado, e
 // vem do arquivo de verdade para que uma divergência apareça como falha.
-const { CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicador } = supabaseApp(async () => {});
+const { CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicador,
+        alternarBotaoCarregando } = supabaseApp(async () => {});
 
 function indexPage({ api = async () => null, aviso = () => {},
   supabaseUrl = 'url', supabaseKey = 'key', token = 'token' } = {}) {
@@ -865,7 +866,10 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
   erroPermissao = () => Object.assign(new Error('sem permissão'), { semPermissao: true }),
   encerrarSessaoNoServidor = async () => {},
   carregar = async () => {},
-  location = { replace() {} }
+  location = { replace() {} },
+  // O papel de administrador: só a tela inicial e o painel o consultam.
+  buscarAdmin = async () => new Set(),
+  aplicarVisibilidadeAdmin = () => {}
 } = {}) {
   const document = new Document();
   document.body.dataset.page = pagina;
@@ -891,6 +895,7 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
   const app = new Function('document', 'window', 'location', 'ASSET_VERSION', 'carregarScript',
     'criarIndicadorCarregamento', 'ligarLogin', 'buscarOrgaosAutorizados',
     'aplicarVisibilidadePorOrgao', 'erroSemPermissao', 'sair', 'redirecionarSemTransicao',
+    'buscarOrgaosAdministrados', 'aplicarVisibilidadeAdmin',
     `${source('bootstrap.js')}\nreturn {
       resolverDestinoPermitido: typeof resolverDestinoPermitido === 'function' ? resolverDestinoPermitido : undefined,
       carregarPaginaAutenticada
@@ -898,9 +903,10 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
     document, { [inicializadores[pagina]]: inicializar }, location, 'teste', carregar,
     texto => { const estado = document.createElement('div'); estado.textContent = texto; return estado; },
     callback => { aoEntrar = callback; }, buscarOrgaos, aplicarVisibilidade, erroPermissao,
-    encerrarSessaoNoServidor, destino => location.replace(destino));
+    encerrarSessaoNoServidor, destino => location.replace(destino),
+    buscarAdmin, aplicarVisibilidadeAdmin);
 
-  return { ...app, sessionLoading, loginScreen, loginErro, btnSair, iniciar: () => aoEntrar() };
+  return { ...app, document, sessionLoading, loginScreen, loginErro, btnSair, iniciar: () => aoEntrar() };
 }
 
 // O carregamento geral cobre o que acontece antes de a tela existir: a consulta
@@ -1155,7 +1161,7 @@ function acervoPage(api, { imprimir = () => {}, colegiado = 'cj' } = {}) {
   document.add('detalheResumo', 'p');
   const detalheLoading = document.add('detalheLoading', 'div');
   detalheLoading.hidden = true;
-  const detalheCorpo = document.add('detalheCorpo', 'div');
+  document.add('detalheCorpo', 'div');
   document.add('detalheTable', 'table');
   const detalheErro = document.add('detalheErro', 'div');
   detalheErro.hidden = true;
@@ -2368,7 +2374,9 @@ test('falha ao exportar a ata avisa dentro do próprio card', async () => {
 // gravação exige duas etapas, e que o corpo enviado ao banco carrega SÓ o que
 // de fato mudou — mandar campo intocado junto reescreveria valor que ninguém
 // pediu para mexer.
-function adminPage({ api = async () => null, aviso = () => {} } = {}) {
+// `botaoCarregando` é o alternarBotaoCarregando que a tela recebe. Mudo por
+// padrão; o de verdade, do supabase.js, entra onde o teste lê o rótulo do botão.
+function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando = () => {} } = {}) {
   const document = new Document();
   const avisos = [];
   const registrarAviso = (texto, tipo) => { avisos.push({ texto, tipo }); aviso(texto, tipo); };
@@ -2378,7 +2386,8 @@ function adminPage({ api = async () => null, aviso = () => {} } = {}) {
    'painelVazioTexto', 'painelErroDetalhe', 'painelStatus', 'painelHint', 'tabelaInstrucao',
    'edicaoResumo', 'edicaoTitulo', 'edicaoCampos',
    'edicaoEtapaCampos', 'edicaoEtapaConfirmacao', 'edicaoDelta', 'edicaoImpacto',
-   'edicaoImpactoLista', 'edicaoErro', 'edicaoEtapaRotulo'].forEach(id => document.add(id, 'div'));
+   'edicaoImpactoTitulo', 'edicaoImpactoLista', 'edicaoErro', 'edicaoEtapaRotulo']
+    .forEach(id => document.add(id, 'div'));
   ['btnTentarNovamente', 'btnMaisAntigas', 'btnVoltar', 'btnVoltarInicio', 'btnAvancarEdicao',
    'btnCancelarEdicao', 'btnFecharEdicao'].forEach(id => document.add(id, 'button'));
   document.add('painelTable', 'table');
@@ -2421,7 +2430,7 @@ function adminPage({ api = async () => null, aviso = () => {} } = {}) {
   const app = new Function('document', 'api', 'aviso', 'criarIndicadorCarregamento',
     'alternarBotaoCarregando', 'rotularCadeira',
     `${source('admin.js')}\nreturn { inicializarAdmin, VOCABULARIO };`)(
-    document, api, registrarAviso, () => document.createElement('div'), () => {}, rotularCadeira);
+    document, api, registrarAviso, () => document.createElement('div'), botaoCarregando, rotularCadeira);
 
   const botaoDeOrgao = orgao => seletor.children.find(b => b.dataset.orgaoAdmin === orgao);
   const botaoDeAba = nome => abas.children.find(b => b.dataset.aba === nome);
@@ -3485,24 +3494,9 @@ test('o painel so entra em cena para quem tem papel de administrador', () => {
     'admin.html precisa entrar por papel, e não por órgão');
   assert.match(bootstrap, /if \(paginaAtual\.exigeAdmin\) \{[^}]*orgaosAdmin\.size === 0\) throw erroSemPermissao/s,
     'sem papel de administrador, o módulo não pode carregar');
-  // Fora do painel a mesma consulta decide só se um atalho aparece: uma falha
-  // ali não pode derrubar a tela inicial inteira.
-  assert.match(bootstrap, /else if \(document\.querySelector\('\[data-admin\]'\)\)[\s\S]*?buscarOrgaosAdministrados\(\)\.catch\(\(\) => new Set\(\)\)/,
-    'na tela inicial, falha na consulta de papel esconde o atalho em vez de quebrar a página');
-  // E nada no download do script depende dela: esperá-la antes punha uma ida e
-  // volta inteira de rede no caminho crítico da tela mais visitada para decidir
-  // a visibilidade de um cartão. Fora do painel a consulta é disparada, não
-  // aguardada — o `await` dela vem depois do carregarScript.
-  assert.doesNotMatch(bootstrap,
-    /atalhoAdmin = await buscarOrgaosAdministrados/,
-    'o atalho opcional não pode voltar ao caminho crítico da tela inicial');
-  assert.ok(bootstrap.indexOf('atalhoAdmin = buscarOrgaosAdministrados')
-    < bootstrap.indexOf('await carregarScript(')
-    && bootstrap.indexOf('await carregarScript(')
-    < bootstrap.indexOf('orgaosAdmin = await atalhoAdmin'),
-    'a consulta do atalho precisa correr junto com o download do script da página');
-  // No próprio painel a ordem é a inversa de propósito: ali a consulta é o
-  // porteiro, e buscar o módulo antes dela seria baixá-lo para quem não entra.
+  // No próprio painel a consulta é o porteiro, e buscar o módulo antes dela seria
+  // baixá-lo para quem não entra. Na tela inicial ela nem é aguardada (ver os
+  // dois testes seguintes).
   assert.ok(bootstrap.indexOf('orgaosAdmin = await buscarOrgaosAdministrados')
     < bootstrap.indexOf('await carregarScript('),
     'no painel o papel precisa ser verificado antes de baixar o módulo');
@@ -3511,4 +3505,189 @@ test('o painel so entra em cena para quem tem papel de administrador', () => {
   assert.match(index, /data-admin/, 'o cartão do painel na tela inicial precisa do marcador');
   assert.match(index, /id="cardAdmin"[^>]*hidden/,
     'o cartão nasce escondido: só aparece depois da consulta de papel');
+});
+
+function telaInicialComAtalhoAdmin(inicializar, opcoes) {
+  const page = bootstrapPage(inicializar, 'sorteio', opcoes);
+  const cartao = page.document.createElement('section');
+  cartao.dataset.admin = '';
+  page.document.body.appendChild(cartao);
+  return page;
+}
+
+// Na tela inicial o papel de administrador decide só se um cartão aparece.
+// Aguardar a consulta — antes ou logo depois do download do script — segurava
+// "Preparando o sorteio…" até a resposta, e com a rede lenta isso era o
+// tempo-limite inteiro.
+test('a consulta do atalho administrativo nao segura a tela inicial', async () => {
+  let responder;
+  let iniciou = false;
+  const aplicados = [];
+  const page = telaInicialComAtalhoAdmin(async () => { iniciou = true; }, {
+    buscarAdmin: () => new Promise(resolve => { responder = resolve; }),
+    aplicarVisibilidadeAdmin: orgaos => aplicados.push([...orgaos])
+  });
+
+  await page.iniciar();
+  assert.equal(iniciou, true, 'a tela inicial começa sem esperar a consulta de papel');
+  assert.equal(page.sessionLoading.hidden, true);
+  assert.deepEqual(aplicados, [], 'sem resposta, o atalho continua como nasceu: escondido');
+
+  responder(new Set(['CJ']));
+  await wait();
+  assert.deepEqual(aplicados, [['CJ']], 'o atalho aparece quando a resposta chega');
+});
+
+// Fora do painel a consulta decide só se um atalho aparece: uma falha ali não
+// pode derrubar a tela inicial inteira.
+test('falha na consulta do atalho administrativo so mantem o cartao escondido', async () => {
+  let iniciou = false;
+  const aplicados = [];
+  const page = telaInicialComAtalhoAdmin(async () => { iniciou = true; }, {
+    buscarAdmin: async () => { throw new Error('rpc indisponível'); },
+    aplicarVisibilidadeAdmin: orgaos => aplicados.push([...orgaos])
+  });
+
+  await page.iniciar();
+  await wait();
+  assert.equal(iniciou, true);
+  assert.equal(page.sessionLoading.hidden, true, 'a falha não vira erro de carregamento');
+  assert.deepEqual(aplicados, [[]]);
+});
+
+// Fechar a janela no meio da gravação e abrir outra deixava a espera da
+// primeira mandando na segunda: ao terminar, fechava a janela nova no meio do
+// preenchimento e devolvia ao botão o rótulo "Confirmar e gravar" na etapa 1.
+test('gravacao lenta de uma janela fechada nao fecha a janela seguinte', async () => {
+  let concluir;
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_corrigir_julgado_cj': () => new Promise(resolve => { concluir = resolve; })
+    }),
+    botaoCarregando: alternarBotaoCarregando
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir dados').dispatch('click');
+  page.campo('voto').value = 'Anular';
+  page.form.dispatch('submit');
+  await wait();
+  page.form.dispatch('submit');
+  await wait();
+  page.dialogo.close();
+
+  page.acao(0, 'Corrigir dados').dispatch('click');
+  const botao = page.document.getElementById('btnAvancarEdicao');
+  assert.equal(botao.disabled, false, 'a janela nova não herda o botão ocupado da anterior');
+
+  concluir({ alterados: {} });
+  await wait();
+  assert.equal(page.dialogo.aberto, true, 'a gravação antiga não pode fechar a janela nova');
+  assert.equal(page.document.getElementById('edicaoEtapaRotulo').textContent, 'Etapa 1 de 2');
+  assert.equal(botao.textContent, 'Revisar alteração',
+    'o rótulo da etapa 2 da janela antiga não pode voltar na etapa 1 da nova');
+  assert.equal(botao.disabled, false);
+  assert.equal(page.avisos.at(-1).tipo, 'sucesso', 'a gravação aconteceu e continua sendo anunciada');
+});
+
+// A trava de envio era da página: enquanto a gravação da janela fechada não
+// voltava, o botão da janela nova não fazia nada — e o erro, quando voltava,
+// aparecia no formulário da nova.
+test('falha lenta de uma janela fechada nao trava nem suja a janela seguinte', async () => {
+  let falhar;
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_corrigir_julgado_cj': () => new Promise((_, rejeitar) => { falhar = rejeitar; })
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir dados').dispatch('click');
+  page.campo('voto').value = 'Anular';
+  page.form.dispatch('submit');
+  await wait();
+  page.form.dispatch('submit');
+  await wait();
+  page.dialogo.close();
+
+  page.acao(0, 'Religar ao acervo').dispatch('click');
+  page.form.dispatch('submit');
+  await wait();
+  assert.equal(page.document.getElementById('edicaoEtapaRotulo').textContent, 'Etapa 2 de 2',
+    'a janela nova avança sem esperar a gravação da anterior');
+
+  falhar(new Error('sem rede'));
+  await wait();
+  assert.equal(page.dialogo.aberto, true);
+  assert.equal(page.document.getElementById('edicaoErro').hidden, true,
+    'o erro da janela antiga não aparece no formulário da nova');
+  assert.equal(page.avisos.at(-1).tipo, 'erro', 'a falha continua sendo anunciada');
+});
+
+// Renumerar só as distribuições também derruba o vínculo dos julgados — o banco
+// devolve quais em `desvinculados` —, e a revisão só avisava no escopo inverso.
+test('renumerar so as distribuicoes avisa que o vinculo dos julgados cai', async () => {
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_registros_do_processo': [
+        { origem_registro: 'acervo', registro_id: 7, data_referencia: '2026-06-18',
+          pauta: null, destino: 'CJ3', vinculado: null },
+        { origem_registro: 'julgados', registro_id: 41, data_referencia: '2026-07-09',
+          pauta: 24, destino: 'CJ3', vinculado: true }
+      ]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir número').dispatch('click');
+  page.campo('num_novo').value = '202600000009999';
+  page.campo('escopo').value = 'acervo';
+  page.form.dispatch('submit');
+  await wait();
+
+  const itens = page.document.getElementById('edicaoImpactoLista').children
+    .map(item => item.textContent);
+  assert.equal(itens.length, 2, 'só a distribuição é alcançada, mais o aviso do vínculo');
+  assert.match(itens[0], /Distribuição de 18\/06\/2026/);
+  assert.match(itens[1], /sem renumerar os julgados.*perdem o vínculo/);
+});
+
+// A lista da etapa 2 tinha título fixo, "Julgados que serão alterados junto", e
+// a renumeração a reaproveita para listar distribuições.
+test('o titulo da lista de impacto diz o que ela lista', async () => {
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_registros_do_processo': [
+        { origem_registro: 'acervo', registro_id: 7, data_referencia: '2026-06-18',
+          pauta: null, destino: 'CJ3', vinculado: null }
+      ]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('sorteios').dispatch('click');
+  await wait();
+  page.acao(0, 'Abrir distribuição').dispatch('click');
+  await wait();
+  const titulo = page.document.getElementById('edicaoImpactoTitulo');
+
+  page.acao(0, 'Corrigir número').dispatch('click');
+  page.campo('num_novo').value = '202600000009999';
+  page.form.dispatch('submit');
+  await wait();
+  assert.equal(titulo.textContent, 'Registros alcançados pela renumeração');
+
+  page.dialogo.close();
+  page.acao(0, 'Corrigir dados').dispatch('click');
+  page.campo('relator').value = 'CJ4';
+  page.form.dispatch('submit');
+  await wait();
+  assert.equal(page.document.getElementById('edicaoImpacto').hidden, false);
+  assert.equal(titulo.textContent, 'Julgados que serão alterados junto',
+    'a janela seguinte não herda o título da anterior');
 });
