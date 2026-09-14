@@ -82,7 +82,10 @@ async function carregarPaginaAutenticada() {
     // onde muda alguma coisa: no próprio painel, e na tela inicial, que decide
     // se mostra o link para ele. As outras páginas seguem com uma consulta só.
     let orgaosAdmin = new Set();
+    let atalhoAdmin = null;
     if (paginaAtual.exigeAdmin) {
+      // Aqui a consulta é o porteiro da página: ela vem ANTES do download, para
+      // não buscar o módulo do painel de quem não pode abri-lo.
       orgaosAdmin = await buscarOrgaosAdministrados();
       if (orgaosAdmin.size === 0) throw erroSemPermissao();
       aplicarVisibilidadeAdmin(orgaosAdmin);
@@ -92,11 +95,19 @@ async function carregarPaginaAutenticada() {
       // migração aplicada — trocava a tela inicial inteira pelo erro de
       // carregamento. Sem resposta, o atalho fica escondido, que é o mesmo
       // estado de quem não administra nada.
-      orgaosAdmin = await buscarOrgaosAdministrados().catch(() => new Set());
-      aplicarVisibilidadeAdmin(orgaosAdmin);
+      //
+      // E como nada no download do script depende dela, aqui ela só é DISPARADA:
+      // esperá-la antes punha uma ida e volta inteira de rede no caminho crítico
+      // da tela mais visitada do sistema, para decidir a visibilidade de um
+      // cartão. As duas correm juntas e o atalho aparece quando a resposta chega.
+      atalhoAdmin = buscarOrgaosAdministrados().catch(() => new Set());
     }
 
     await carregarScript(`assets/js/${paginaAtual.arquivo}?v=${ASSET_VERSION}`);
+    if (atalhoAdmin) {
+      orgaosAdmin = await atalhoAdmin;
+      aplicarVisibilidadeAdmin(orgaosAdmin);
+    }
     // Toda tela monta a própria moldura de forma síncrona antes de buscar dado
     // algum — a lista de pautas, o painel do acervo/histórico, o seletor de
     // modalidade — e põe o próprio indicador dentro dela. Então o indicador

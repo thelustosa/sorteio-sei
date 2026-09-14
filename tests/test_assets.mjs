@@ -258,6 +258,9 @@ assert.equal(Number(entradaDoIndicador[1]), atrasoNoJs,
 // Cada destino protegido precisa explicar o contexto em que a pessoa está entrando.
 // Se um HTML voltar ao bloco genérico, a autenticação ainda funciona, mas a tela
 // perde a identidade e a orientação específicas pedidas para aquele fluxo.
+// admin.html entra na lista: ficar de fora era o que permitia ao painel manter
+// um sistema de login paralelo (.admin-login-*), duplicando esta composição
+// inteira sem nenhum teste notar a divergência.
 const loginsEspecificos = [
   ['index.html', 'sorteio'],
   ['acervo-cj.html', 'acervo-cj'],
@@ -265,7 +268,8 @@ const loginsEspecificos = [
   ['historico-cj.html', 'historico-cj'],
   ['historico-creg.html', 'historico-creg'],
   ['julgados-cj.html', 'julgados-cj'],
-  ['julgados-creg.html', 'julgados-creg']
+  ['julgados-creg.html', 'julgados-creg'],
+  ['admin.html', 'admin']
 ];
 const titulosDosLogins = new Set();
 for (const [pagina, identidade] of loginsEspecificos) {
@@ -294,5 +298,16 @@ for (const [pagina, identidade] of loginsEspecificos) {
 }
 assert.equal(titulosDosLogins.size, loginsEspecificos.length,
   'cada HTML protegido precisa ter um conceito de login independente');
+
+// E o contrato é UM: um segundo sistema de login no CSS foi exatamente o que
+// deixou o painel administrativo fora desta verificação por tanto tempo.
+// Procura por REGRA e não pela palavra: os comentários do CSS citam o sistema
+// removido de propósito, para que ninguém o reintroduza sem ler por quê.
+assert.doesNotMatch(cssIndex, /\.admin-login[\w-]*\s*[,{]/,
+  'o painel voltou a ter um sistema de login próprio em vez de usar .app-login');
+for (const [pagina, identidade] of loginsEspecificos) {
+  assert.ok(cssIndex.includes(`[data-login-art='${identidade}']`),
+    `${pagina}: nenhuma regra de .app-login veste a identidade "${identidade}"`);
+}
 
 console.log('assets: minificação, lazy load e versão por hash coerentes ✓');

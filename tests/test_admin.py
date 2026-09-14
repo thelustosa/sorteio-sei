@@ -825,6 +825,206 @@ def preview_de_impacto_lista_os_julgados_afetados(cur):
     assert cur.fetchall() == [(julgado_id, num)]
 
 
+# ── Regressões da segunda revisão ────────────────────────────────────────────
+# Tudo abaixo nasceu de defeito encontrado em revisão, não de requisito novo.
+
+
+@teste
+def propagacao_conta_so_os_julgados_que_mudaram(cur):
+    """`propagados` alimenta a frase "N julgados seguiram a correção".
+
+    Um julgado que já carregava o valor corrigido não gera linha de auditoria, e
+    contá-lo fazia a tela anunciar mais registros alterados do que o rastro
+    guarda — em cima da mesma operação.
+    """
+    num, acervo_id, ja_certo = cenario_cj(cur, relator='CJ3')
+    como_dono(cur, 'update public.julgados_cj set relator = %s where id = %s',
+              ('CJ4', ja_certo))
+    vai_mudar = como_dono(cur, """
+        insert into public.julgados_cj (num_processo, data_sessao, pauta)
+        values (%s, date '2026-07-16', 25) returning id""", (num,))
+    cur.connection.commit()
+
+    autenticar(cur, 'lucas')
+    cur.execute("""select public.admin_corrigir_acervo_cj(
+                     %s, '{"relator":"CJ4"}'::jsonb, null)""", (acervo_id,))
+    retorno = cur.fetchone()[0]
+    assert retorno['propagados'] == [vai_mudar], retorno['propagados']
+
+    cur.execute('reset role')
+    assert len(auditoria(cur, 'julgados_cj', ja_certo)) == 0, \
+        'sem delta não há rastro — e sem rastro não pode haver contagem'
+    assert len(auditoria(cur, 'julgados_cj', vai_mudar)) == 1
+
+
+@teste
+def propagacao_creg_conta_so_os_julgados_que_mudaram(cur):
+    num, acervo_id, ja_certo = cenario_creg(cur, unidade='CREG2')
+    como_dono(cur, 'update public.julgados_creg set unidade = %s where id = %s',
+              ('CREG3', ja_certo))
+    vai_mudar = como_dono(cur, """
+        insert into public.julgados_creg (num_processo, data_sessao, pauta)
+        values (%s, date '2026-07-17', 13) returning id""", (num,))
+    cur.connection.commit()
+
+    autenticar(cur, 'lucas')
+    cur.execute("""select public.admin_corrigir_acervo_creg(
+                     %s, '{"unidade":"CREG3"}'::jsonb, null)""", (acervo_id,))
+    assert cur.fetchone()[0]['propagados'] == [vai_mudar]
+
+
+@teste
+def acervo_recusa_data_em_branco_com_a_mensagem_certa(cur):
+    """A guarda testava `->> ... is null`, que não pega a string vazia.
+
+    Um <input type="date"> limpo manda `""`: a validação passava direto e o
+    ''::date estourava com erro cru do Postgres, em vez do 22023 escrito para a
+    tela. As funções de julgado já usavam `nullif`, e é o idioma agora.
+    """
+    _, acervo_cj_id, _ = cenario_cj(cur)
+    _, acervo_creg_id, _ = cenario_creg(cur)
+    cur.connection.commit()
+
+    for porta, registro in [('admin_corrigir_acervo_cj', acervo_cj_id),
+                            ('admin_corrigir_acervo_creg', acervo_creg_id)]:
+        autenticar(cur, 'lucas')
+        erro = deve_falhar(cur,
+                           f"""select public.{porta}(
+                                 %s, '{{"data_distribuicao":""}}'::jsonb, null)""",
+                           (registro,), codigo='22023')
+        assert 'data de distribuicao nao pode ficar vazia' in str(erro), erro
+
+
+@teste
+def acervo_aceita_apagar_a_ordem_em_branco(cur):
+    """Ordem vazia é apagar a ordem — a planilha importada nunca a teve.
+
+    Antes o cast de '' estourava aqui também, com erro de sintaxe de inteiro.
+    """
+    _, acervo_id, _ = cenario_cj(cur)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    cur.execute("""select public.admin_corrigir_acervo_cj(
+                     %s, '{"ordem":""}'::jsonb, 'ordem nao se aplica')""", (acervo_id,))
+    assert cur.fetchone()[0]['alterados']['ordem']['depois'] is None
+
+    cur.execute('reset role')
+    assert julgado(cur, 'acervo_cj', acervo_id, 'ordem')[0] is None
+
+
+@teste
+def renumerar_so_os_julgados_reporta_o_vinculo_perdido(cur):
+    """Sem renumerar o acervo, o gatilho não acha o número novo e o vínculo cai.
+
+    É consequência correta, mas voltava só no rastro: `desvinculados` chegava
+    vazio ao chamador e a tela não tinha o que avisar.
+    """
+    num, acervo_id, julgado_id = cenario_cj(cur)
+    novo = numero()
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    cur.execute("select public.admin_corrigir_processo_cj(%s, %s, 'julgados', null)",
+                (num, novo))
+    retorno = cur.fetchone()[0]
+    assert retorno['julgados'] == [julgado_id]
+    assert retorno['acervo'] == []
+    assert retorno['desvinculados'] == [julgado_id], retorno['desvinculados']
+
+    cur.execute('reset role')
+    assert julgado(cur, 'julgados_cj', julgado_id, 'num_processo, acervo_id') == (novo, None)
+    assert julgado(cur, 'acervo_cj', acervo_id, 'num_processo')[0] == num
+
+
+@teste
+def renumerar_tudo_nao_desvincula_ninguem(cur):
+    """O acervo vem primeiro justamente para o vínculo se manter."""
+    num, _, _ = cenario_cj(cur)
+    novo = numero()
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    cur.execute("select public.admin_corrigir_processo_cj(%s, %s, 'tudo', null)", (num, novo))
+    assert cur.fetchone()[0]['desvinculados'] == []
+
+
+@teste
+def auditoria_diz_de_qual_processo_se_trata(cur):
+    """Chave interna não identifica nada para quem opera o sistema: cruzar o
+    rastro com um processo exigia SQL direto no banco."""
+    num, _, julgado_id = cenario_cj(cur)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    cur.execute("""select public.admin_corrigir_julgado_cj(
+                     %s, '{"voto":"Anular"}'::jsonb, null)""", (julgado_id,))
+    cur.execute("""select registro_id, num_processo from public.admin_auditoria('CJ', 5, null)
+                    where tabela = 'julgados_cj' and registro_id = %s""", (julgado_id,))
+    assert cur.fetchone() == (julgado_id, num)
+
+
+@teste
+def registros_do_processo_listam_o_que_a_renumeracao_alcanca(cur):
+    """O preview da correção de número: a operação alcança TODA distribuição e
+    TODO julgado com aquele número, e o diálogo abria a partir de uma linha só."""
+    num, acervo_id, julgado_id = cenario_cj(cur, data_dist='2026-04-08',
+                                            data_sessao='2026-05-13', pauta=17)
+    segunda = como_dono(cur, """
+        insert into public.acervo_cj
+          (num_processo, relator, data_distribuicao, defesa, assunto, origem)
+        values (%s, 'CJ5', date '2026-06-24', true, 'Auto de Infração', 'ata')
+        returning id""", (num,))
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    cur.execute("""select origem_registro, registro_id, data_referencia, pauta, destino, vinculado
+                     from public.admin_registros_do_processo('CJ', %s)""", (num,))
+    linhas = cur.fetchall()
+
+    assert sorted(l[1] for l in linhas if l[0] == 'acervo') == sorted([acervo_id, segunda])
+    julgados = [l for l in linhas if l[0] == 'julgados']
+    assert len(julgados) == 1
+    assert julgados[0][1] == julgado_id
+    assert julgados[0][3] == 17
+    assert julgados[0][5] is True, 'o preview precisa dizer quem já está vinculado'
+
+
+@teste
+def registros_do_processo_nao_vazam_o_outro_colegiado(cur):
+    num, _, _ = cenario_cj(cur)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    cur.execute("select count(*) from public.admin_registros_do_processo('CREG', %s)", (num,))
+    assert cur.fetchone()[0] == 0
+
+
+@teste
+def processos_do_acervo_separam_a_defesa_do_texto_legado(cur):
+    """`decisao` cai no texto legado de `recurso` quando a defesa é nula — está
+    certo para a TABELA. Lido como "antes" do formulário, fazia a confirmação
+    prometer uma mudança diferente da que a auditoria registra."""
+    num = numero()
+    acervo_id = como_dono(cur, """
+        insert into public.acervo_cj
+          (num_processo, relator, data_distribuicao, defesa, recurso, assunto, origem)
+        values (%s, 'CJ2', date '2024-03-12', null, 'Sim', 'Auto de Infração', 'planilha')
+        returning id""", (num,))
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    cur.execute("""select decisao, defesa from public.admin_processos_acervo(
+                     'CJ', date '2024-03-12', null, 'planilha')
+                    where id = %s""", (acervo_id,))
+    assert cur.fetchone() == ('Sim', None), 'o legado sai em decisao; defesa é o que se edita'
+
+
+@teste
+def acervo_recusa_distribuicao_no_futuro(cur):
+    _, acervo_id, _ = cenario_cj(cur)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    erro = deve_falhar(cur,
+                       """select public.admin_corrigir_acervo_cj(
+                            %s, '{"data_distribuicao":"2099-01-01"}'::jsonb, null)""",
+                       (acervo_id,), codigo='22023')
+    assert 'distribuicao no futuro' in str(erro), erro
+
+
 # ── Integridade ──────────────────────────────────────────────────────────────
 
 @teste
