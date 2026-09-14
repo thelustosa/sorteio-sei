@@ -3,8 +3,10 @@
 ![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=flat-square&logo=html5&logoColor=white)
 ![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=flat-square&logo=css3&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
 
-Aplicação web estática desenvolvida para auxiliar o **Secretário Executivo do Conselho Regulador** (modo CREG) e a **Secretária Executiva da Câmara de Julgamento** (modo CJ) da AGR na distribuição eletrônica e igualitária de processos do SEI entre suas respectivas unidades.
+Aplicação web estática desenvolvida para a **Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos (AGR)**, atendendo o **Conselho Regulador** (modo CREG) e a **Câmara de Julgamento** (modo CJ) na distribuição eletrônica e igualitária de processos do SEI, gestão de acervo, registro de julgamentos, consulta de histórico de sorteios e manutenção administrativa.
 
 Acesse a aplicação online em: [https://thelustosa.github.io/sorteio-sei/](https://thelustosa.github.io/sorteio-sei/)
 
@@ -16,7 +18,7 @@ Acesse a aplicação online em: [https://thelustosa.github.io/sorteio-sei/](http
 
 ## Auditoria e Transparência
 
-Este repositório está público e totalmente aberto para auditoria dos sorteios. Caso surjam quaisquer dúvidas em relação à integridade da divisão dos processos, qualquer interessado pode inspecionar o código-fonte da lógica de distribuição para verificar a conformidade, impessoalidade e igualdade matemática das regras aplicadas.
+Este repositório é público e totalmente aberto para auditoria dos sorteios. Caso surjam quaisquer dúvidas em relação à integridade da divisão dos processos, qualquer interessado pode inspecionar o código-fonte da lógica de distribuição para verificar a conformidade, impessoalidade e igualdade matemática das regras aplicadas (algoritmo Fisher-Yates com `crypto.getRandomValues`, sem viés de módulo e com balanceamento proporcional cruzado por assunto).
 
 O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR) está disponível para consulta em: [SEI_93024891_Termo_de_Entrega_1.pdf](documentos/SEI_93024891_Termo_de_Entrega_1.pdf).
 
@@ -24,52 +26,53 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 
 ## Funcionalidades
 
-- **Acesso Restrito por Login**: o sorteio só é liberado após autenticação com usuário e senha cadastrados, garantindo que apenas as secretarias executivas realizem distribuições. As senhas não ficam no código — são validadas pelo servidor do Supabase.
-- **Geração Dinâmica de Linhas**: Permite definir a quantidade inicial de processos a serem cadastrados na tabela.
+- **Autenticação e Controle de Acesso por Órgão**: o acesso ao sistema é restrito a servidores autorizados, com controle granular por órgão (`CREG`, `CJ` ou `ambos`) e papel de usuário (`admin` ou operador) gerenciados na tabela `permissoes_usuario`.
+  - A tela de login apresenta contexto visual e textual específico para o destino solicitado.
+  - O menu inicial ajusta dinamicamente a exibição e o posicionamento dos botões conforme os órgãos autorizados para o usuário logado.
+  - A segurança é garantida em duas camadas: controle de interface em `bootstrap.js` e validação no banco de dados via RPCs `SECURITY DEFINER` e políticas de Row Level Security (RLS) que consultam `orgaos_autorizados()`. As senhas são tratadas com segurança diretamente pelo Supabase Auth.
+- **Geração Dinâmica de Linhas**: Permite definir a quantidade inicial de processos a serem cadastrados na tabela (de 1 a 500 processos).
 - **Inserção e Exclusão Flexíveis**: 
-  - Adicione novas linhas a qualquer momento utilizando o botão **+ Adicionar Linha** sem perder os dados já preenchidos.
+  - Adicione novas linhas a qualquer momento utilizando o botão **Adicionar linha** sem perder os dados já preenchidos.
   - Exclua linhas geradas incorretamente de forma individual clicando no botão **×** no final da linha.
 - **Distribuição Igualitária**:
-  - Garante que cada unidade (CREG ou CJ) receba a mesma quantidade total de processos.
+  - Garante que cada unidade ou cadeira receba a mesma quantidade total de processos.
   - Realiza o balanceamento proporcional e cruzado de cada **Assunto** individualmente, evitando que uma unidade receba apenas um tipo de assunto de processo.
+  - Utiliza o algoritmo Fisher-Yates impulsionado por `crypto.getRandomValues()` com descarte de resto para eliminar viés de módulo.
 - **Exclusão de Unidades**: Seleção simples das unidades que NÃO vão participar da rodada de distribuição através de filtros de exclusão visual (pills).
-- **Validação Completa**: Impede a realização do sorteio caso existam campos em branco na tabela ou números de processo repetidos, indicando as linhas em conflito.
-- **Assunto Fixo na Câmara de Julgamento**: no modo CJ, todo processo é Auto de Infração — o campo já vem preenchido e travado, eliminando a possibilidade de erro.
-- **Travamento de Recurso Inteligente** (CREG): Define automaticamente o campo de recurso como "Não se aplica" e o desabilita caso o assunto selecionado não seja "Auto de Infração".
-- **Defesa no lugar de Recurso** (CJ): na Câmara de Julgamento a 6ª coluna registra se o autuado apresentou **Defesa** (Sim/Não) — é esse o dado que os julgados herdam do acervo. Recurso é conceito do Conselho Regulador e só aparece no modo CREG.
-- **Exportação da Ata em Word**: geração automática da ata de distribuição em formato Word (`.doc`), nomeada dinamicamente (`Sorteio_CREG_18.08.2026.doc`). A ata traz as mesmas colunas da tela — ordem, processo, assunto, recurso (ou defesa, na CJ) e unidade sorteada — para que quem lê o documento consiga conferir a repartição por assunto sem abrir o sistema.
-- **Painel Administrativo**: área restrita a administradores, em [admin.html](admin.html), para corrigir o que já foi gravado — o que antes só se resolvia com SQL direto no banco. Cobre os dois colegiados, com seletor de órgão dentro da própria página, e navega **por data**: a sessão do dia tal, ou a rodada de sorteio do dia tal. A busca não é por número de processo de propósito — quando é o próprio número que está errado, procurar por ele não acha nada, e corrigi-lo é uma das operações do painel.
-
-  Cada operação tem porta própria no banco, com allowlist de campos e validação: corrigir voto, status, data da sessão e número da pauta (inclusive **desfazer**, voltando um campo a vazio, que a tela de julgamentos não permite por desenho); corrigir a distribuição gravada pelo sorteio; religar um julgado ao acervo; e corrigir o número do processo. **Corrigir** e **redistribuir** são ações distintas e é essa a diferença que importa: a correção propaga aos julgados que copiaram a distribuição, porque o erro foi copiado junto; a redistribuição não propaga, porque o julgado registra quem de fato levou o processo à mesa e reescrever isso apagaria história.
-
-  Nada grava em um passo: a confirmação mostra o que muda de quê para quê e, quando a operação alcança mais de um registro, quais são — os julgados que vão junto numa correção de acervo, e as distribuições e julgados que mudam de nome numa correção de número, que alcança **todos** os registros com aquele número e não apenas a linha clicada. Toda alteração deixa uma linha em `auditoria_admin` com autor, horário, motivo e os valores anterior e posterior — uma linha por registro tocado, na mesma transação. A tabela é append-only por construção: não existe política de INSERT nela, nem para o administrador; quem grava são as funções `SECURITY DEFINER`.
-
-  A aba **Auditoria** lê esse rastro, da correção mais recente para a mais antiga, em páginas de 100 linhas: o rodapé diz se o que está na tela é o rastro completo, e **Mostrar correções anteriores** acrescenta a página seguinte sem tirar da vista o que já foi lido. Cada linha identifica o registro pelo número do processo, não só pela chave interna.
-
-  O papel de administrador é por órgão, numa coluna `papel` de `permissoes_usuario`, e é concedido por operação privilegiada de banco — não há tela de gestão de usuários. A secretaria de cada colegiado continua exatamente com o acesso que já tinha.
-
-- **Registro de Julgamentos**: página própria onde a secretaria abre uma pauta e preenche o voto e o status de cada processo julgado. Os processos chegam sozinhos das pautas publicadas pela AGR, e cada preenchimento guarda quem fez e quando.
-- **Histórico de Sorteios**: card na tela principal com um botão por colegiado, que abre [historico-creg.html](historico-creg.html) ou [historico-cj.html](historico-cj.html). A lista traz uma rodada por linha, da mais recente para a mais antiga, com a data (e o dia da semana), o horário, quantos processos entraram e para quais cadeiras ou unidades foram — cada destino com a sua parcela ao lado, e a soma dessas parcelas é o total da linha. Clicar em **Ver processos** abre a rodada inteira: ordem, número do processo, cadeira ou unidade sorteada (com o conselheiro da época, na Câmara), assunto, defesa ou recurso e, no Conselho, o interessado. Clicar num destino abre o mesmo card já filtrado por ele — "o que foi para a CJ3 nesta rodada" sem passar os olhos pela lista inteira.
-
-  **Exportar** baixa o que está no card em `.docx` (`historico-cj-2026-08-27-CJ3.docx`), no formato de ata da AGR: cabeçalho institucional, o parágrafo de abertura com a data por extenso e a tabela do sorteio. É o mesmo caminho da ata do sorteio — zip com WordprocessingML montado no próprio navegador, sem biblioteca — e sai do que está na tela: se o card foi aberto por um destino, a ata cobre só aquele destino. A Câmara publica o **relator** e mantém a ordem do sorteio; o Conselho publica a **unidade** e agrupa as linhas por ela. O documento registra o conteúdo da rodada — não substitui a ata assinada eletronicamente no SEI, e por isso não traz brasão nem "ATA Nº".
-
-  Não há passo nenhum depois do sorteio: gravar no acervo já coloca a rodada no histórico. Duas condições recortam o que entra, e as duas dizem "o que o sistema sorteou, do marco em diante":
-
-  - **`origem = 'sorteio'`** — o que foi distribuído por esta tela. Fica de fora o acervo herdado das planilhas de gabinete (`planilha`), que nunca foi um evento de sorteio, e as atas anteriores ao sistema (`ata`), conhecidas só pelo PDF publicado no SEI.
-  - **`data >= 27/08/2026`** — o **marco de início da série**, o mesmo para os dois colegiados. É o dia do primeiro sorteio feito na tela: os 81 processos do Conselho Regulador que `processos_sorteados` gravou e que hoje vivem em `acervo_creg`, de onde o histórico os lê (aquela tabela provisória vai ser removida). As quatro rodadas da Câmara de 2026 são anteriores ao marco e ficam de fora, então a Câmara começa com o histórico vazio e o preenche no próximo sorteio — a tela diz isso em vez de abrir em branco.
-
-  O marco mora numa função só (`historico_marco`), usada pelas duas consultas; a tela guarda uma cópia apenas para poder anunciar a data, e um teste compara as duas. A consulta é só leitura: as funções do banco que a alimentam são `STABLE` e nada nesta tela escreve.
-
-- **Registro no Banco de Dados**: ao final do sorteio, os dados que antes iam para as planilhas são gravados no banco (Supabase/PostgreSQL), uma linha por processo, cada colegiado no seu acervo (`acervo_cj` e `acervo_creg`). Enquanto o banco não estiver configurado — ou se o envio falhar — o sistema oferece um botão para baixar o sorteio completo em `.json`, sem depender de downloads automáticos bloqueados pelo navegador.
+- **Validação Completa**: Impede a realização do sorteio caso existam campos em branco na tabela, formatos inválidos ou números de processo SEI repetidos, indicando as linhas em conflito.
+- **Regras Específicas por Colegiado**:
+  - **Câmara de Julgamento (CJ)**: todo processo é Auto de Infração (campo pré-fixado e travado, eliminando erro de digitação); a 6ª coluna registra se houve **Defesa** (Sim/Não) — dado herdado pelos julgamentos do acervo; os destinos correspondem às cadeiras `CJ1`..`CJ5`, mapeadas para os conselheiros relatores via `cadeiras_cj`.
+  - **Conselho Regulador (CREG)**: 11 assuntos disponíveis; **Travamento de Recurso Inteligente** que define automaticamente o campo como "Não se aplica" e o desabilita caso o assunto selecionado não seja "Auto de Infração"; campo adicional para identificação do **Interessado**; os destinos correspondem às unidades `CREG1`..`CREG4`.
+- **Exportação da Ata em Word**: geração automática da ata de distribuição em formato Word (`.doc`), nomeada dinamicamente (`Sorteio_CREG_DD.MM.AAAA.doc`). A ata traz cabeçalho institucional e as mesmas colunas da tela — ordem, processo, interessado (se houver), assunto, recurso (ou defesa, na CJ) e unidade sorteada — permitindo conferência da repartição por assunto sem depender do sistema.
+- **Registro de Julgamentos e Monitor de Pendências**:
+  - Páginas dedicadas ([julgados-cj.html](julgados-cj.html) e [julgados-creg.html](julgados-creg.html)) onde a secretaria abre uma pauta e preenche o voto e o status de cada processo deliberado em sessão.
+  - **Aviso visual de pendências**: o card da tela principal monitora em tempo real processos sem voto ou sem status e exibe um alerta visual pulsante e badge com a contagem de pendências.
+  - Processos chegam automaticamente das pautas publicadas pela AGR via rotina de sincronização, e o registro do voto/status anota auditoria de autoria e horário (`atualizado_por` e `atualizado_em`) via RPC protegida `registrar_votos`.
+- **Acervo de Processos**:
+  - Painéis de consulta ([acervo-cj.html](acervo-cj.html) e [acervo-creg.html](acervo-creg.html)) para acompanhamento dos processos distribuídos que aguardam deliberação.
+  - Organização por faixas de permanência (menos de 30 dias, 30 a 60 dias, 60 a 90 dias, mais de 90 dias) e opções de exportação do acervo em planilha Excel (`.xlsx`) e documento PDF.
+- **Histórico de Sorteios**:
+  - Páginas dedicadas ([historico-creg.html](historico-creg.html) e [historico-cj.html](historico-cj.html)) acessíveis por botão na tela principal.
+  - A lista traz uma rodada por linha, da mais recente para a mais antiga, com data, dia da semana, horário, quantidade total de processos e a distribuição detalhada por destino com sua respectiva contagem (ex.: `CJ1: 3`, `CJ2: 3`...), cuja soma compõe o total da linha.
+  - Clicar em **Ver processos** abre a rodada completa (ordem, processo, destino sorteado, relator da época na CJ, interessado no CREG, assunto e defesa/recurso).
+  - Clicar na sigla de um destino abre o modal já filtrado exclusivamente para aquele destino.
+  - **Exportação em Word (.docx)**: exporta os processos exibidos no modal em arquivo `.docx` nos moldes oficiais de ata da AGR (cabeçalho institucional, texto de abertura com data por extenso e tabela formatada), gerado diretamente no navegador via WordprocessingML sem bibliotecas externas.
+  - O sorteio grava o resultado diretamente no acervo (`acervo_cj` e `acervo_creg`) com `origem = 'sorteio'`, entrando no histórico automaticamente a partir do marco inicial de `2026-08-27`. A antiga tabela provisória `processos_sorteados` foi completamente descontinuada.
+- **Painel Administrativo**: área restrita a administradores, em [admin.html](admin.html), para efetuar manutenções e correções em registros de sorteios e julgamentos já gravados — eliminando a necessidade de intervenções manuais via SQL direto.
+  - Cobre os dois colegiados com seletor de órgão na própria página e navegação por data de sessão de julgamento ou rodada de sorteio.
+  - Operações atômicas com allowlist e validação rigorosa: corrigir voto, status, data da sessão e número da pauta (inclusive **desfazer**, retornando campos para vazio/null); corrigir distribuição gravada pelo sorteio; religar julgados ao acervo; corrigir número de processo (com propagação atômica para todos os registros que compartilham o número incorreto); e redistribuir processos preservando o histórico do julgado.
+  - Confirmação em duas etapas detalhando exatamente o impacto antes da gravação.
+  - Trilha de auditoria append-only em `auditoria_admin` gravada na mesma transação por funções `SECURITY DEFINER`, com consulta paginada de 100 em 100 registros na aba **Auditoria**.
+- **Registro no Banco de Dados e Resiliência**: ao final do sorteio, os dados são gravados no banco (Supabase/PostgreSQL) no acervo correspondente. Em caso de instabilidade na conexão ou banco não configurado, a interface disponibiliza download do sorteio completo em `.json` como alternativa segura de contingência.
 
 ---
 
 ## Design e Cores
 
-O visual foi adaptado com base na identidade visual institucional do portal do **Estado de Goiás**:
-- **Paleta de Cores**: Uso do verde institucional (`#00534b`) como cor principal de realce e botões, fundo de tela branco, e painel interno em tom de verde menta claro (`#E9F5EC`).
-- **Rodapé Institucional**: Banner verde com logotipo branco oficial e informações de integridade e auditoria do sorteio.
-- **Tipografia**: títulos em **Montserrat**, sob a [SIL Open Font License 1.1](assets/fonts/OFL.txt), que permite uso, modificação e redistribuição. Ela substituiu a Gotham, que é comercial: como este repositório é público e está sob licença MIT, versionar o arquivo da fonte equivalia a redistribuí-la sem direito. Os dois arquivos `.woff2` cobrem os subconjuntos `latin` e `latin-ext`, que é o que o português usa.
+O visual foi desenvolvido com base na identidade visual institucional do portal do **Estado de Goiás**:
+- **Paleta de Cores**: Uso do verde institucional (`#00534b`) como cor principal de realce e botões, fundo de tela branco, painel interno em tom de verde menta claro (`#E9F5EC`) e tokens de cores temáticas para cada card de serviço.
+- **Rodapé Institucional**: Banner verde com logotipo oficial do Estado de Goiás, versão atual da aplicação (Versão 3.9), créditos e informações de integridade e auditoria do sorteio.
+- **Tipografia**: Títulos e elementos de destaque em **Montserrat**, complementados pela tipografia nativa do sistema operacional para o corpo de texto.
 
 ---
 
@@ -94,16 +97,16 @@ endereço não existe. Todo o resto está agrupado por natureza.
 │   ├── css/index.css       fonte legível do design de todas as páginas
 │   ├── css/index.min.css   versão otimizada servida pelo site
 │   ├── js/
-│   │   ├── bootstrap.js    carrega cada área somente depois da autenticação
-│   │   ├── index.js        fonte da lógica do sorteio e da ata
+│   │   ├── bootstrap.js    carregamento sob demanda, verificação de sessão e controle de acesso
+│   │   ├── index.js        fonte da lógica do sorteio, validação e ata
 │   │   ├── julgados.js     fonte do registro de julgamentos da Câmara
 │   │   ├── julgados-creg.js  o mesmo, para o Conselho Regulador
 │   │   ├── acervo.js       fonte do painel do acervo dos dois colegiados
 │   │   ├── historico.js    fonte do histórico de sorteios dos dois colegiados
 │   │   ├── admin.js        fonte do painel administrativo dos dois colegiados
-│   │   ├── supabase.js     configuração, login e chamadas — usado pelas duas páginas
+│   │   ├── supabase.js     cliente Supabase, autenticação, permissões por órgão e chamadas de API
 │   │   └── *.min.js        versões otimizadas servidas pelo site
-│   ├── fonts/              Montserrat em .woff2 e a licença OFL
+│   ├── fonts/              arquivos de fonte Montserrat em .woff2
 │   └── img/                logotipos, favicon e as capturas de tela do README
 │
 ├── sql/                      tudo que roda no SQL Editor do Supabase
@@ -193,6 +196,7 @@ npx --yes esbuild@0.28.2 assets/js/julgados.js --minify-syntax --minify-whitespa
 npx --yes esbuild@0.28.2 assets/js/julgados-creg.js --minify-syntax --minify-whitespace --outfile=assets/js/julgados-creg.min.js
 npx --yes esbuild@0.28.2 assets/js/acervo.js --minify-syntax --minify-whitespace --outfile=assets/js/acervo.min.js
 npx --yes esbuild@0.28.2 assets/js/historico.js --minify-syntax --minify-whitespace --outfile=assets/js/historico.min.js
+npx --yes esbuild@0.28.2 assets/js/admin.js --minify-syntax --minify-whitespace --outfile=assets/js/admin.min.js
 node tools/versionar.mjs
 ```
 
@@ -213,7 +217,20 @@ tem de ser `CREG1`, `CREG2`… Se uma base antiga tiver número fora do padrão,
 corrija-o pela fonte oficial antes de reaplicar o schema; a validação falha sem
 completar ou apagar números por inferência.
 
-Depois, em **Authentication → Users**, cadastre quem vai usar o sistema; e em **Authentication → Providers → Email**, mantenha **desativado** o "Enable sign ups", senão qualquer visitante criaria a própria conta.
+Depois, em **Authentication → Users**, cadastre os usuários do sistema; e em **Authentication → Providers → Email**, mantenha **desativado** o "Enable sign ups", evitando cadastros públicos não autorizados.
+
+Com os usuários criados no Supabase Auth, cadastre as permissões de cada um na tabela `public.permissoes_usuario`:
+
+```sql
+insert into public.permissoes_usuario (user_id, email, orgao, papel)
+values
+  ('<UUID_DO_USUARIO_1>', 'operador.creg@goias.gov.br', 'creg', 'operador'),
+  ('<UUID_DO_USUARIO_2>', 'operador.cj@goias.gov.br', 'cj', 'operador'),
+  ('<UUID_DO_USUARIO_3>', 'admin@goias.gov.br', 'ambos', 'admin');
+```
+
+- **`orgao`**: define o escopo de atuação do usuário (`'creg'`, `'cj'` ou `'ambos'`). Usuários restritos a um órgão só conseguem visualizar e operar os módulos daquele colegiado.
+- **`papel`**: o valor `'admin'` habilita o botão de acesso e a execução de rotinas privilegiadas no [Painel Administrativo](admin.html). Para operadores das secretarias executivas, use `'operador'`.
 
 Se o projeto migrar para um plano Pro ou superior, ative também **Prevent use
 of leaked passwords**; o recurso não está disponível no plano Free.
@@ -230,7 +247,11 @@ Para configurar no **UptimeRobot** (plano gratuito com método `HEAD`) ou no **c
   ```
 - **Intervalo:** A cada 5 a 15 minutos (ou diário via cron).
 
-A chave publicável é pública por natureza e pode ficar no código: ela identifica o projeto, não autoriza operações. A proteção dos dados vem das políticas de RLS do `schema.sql`, que exigem **usuário autenticado** e dão a cada tabela o mínimo: o sorteio só **insere** (nenhum sorteio já gravado pode ser lido, alterado ou apagado pelo navegador), `julgados_cj` só é **lida** pela página de registro, e `pautas_cj` não é nem uma coisa nem outra. Não existe política de `UPDATE` ou `DELETE` em tabela nenhuma. É o que permite manter o código-fonte totalmente aberto para auditoria.
+A chave publicável é pública por natureza e pode ficar no código: ela identifica o projeto, não autoriza operações por si só. A proteção dos dados é assegurada pelas políticas de RLS e funções RPC com `SECURITY DEFINER`:
+- O usuário anônimo não acessa dados restritos.
+- Usuários autenticados operam sob o escopo autorizado de seu órgão (`orgaos_autorizados()`), inserindo novos sorteios e consultando apenas as tabelas autorizadas.
+- Não existem políticas de `UPDATE` ou `DELETE` direto abertas ao cliente web em tabela nenhuma.
+- Atualizações de votos e status passam exclusivamente pela RPC `registrar_votos` / `registrar_votos_creg`, e manutenções administrativas passam pelas RPCs com allowlist de campos e gravação transacional na trilha append-only `auditoria_admin`. É essa blindagem que permite manter o código-fonte 100% aberto para auditoria sem renunciar à segurança dos dados.
 
 ---
 
@@ -410,48 +431,60 @@ Instale uma vez as dependências usadas pelas suítes Python:
 python -m pip install -r tests/requirements.txt
 ```
 
+#### Testes de banco e regras de negócio (requerem Docker e psycopg2)
+
 ```bash
 python tests/test_cj.py "C:/caminho/Câmara de Julgamento - REG.xlsx"
 ```
+Sobe um Postgres descartável no Docker (mesmo motor do Supabase), aplica o schema e confere que o banco reproduz as fórmulas e derivações da Câmara de Julgamento — inclusive recalculando os campos derivados das 3.144 linhas de julgados. Sem a planilha à mão, os testes dependentes dela são pulados e o restante roda normalmente.
 
-Sobe um Postgres descartável no Docker (o mesmo motor do Supabase), aplica o schema e a migração, importa a planilha e confere que o banco reproduz as fórmulas — inclusive apagando os campos derivados de todas as 3.144 linhas de julgados e mandando o banco recalculá-las do zero. Sem a planilha à mão, os testes que dependem dela são pulados e o resto roda igual.
+```bash
+python tests/test_creg.py
+```
+Sobe um Postgres descartável e valida todas as regras, fórmulas e funções do Conselho Regulador (`meta_45`, `dias_dt`, `dias_dist_cr_cj`, `em_relacao_cj`, derivação de pautas e RPC de registro de votos).
+
+```bash
+python tests/test_acesso.py
+```
+Testa o modelo de controle de acesso por órgão em Postgres real: checagem de isolamento por órgão (`CREG`, `CJ` e `ambos`), permissões de operadores e bloqueio estrito de acessos não autorizados nas tabelas e nas RPCs protegidas.
+
+```bash
+python tests/test_admin.py
+```
+Testa as operações do painel administrativo em Postgres real: controle de perfil (`papel = 'admin'`), operações de correção com allowlist (voto, status, pauta, data, desfazer para vazio), renumeração em lote, correção de acervo, redistribuição com preservação de histórico, integridade transacional e gravação imutável na trilha `auditoria_admin`.
+
+#### Testes de sincronização e workflows
 
 ```bash
 python tests/test_sincronizacao.py
 ```
-
-Testa o parser e a sincronização contra fixtures reais (HTML da listagem, texto e PDF de pautas de datas diferentes) e contra o mesmo Postgres descartável, sem depender do site estar no ar. Com `--online` roda também um teste que consulta a AGR de verdade — serve para avisar quando o portal mudar de formato.
+Testa o parser e a sincronização contra fixtures reais (HTML da listagem, texto e PDF de pautas de datas diferentes) e contra o Postgres descartável, sem depender do portal estar no ar. O parâmetro `--online` permite executar testes de integração contra o portal oficial da AGR para detectar eventuais mudanças de layout.
 
 ```bash
 python tests/test_workflows.py
 ```
+Valida o contrato dos workflows do GitHub Actions (`ci.yml` e `sincronizar-julgados.yml`): sincronização agendada periódica, cobertura de ambos os colegiados na mesma execução, disparo manual e tolerância a falhas isoladas entre colegiados.
 
-Confere o contrato do agendamento, que nenhuma outra suíte alcança: um único
-workflow para os dois colegiados, busca várias vezes por dia, disparo manual
-preservado e falha de um colegiado anotada no log da Action. Lê o arquivo do
-workflow, sem Docker nem rede.
+#### Testes do frontend e assets (Node.js nativo)
 
 ```bash
 node tests/test_sorteio.mjs
 node --test tests/test_frontend.mjs
 node tests/test_assets.mjs
 ```
+Não necessitam de Docker nem de banco de dados: exercitam a aleatoriedade uniforme do sorteio (Fisher-Yates sem viés), a navegação e interface do usuário (cards dinâmicos, modais, exportações em `.docx`, `.xlsx` e `.pdf`, autenticação contextual), além da integridade de minificação, lazy loading e versão de cache por hash.
 
-Não precisam de Docker nem de banco: exercitam o embaralhamento auditável, os
-fluxos do frontend e a coerência entre assets minificados, carregamento lazy e
-versão do cache.
-
-O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) repete essas
-verificações em todo push e pull request, executa as suítes PostgreSQL e rejeita
-fontes cujos arquivos `.min.*` não tenham sido regenerados com a versão fixada
-do esbuild.
+O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) repete essas verificações em todo push e pull request, validando sintaxe JavaScript (`node --check`), suítes Node.js, testes PostgreSQL/Python e garantindo que os arquivos `.min.*` estejam devidamente regenerados e alinhados ao versionador.
 
 ---
 
 ## Tecnologias Utilizadas
 
-- **HTML5** (Semântico)
-- **CSS3** (Flexbox, variáveis nativas e design responsivo)
-- **JavaScript ES6+** (Lógica do sorteio e manipulação de DOM)
-- **Sem dependências de terceiros no navegador** (a ata em Word e o backup .json são gerados com `Blob` e `URL.createObjectURL`, da própria plataforma)
-- **Supabase / PostgreSQL** (Banco de dados dos sorteios, acessado via API REST com a Fetch API)
+- **HTML5** (Semântico, estruturado com foco em usabilidade e acessibilidade)
+- **CSS3** (Variáveis nativas para tokens de cores, Flexbox, Grid e animações leves)
+- **JavaScript ES6+** (Modular, sem dependências de frameworks pesados no cliente e manipulação nativa do DOM)
+- **Sem dependências externas no cliente** (Geração de atas em Word `.doc`/`.docx`, planilhas Excel `.xlsx` e relatórios PDF via APIs nativas e `Blob`)
+- **Supabase / PostgreSQL** (Banco de dados relacional, Row Level Security, funções RPC com `SECURITY DEFINER`, autenticação segura e auditoria append-only)
+- **Python 3** (Automação da sincronização de pautas da AGR via `pdfplumber`/`beautifulsoup4` e suítes completas de testes)
+- **GitHub Actions** (CI contínuo com verificação estrita de integridade e rotina diária de sincronização de pautas)
+- **esbuild** (Minificação e empacotamento determinístico com versionamento de assets por hash SHA-256)
