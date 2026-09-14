@@ -969,7 +969,7 @@ def registros_do_processo_listam_o_que_a_renumeracao_alcanca(cur):
     segunda = como_dono(cur, """
         insert into public.acervo_cj
           (num_processo, relator, data_distribuicao, defesa, assunto, origem)
-        values (%s, 'CJ5', date '2026-06-24', true, 'Auto de Infração', 'ata')
+        values (%s, 'CJ5', date '2026-06-24', true, 'Auto de Infração', 'planilha')
         returning id""", (num,))
     cur.connection.commit()
     autenticar(cur, 'lucas')

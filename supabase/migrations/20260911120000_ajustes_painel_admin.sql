@@ -104,9 +104,11 @@ begin
 
   return query
   select a.id, a.operacao, a.tabela, a.registro_id,
-         -- O número ATUAL do registro, não o da época da alteração: é ele que a
-         -- pessoa tem em mãos ao procurar no rastro. Quando a própria alteração
-         -- foi o número, o antes/depois do delta já conta a história.
+         -- Chave interna não identifica nada para quem opera o sistema: o
+         -- rastro precisa dizer de QUAL processo se trata. É o número ATUAL do
+         -- registro, não o da época da alteração — é ele que a pessoa tem em
+         -- mãos ao procurar. Quando a própria alteração foi o número, o
+         -- antes/depois do delta já conta a história.
          case a.tabela
            when 'julgados_cj'   then (select j.num_processo from public.julgados_cj j
                                        where j.id = a.registro_id)
@@ -327,6 +329,9 @@ begin
       using errcode = '22023';
   end if;
 
+  -- Mesmo idioma da Câmara: nullif pega a chave presente com string vazia, que
+  -- é o que um <input type="date"> limpo manda — e sem ele o ''::date estourava
+  -- com erro cru do Postgres em vez da mensagem pensada para a tela.
   if p_campos ? 'data_distribuicao' then
     if nullif(p_campos ->> 'data_distribuicao', '') is null then
       raise exception 'a data de distribuicao nao pode ficar vazia' using errcode = '22023';

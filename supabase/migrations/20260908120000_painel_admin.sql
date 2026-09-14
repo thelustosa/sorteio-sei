@@ -349,6 +349,10 @@ begin
 end;
 $$;
 
+-- A migration precisa poder ser reexecutada sobre o schema final, cujo retorno
+-- ganhou a coluna `defesa`; CREATE OR REPLACE não aceita mudar OUT parameters.
+drop function if exists public.admin_processos_acervo(text, date, timestamptz, text);
+
 create or replace function public.admin_processos_acervo(
   p_colegiado text, p_data date, p_sorteado_em timestamptz default null,
   p_origem text default null)
@@ -417,6 +421,10 @@ begin
    order by 3, 2;
 end;
 $$;
+
+-- O schema final acrescenta `num_processo` ao retorno; a assinatura precisa
+-- sair antes que esta versão histórica seja recriada durante a reaplicação.
+drop function if exists public.admin_auditoria(text, int, bigint);
 
 create or replace function public.admin_auditoria(
   p_colegiado text, p_limite int default 50, p_antes_de bigint default null)

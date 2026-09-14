@@ -647,7 +647,7 @@ function pintarProcessosDaSessao(linhas) {
     // vinculado. acervo_id e data_distribuicao já vinham na resposta de
     // admin_processos_sessao e eram descartados aqui.
     { rotulo: 'Vínculo', eixo: 'centro' },
-    'Atualizado por'
+    { rotulo: 'Atualizado por', eixo: 'centro' }
   ];
 
   desenhar(colunas, linhas.map(linha => {
