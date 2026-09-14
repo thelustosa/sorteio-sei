@@ -20,7 +20,6 @@ const VOCABULARIO = {
     destino: 'Relator',
     destinoPadrao: /^CJ[1-9][0-9]*$/,
     decisao: 'Defesa',
-    campoDecisao: 'defesa',
     campoDestino: 'relator',
     votos: ['Manter', 'Anular', 'Vista'],
     status: ['Julgado', 'Retornou', 'Retirado', 'Vista'],
@@ -33,7 +32,6 @@ const VOCABULARIO = {
     destino: 'Unidade',
     destinoPadrao: /^CREG[1-9][0-9]*$/,
     decisao: 'Recurso',
-    campoDecisao: 'recurso',
     campoDestino: 'unidade',
     votos: ['Manter', 'Anular', 'Aprovação', 'Indeferimento', 'Extinção', 'Retirado', 'Vista'],
     status: ['Julgado', 'Retirado', 'Vista', 'Sobrestado', 'Prejudicado'],
@@ -142,6 +140,7 @@ const edicaoEtapaCampos = document.getElementById('edicaoEtapaCampos');
 const edicaoEtapaConfirmacao = document.getElementById('edicaoEtapaConfirmacao');
 const edicaoDelta = document.getElementById('edicaoDelta');
 const edicaoImpacto = document.getElementById('edicaoImpacto');
+const edicaoImpactoTitulo = document.getElementById('edicaoImpactoTitulo');
 const edicaoImpactoLista = document.getElementById('edicaoImpactoLista');
 const edicaoErro = document.getElementById('edicaoErro');
 const edicaoEtapaRotulo = document.getElementById('edicaoEtapaRotulo');
@@ -158,11 +157,6 @@ let detalhe = null;
 // trocar de aba durante uma consulta lenta não pode repintar a tabela errada.
 let pedido = 0;
 let dialogoAtual = null;
-// avancar() é assíncrono nas DUAS etapas, e o <form> aceita submit por Enter
-// além do clique no botão. Sem esta trava, um segundo submit durante a consulta
-// de impacto reentrava com `delta` já preenchido e caía direto na gravação: a
-// etapa de confirmação era pulada justamente na operação que propaga.
-let avancando = false;
 
 // A auditoria é a única visão que cresce sem limite: uma linha por correção,
 // para sempre. Pedir "as 100 mais recentes" e rotular o resultado como "100
@@ -838,8 +832,18 @@ function valorDoCampo(nome) {
   return campo ? campo.value.trim() : '';
 }
 
-function abrirDialogo({ titulo, resumo, campos, montarDelta, impacto, gravar, mensagem }) {
-  dialogoAtual = { montarDelta, impacto, gravar, mensagem, delta: null };
+// `tituloImpacto` nomeia a lista da etapa 2. O padrão é o da correção de
+// distribuição, que lista julgados; a renumeração lista distribuições E
+// julgados, e herdar o título fazia a lista dizer que eram só julgados.
+function abrirDialogo({ titulo, resumo, campos, montarDelta, impacto, gravar, mensagem,
+                        tituloImpacto = 'Julgados que serão alterados junto' }) {
+  // avancar() é assíncrono nas DUAS etapas, e o <form> aceita submit por Enter
+  // além do clique no botão. Sem a trava `avancando`, um segundo submit durante
+  // a consulta de impacto reentrava com `delta` já preenchido e caía direto na
+  // gravação: a etapa de confirmação era pulada justamente na operação que
+  // propaga. A trava é DESTE diálogo, não da página: global, a gravação lenta de
+  // uma janela fechada no meio deixava o botão da janela seguinte mudo.
+  dialogoAtual = { montarDelta, impacto, gravar, mensagem, delta: null, avancando: false };
 
   edicaoTitulo.textContent = titulo;
   edicaoResumo.textContent = resumo;
@@ -847,10 +851,15 @@ function abrirDialogo({ titulo, resumo, campos, montarDelta, impacto, gravar, me
   edicaoMotivo.value = '';
   edicaoErro.hidden = true;
   edicaoImpacto.hidden = true;
+  edicaoImpactoTitulo.textContent = tituloImpacto;
   edicaoImpactoLista.replaceChildren();
   edicaoEtapaCampos.hidden = false;
   edicaoEtapaConfirmacao.hidden = true;
   edicaoEtapaRotulo.textContent = 'Etapa 1 de 2';
+  // A janela anterior pode ter sido fechada com o botão ainda em "Verificando…"
+  // ou "Gravando…". A espera dela não toca mais no botão (ver passo), então quem
+  // o devolve ao estado da etapa 1 é quem abre a janela nova.
+  alternarBotaoCarregando(btnAvancar, false);
   btnAvancar.textContent = 'Revisar alteração';
   btnAvancar.disabled = false;
 
@@ -865,27 +874,30 @@ function mostrarErroNoDialogo(mensagem) {
 }
 
 async function avancar() {
-  if (!dialogoAtual || avancando) return;
-  avancando = true;
+  const atual = dialogoAtual;
+  if (!atual || atual.avancando) return;
+  atual.avancando = true;
   try {
-    await passo();
+    await passo(atual);
   } catch (err) {
     // Nenhum caminho de passo() deveria chegar aqui, mas um `await` num diálogo
     // que a pessoa fechou no meio é justamente o tipo de falha que se perdia
     // como rejeição não tratada — sem nada na tela e sem nada no console.
     console.error(err);
   } finally {
-    avancando = false;
+    atual.avancando = false;
   }
 }
 
-async function passo() {
+// `atual` é o diálogo que esta chamada conduz. Fechar a janela zera
+// `dialogoAtual` (ouvinte de `close`), e há dois `await` abaixo: depois deles a
+// janela na tela pode ser nenhuma — ou OUTRA, aberta enquanto a espera corria.
+// Escrever nela fechava a janela nova no meio do preenchimento, punha o erro da
+// antiga no formulário da nova e devolvia ao botão o rótulo de outra etapa. Por
+// isso toda escrita na janela depois de um `await` passa por naTela().
+async function passo(atual) {
   edicaoErro.hidden = true;
-  // O diálogo que esta chamada está conduzindo. Fechar a janela zera
-  // `dialogoAtual` (ouvinte de `close`), e há dois `await` abaixo: sem comparar a
-  // referência depois deles, um Esc durante a consulta de impacto fazia a
-  // continuação escrever em `null`.
-  const atual = dialogoAtual;
+  const naTela = () => dialogoAtual === atual;
 
   // Etapa 1 → 2: monta o delta e mostra a confirmação.
   if (!atual.delta) {
@@ -918,26 +930,27 @@ async function passo() {
       // e clicável, ele dizia que a etapa 1 ainda não terminou enquanto a
       // resposta vinha.
       alternarBotaoCarregando(btnAvancar, true, 'Verificando…');
+      let afetados = [];
       try {
-        const afetados = await atual.impacto();
-        if (afetados.length) {
-          edicaoImpactoLista.replaceChildren(...afetados.map(texto => {
-            const item = document.createElement('li');
-            item.textContent = texto;
-            return item;
-          }));
-          edicaoImpacto.hidden = false;
-        }
+        afetados = await atual.impacto();
       } catch (_) {
         // O preview é informativo: falhar nele não impede a confirmação, e
         // inventar "nenhum julgado afetado" seria pior que omiti-lo.
-      } finally {
-        alternarBotaoCarregando(btnAvancar, false, 'Revisar alteração');
+      }
+
+      // A janela foi fechada enquanto o impacto vinha: não há etapa 2 para
+      // montar, e a lista e o botão na tela, se houver, são de outra janela.
+      if (!naTela()) return;
+      alternarBotaoCarregando(btnAvancar, false, 'Revisar alteração');
+      if (afetados.length) {
+        edicaoImpactoLista.replaceChildren(...afetados.map(texto => {
+          const item = document.createElement('li');
+          item.textContent = texto;
+          return item;
+        }));
+        edicaoImpacto.hidden = false;
       }
     }
-
-    // A janela foi fechada enquanto o impacto vinha: não há etapa 2 para montar.
-    if (dialogoAtual !== atual) return;
 
     // Só aqui a etapa 1 está de fato concluída: marcar o delta antes da espera
     // acima deixava a etapa 2 alcançável enquanto a tela ainda mostrava a 1.
@@ -963,7 +976,9 @@ async function passo() {
     // deixava a divergência para aparecer em verificacao_cj.sql, que é
     // exatamente o que ela existe para evitar.
     const resultado = await atual.gravar(edicaoMotivo.value.trim() || null);
-    dialogo.close();
+    // A gravação aconteceu mesmo que a janela tenha sido fechada no meio: o aviso
+    // e a recarga valem igual. Só fechar depende de ela ainda ser esta.
+    if (naTela()) dialogo.close();
     // `mensagem` devolve texto, ou `{ texto, tom }` quando o que o banco fez por
     // baixo não é motivo de comemoração — um julgado que perdeu o vínculo com o
     // acervo não pode sair no mesmo verde de uma correção bem-sucedida.
@@ -972,10 +987,10 @@ async function passo() {
     aviso(texto || 'Alteração gravada.', tom || 'sucesso');
     await carregar();
   } catch (err) {
-    mostrarErroNoDialogo(err.message);
+    if (naTela()) mostrarErroNoDialogo(err.message);
     aviso(`Não foi possível gravar: ${err.message}`, 'erro');
   } finally {
-    alternarBotaoCarregando(btnAvancar, false, 'Confirmar e gravar');
+    if (naTela()) alternarBotaoCarregando(btnAvancar, false, 'Confirmar e gravar');
   }
 }
 
@@ -1220,6 +1235,7 @@ function abrirCorrecaoDeNumero(numAtual) {
   abrirDialogo({
     titulo: 'Corrigir número do processo',
     resumo: `Número atual: ${numAtual} · a correção alcança todos os registros com este número`,
+    tituloImpacto: 'Registros alcançados pela renumeração',
     campos,
     montarDelta() {
       const novo = valorDoCampo('num_novo');
@@ -1245,20 +1261,30 @@ function abrirCorrecaoDeNumero(numAtual) {
         method: 'POST',
         body: JSON.stringify({ p_colegiado: orgao, p_num_processo: numAtual })
       });
-      const alcancados = (Array.isArray(registros) ? registros : []).filter(r =>
-        this.escopo === 'tudo' || r.origem_registro === this.escopo);
+      const todos = Array.isArray(registros) ? registros : [];
+      const alcancados = todos.filter(r => this.escopo === 'tudo' || r.origem_registro === this.escopo);
 
       const itens = alcancados.map(r => r.origem_registro === 'acervo'
         ? `Distribuição de ${dataBR(r.data_referencia)} — ${ou(r.destino)}`
         : `Julgado da sessão de ${dataBR(r.data_referencia)}${vazio(r.pauta) ? '' : ` · pauta ${r.pauta}`}`
           + (r.vinculado ? '' : ' — hoje sem distribuição vinculada'));
 
-      // Renumerar só os julgados deixa o gatilho sem acervo para encontrar, e o
-      // vínculo cai. É consequência, não erro — mas confirmar sem saber dela é o
-      // que a etapa de revisão existe para evitar.
-      if (this.escopo === 'julgados' && alcancados.some(r => r.vinculado)) {
+      // Renumerar um lado só desfaz o par que o gatilho usa para vincular, e o
+      // vínculo cai. Só os julgados: o acervo não tem mais o número deles. Só as
+      // distribuições: admin_corrigir_processo_* redispara o gatilho dos julgados
+      // que apontavam para elas, e ele derruba o vínculo em vez de deixá-lo
+      // apontar para outro processo. É consequência, não erro — mas confirmar sem
+      // saber dela é o que a etapa de revisão existe para evitar. No escopo das
+      // distribuições os julgados nem entram na lista acima, e o aviso é o único
+      // ponto da confirmação que fala deles.
+      const haVinculados = todos.some(r => r.origem_registro === 'julgados' && r.vinculado);
+      if (haVinculados && this.escopo === 'julgados') {
         itens.push('Atenção: sem renumerar as distribuições, os julgados vinculados '
           + 'perdem o vínculo com o acervo.');
+      }
+      if (haVinculados && this.escopo === 'acervo') {
+        itens.push('Atenção: sem renumerar os julgados, os que estão vinculados a estas '
+          + 'distribuições perdem o vínculo com o acervo.');
       }
       return itens;
     },

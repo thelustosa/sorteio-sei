@@ -31,7 +31,6 @@
 
 :root {
   --bg: #f4f7f5;
-  --surface: #e9f5ec;
   --surface-raised: #ffffff;
   --text: #112720;
   --muted: #556b63;
@@ -61,7 +60,6 @@
   --table-heading: rgba(0, 83, 75, 0.04);
   --table-rule: rgba(0, 83, 75, 0.08);
   --table-row-hover: rgba(0, 83, 75, 0.025);
-  --shadow-toast: 0 12px 28px rgba(17, 39, 32, 0.18);
   --shadow-panel: 0 12px 32px rgba(17, 39, 32, 0.09);
   --shadow-badge: 0 2px 6px rgba(17, 39, 32, 0.22);
   --surface-subtle: #f8fbfa;

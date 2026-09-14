@@ -367,7 +367,6 @@ Três raios cobrem o sistema inteiro: `8px` (controles — botão, input, select
 ### Don't:
 - **Don't** introduzir um modo escuro sem uma decisão de produto — hoje existe um único tema, comprometido, não uma lacuna.
 - **Don't** inventar uma escala de espaçamento em token — ela não existe; use o valor em pixel mais próximo já presente no contexto.
-- **Don't** usar `--surface` (`#e9f5ec`): está declarado em `:root` mas não é referenciado em nenhuma regra do CSS — é um token morto, não faz parte da paleta ativa (candidato a limpeza, não a reuso).
 - **Don't** usar vermelho para ênfase neutra ou aviso brando — é exclusivo de erro e ação destrutiva; pendência usa o Teal dos Pendentes.
 - **Don't** abrir uma família de cor semântica nova quando o canal de atenção já existe. Uma tela que precise de fundo, borda e texto para "atenção" usa os derivados do Teal dos Pendentes, não um âmbar, um laranja ou um amarelo próprios — ver The One Alert Color Rule em Colors.
 - **Don't** gastar o Teal dos Pendentes em sobrancelha, rótulo estrutural ou borda lateral decorativa. Borda colorida de 3px num item de lista é, além disso, o padrão que o detector do projeto sinaliza como tique de interface gerada.

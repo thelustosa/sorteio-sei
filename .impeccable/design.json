@@ -461,7 +461,6 @@
     "donts": [
       "Don't introduzir um modo escuro sem uma decisão de produto — hoje existe um único tema, comprometido.",
       "Don't inventar uma escala de espaçamento em token — ela não existe; use o valor em pixel mais próximo já presente no contexto.",
-      "Don't usar --surface (#e9f5ec): está declarado em :root mas não é referenciado em nenhuma regra do CSS — é um token morto.",
       "Don't usar vermelho para ênfase neutra ou aviso brando — é exclusivo de erro e ação destrutiva.",
       "Don't clarear o Verde Institucional para um estado de interação — o único estado de hover/active é escurecer, nunca um tom mais claro.",
       "Don't hardcodar hex direto num seletor .selection-card-* novo — as quatro cores de card já são token em :root; um quinto card ganha seu próprio par de tokens do mesmo jeito."
