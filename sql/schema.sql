@@ -1868,11 +1868,16 @@ begin
 end;
 $$;
 
+-- O drop acompanha uma mudança de colunas no retorno (`defesa`, abaixo):
+-- `create or replace` recusa alterar o tipo de retorno de uma função.
+drop function if exists public.admin_processos_acervo(text, date, timestamptz, text);
+
 create or replace function public.admin_processos_acervo(
   p_colegiado text, p_data date, p_sorteado_em timestamptz default null,
   p_origem text default null)
 returns table (id bigint, ordem int, num_processo text, destino text, assunto text,
-               decisao text, interessado text, origem text, julgados int)
+               decisao text, defesa boolean, interessado text, origem text,
+               julgados int)
 language plpgsql
 stable
 security definer
@@ -1884,10 +1889,19 @@ begin
   return query
   -- `is not distinct from` e não `=`: o carimbo de uma rodada pode ser nulo, e
   -- um `=` com nulo devolveria lista vazia justamente para ela.
+  --
+  -- `decisao` e `defesa` são a mesma coluna vista de dois lugares, e é de
+  -- propósito. `decisao` é o que a TABELA mostra, e segue a regra que
+  -- processos_acervo_cj documenta: defesa nula cai no texto legado de
+  -- `recurso`, porque relê-lo como defesa inventaria a decisão. `defesa` é o
+  -- que o FORMULÁRIO edita, e aí só o valor armazenado serve — o legado como
+  -- "antes" faria a confirmação prometer uma mudança diferente da que a
+  -- auditoria registra.
   select a.id, a.ordem, a.num_processo, a.relator, a.assunto,
          case when a.defesa is null then a.recurso
               when a.defesa        then 'Sim'
               else 'Não' end,
+         a.defesa,
          null::text, a.origem,
          (select count(*)::int from public.julgados_cj j where j.acervo_id = a.id)
     from public.acervo_cj a
@@ -1897,7 +1911,7 @@ begin
      and (p_origem is null or a.origem = p_origem)
    union all
   select b.id, b.ordem, b.num_processo, b.unidade, b.assunto, b.recurso,
-         b.interessado, b.origem,
+         null::boolean, b.interessado, b.origem,
          (select count(*)::int from public.julgados_creg k where k.acervo_id = b.id)
     from public.acervo_creg b
    where p_colegiado = 'CREG'
@@ -1905,6 +1919,42 @@ begin
      and b.sorteado_em is not distinct from p_sorteado_em
      and (p_origem is null or b.origem = p_origem)
    order by 2 nulls last, 3;
+end;
+$$;
+
+-- A correção do número do processo não é a edição da linha que a pessoa clicou:
+-- alcança TODA distribuição e TODO julgado que carregam aquele número. Este é o
+-- preview que a confirmação mostra antes de gravar, porque a operação não tem
+-- desfazer e o diálogo abria a partir de uma linha só.
+create or replace function public.admin_registros_do_processo(
+  p_colegiado text, p_num_processo text)
+returns table (origem_registro text, registro_id bigint, data_referencia date,
+               pauta int, destino text, vinculado boolean)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.admin_exigir(p_colegiado);
+
+  return query
+  select 'acervo'::text, a.id, a.data_distribuicao, null::int, a.relator, null::boolean
+    from public.acervo_cj a
+   where p_colegiado = 'CJ' and a.num_processo = p_num_processo
+   union all
+  select 'julgados'::text, j.id, j.data_sessao, j.pauta, j.relator, j.acervo_id is not null
+    from public.julgados_cj j
+   where p_colegiado = 'CJ' and j.num_processo = p_num_processo
+   union all
+  select 'acervo'::text, b.id, b.data_distribuicao, null::int, b.unidade, null::boolean
+    from public.acervo_creg b
+   where p_colegiado = 'CREG' and b.num_processo = p_num_processo
+   union all
+  select 'julgados'::text, k.id, k.data_sessao, k.pauta, k.unidade, k.acervo_id is not null
+    from public.julgados_creg k
+   where p_colegiado = 'CREG' and k.num_processo = p_num_processo
+   order by 1, 3, 2;
 end;
 $$;
 
@@ -1937,11 +1987,14 @@ begin
 end;
 $$;
 
+-- Mesmo motivo do drop de admin_processos_acervo: o retorno ganhou uma coluna.
+drop function if exists public.admin_auditoria(text, int, bigint);
+
 create or replace function public.admin_auditoria(
   p_colegiado text, p_limite int default 50, p_antes_de bigint default null)
 returns table (id bigint, operacao text, tabela text, registro_id bigint,
-               antes jsonb, depois jsonb, motivo text, feito_por text,
-               feito_em timestamptz)
+               num_processo text, antes jsonb, depois jsonb, motivo text,
+               feito_por text, feito_em timestamptz)
 language plpgsql
 stable
 security definer
@@ -1951,8 +2004,23 @@ begin
   perform public.admin_exigir(p_colegiado);
 
   return query
-  select a.id, a.operacao, a.tabela, a.registro_id, a.antes, a.depois,
-         a.motivo, a.feito_por, a.feito_em
+  select a.id, a.operacao, a.tabela, a.registro_id,
+         -- Chave interna não identifica nada para quem opera o sistema: o
+         -- rastro precisa dizer de QUAL processo se trata. É o número ATUAL do
+         -- registro, não o da época da alteração — é ele que a pessoa tem em
+         -- mãos ao procurar. Quando a própria alteração foi o número, o
+         -- antes/depois do delta já conta a história.
+         case a.tabela
+           when 'julgados_cj'   then (select j.num_processo from public.julgados_cj j
+                                       where j.id = a.registro_id)
+           when 'julgados_creg' then (select k.num_processo from public.julgados_creg k
+                                       where k.id = a.registro_id)
+           when 'acervo_cj'     then (select c.num_processo from public.acervo_cj c
+                                       where c.id = a.registro_id)
+           when 'acervo_creg'   then (select d.num_processo from public.acervo_creg d
+                                       where d.id = a.registro_id)
+         end,
+         a.antes, a.depois, a.motivo, a.feito_por, a.feito_em
     from public.auditoria_admin a
    where a.orgao = p_colegiado
      and (p_antes_de is null or a.id < p_antes_de)
@@ -1968,12 +2036,14 @@ revoke all on function public.admin_processos_acervo(text, date, timestamptz, te
   from public, anon, service_role;
 revoke all on function public.admin_julgados_do_acervo(text, bigint) from public, anon, service_role;
 revoke all on function public.admin_auditoria(text, int, bigint) from public, anon, service_role;
+revoke all on function public.admin_registros_do_processo(text, text) from public, anon, service_role;
 grant execute on function public.admin_sessoes(text) to authenticated;
 grant execute on function public.admin_processos_sessao(text, date, int) to authenticated;
 grant execute on function public.admin_sorteios(text) to authenticated;
 grant execute on function public.admin_processos_acervo(text, date, timestamptz, text) to authenticated;
 grant execute on function public.admin_julgados_do_acervo(text, bigint) to authenticated;
 grant execute on function public.admin_auditoria(text, int, bigint) to authenticated;
+grant execute on function public.admin_registros_do_processo(text, text) to authenticated;
 
 -- ── Correção de julgado ──────────────────────────────────────────────────────
 -- p_campos traz SÓ as chaves que mudam: ausente é "não mexer", presente com
@@ -2292,8 +2362,13 @@ begin
       using errcode = '22023';
   end if;
 
+  -- nullif, e não `->> ... is null`: a chave presente com string vazia é o que
+  -- um <input type="date"> limpo manda, e é exatamente o caso que esta guarda
+  -- existe para recusar. Sem o nullif ela passava direto e o ''::date estourava
+  -- com erro cru do Postgres — a mesma razão que fez as funções de julgado
+  -- adotarem o idioma, e o único idioma usado daqui para baixo.
   if p_campos ? 'data_distribuicao' then
-    if p_campos ->> 'data_distribuicao' is null then
+    if nullif(p_campos ->> 'data_distribuicao', '') is null then
       raise exception 'a data de distribuicao nao pode ficar vazia' using errcode = '22023';
     end if;
     if (p_campos ->> 'data_distribuicao')::date > current_date then
@@ -2302,12 +2377,15 @@ begin
     end if;
   end if;
 
-  if p_campos ? 'assunto' and coalesce(btrim(p_campos ->> 'assunto'), '') = '' then
+  if p_campos ? 'assunto' and nullif(btrim(coalesce(p_campos ->> 'assunto', '')), '') is null then
     raise exception 'o assunto nao pode ficar vazio' using errcode = '22023';
   end if;
 
-  if p_campos ? 'ordem' and p_campos ->> 'ordem' is not null
-     and (p_campos ->> 'ordem')::int <= 0 then
+  -- coalesce e não uma segunda condição depois do `and`: o Postgres não garante
+  -- ordem de avaliação entre os operandos, e ''::int ESTOURA em vez de recusar
+  -- com mensagem. Aqui o vazio já virou null antes de qualquer cast — e ordem
+  -- em branco é apagar a ordem, que é legítimo.
+  if p_campos ? 'ordem' and coalesce(nullif(p_campos ->> 'ordem', '')::int, 1) <= 0 then
     raise exception 'ordem invalida: %', p_campos ->> 'ordem' using errcode = '22023';
   end if;
 
@@ -2326,9 +2404,9 @@ begin
            assunto = case when p_campos ? 'assunto'
                           then p_campos ->> 'assunto' else a.assunto end,
            defesa  = case when p_campos ? 'defesa'
-                          then (p_campos ->> 'defesa')::boolean else a.defesa end,
+                          then (nullif(p_campos ->> 'defesa', ''))::boolean else a.defesa end,
            ordem   = case when p_campos ? 'ordem'
-                          then (p_campos ->> 'ordem')::int else a.ordem end
+                          then nullif(p_campos ->> 'ordem', '')::int else a.ordem end
      where a.id = p_id
      returning * into depois;
   exception when unique_violation then
@@ -2360,12 +2438,16 @@ begin
 
       j_delta := public.admin_delta(to_jsonb(j_antes), to_jsonb(j_depois),
                                     copiados || array['acervo_id']);
+      -- Dentro do `if`, e não depois dele: um julgado que já carregava o valor
+      -- corrigido não gera linha de auditoria, e contá-lo fazia o painel
+      -- anunciar mais julgados alterados do que o rastro registra. O que
+      -- `propagados` conta é o que MUDOU.
       if j_delta <> '{}'::jsonb then
         perform public.auditar('CJ', p_operacao, 'julgados_cj', j_antes.id,
           public.admin_fatiar(to_jsonb(j_antes), j_delta),
           public.admin_fatiar(to_jsonb(j_depois), j_delta), p_motivo);
+        propagados := propagados || j_antes.id;
       end if;
-      propagados := propagados || j_antes.id;
     end loop;
   end if;
 
@@ -2404,8 +2486,11 @@ begin
       using errcode = '22023';
   end if;
 
+  -- Mesmo idioma da Câmara: nullif pega a chave presente com string vazia, que
+  -- é o que um <input type="date"> limpo manda — e sem ele o ''::date estourava
+  -- com erro cru do Postgres em vez da mensagem pensada para a tela.
   if p_campos ? 'data_distribuicao' then
-    if p_campos ->> 'data_distribuicao' is null then
+    if nullif(p_campos ->> 'data_distribuicao', '') is null then
       raise exception 'a data de distribuicao nao pode ficar vazia' using errcode = '22023';
     end if;
     if (p_campos ->> 'data_distribuicao')::date > current_date then
@@ -2414,8 +2499,7 @@ begin
     end if;
   end if;
 
-  if p_campos ? 'ordem' and p_campos ->> 'ordem' is not null
-     and (p_campos ->> 'ordem')::int <= 0 then
+  if p_campos ? 'ordem' and coalesce(nullif(p_campos ->> 'ordem', '')::int, 1) <= 0 then
     raise exception 'ordem invalida: %', p_campos ->> 'ordem' using errcode = '22023';
   end if;
 
@@ -2436,7 +2520,7 @@ begin
            recurso = case when p_campos ? 'recurso'
                           then p_campos ->> 'recurso' else b.recurso end,
            ordem   = case when p_campos ? 'ordem'
-                          then (p_campos ->> 'ordem')::int else b.ordem end,
+                          then nullif(p_campos ->> 'ordem', '')::int else b.ordem end,
            interessado = case when p_campos ? 'interessado'
                               then p_campos ->> 'interessado' else b.interessado end
      where b.id = p_id
@@ -2468,12 +2552,13 @@ begin
 
       k_delta := public.admin_delta(to_jsonb(k_antes), to_jsonb(k_depois),
                                     copiados || array['acervo_id']);
+      -- Como na Câmara: conta quem mudou, que é quem deixou rastro.
       if k_delta <> '{}'::jsonb then
         perform public.auditar('CREG', p_operacao, 'julgados_creg', k_antes.id,
           public.admin_fatiar(to_jsonb(k_antes), k_delta),
           public.admin_fatiar(to_jsonb(k_depois), k_delta), p_motivo);
+        propagados := propagados || k_antes.id;
       end if;
-      propagados := propagados || k_antes.id;
     end loop;
   end if;
 
@@ -2607,6 +2692,14 @@ begin
         jsonb_build_object('num_processo', p_num_novo, 'acervo_id', nova_j.acervo_id),
         p_motivo);
       julgados := julgados || linha_j.id;
+      -- Com escopo 'julgados' nenhuma linha do acervo carrega o número novo, e o
+      -- gatilho DERRUBA o vínculo — o que é a verdade do que ficou, mas era
+      -- verdade só no rastro: `desvinculados` voltava vazio e o painel não tinha
+      -- o que avisar. Com 'tudo' o acervo foi renumerado antes e o vínculo se
+      -- mantém, então este ramo não acrescenta nada lá.
+      if nova_j.acervo_id is null and linha_j.acervo_id is not null then
+        desvinculados := desvinculados || linha_j.id;
+      end if;
     end loop;
   elsif p_escopo = 'acervo' then
     -- Sem renumerar os julgados, o vínculo passaria a apontar para um processo
@@ -2710,6 +2803,9 @@ begin
         jsonb_build_object('num_processo', p_num_novo, 'acervo_id', nova_k.acervo_id),
         p_motivo);
       julgados := julgados || linha_k.id;
+      if nova_k.acervo_id is null and linha_k.acervo_id is not null then
+        desvinculados := desvinculados || linha_k.id;
+      end if;
     end loop;
   elsif p_escopo = 'acervo' then
     for linha_k in

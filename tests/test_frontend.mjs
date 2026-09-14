@@ -2379,8 +2379,8 @@ function adminPage({ api = async () => null, aviso = () => {} } = {}) {
    'edicaoResumo', 'edicaoTitulo', 'edicaoCampos',
    'edicaoEtapaCampos', 'edicaoEtapaConfirmacao', 'edicaoDelta', 'edicaoImpacto',
    'edicaoImpactoLista', 'edicaoErro', 'edicaoEtapaRotulo'].forEach(id => document.add(id, 'div'));
-  ['btnTentarNovamente', 'btnVoltar', 'btnVoltarInicio', 'btnAvancarEdicao', 'btnCancelarEdicao',
-   'btnFecharEdicao'].forEach(id => document.add(id, 'button'));
+  ['btnTentarNovamente', 'btnMaisAntigas', 'btnVoltar', 'btnVoltarInicio', 'btnAvancarEdicao',
+   'btnCancelarEdicao', 'btnFecharEdicao'].forEach(id => document.add(id, 'button'));
   document.add('painelTable', 'table');
   document.add('edicaoMotivo', 'input');
 
@@ -2446,8 +2446,11 @@ const PROCESSOS_SESSAO = [
 const SORTEIOS = [{ data_distribuicao: '2026-06-18', sorteado_em: null, origem: 'sorteio',
                     processos: 1, destinos: ['CJ3'] }];
 const PROCESSOS_ACERVO = [
+  // `decisao` é o texto que a tabela mostra (com o legado de `recurso` quando a
+  // defesa é nula) e `defesa` é a coluna booleana que o formulário edita: são
+  // duas colunas da resposta, e confundi-las era o defeito.
   { id: 7, ordem: 1, num_processo: '202600000000001', destino: 'CJ3',
-    assunto: 'Auto de Infração', decisao: 'Sim', interessado: null,
+    assunto: 'Auto de Infração', decisao: 'Sim', defesa: true, interessado: null,
     origem: 'sorteio', julgados: 1 }
 ];
 
@@ -2596,7 +2599,7 @@ test('tabelas administrativas nomeiam a coluna e as operacoes sem abreviacoes am
   assert.equal(page.document.getElementById('painelTable').dataset.visao, 'processos-sessao');
   const cabecalhoDetalhe = page.document.getElementById('painelTable').children[0].children[0];
   assert.deepEqual(cabecalhoDetalhe.children.map(celula => celula.textContent),
-    ['Processo', 'Ações', 'Relator', 'Voto', 'Status', 'Atualizado por']);
+    ['Processo', 'Ações', 'Relator', 'Voto', 'Status', 'Vínculo', 'Atualizado por']);
   const botoes = page.linhasDaTabela()[0].children[1].children[0].children;
   assert.deepEqual(botoes.map(botao => botao.textContent),
     ['Corrigir dados', 'Corrigir número', 'Religar ao acervo']);
@@ -3140,6 +3143,330 @@ test('origem e campo derivado aparecem por extenso, nao pelo valor cru', async (
     'toda religação observa acervo_id: sem rótulo, a operação mais comum saía crua');
 });
 
+// ── Regressões do painel · segunda revisão ───────────────────────────────────
+
+// O gatilho reescreve acervo_id em TODA correção de julgado (data_sessao entra
+// sempre no UPDATE, e `update of` dispara pela presença da coluna), então
+// `alterados.acervo_id` não significa que a data mudou — e o vínculo pode ter
+// CAÍDO. Anunciar isso como "religou o julgado a outra distribuição" vendia como
+// sucesso a perda do vínculo.
+test('vinculo perdido na correcao do julgado sai como atencao, nao como religacao', async () => {
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_corrigir_julgado_cj': { alterados: { acervo_id: { antes: 7, depois: null } } }
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir dados').dispatch('click');
+  page.campo('voto').value = 'Anular';
+  page.form.dispatch('submit');
+  await wait();
+  page.form.dispatch('submit');
+  await wait();
+
+  assert.match(page.avisos.at(-1).texto, /SEM distribuição vinculada/);
+  assert.equal(page.avisos.at(-1).tipo, 'atencao');
+  assert.doesNotMatch(page.avisos.at(-1).texto, /religou/);
+});
+
+// A data futura era barrada só no banco, e a resposta que chegava à tela era a
+// frase crua do Postgres ('sessao no futuro: 2027-01-01') — a única regra desta
+// classe sem frase em português.
+test('data futura e recusada na tela, com frase em portugues', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir dados').dispatch('click');
+  assert.ok(page.campo('data_sessao').getAttribute('max'),
+    'o campo precisa declarar o limite que o banco aplica');
+  page.campo('data_sessao').value = '2099-01-01';
+  const antes = chamadas.length;
+  page.form.dispatch('submit');
+  await wait();
+
+  assert.equal(chamadas.length, antes);
+  assert.match(page.document.getElementById('edicaoErro').children[0].textContent,
+    /não pode ser futura/);
+});
+
+// A tabela da sessão oferece "Religar ao acervo" em toda linha, e desenhava
+// igual o julgado que está vinculado e o que não está — que é justamente o caso
+// que a operação existe para resolver. acervo_id já vinha na resposta.
+test('a sessao mostra quais julgados estao sem distribuicao vinculada', async () => {
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_processos_sessao': [
+        { id: 41, num_processo: '202600000000001', pauta: 24, voto: 'Manter', status: 'Julgado',
+          destino: 'CJ3', data_distribuicao: '2026-06-18', acervo_id: 7,
+          atualizado_por: null, atualizado_em: null },
+        { id: 42, num_processo: '202600000000002', pauta: 24, voto: null, status: null,
+          destino: null, data_distribuicao: null, acervo_id: null,
+          atualizado_por: null, atualizado_em: null }
+      ]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+
+  const vinculo = indice => page.linhasDaTabela()[indice].children
+    .find(c => c.dataset.label === 'Vínculo').children[0];
+  assert.match(vinculo(0).textContent, /Distribuição de 18\/06\/2026/);
+  assert.equal(vinculo(1).textContent, 'Sem distribuição');
+  assert.ok(vinculo(1).classList.contains('admin-badge-alerta'));
+
+  // E a confirmação de religar precisa dizer de onde o julgado sai hoje: o texto
+  // fixo "como estão hoje no julgado → rederivados do acervo" servia igual para
+  // os dois casos, inclusive para o religar que não muda nada.
+  page.acao(1, 'Religar ao acervo').dispatch('click');
+  page.form.dispatch('submit');
+  await wait();
+  assert.match(page.document.getElementById('edicaoDelta').children[0].textContent,
+    /Distribuição vinculada: nenhuma/);
+});
+
+// Renumerar alcança TODA distribuição e TODO julgado com aquele número, e o
+// diálogo apresentava a operação como a edição da linha clicada: sem preview,
+// sem contagem, e descartando os ids que a função devolve.
+test('corrigir o numero mostra os registros alcancados e conta os renumerados', async () => {
+  const chamadas = [];
+  const page = adminPage({
+    api: apiDoPainel(chamadas, {
+      'rpc/admin_registros_do_processo': [
+        { origem_registro: 'acervo', registro_id: 7, data_referencia: '2026-06-18',
+          pauta: null, destino: 'CJ3', vinculado: null },
+        { origem_registro: 'julgados', registro_id: 41, data_referencia: '2026-07-09',
+          pauta: 24, destino: 'CJ3', vinculado: true }
+      ],
+      'rpc/admin_corrigir_processo_cj': { acervo: [7], julgados: [41], desvinculados: [] }
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir número').dispatch('click');
+  page.campo('num_novo').value = '202600000009999';
+  page.form.dispatch('submit');
+  await wait();
+
+  const impacto = page.document.getElementById('edicaoImpactoLista');
+  assert.equal(page.document.getElementById('edicaoImpacto').hidden, false,
+    'a renumeração não pode ser confirmada sem dizer quantos registros alcança');
+  assert.equal(impacto.children.length, 2);
+  assert.match(impacto.children[0].textContent, /Distribuição de 18\/06\/2026/);
+  assert.match(impacto.children[1].textContent, /sessão de 09\/07\/2026/);
+  // O alcance é escolha, não mudança de valor: "Alcance: — → tudo" emprestava a
+  // forma de um antes→depois a algo que nunca teve um antes, e mostrava o valor
+  // cru do enum do banco.
+  assert.equal(page.document.getElementById('edicaoDelta').children[1].textContent,
+    'Alcance: Distribuições e julgados');
+
+  page.form.dispatch('submit');
+  await wait();
+  assert.match(page.avisos.at(-1).texto, /1 distribuição renumerada e 1 julgado renumerado/);
+});
+
+test('renumerar so os julgados avisa que o vinculo com o acervo cai', async () => {
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_registros_do_processo': [
+        { origem_registro: 'acervo', registro_id: 7, data_referencia: '2026-06-18',
+          pauta: null, destino: 'CJ3', vinculado: null },
+        { origem_registro: 'julgados', registro_id: 41, data_referencia: '2026-07-09',
+          pauta: 24, destino: 'CJ3', vinculado: true }
+      ],
+      'rpc/admin_corrigir_processo_cj': { acervo: [], julgados: [41], desvinculados: [41] }
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir número').dispatch('click');
+  page.campo('num_novo').value = '202600000009999';
+  page.campo('escopo').value = 'julgados';
+  page.form.dispatch('submit');
+  await wait();
+
+  const itens = page.document.getElementById('edicaoImpactoLista').children
+    .map(item => item.textContent);
+  assert.equal(itens.length, 2, 'só o julgado é alcançado, mais o aviso do vínculo');
+  assert.ok(itens.some(texto => /perdem o vínculo/.test(texto)));
+
+  page.form.dispatch('submit');
+  await wait();
+  assert.match(page.avisos.at(-1).texto, /sem distribuição vinculada/);
+  assert.equal(page.avisos.at(-1).tipo, 'atencao');
+});
+
+// O select de escopo mostrava 'tudo', 'acervo' e 'julgados' — valor cru do banco
+// como rótulo visível, no arquivo que traduz todo valor de banco antes de exibir.
+test('o escopo da renumeracao e escolhido por frase, e envia o valor do banco', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir número').dispatch('click');
+  const escopo = page.campo('escopo');
+  const opcoes = escopo.children.filter(opcao => opcao.value !== '');
+  assert.deepEqual(opcoes.map(opcao => opcao.value), ['tudo', 'acervo', 'julgados']);
+  assert.deepEqual(opcoes.map(opcao => opcao.textContent),
+    ['Distribuições e julgados', 'Somente as distribuições', 'Somente os julgados']);
+
+  escopo.value = 'acervo';
+  page.campo('num_novo').value = '202600000009999';
+  page.form.dispatch('submit');
+  await wait();
+  page.form.dispatch('submit');
+  await wait();
+  assert.equal(chamadas.find(c => c.caminho === 'rpc/admin_corrigir_processo_cj').corpo.p_escopo,
+    'acervo');
+});
+
+// A "antes" da defesa saía de `decisao`, que CAI no texto legado de `recurso`
+// quando a coluna booleana é nula: a confirmação prometia uma mudança diferente
+// da que a auditoria registra.
+test('a defesa editada vem da coluna armazenada, nao do texto legado', async () => {
+  const chamadas = [];
+  const page = adminPage({
+    api: apiDoPainel(chamadas, {
+      'rpc/admin_processos_acervo': [{ id: 7, ordem: 1, num_processo: '202600000000001',
+        destino: 'CJ3', assunto: 'Auto de Infração', decisao: 'Sim', defesa: null,
+        interessado: null, origem: 'planilha', julgados: 0 }]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('sorteios').dispatch('click');
+  await wait();
+  page.acao(0, 'Abrir distribuição').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir dados').dispatch('click');
+  assert.equal(page.campo('defesa').value, '',
+    'defesa nula é campo vazio: o "Sim" da tabela é o legado de recurso');
+
+  page.campo('defesa').value = 'Não';
+  page.form.dispatch('submit');
+  await wait();
+  assert.match(page.document.getElementById('edicaoDelta').children[0].textContent,
+    /Defesa: \(vazio\) → Não/);
+  page.form.dispatch('submit');
+  await wait();
+  assert.deepEqual(chamadas.find(c => c.caminho === 'rpc/admin_corrigir_acervo_cj').corpo.p_campos,
+    { defesa: false });
+});
+
+// A auditoria pedia 100 linhas e rotulava o resultado como se fosse o total.
+test('a auditoria pagina e diz quando ha registros anteriores', async () => {
+  const chamadas = [];
+  const pagina = tamanho => Array.from({ length: tamanho }, (_, i) => ({
+    id: 1000 - i, operacao: 'corrigir_julgado', tabela: 'julgados_cj', registro_id: 41,
+    num_processo: '202600000000001', antes: { voto: 'Manter' }, depois: { voto: 'Anular' },
+    motivo: null, feito_por: 'admin@goias.gov.br', feito_em: '2026-09-08T12:00:00Z'
+  }));
+  let primeira = true;
+  const page = adminPage({
+    api: apiDoPainel(chamadas, {
+      // 101 na primeira resposta: o registro extra é o sinal de que há mais.
+      'rpc/admin_auditoria': () => {
+        if (primeira) { primeira = false; return pagina(101); }
+        return pagina(3);
+      }
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('auditoria').dispatch('click');
+  await wait();
+
+  const botao = page.document.getElementById('btnMaisAntigas');
+  assert.equal(page.linhasDaTabela().length, 100, 'o registro extra não entra na tabela');
+  assert.match(page.document.getElementById('painelStatus').textContent,
+    /Há registros além destes/);
+  assert.equal(botao.hidden, false);
+  assert.equal(chamadas.at(-1).corpo.p_limite, 101);
+  assert.equal(chamadas.at(-1).corpo.p_antes_de, null);
+
+  botao.dispatch('click');
+  await wait();
+  assert.equal(chamadas.at(-1).corpo.p_antes_de, 901,
+    'a página seguinte parte do último id já lido');
+  assert.equal(page.linhasDaTabela().length, 103, 'a busca anterior acrescenta, não substitui');
+  assert.match(page.document.getElementById('painelStatus').textContent, /rastro completo/);
+  assert.equal(botao.hidden, true);
+});
+
+// Chave interna não identifica nada para quem opera o sistema.
+test('cada linha da auditoria diz de qual processo se trata', async () => {
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_auditoria': [{ id: 1, operacao: 'corrigir_julgado', tabela: 'julgados_cj',
+        registro_id: 3417, num_processo: '202600000000001', antes: { voto: 'Manter' },
+        depois: { voto: 'Anular' }, motivo: null, feito_por: 'admin@goias.gov.br',
+        feito_em: '2026-09-08T12:00:00Z' }]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('auditoria').dispatch('click');
+  await wait();
+
+  const registro = page.linhasDaTabela()[0].children.find(c => c.dataset.label === 'Registro');
+  assert.deepEqual(registro.children[0].children.map(no => no.textContent),
+    ['Julgado nº 3417', 'processo 202600000000001']);
+});
+
+// Falhar ao trocar de aba deixava o cabeçalho e o data-visao da aba anterior na
+// tela: a pessoa lia "não foi possível carregar" sob o título de outro lugar.
+test('falha ao trocar de aba nao deixa o titulo da aba anterior', async () => {
+  const page = adminPage({
+    api: apiDoPainel([], { 'rpc/admin_auditoria': () => { throw new Error('sem rede'); } })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('auditoria').dispatch('click');
+  await wait();
+
+  assert.equal(page.document.getElementById('painelErro').hidden, false);
+  assert.equal(page.document.getElementById('painelTitulo').textContent,
+    'Auditoria das correções');
+  assert.equal(page.document.getElementById('painelTable').dataset.visao, 'auditoria');
+});
+
+// `dialogoAtual` é zerado pelo ouvinte de `close`, e passo() continuava depois de
+// dois await: fechar a janela durante a consulta de impacto estourava um
+// TypeError dentro de uma cadeia assíncrona sem catch.
+test('fechar o dialogo durante a consulta de impacto nao estoura', async () => {
+  let liberar;
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_julgados_do_acervo': () => new Promise(resolve => { liberar = () => resolve([]); })
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('sorteios').dispatch('click');
+  await wait();
+  page.acao(0, 'Abrir distribuição').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir dados').dispatch('click');
+  page.campo('relator').value = 'CJ4';
+  page.form.dispatch('submit');
+  await wait();
+
+  page.dialogo.close();
+  liberar();
+  await wait();
+  assert.equal(page.document.getElementById('edicaoEtapaConfirmacao').hidden, true,
+    'a janela foi fechada: não há etapa 2 para montar');
+});
+
 test('o painel so entra em cena para quem tem papel de administrador', () => {
   const bootstrap = readFileSync(new URL('../assets/js/bootstrap.js', import.meta.url), 'utf8');
   assert.match(bootstrap, /exigeAdmin: true/,
@@ -3150,6 +3477,23 @@ test('o painel so entra em cena para quem tem papel de administrador', () => {
   // ali não pode derrubar a tela inicial inteira.
   assert.match(bootstrap, /else if \(document\.querySelector\('\[data-admin\]'\)\)[\s\S]*?buscarOrgaosAdministrados\(\)\.catch\(\(\) => new Set\(\)\)/,
     'na tela inicial, falha na consulta de papel esconde o atalho em vez de quebrar a página');
+  // E nada no download do script depende dela: esperá-la antes punha uma ida e
+  // volta inteira de rede no caminho crítico da tela mais visitada para decidir
+  // a visibilidade de um cartão. Fora do painel a consulta é disparada, não
+  // aguardada — o `await` dela vem depois do carregarScript.
+  assert.doesNotMatch(bootstrap,
+    /atalhoAdmin = await buscarOrgaosAdministrados/,
+    'o atalho opcional não pode voltar ao caminho crítico da tela inicial');
+  assert.ok(bootstrap.indexOf('atalhoAdmin = buscarOrgaosAdministrados')
+    < bootstrap.indexOf('await carregarScript(')
+    && bootstrap.indexOf('await carregarScript(')
+    < bootstrap.indexOf('orgaosAdmin = await atalhoAdmin'),
+    'a consulta do atalho precisa correr junto com o download do script da página');
+  // No próprio painel a ordem é a inversa de propósito: ali a consulta é o
+  // porteiro, e buscar o módulo antes dela seria baixá-lo para quem não entra.
+  assert.ok(bootstrap.indexOf('orgaosAdmin = await buscarOrgaosAdministrados')
+    < bootstrap.indexOf('await carregarScript('),
+    'no painel o papel precisa ser verificado antes de baixar o módulo');
 
   const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   assert.match(index, /data-admin/, 'o cartão do painel na tela inicial precisa do marcador');

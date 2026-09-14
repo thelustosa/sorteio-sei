@@ -87,6 +87,18 @@ const ORIGENS_LEGIVEIS = {
   ata: 'Ata publicada'
 };
 
+// O escopo da correção de número decide quantos registros mudam de nome — e se
+// o vínculo dos julgados com o acervo cai. Os três valores do banco em minúscula
+// solta não diziam isso a ninguém: 'tudo', 'acervo' e 'julgados' apareciam como
+// rótulo visível de um <select>, no único arquivo que traduz todo valor de banco
+// antes de mostrá-lo.
+const ESCOPOS = [
+  { valor: 'tudo', rotulo: 'Distribuições e julgados' },
+  { valor: 'acervo', rotulo: 'Somente as distribuições' },
+  { valor: 'julgados', rotulo: 'Somente os julgados' }
+];
+const escopoLegivel = valor => ESCOPOS.find(e => e.valor === valor)?.rotulo || valor;
+
 const campoLegivel = nome => CAMPOS_LEGIVEIS[nome] || nome;
 
 // "5 sessão(ões) registrada(s)" pede que a pessoa monte a frase de cabeça, e a
@@ -116,6 +128,7 @@ const painelTabelaWrap = document.querySelector('.admin-table-wrap');
 const painelStatusBloco = document.querySelector('.admin-panel-status');
 const adminOrgaoAtual = document.getElementById('adminOrgaoAtual');
 const btnTentarNovamente = document.getElementById('btnTentarNovamente');
+const btnMaisAntigas = document.getElementById('btnMaisAntigas');
 const btnVoltar = document.getElementById('btnVoltar');
 const btnVoltarInicio = document.getElementById('btnVoltarInicio');
 
@@ -151,7 +164,25 @@ let dialogoAtual = null;
 // etapa de confirmação era pulada justamente na operação que propaga.
 let avancando = false;
 
+// A auditoria é a única visão que cresce sem limite: uma linha por correção,
+// para sempre. Pedir "as 100 mais recentes" e rotular o resultado como "100
+// correções listadas" fazia a página parecer o rastro inteiro. Agora a página é
+// uma página, o rodapé diz isso, e o cursor que admin_auditoria já aceitava
+// (p_antes_de) busca as anteriores.
+const PAGINA_AUDITORIA = 100;
+let auditoria = { linhas: [], cursor: null, temMais: false };
+const reiniciarAuditoria = () => { auditoria = { linhas: [], cursor: null, temMais: false }; };
+
 // ── Formatação ───────────────────────────────────────────────────────────────
+// Hoje em aaaa-mm-dd pelo calendário LOCAL: toISOString() converte para UTC e,
+// em fuso negativo depois das 21h, devolveria amanhã — que é justamente o valor
+// que o `max` dos campos de data existe para barrar.
+function hojeISO() {
+  const agora = new Date();
+  const doisDigitos = n => String(n).padStart(2, '0');
+  return `${agora.getFullYear()}-${doisDigitos(agora.getMonth() + 1)}-${doisDigitos(agora.getDate())}`;
+}
+
 // aaaa-mm-dd → dd/mm/aaaa sem passar por Date: o construtor lê data pura como
 // UTC e, em fuso negativo, devolveria o dia anterior.
 function dataBR(iso) {
@@ -317,7 +348,6 @@ function desenhar(colunas, linhas) {
 function medirRolagem() {
   if (!painelTabelaWrap) return;
   const rolavel = painelTabelaWrap.scrollWidth > painelTabelaWrap.clientWidth + 1;
-  painelTabelaWrap.dataset.rolavel = rolavel ? 'sim' : 'nao';
   painelTabelaWrap.tabIndex = rolavel ? 0 : -1;
   tabelaInstrucao.hidden = !rolavel;
 }
@@ -370,7 +400,53 @@ function navegarAbas(evento) {
 }
 
 // ── Carregamento ─────────────────────────────────────────────────────────────
-async function carregar() {
+// A identidade da visão — título, descrição, dica e o data-visao que dá as
+// larguras de coluna — é decidida pelo par (aba, detalhe), e os dois são
+// conhecidos ANTES de a consulta sair. Por isso a moldura é montada aqui e não
+// dentro de cada pintar*: quando a consulta falhava, o cabeçalho continuava
+// descrevendo a aba anterior e a tabela mantinha o layout dela, de modo que a
+// pessoa lia "não foi possível carregar" sob um título de outro lugar.
+function moldura() {
+  if (detalhe?.tipo === 'sessao') {
+    definirVisaoTabela('processos-sessao');
+    return tituloDoPainel(
+      `Sessão de ${dataBR(detalhe.data)}${vazio(detalhe.pauta) ? '' : ` · pauta ${detalhe.pauta}`}`,
+      'Corrija voto, status, pauta ou a data da sessão. Religar refaz o vínculo com o acervo.',
+      'Escolha uma ação na linha do processo que precisa de ajuste.');
+  }
+  if (detalhe?.tipo === 'sorteio') {
+    definirVisaoTabela('processos-sorteio');
+    return tituloDoPainel(`Distribuição de ${dataBR(detalhe.data)}`,
+      'Corrigir alcança também os julgados que copiaram este processo; redistribuir, não.',
+      'Escolha uma ação na linha do processo que precisa de ajuste.');
+  }
+  if (aba === 'sessoes') {
+    definirVisaoTabela('sessoes');
+    return tituloDoPainel('Sessões de julgamento',
+      'Selecione a data da sessão para corrigir voto, status, pauta ou a própria data.',
+      'Abra uma sessão para consultar seus processos.');
+  }
+  if (aba === 'sorteios') {
+    definirVisaoTabela('sorteios');
+    // Aba, título, botão e rodapé diziam sorteio, distribuição e rodada para o
+    // mesmo registro. "Distribuição" é o termo que cobre os dois casos: a linha
+    // pode ter vindo do sorteio eletrônico ou de uma ata publicada, e chamar de
+    // sorteio a que veio da ata seria falso.
+    return tituloDoPainel('Distribuições registradas',
+      'Selecione a data da distribuição para corrigir como um processo foi distribuído.',
+      'Abra uma distribuição para consultar seus processos.');
+  }
+  definirVisaoTabela('auditoria');
+  return tituloDoPainel('Auditoria das correções',
+    'Somente consulta: cada linha é um registro já alterado por este painel, com o valor anterior e o posterior.',
+    'Nenhuma linha pode ser alterada aqui.');
+}
+
+// `anexando` é a busca das correções anteriores da auditoria: ela acrescenta à
+// tabela em vez de substituí-la, então não pode apagar o que já está na tela nem
+// trocar o rodapé por "Carregando…". Quem indica o andamento ali é o próprio
+// botão que a pediu.
+async function carregar({ anexando = false } = {}) {
   const meu = ++pedido;
   // Os dois botões de volta se revezam, como em julgados.js: dentro de um
   // detalhe quem volta é o Voltar (para a lista), e fora dele o Início (para o
@@ -381,9 +457,20 @@ async function carregar() {
   // à inicial, e só o botão do navegador tirava a pessoa de lá.
   btnVoltar.hidden = !detalhe;
   btnVoltarInicio.hidden = !!detalhe;
-  estado({ carregando: true });
-  painelTabela.replaceChildren();
-  painelStatus.textContent = 'Carregando…';
+  moldura();
+
+  if (anexando) {
+    alternarBotaoCarregando(btnMaisAntigas, true, 'Buscando…');
+  } else {
+    // Carregamento que não anexa SUBSTITUI: sem zerar o acumulado, repetir a
+    // consulta da auditoria — trocar de aba e voltar, "Tentar novamente", ou o
+    // recarregamento que segue uma gravação — somava as mesmas linhas de novo.
+    reiniciarAuditoria();
+    if (btnMaisAntigas) btnMaisAntigas.hidden = true;
+    estado({ carregando: true });
+    painelTabela.replaceChildren();
+    painelStatus.textContent = 'Carregando…';
+  }
 
   try {
     const linhas = await buscar();
@@ -393,6 +480,12 @@ async function carregar() {
     pintar(linhas);
   } catch (err) {
     if (meu !== pedido) return;
+    // Anexando, a tabela na tela continua válida: trocá-la pelo estado de erro
+    // apagaria as correções já lidas por causa de uma página que não veio.
+    if (anexando) {
+      aviso(`Não foi possível buscar as correções anteriores: ${err.message}`, 'erro');
+      return;
+    }
     painelTabela.replaceChildren();
     medirRolagem();
     painelStatus.textContent = 'Não foi possível carregar.';
@@ -406,6 +499,8 @@ async function carregar() {
       erro: 'Não foi possível carregar os dados. Verifique sua conexão e tente novamente.',
       detalhe: err.message
     });
+  } finally {
+    if (anexando) alternarBotaoCarregando(btnMaisAntigas, false, 'Mostrar correções anteriores');
   }
 }
 
@@ -431,7 +526,12 @@ function buscar() {
   }
   if (aba === 'sessoes') return api('rpc/admin_sessoes', { method: 'POST', body: corpo() });
   if (aba === 'sorteios') return api('rpc/admin_sorteios', { method: 'POST', body: corpo() });
-  return api('rpc/admin_auditoria', { method: 'POST', body: corpo({ p_limite: 100 }) });
+  // Um a mais que a página: se vier, é porque existe registro anterior — e é
+  // como se sabe disso sem uma segunda consulta de contagem.
+  return api('rpc/admin_auditoria', {
+    method: 'POST',
+    body: corpo({ p_limite: PAGINA_AUDITORIA + 1, p_antes_de: auditoria.cursor })
+  });
 }
 
 function pintar(linhas) {
@@ -464,10 +564,6 @@ function semRegistros(titulo, texto, dica = '') {
 }
 
 function pintarSessoes(linhas) {
-  definirVisaoTabela('sessoes');
-  tituloDoPainel('Sessões de julgamento',
-    'Selecione a data da sessão para corrigir voto, status, pauta ou a própria data.',
-    'Abra uma sessão para consultar seus processos.');
   if (!linhas.length) {
     return semRegistros('Nenhuma sessão registrada',
       'Assim que uma pauta da AGR for sincronizada, ela aparece aqui.');
@@ -496,15 +592,7 @@ function pintarSessoes(linhas) {
   painelStatus.textContent = `${plural(linhas.length, 'sessão registrada', 'sessões registradas')}.`;
 }
 
-// Aba, título, botão e rodapé diziam sorteio, distribuição e rodada para o mesmo
-// registro. "Distribuição" é o termo que cobre os dois casos: a linha pode ter
-// vindo do sorteio eletrônico ou de uma ata publicada, e chamar de sorteio a que
-// veio da ata seria falso.
 function pintarSorteios(linhas) {
-  definirVisaoTabela('sorteios');
-  tituloDoPainel('Distribuições registradas',
-    'Selecione a data da distribuição para corrigir como um processo foi distribuído.',
-    'Abra uma distribuição para consultar seus processos.');
   if (!linhas.length) {
     return semRegistros('Nenhuma distribuição registrada',
       'O acervo deste colegiado ainda está vazio.');
@@ -542,11 +630,7 @@ function pintarSorteios(linhas) {
 }
 
 function pintarProcessosDaSessao(linhas) {
-  definirVisaoTabela('processos-sessao');
   const v = VOCABULARIO[orgao];
-  tituloDoPainel(`Sessão de ${dataBR(detalhe.data)}${vazio(detalhe.pauta) ? '' : ` · pauta ${detalhe.pauta}`}`,
-    'Corrija voto, status, pauta ou a data da sessão. Religar refaz o vínculo com o acervo.',
-    'Escolha uma ação na linha do processo que precisa de ajuste.');
   if (!linhas.length) {
     return semRegistros('Nenhum processo nesta sessão',
       'A sessão não tem processos registrados.');
@@ -558,6 +642,11 @@ function pintarProcessosDaSessao(linhas) {
     { rotulo: v.destino, eixo: 'centro' },
     { rotulo: 'Voto', eixo: 'centro' },
     { rotulo: 'Status', eixo: 'centro' },
+    // "Religar ao acervo" aparece em toda linha, e o julgado SEM vínculo — o caso
+    // que a operação existe para resolver — era desenhado igual ao que está
+    // vinculado. acervo_id e data_distribuicao já vinham na resposta de
+    // admin_processos_sessao e eram descartados aqui.
+    { rotulo: 'Vínculo', eixo: 'centro' },
     'Atualizado por'
   ];
 
@@ -574,6 +663,9 @@ function pintarProcessosDaSessao(linhas) {
       destino,
       celula(valorOuSelo(linha.voto, 'info')),
       celula(valorOuSelo(linha.status, linha.status === 'Julgado' ? 'sucesso' : 'alerta')),
+      celula(linha.acervo_id
+        ? badge(`Distribuição de ${dataBR(linha.data_distribuicao)}`, 'neutro')
+        : badge('Sem distribuição', 'alerta')),
       celula(linha.atualizado_por ? `${linha.atualizado_por} · ${dataHoraBR(linha.atualizado_em)}` : '—',
         'td', 'small')
     ];
@@ -582,11 +674,7 @@ function pintarProcessosDaSessao(linhas) {
 }
 
 function pintarProcessosDoSorteio(linhas) {
-  definirVisaoTabela('processos-sorteio');
   const v = VOCABULARIO[orgao];
-  tituloDoPainel(`Distribuição de ${dataBR(detalhe.data)}`,
-    'Corrigir alcança também os julgados que copiaram este processo; redistribuir, não.',
-    'Escolha uma ação na linha do processo que precisa de ajuste.');
   if (!linhas.length) {
     return semRegistros('Nenhum processo nesta distribuição',
       'A distribuição não tem processos registrados.');
@@ -625,11 +713,17 @@ function pintarProcessosDoSorteio(linhas) {
   painelStatus.textContent = `${plural(linhas.length, 'processo', 'processos')} nesta distribuição.`;
 }
 
-function pintarAuditoria(linhas) {
-  definirVisaoTabela('auditoria');
-  tituloDoPainel('Auditoria das correções',
-    'Somente consulta: cada linha é um registro já alterado por este painel, com o valor anterior e o posterior.',
-    'Nenhuma linha pode ser alterada aqui.');
+function pintarAuditoria(pagina) {
+  // A resposta traz um registro além da página justamente para revelar que há
+  // mais; ele não entra na tabela.
+  auditoria.temMais = pagina.length > PAGINA_AUDITORIA;
+  auditoria.linhas = auditoria.linhas.concat(
+    auditoria.temMais ? pagina.slice(0, PAGINA_AUDITORIA) : pagina);
+  auditoria.cursor = auditoria.linhas.at(-1)?.id ?? null;
+
+  const linhas = auditoria.linhas;
+  if (btnMaisAntigas) btnMaisAntigas.hidden = !auditoria.temMais;
+
   if (!linhas.length) {
     // Continua verdadeiro com a lista vazia: a auditoria nunca aceita edição.
     return semRegistros('Nenhuma correção registrada',
@@ -646,7 +740,20 @@ function pintarAuditoria(linhas) {
         `${campoLegivel(campo)}: ${legivel(linha.antes?.[campo])} → ${legivel(linha.depois?.[campo])}`;
       mudancas.appendChild(item);
     });
-    const registro = `${TABELAS_LEGIVEIS[linha.tabela] || linha.tabela} nº ${linha.registro_id}`;
+
+    // A chave interna sozinha ("Julgado nº 3417") não liga a linha a processo
+    // nenhum, e cruzar o rastro com um processo exigia SQL direto no banco.
+    // admin_auditoria devolve o número atual do registro justamente para isto.
+    const registro = document.createElement('div');
+    const tipo = document.createElement('span');
+    tipo.textContent = `${TABELAS_LEGIVEIS[linha.tabela] || linha.tabela} nº ${linha.registro_id}`;
+    const processo = document.createElement('span');
+    processo.className = 'admin-registro-processo';
+    processo.textContent = vazio(linha.num_processo)
+      ? 'processo não localizado'
+      : `processo ${linha.num_processo}`;
+    registro.append(tipo, processo);
+
     return [
       celula(dataHoraBR(linha.feito_em), 'td', 'small'),
       celula(OPERACOES_LEGIVEIS[linha.operacao] || linha.operacao),
@@ -656,7 +763,12 @@ function pintarAuditoria(linhas) {
       celula(ou(linha.feito_por), 'td', 'small')
     ];
   }));
-  painelStatus.textContent = `${plural(linhas.length, 'correção listada', 'correções listadas')}.`;
+
+  // "100 correções listadas" lia-se como o total. O rodapé precisa dizer se o
+  // que está na tela é o rastro inteiro ou apenas a parte mais recente dele.
+  painelStatus.textContent = auditoria.temMais
+    ? `${plural(linhas.length, 'correção listada', 'correções listadas')}, das mais recentes para as anteriores. Há registros além destes.`
+    : `${plural(linhas.length, 'correção listada', 'correções listadas')} — rastro completo.`;
 }
 
 // ── Diálogo de edição ────────────────────────────────────────────────────────
@@ -705,10 +817,14 @@ function campoSelecao({ nome, rotulo, valor, opcoes, rotuloVazio = '— em branc
   branco.textContent = rotuloVazio;
   select.appendChild(branco);
 
+  // Uma opção é ou o próprio valor — voto, status, cadeira: o que o banco
+  // guarda é o que a pessoa lê —, ou `{ valor, rotulo }`, para quando o valor do
+  // banco não é frase nenhuma em português.
   opcoes.forEach(opcao => {
     const item = document.createElement('option');
-    item.value = String(opcao);
-    item.textContent = String(opcao);
+    const valorBruto = typeof opcao === 'object' ? opcao.valor : opcao;
+    item.value = String(valorBruto);
+    item.textContent = String(typeof opcao === 'object' ? opcao.rotulo : opcao);
     select.appendChild(item);
   });
   select.value = vazio(valor) ? '' : String(valor);
@@ -753,6 +869,11 @@ async function avancar() {
   avancando = true;
   try {
     await passo();
+  } catch (err) {
+    // Nenhum caminho de passo() deveria chegar aqui, mas um `await` num diálogo
+    // que a pessoa fechou no meio é justamente o tipo de falha que se perdia
+    // como rejeição não tratada — sem nada na tela e sem nada no console.
+    console.error(err);
   } finally {
     avancando = false;
   }
@@ -760,12 +881,17 @@ async function avancar() {
 
 async function passo() {
   edicaoErro.hidden = true;
+  // O diálogo que esta chamada está conduzindo. Fechar a janela zera
+  // `dialogoAtual` (ouvinte de `close`), e há dois `await` abaixo: sem comparar a
+  // referência depois deles, um Esc durante a consulta de impacto fazia a
+  // continuação escrever em `null`.
+  const atual = dialogoAtual;
 
   // Etapa 1 → 2: monta o delta e mostra a confirmação.
-  if (!dialogoAtual.delta) {
+  if (!atual.delta) {
     let delta;
     try {
-      delta = dialogoAtual.montarDelta();
+      delta = atual.montarDelta();
     } catch (err) {
       mostrarErroNoDialogo(err.message);
       return;
@@ -775,19 +901,25 @@ async function passo() {
       return;
     }
 
-    edicaoDelta.replaceChildren(...delta.map(({ rotulo, antes, depois }) => {
+    // Uma linha do delta é uma mudança de valor ("Voto: Manter → Anular") ou uma
+    // escolha que não substitui valor nenhum — o alcance da renumeração, por
+    // exemplo, que saía como "Alcance: — → tudo" e emprestava a forma antes→
+    // depois a algo que nunca teve um "antes".
+    edicaoDelta.replaceChildren(...delta.map(({ rotulo, antes, depois, texto }) => {
       const item = document.createElement('li');
-      item.textContent = `${rotulo}: ${legivel(antes)} → ${legivel(depois)}`;
+      item.textContent = texto === undefined
+        ? `${rotulo}: ${legivel(antes)} → ${legivel(depois)}`
+        : `${rotulo}: ${texto}`;
       return item;
     }));
 
-    if (dialogoAtual.impacto) {
+    if (atual.impacto) {
       // O botão vira indicador durante a consulta: rotulado "Revisar alteração"
       // e clicável, ele dizia que a etapa 1 ainda não terminou enquanto a
       // resposta vinha.
       alternarBotaoCarregando(btnAvancar, true, 'Verificando…');
       try {
-        const afetados = await dialogoAtual.impacto();
+        const afetados = await atual.impacto();
         if (afetados.length) {
           edicaoImpactoLista.replaceChildren(...afetados.map(texto => {
             const item = document.createElement('li');
@@ -804,9 +936,12 @@ async function passo() {
       }
     }
 
+    // A janela foi fechada enquanto o impacto vinha: não há etapa 2 para montar.
+    if (dialogoAtual !== atual) return;
+
     // Só aqui a etapa 1 está de fato concluída: marcar o delta antes da espera
     // acima deixava a etapa 2 alcançável enquanto a tela ainda mostrava a 1.
-    dialogoAtual.delta = delta;
+    atual.delta = delta;
     edicaoEtapaCampos.hidden = true;
     edicaoEtapaConfirmacao.hidden = false;
     edicaoEtapaRotulo.textContent = 'Etapa 2 de 2';
@@ -820,16 +955,21 @@ async function passo() {
 
   // Etapa 2: grava.
   alternarBotaoCarregando(btnAvancar, true, 'Gravando…');
-  const descrever = dialogoAtual.mensagem;
+  const descrever = atual.mensagem;
   try {
     // O que o gatilho de derivação fez por baixo da correção só é sabido depois
     // da escrita — é o que a função devolve em `alterados` e `propagados`, e o
     // motivo de a migração dizer que "nada é silencioso". Descartar o retorno
     // deixava a divergência para aparecer em verificacao_cj.sql, que é
     // exatamente o que ela existe para evitar.
-    const resultado = await dialogoAtual.gravar(edicaoMotivo.value.trim() || null);
+    const resultado = await atual.gravar(edicaoMotivo.value.trim() || null);
     dialogo.close();
-    aviso((descrever && descrever(resultado)) || 'Alteração gravada.', 'sucesso');
+    // `mensagem` devolve texto, ou `{ texto, tom }` quando o que o banco fez por
+    // baixo não é motivo de comemoração — um julgado que perdeu o vínculo com o
+    // acervo não pode sair no mesmo verde de uma correção bem-sucedida.
+    const anuncio = descrever && descrever(resultado);
+    const { texto, tom } = typeof anuncio === 'string' ? { texto: anuncio } : (anuncio || {});
+    aviso(texto || 'Alteração gravada.', tom || 'sucesso');
     await carregar();
   } catch (err) {
     mostrarErroNoDialogo(err.message);
@@ -847,6 +987,12 @@ function abrirCorrecaoDeJulgado(linha) {
     campoSelecao({ nome: 'status', rotulo: 'Status', valor: linha.status, opcoes: v.status }),
     campoTexto({
       nome: 'data_sessao', rotulo: 'Data da sessão', tipo: 'date', valor: detalhe.data,
+      // O `max` é a mesma regra que admin_corrigir_julgado_* aplica no banco.
+      // Sem ele, a única resposta a uma data futura era a frase crua do Postgres
+      // ('sessao no futuro: 2027-01-01') aparecendo na tela — a única regra desta
+      // classe que não tinha frase em português, ao lado de data em branco e
+      // formato de cadeira, que têm.
+      atributos: { max: hojeISO() },
       // Quem religa é o gatilho de derivação, DURANTE a escrita: na confirmação
       // isso ainda não aconteceu. Quem informa é o aviso de gravação, montado
       // com o `alterados` que a função devolve.
@@ -891,6 +1037,9 @@ function abrirCorrecaoDeJulgado(linha) {
       if (alterados.data_sessao === null) {
         throw new Error('A data da sessão não pode ficar em branco.');
       }
+      if (alterados.data_sessao && alterados.data_sessao > hojeISO()) {
+        throw new Error('A data da sessão não pode ser futura.');
+      }
       this.alterados = alterados;
       return delta;
     },
@@ -900,9 +1049,27 @@ function abrirCorrecaoDeJulgado(linha) {
         body: JSON.stringify({ p_id: linha.id, p_campos: this.alterados, p_motivo: motivo })
       });
     },
-    mensagem: resultado => resultado?.alterados?.acervo_id
-      ? 'Alteração gravada. A data nova religou o julgado a outra distribuição.'
-      : null
+    // O gatilho reescreve acervo_id em TODA correção — data_sessao entra sempre na
+    // lista do UPDATE, e `update of` dispara pela presença da coluna, não pela
+    // mudança de valor. Então `alterados.acervo_id` presente não significa que
+    // alguém mexeu na data, e o vínculo pode ter CAÍDO: dizer "religou o julgado
+    // a outra distribuição" nesse caso anunciava como sucesso a perda do vínculo,
+    // que é o AVISO de verificacao_cj.sql.
+    mensagem(resultado) {
+      const vinculo = resultado?.alterados?.acervo_id;
+      if (!vinculo) return null;
+      if (vazio(vinculo.depois)) {
+        return {
+          texto: 'Alteração gravada, mas o julgado ficou SEM distribuição vinculada: '
+            + 'nenhuma distribuição deste processo corresponde à data gravada. '
+            + 'Use "Religar ao acervo" ou corrija a data da distribuição.',
+          tom: 'atencao'
+        };
+      }
+      return vazio(vinculo.antes)
+        ? 'Alteração gravada. O julgado passou a ter uma distribuição vinculada.'
+        : 'Alteração gravada. A data nova religou o julgado a outra distribuição.';
+    }
   });
 }
 
@@ -916,7 +1083,7 @@ function abrirAlteracaoDeAcervo(linha, modo) {
       dica: orgao === 'CJ' ? 'Cadeira, no formato CJ1…CJ5.' : 'Unidade, no formato CREG1…CREG4.'
     }),
     campoTexto({ nome: 'data_distribuicao', rotulo: 'Data da distribuição', tipo: 'date',
-      valor: detalhe.data }),
+      valor: detalhe.data, atributos: { max: hojeISO() } }),
     campoTexto({ nome: 'assunto', rotulo: 'Assunto', valor: linha.assunto }),
     campoTexto({ nome: 'ordem', rotulo: 'Ordem no sorteio', tipo: 'number', valor: linha.ordem,
       atributos: { min: '1', step: '1' } })
@@ -925,10 +1092,16 @@ function abrirAlteracaoDeAcervo(linha, modo) {
   // A 6ª coluna muda de nome e de natureza entre os colegiados: na Câmara é a
   // DEFESA, booleana; no Conselho é o RECURSO, texto. Não é o mesmo campo com
   // rótulo trocado, então nem o controle é o mesmo.
+  //
+  // E o valor vem de `linha.defesa`, a coluna booleana, não de `linha.decisao`:
+  // essa outra CAI no texto legado de `recurso` quando a defesa é nula (é o que
+  // a tabela mostra, e está certo lá). Lido como "antes" do formulário, o legado
+  // fazia a confirmação prometer "Defesa: Sim → Não" para uma linha que vai de
+  // vazio para Não — divergindo da auditoria, que registra a verdade.
   if (orgao === 'CJ') {
     campos.splice(2, 0, campoSelecao({
       nome: 'defesa', rotulo: 'Defesa', opcoes: ['Sim', 'Não'],
-      valor: linha.decisao === 'Sim' ? 'Sim' : linha.decisao === 'Não' ? 'Não' : null
+      valor: linha.defesa === true ? 'Sim' : linha.defesa === false ? 'Não' : null
     }));
   } else {
     campos.splice(2, 0, campoTexto({ nome: 'recurso', rotulo: 'Recurso', valor: linha.decisao }));
@@ -940,7 +1113,7 @@ function abrirAlteracaoDeAcervo(linha, modo) {
     data_distribuicao: detalhe.data,
     assunto: linha.assunto,
     ordem: linha.ordem,
-    defesa: linha.decisao === 'Sim' ? 'Sim' : linha.decisao === 'Não' ? 'Não' : null,
+    defesa: linha.defesa === true ? 'Sim' : linha.defesa === false ? 'Não' : null,
     recurso: linha.decisao,
     interessado: linha.interessado
   };
@@ -985,6 +1158,9 @@ function abrirAlteracaoDeAcervo(linha, modo) {
       if (alterados.data_distribuicao === null) {
         throw new Error('A data da distribuição não pode ficar em branco.');
       }
+      if (alterados.data_distribuicao && alterados.data_distribuicao > hojeISO()) {
+        throw new Error('A data da distribuição não pode ser futura.');
+      }
       if (v.assuntoObrigatorio && alterados.assunto === null) {
         throw new Error('O assunto não pode ficar em branco.');
       }
@@ -1023,6 +1199,11 @@ function abrirAlteracaoDeAcervo(linha, modo) {
 
 // O caso que descartou a busca por número: quando o próprio número está errado,
 // só a navegação por data chega até ele.
+//
+// E a correção NÃO é a edição da linha em que a pessoa clicou: alcança toda
+// distribuição e todo julgado do colegiado que carregam aquele número. O diálogo
+// abria a partir de uma linha só e não dizia nada disso — por isso a etapa 2
+// lista os registros alcançados, lidos de admin_registros_do_processo.
 function abrirCorrecaoDeNumero(numAtual) {
   const campos = [
     campoTexto({
@@ -1032,13 +1213,13 @@ function abrirCorrecaoDeNumero(numAtual) {
     }),
     campoSelecao({
       nome: 'escopo', rotulo: 'Onde corrigir', valor: 'tudo', rotuloVazio: '— selecione —',
-      opcoes: ['tudo', 'acervo', 'julgados']
+      opcoes: ESCOPOS
     })
   ];
 
   abrirDialogo({
     titulo: 'Corrigir número do processo',
-    resumo: `Número atual: ${numAtual}`,
+    resumo: `Número atual: ${numAtual} · a correção alcança todos os registros com este número`,
     campos,
     montarDelta() {
       const novo = valorDoCampo('num_novo');
@@ -1047,15 +1228,39 @@ function abrirCorrecaoDeNumero(numAtual) {
         throw new Error('O número precisa ter 15 dígitos, só dígitos.');
       }
       if (novo === numAtual) throw new Error('O número novo é igual ao atual.');
-      if (!['tudo', 'acervo', 'julgados'].includes(escopo)) {
+      if (!ESCOPOS.some(e => e.valor === escopo)) {
         throw new Error('Escolha onde a correção deve valer.');
       }
       this.novo = novo;
       this.escopo = escopo;
       return [
         { rotulo: 'Número do processo', antes: numAtual, depois: novo },
-        { rotulo: 'Alcance', antes: '—', depois: escopo }
+        // `texto` e não antes→depois: o alcance não substitui valor nenhum, e
+        // "Alcance: — → tudo" emprestava a forma de uma mudança a uma escolha.
+        { rotulo: 'Alcance', texto: escopoLegivel(escopo) }
       ];
+    },
+    async impacto() {
+      const registros = await api('rpc/admin_registros_do_processo', {
+        method: 'POST',
+        body: JSON.stringify({ p_colegiado: orgao, p_num_processo: numAtual })
+      });
+      const alcancados = (Array.isArray(registros) ? registros : []).filter(r =>
+        this.escopo === 'tudo' || r.origem_registro === this.escopo);
+
+      const itens = alcancados.map(r => r.origem_registro === 'acervo'
+        ? `Distribuição de ${dataBR(r.data_referencia)} — ${ou(r.destino)}`
+        : `Julgado da sessão de ${dataBR(r.data_referencia)}${vazio(r.pauta) ? '' : ` · pauta ${r.pauta}`}`
+          + (r.vinculado ? '' : ' — hoje sem distribuição vinculada'));
+
+      // Renumerar só os julgados deixa o gatilho sem acervo para encontrar, e o
+      // vínculo cai. É consequência, não erro — mas confirmar sem saber dela é o
+      // que a etapa de revisão existe para evitar.
+      if (this.escopo === 'julgados' && alcancados.some(r => r.vinculado)) {
+        itens.push('Atenção: sem renumerar as distribuições, os julgados vinculados '
+          + 'perdem o vínculo com o acervo.');
+      }
+      return itens;
     },
     gravar(motivo) {
       return api(`rpc/admin_corrigir_processo_${VOCABULARIO[orgao].sufixo}`, {
@@ -1065,25 +1270,77 @@ function abrirCorrecaoDeNumero(numAtual) {
           p_escopo: this.escopo, p_motivo: motivo
         })
       });
+    },
+    // A função devolve os ids de cada grupo que tocou, e o painel os descartava:
+    // o aviso caía no 'Alteração gravada.' genérico depois de renumerar sete
+    // registros e gravar sete linhas de auditoria.
+    mensagem(resultado) {
+      const quantos = chave => (Array.isArray(resultado?.[chave]) ? resultado[chave].length : 0);
+      const partes = [];
+      if (quantos('acervo')) {
+        partes.push(plural(quantos('acervo'), 'distribuição renumerada', 'distribuições renumeradas'));
+      }
+      if (quantos('julgados')) {
+        partes.push(plural(quantos('julgados'), 'julgado renumerado', 'julgados renumerados'));
+      }
+      if (!partes.length) return null;
+
+      const desvinculados = quantos('desvinculados');
+      const texto = `Alteração gravada: ${partes.join(' e ')}.`
+        + (desvinculados
+          ? ` ${plural(desvinculados, 'julgado ficou', 'julgados ficaram')} sem distribuição `
+            + 'vinculada — use "Religar ao acervo" quando a distribuição existir.'
+          : '');
+      return desvinculados ? { texto, tom: 'atencao' } : texto;
     }
   });
 }
 
+// A operação não recebe campo nenhum: grava null nos derivados e deixa o gatilho
+// rederivá-los. Por isso a confirmação não tem um "antes → depois" de valor — o
+// que ela precisa dizer é de onde o julgado sai HOJE, porque religar um julgado
+// já vinculado à distribuição certa é um não-efeito que ainda assim reescreve
+// atualizado_por, e a tela não distinguia os dois casos.
 function religarJulgado(linha) {
+  const vinculado = !!linha.acervo_id;
   abrirDialogo({
     titulo: 'Religar ao acervo',
-    resumo: `Processo ${linha.num_processo} · os campos copiados voltam a sair da distribuição vinculada`,
+    resumo: `Processo ${linha.num_processo} · `
+      + (vinculado
+        ? `vinculado hoje à distribuição de ${dataBR(linha.data_distribuicao)}`
+        : 'hoje sem distribuição vinculada'),
     campos: [],
-    montarDelta: () => ([{
-      rotulo: 'Campos derivados',
-      antes: 'como estão hoje no julgado',
-      depois: 'rederivados do acervo'
-    }]),
+    montarDelta: () => ([
+      {
+        rotulo: 'Distribuição vinculada',
+        texto: vinculado
+          ? `distribuição de ${dataBR(linha.data_distribuicao)} — reprocurada pelo número e pela data da sessão`
+          : 'nenhuma — o gatilho procura de novo pelo número e pela data da sessão'
+      },
+      {
+        rotulo: 'Campos derivados',
+        texto: 'rederivados da distribuição que o gatilho encontrar'
+      }
+    ]),
     gravar(motivo) {
       return api(`rpc/admin_religar_julgado_${VOCABULARIO[orgao].sufixo}`, {
         method: 'POST',
         body: JSON.stringify({ p_id: linha.id, p_motivo: motivo })
       });
+    },
+    // Religar não é garantia de vínculo: se nenhuma distribuição corresponde, o
+    // gatilho devolve null e o julgado continua solto. Dizer "gravado" e nada
+    // mais deixava a pessoa sem saber em qual dos dois casos caiu.
+    mensagem(resultado) {
+      const vinculo = resultado?.alterados?.acervo_id;
+      const aindaSolto = vinculo ? vazio(vinculo.depois) : !vinculado;
+      return aindaSolto
+        ? {
+            texto: 'Religação gravada, mas nenhuma distribuição deste processo corresponde '
+              + 'à data da sessão: o julgado continua sem vínculo.',
+            tom: 'atencao'
+          }
+        : 'Religação gravada. Os campos derivados voltaram a sair da distribuição vinculada.';
     }
   });
 }
@@ -1114,6 +1371,12 @@ function inicializarAdmin(orgaosAdmin) {
     carregar();
   });
   btnTentarNovamente.addEventListener('click', () => carregar());
+  // A auditoria é a única lista que não cabe numa consulta só. O botão pede a
+  // página anterior pelo cursor que admin_auditoria já aceitava, e ACRESCENTA à
+  // tabela: quem está lendo o rastro não perde o que já leu.
+  if (btnMaisAntigas) {
+    btnMaisAntigas.addEventListener('click', () => carregar({ anexando: true }));
+  }
   // A tabela cabe ou não conforme a largura da janela, então a dica de rolagem
   // acompanha a medição real — não o breakpoint. O guard existe porque este
   // arquivo também roda no escopo isolado dos testes, sem o global do navegador.
