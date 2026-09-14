@@ -3301,12 +3301,12 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 /* Sete colunas desde que "Vínculo" entrou entre o status e a autoria: sem ela, o
    julgado sem distribuição vinculada — o caso que "Religar ao acervo" existe
    para resolver — era desenhado igual ao que está no lugar. */
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(1) { width: 15%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(1) { width: 13%; }
 .admin-table[data-visao='processos-sessao'] thead th:nth-child(2) { width: 30%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(3) { width: 8%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(4) { width: 9%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(5) { width: 11%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(6) { width: 13%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(3) { width: 7%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(4) { width: 8%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(5) { width: 10%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(6) { width: 18%; }
 .admin-table[data-visao='processos-sessao'] thead th:nth-child(7) { width: 14%; }
 
 .admin-table[data-visao='processos-sorteio'] thead th:nth-child(1) { width: 7%; }

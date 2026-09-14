@@ -2566,6 +2566,14 @@ test('tabela administrativa explica a rolagem e mantem as acoes acessiveis', () 
   assert.match(css, /\.admin-table-wrap:focus-visible\s*\{[^}]*outline:/s);
   assert.match(css, /\.admin-table\s*\{[^}]*table-layout:\s*fixed/s,
     'larguras previsíveis impedem que o conteúdo abra vãos diferentes entre colunas');
+  const larguraMinimaSessao = Number(css.match(
+    /\.admin-table\[data-visao='processos-sessao'\]\s*\{[^}]*min-width:\s*(\d+)px/
+  )?.[1]);
+  const percentualVinculo = Number(css.match(
+    /\.admin-table\[data-visao='processos-sessao'\] thead th:nth-child\(6\)\s*\{[^}]*width:\s*([\d.]+)%/
+  )?.[1]);
+  assert.ok(larguraMinimaSessao * percentualVinculo / 100 >= 212,
+    'a coluna Vínculo precisa conter o selo completo sem invadir Atualizado por');
   assert.match(css,
     /\.admin-table th\.col-acoes,\s*\.admin-table td\.col-acoes\s*\{[^}]*text-align:\s*center/s,
     'cabeçalho e botões devem compartilhar o centro da coluna');
@@ -2600,6 +2608,10 @@ test('tabelas administrativas nomeiam a coluna e as operacoes sem abreviacoes am
   const cabecalhoDetalhe = page.document.getElementById('painelTable').children[0].children[0];
   assert.deepEqual(cabecalhoDetalhe.children.map(celula => celula.textContent),
     ['Processo', 'Ações', 'Relator', 'Voto', 'Status', 'Vínculo', 'Atualizado por']);
+  assert.ok(cabecalhoDetalhe.children.at(-1).classList.contains('col-centro'),
+    'o cabeçalho Atualizado por precisa compartilhar o eixo central dos valores');
+  assert.ok(page.linhasDaTabela().every(linha => linha.children.at(-1).classList.contains('col-centro')),
+    'os valores de Atualizado por precisam ficar centralizados sob o cabeçalho');
   const botoes = page.linhasDaTabela()[0].children[1].children[0].children;
   assert.deepEqual(botoes.map(botao => botao.textContent),
     ['Corrigir dados', 'Corrigir número', 'Religar ao acervo']);
