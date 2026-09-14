@@ -36,7 +36,6 @@ histórico registrou, e o gatilho do banco só preenche o que vier em branco.
 import collections
 import sys
 import unicodedata
-from datetime import date, datetime
 from pathlib import Path
 
 import openpyxl

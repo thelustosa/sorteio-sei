@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=fcc93a20ea" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=3caa5edd4e" />
   <script>
     (function () {
       try {
@@ -35,8 +35,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./acervo-cj.html", "./acervo-creg.html", "./historico-cj.html", "./historico-creg.html", "./julgados-cj.html", "./julgados-creg.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=fcc93a20ea"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=fcc93a20ea"></script>
+  <script defer src="assets/js/supabase.min.js?v=3caa5edd4e"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=3caa5edd4e"></script>
 </head>
 
 <body data-page="sorteio">
@@ -80,19 +80,65 @@
   </nav>
 
   <main id="conteudo-principal" class="container pb-36" tabindex="-1">
-    <div class="card">
-      <div id="loginScreen">
-        <h2>Acesso restrito</h2>
-        <p>Identifique-se para realizar o sorteio de processos.</p>
-        <form id="loginForm">
-          <label for="loginEmail">E-mail</label>
-          <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
-          <label for="loginSenha">Senha</label>
-          <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
-          <button id="btnEntrar" type="submit">Entrar</button>
-          <div id="loginErro" role="alert" aria-live="assertive"></div>
-        </form>
+    <!-- Fora da caixa branca dos quatro cards, de propósito: o painel não é um
+         quinto caminho da tela inicial — é a porta de manutenção de quem
+         administra, e a tela inicial tem QUATRO canais (ver The Four Card
+         Channels Rule em DESIGN.md). Pousa no fundo da página, no canto
+         superior direito, com largura própria — acima da caixa e encostado à
+         direita dela; os quatro seguem intocados, em largura cheia, abaixo.
+
+         Só para quem tem papel de administrador. Diferente de data-orgao, que
+         separa CJ de CREG, data-admin some inteiro para quem não é admin — o
+         painel escolhe o colegiado por dentro. Esconder o cartão é
+         conveniência: quem recusa é o banco, em toda RPC administrativa.
+
+         Ele saiu de dentro de #modeSelector, mas continua preso à mesma tela:
+         o CSS o esconde enquanto o seletor de modalidade estiver escondido, e
+         assim o atributo hidden segue com um dono só (o bootstrap, que decide
+         a permissão) em vez de dois. -->
+    <section id="cardAdmin" class="selection-card selection-card-acervo selection-card-admin"
+      aria-labelledby="adminSelectorTitle" data-admin hidden>
+      <div class="selection-copy">
+        <h2 id="adminSelectorTitle">Painel administrativo</h2>
+        <p class="mode-description">Corrija registros já gravados pelo sorteio ou vindos das pautas publicadas pela AGR.</p>
       </div>
+      <div class="buttons-wrapper single-choice" role="group" aria-label="Manutenção de dados">
+        <a id="btnAdmin" class="mode-button mode-button-outline" href="./admin.html">Abrir painel administrativo</a>
+      </div>
+    </section>
+
+    <div class="card login-host">
+      <section id="loginScreen" class="app-login" data-login-art="sorteio" aria-labelledby="loginTitulo">
+        <div class="app-login-intro">
+          <span class="app-login-eyebrow">Nova distribuição</span>
+          <div class="app-login-symbol" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="16" cy="6" r="3"></circle><circle cx="7" cy="24" r="3"></circle><circle cx="25" cy="24" r="3"></circle>
+              <path d="M14 8.5 8.5 21M18 8.5 23.5 21M10 24h12"></path>
+            </svg>
+          </div>
+          <h2 id="loginTitulo">Distribuição justa, resultado auditável</h2>
+          <p>Prepare um novo sorteio entre as unidades do colegiado com equilíbrio e rastreabilidade.</p>
+          <ul class="app-login-assurances">
+            <li><span aria-hidden="true">✓</span>Balanceamento por quantidade e assunto</li>
+            <li><span aria-hidden="true">✓</span>Resultado registrado com autor e horário</li>
+          </ul>
+        </div>
+
+        <div class="app-login-form-card">
+          <span class="app-login-eyebrow">Identificação institucional</span>
+          <h2>Entrar para sortear</h2>
+          <p>Use suas credenciais para iniciar uma distribuição.</p>
+          <form id="loginForm">
+            <label for="loginEmail">E-mail</label>
+            <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
+            <label for="loginSenha">Senha</label>
+            <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+            <button id="btnEntrar" type="submit">Acessar sorteio</button>
+            <div id="loginErro" role="alert" aria-live="assertive"></div>
+          </form>
+        </div>
+      </section>
 
       <div id="sessionLoading" class="session-loading" data-sessao hidden></div>
 
@@ -221,7 +267,7 @@
         Todos os sorteios são auditáveis para garantir transparência.
       </p>
       <div class="footer-meta">
-        <div class="footer-version">Versão 3.8</div>
+        <div class="footer-version">Versão 3.9</div>
         <p class="footer-credit">Desenvolvido por <strong>Lucas Lustosa Coelho e Leonardo Ferreira Amichi</strong>.</p>
       </div>
     </div>

@@ -255,4 +255,59 @@ assert.ok(entradaDoIndicador, 'não achei o animation-delay de spinner-fade-in n
 assert.equal(Number(entradaDoIndicador[1]), atrasoNoJs,
   'ATRASO_DO_INDICADOR divergiu do animation-delay de spinner-fade-in');
 
+// Cada destino protegido precisa explicar o contexto em que a pessoa está entrando.
+// Se um HTML voltar ao bloco genérico, a autenticação ainda funciona, mas a tela
+// perde a identidade e a orientação específicas pedidas para aquele fluxo.
+// admin.html entra na lista: ficar de fora era o que permitia ao painel manter
+// um sistema de login paralelo (.admin-login-*), duplicando esta composição
+// inteira sem nenhum teste notar a divergência.
+const loginsEspecificos = [
+  ['index.html', 'sorteio'],
+  ['acervo-cj.html', 'acervo-cj'],
+  ['acervo-creg.html', 'acervo-creg'],
+  ['historico-cj.html', 'historico-cj'],
+  ['historico-creg.html', 'historico-creg'],
+  ['julgados-cj.html', 'julgados-cj'],
+  ['julgados-creg.html', 'julgados-creg'],
+  ['admin.html', 'admin']
+];
+const titulosDosLogins = new Set();
+for (const [pagina, identidade] of loginsEspecificos) {
+  const html = ler(pagina);
+  const login = html.match(/<section id="loginScreen"[\s\S]*?<\/section>/)?.[0] || '';
+
+  assert.match(login, /class="app-login"/,
+    `${pagina}: o login precisa usar a composição institucional`);
+  assert.match(login, new RegExp(`data-login-art="${identidade}"`),
+    `${pagina}: o login precisa declarar sua identidade visual própria`);
+  assert.match(login, /aria-labelledby="loginTitulo"/,
+    `${pagina}: a composição precisa ser nomeada pelo seu título`);
+  assert.match(login, /class="app-login-intro"/,
+    `${pagina}: falta o painel contextual do login`);
+  assert.match(login, /class="app-login-form-card"/,
+    `${pagina}: falta o painel de identificação do login`);
+
+  for (const id of ['loginForm', 'loginEmail', 'loginSenha', 'btnEntrar', 'loginErro']) {
+    assert.equal((login.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1,
+      `${pagina}: o contrato de autenticação exige um único #${id}`);
+  }
+
+  const titulo = login.match(/<h2 id="loginTitulo">([^<]+)<\/h2>/)?.[1];
+  assert.ok(titulo, `${pagina}: o painel contextual precisa de título próprio`);
+  titulosDosLogins.add(titulo);
+}
+assert.equal(titulosDosLogins.size, loginsEspecificos.length,
+  'cada HTML protegido precisa ter um conceito de login independente');
+
+// E o contrato é UM: um segundo sistema de login no CSS foi exatamente o que
+// deixou o painel administrativo fora desta verificação por tanto tempo.
+// Procura por REGRA e não pela palavra: os comentários do CSS citam o sistema
+// removido de propósito, para que ninguém o reintroduza sem ler por quê.
+assert.doesNotMatch(cssIndex, /\.admin-login[\w-]*\s*[,{]/,
+  'o painel voltou a ter um sistema de login próprio em vez de usar .app-login');
+for (const [pagina, identidade] of loginsEspecificos) {
+  assert.ok(cssIndex.includes(`[data-login-art='${identidade}']`),
+    `${pagina}: nenhuma regra de .app-login veste a identidade "${identidade}"`);
+}
+
 console.log('assets: minificação, lazy load e versão por hash coerentes ✓');

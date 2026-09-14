@@ -27,7 +27,12 @@ const PAGINAS = {
   // Mesmo script para os dois colegiados, como o painel do acervo: quem escolhe
   // o vocabulário e a sigla que vai ao banco é o data-colegiado do <body>
   // (ver COLEGIADOS em historico.js).
-  'historico-creg': { orgao: 'CREG', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Preparando o histórico…' }
+  'historico-creg': { orgao: 'CREG', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Preparando o histórico…' },
+  // A primeira página sem órgão fixo: o painel administrativo atende os dois
+  // colegiados e traz o seletor dentro dele. Por isso não entra por `orgao`,
+  // que é o que redireciona quem abre a URL do colegiado errado, e sim por
+  // `exigeAdmin` — quem decide se ela abre é o papel, não a página.
+  admin: { exigeAdmin: true, arquivo: 'admin.min.js', iniciar: 'inicializarAdmin', texto: 'Preparando o painel…' }
 };
 
 const DESTINOS = {
@@ -72,12 +77,43 @@ async function carregarPaginaAutenticada() {
     if (paginaAtual.orgao && !orgaos.has(paginaAtual.orgao)) throw erroSemPermissao();
 
     aplicarVisibilidadePorOrgao(orgaos);
+
+    // O papel de administrador custa uma consulta a mais, então só é buscado
+    // onde muda alguma coisa: no próprio painel, e na tela inicial, que decide
+    // se mostra o link para ele. As outras páginas seguem com uma consulta só.
+    let orgaosAdmin = new Set();
+    if (paginaAtual.exigeAdmin) {
+      // Aqui a consulta é o porteiro da página: ela vem ANTES do download, para
+      // não buscar o módulo do painel de quem não pode abri-lo.
+      orgaosAdmin = await buscarOrgaosAdministrados();
+      if (orgaosAdmin.size === 0) throw erroSemPermissao();
+      aplicarVisibilidadeAdmin(orgaosAdmin);
+    } else if (document.querySelector('[data-admin]')) {
+      // Fora do painel a consulta decide UMA coisa: se um atalho opcional
+      // aparece. Sem o catch, uma falha nela — RPC indisponível, ambiente sem a
+      // migração aplicada — trocava a tela inicial inteira pelo erro de
+      // carregamento. Sem resposta, o atalho fica escondido, que é o mesmo
+      // estado de quem não administra nada.
+      //
+      // E como nada na tela inicial depende dela, aqui ela só é DISPARADA, nunca
+      // aguardada. Esperá-la — antes do download ou logo depois dele — segurava
+      // "Preparando o sorteio…" no ar até a resposta chegar, e com a rede lenta
+      // isso é o tempo-limite inteiro, só para decidir se um cartão aparece. O
+      // atalho surge quando a resposta vier, com a tela já de pé.
+      buscarOrgaosAdministrados()
+        .catch(() => new Set())
+        .then(orgaos => aplicarVisibilidadeAdmin(orgaos));
+    }
+
     await carregarScript(`assets/js/${paginaAtual.arquivo}?v=${ASSET_VERSION}`);
     // Toda tela monta a própria moldura de forma síncrona antes de buscar dado
     // algum — a lista de pautas, o painel do acervo/histórico, o seletor de
     // modalidade — e põe o próprio indicador dentro dela. Então o indicador
     // geral sai aqui, sem deixar quadro vazio e sem competir com o menor.
-    const inicializacao = window[paginaAtual.iniciar]();
+    // O painel recebe os órgãos que pode administrar — é o que monta o seletor,
+    // e é dado que só o bootstrap tem. As demais telas ignoram o argumento:
+    // quem escolhe o colegiado nelas é o data-colegiado do <body>.
+    const inicializacao = window[paginaAtual.iniciar](orgaosAdmin);
     sessionLoading.hidden = true;
     sessionLoading.replaceChildren();
     await inicializacao;

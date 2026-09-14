@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = 'fcc93a20ea';
+const ASSET_VERSION = '3caa5edd4e';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -339,6 +339,30 @@ async function buscarOrgaosAutorizados() {
   return new Set(linhas
     .map(linha => linha.orgao)
     .filter(orgao => ORGAOS_CONHECIDOS.has(orgao)));
+}
+
+// O papel de administrador é consultado à parte, e só por quem precisa dele: a
+// página do painel e a inicial, que decide se mostra o link. As demais telas
+// seguem com uma consulta de permissão só, como antes.
+async function buscarOrgaosAdministrados() {
+  const linhas = await api('rpc/orgaos_administrados', {
+    method: 'POST',
+    body: '{}'
+  });
+  if (!Array.isArray(linhas)) {
+    throw new Error('Não foi possível verificar suas permissões de acesso.');
+  }
+  return new Set(linhas
+    .map(linha => linha.orgao)
+    .filter(orgao => ORGAOS_CONHECIDOS.has(orgao)));
+}
+
+// Esconder o link é conveniência, não segurança: quem recusa é o banco, em toda
+// RPC administrativa, com 42501.
+function aplicarVisibilidadeAdmin(orgaosAdmin, raiz = document) {
+  raiz.querySelectorAll('[data-admin]').forEach(elemento => {
+    elemento.hidden = orgaosAdmin.size === 0;
+  });
 }
 
 function aplicarVisibilidadePorOrgao(orgaos, raiz = document) {
