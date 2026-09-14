@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=fcc93a20ea" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=3caa5edd4e" />
   <script>
     (function () {
       try {
@@ -35,8 +35,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=fcc93a20ea"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=fcc93a20ea"></script>
+  <script defer src="assets/js/supabase.min.js?v=3caa5edd4e"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=3caa5edd4e"></script>
 </head>
 
 <body data-page="julgados-creg">
@@ -91,19 +91,37 @@
   </nav>
 
   <main id="conteudo-principal" class="container pb-36" tabindex="-1">
-    <div class="card">
-      <div id="loginScreen">
-        <h2>Acesso restrito</h2>
-        <p>Identifique-se para registrar os julgamentos.</p>
-        <form id="loginForm">
-          <label for="loginEmail">E-mail</label>
-          <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
-          <label for="loginSenha">Senha</label>
-          <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
-          <button id="btnEntrar" type="submit">Entrar</button>
-          <div id="loginErro" role="alert" aria-live="assertive"></div>
-        </form>
-      </div>
+    <div class="card login-host">
+      <section id="loginScreen" class="app-login" data-login-art="julgados-creg" aria-labelledby="loginTitulo">
+        <div class="app-login-intro">
+          <span class="app-login-eyebrow">Sessões do Conselho</span>
+          <div class="app-login-symbol" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 4 27 10 16 16 5 10zM8 14v8m16-8v8M5 25h22M12 16v6m8-6v6"></path>
+            </svg>
+          </div>
+          <h2 id="loginTitulo">Decisões regulatórias bem registradas</h2>
+          <p>Atualize voto, recurso e status dos processos apreciados pelo Conselho Regulador.</p>
+          <ul class="app-login-assurances">
+            <li><span aria-hidden="true">✓</span>Sessões pendentes reunidas em um só lugar</li>
+            <li><span aria-hidden="true">✓</span>Cada registro mantém autoria e horário</li>
+          </ul>
+        </div>
+
+        <div class="app-login-form-card">
+          <span class="app-login-eyebrow">Decisão e acompanhamento</span>
+          <h2>Acessar sessões do CREG</h2>
+          <p>Entre para registrar os resultados do Conselho.</p>
+          <form id="loginForm">
+            <label for="loginEmail">E-mail</label>
+            <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
+            <label for="loginSenha">Senha</label>
+            <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+            <button id="btnEntrar" type="submit">Acessar sessões</button>
+            <div id="loginErro" role="alert" aria-live="assertive"></div>
+          </form>
+        </div>
+      </section>
 
       <div id="sessionLoading" class="session-loading" data-sessao hidden></div>
 
@@ -169,7 +187,7 @@
         Cada registro guarda quem preencheu e quando, para garantir rastreabilidade.
       </p>
       <div class="footer-meta">
-        <div class="footer-version">Versão 3.8</div>
+        <div class="footer-version">Versão 3.9</div>
         <p class="footer-credit">Desenvolvido por <strong>Lucas Lustosa Coelho e Leonardo Ferreira Amichi</strong>.</p>
       </div>
     </div>

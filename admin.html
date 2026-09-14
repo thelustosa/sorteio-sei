@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#00534b" />
+  <meta name="description"
+    content="Painel administrativo do Sorteio de Processos SEI: correção auditável de registros de sorteio e de sessões de julgamento da AGR." />
+  <title>Painel Administrativo — Sorteio de Processos SEI</title>
+  <link rel="preconnect" href="https://giipnmpfclfudkzflwsv.supabase.co" crossorigin />
+  <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
+  <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="icon" href="assets/img/favicon.png" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=3caa5edd4e" />
+  <script>
+    (function () {
+      try {
+        if (sessionStorage.getItem('sorteio-sei.access-token')) {
+          document.documentElement.classList.add('has-session');
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <script type="speculationrules">
+    {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
+  </script>
+  <script defer src="assets/js/supabase.min.js?v=3caa5edd4e"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=3caa5edd4e"></script>
+</head>
+
+<body class="admin-page" data-page="admin">
+  <a class="skip-link" href="#conteudo-principal">Pular para o conteúdo principal</a>
+  <div class="page-header-wrapper">
+    <div class="container">
+      <header>
+        <div class="logo">
+          <img src="assets/img/logo_header.png" alt="Governo de Goiás" width="120" height="55" />
+        </div>
+        <div class="header-copy">
+          <p class="institution-name">Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</p>
+          <h1>Painel Administrativo</h1>
+          <p class="lead">Correção dos registros de sorteio e das sessões de julgamento.</p>
+        </div>
+      </header>
+    </div>
+  </div>
+
+  <nav class="green-bar" aria-label="Navegação do sistema">
+    <div class="container">
+      <span id="txtModo">Manutenção de dados</span>
+      <div class="nav-actions">
+        <a id="btnVoltarInicio" class="nav-action" href="./index.html" data-sessao hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15.5 10h-11"></path>
+            <path d="m8.5 6-4 4 4 4"></path>
+          </svg>
+          <span>Início</span>
+        </a>
+        <button id="btnVoltar" class="nav-action" type="button" hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15.5 10h-11"></path>
+            <path d="m8.5 6-4 4 4 4"></path>
+          </svg>
+          <span>Voltar</span>
+        </button>
+        <button id="btnSair" class="nav-action" type="button" hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"></path>
+            <path d="m11 7 3 3-3 3"></path>
+            <path d="M14 10H8"></path>
+          </svg>
+          <span>Sair</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="conteudo-principal" class="container admin-main pb-36" tabindex="-1">
+    <div class="admin-shell" data-login-only>
+      <section id="loginScreen" class="app-login" data-login-art="admin" aria-labelledby="loginTitulo">
+        <div class="app-login-intro">
+          <span class="app-login-eyebrow">Área administrativa</span>
+          <div class="app-login-symbol" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 3.5 26 7v7.5c0 6.2-4.2 11.7-10 14-5.8-2.3-10-7.8-10-14V7l10-3.5Z"></path>
+              <path d="m11.5 16 3 3 6-6"></path>
+            </svg>
+          </div>
+          <h2 id="loginTitulo">Correções seguras, histórico preservado</h2>
+          <p>Consulte e corrija registros dos colegiados sem perder a origem das informações.</p>
+          <ul class="app-login-assurances">
+            <li><span aria-hidden="true">✓</span>Toda alteração registra autor e horário</li>
+            <li><span aria-hidden="true">✓</span>Você revisa o impacto antes de gravar</li>
+          </ul>
+        </div>
+
+        <div class="app-login-form-card">
+          <span class="app-login-eyebrow">Identificação</span>
+          <h2>Entrar no painel</h2>
+          <p>Use suas credenciais institucionais.</p>
+          <form id="loginForm">
+            <label for="loginEmail">E-mail</label>
+            <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
+            <label for="loginSenha">Senha</label>
+            <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+            <button id="btnEntrar" type="submit">Entrar com segurança</button>
+            <div id="loginErro" role="alert" aria-live="assertive"></div>
+          </form>
+        </div>
+      </section>
+
+      <div id="sessionLoading" class="session-loading admin-session-loading" data-sessao hidden></div>
+
+      <div id="adminPainel" class="admin-workspace" data-sessao hidden>
+        <section class="admin-commandbar" aria-label="Contexto administrativo">
+          <div class="admin-command-context">
+            <span class="admin-command-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 20h16M6 17V9m4 8V9m4 8V9m4 8V9M3 7l9-4 9 4H3Z"></path>
+              </svg>
+            </span>
+            <div>
+              <span class="admin-context-label">Colegiado selecionado</span>
+              <strong id="adminOrgaoAtual">Carregando…</strong>
+            </div>
+          </div>
+
+          <div class="admin-command-actions">
+            <!-- Montado por admin.js apenas com os órgãos administrados. O nome
+                 completo do colegiado escolhido já está à esquerda, na mesma
+                 linha, então aqui fica só o código e o nome vai no aria-label. -->
+            <section id="seletorOrgaoCard" class="admin-org-switcher"
+              aria-labelledby="seletorOrgaoTitulo" hidden>
+              <h2 id="seletorOrgaoTitulo" class="visually-hidden">Trocar colegiado</h2>
+              <div id="seletorOrgao" role="group" aria-label="Colegiado a administrar">
+                <button class="admin-org-button" type="button" data-orgao-admin="CREG"
+                  aria-label="Conselho Regulador" hidden>
+                  <span class="admin-org-code">CREG</span>
+                </button>
+                <button class="admin-org-button" type="button" data-orgao-admin="CJ"
+                  aria-label="Câmara de Julgamento" hidden>
+                  <span class="admin-org-code">CJ</span>
+                </button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <nav id="abas" class="admin-abas" role="tablist" aria-label="Áreas do painel">
+          <button id="abaSessoes" class="admin-aba" type="button" role="tab" data-aba="sessoes"
+            aria-selected="true" aria-controls="painelConteudo" tabindex="0">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="4.5" width="14" height="12.5" rx="2"></rect><path d="M6 2.8v3.4m8-3.4v3.4M3 8.5h14"></path>
+            </svg><span>Sessões</span>
+          </button>
+          <button id="abaSorteios" class="admin-aba" type="button" role="tab" data-aba="sorteios"
+            aria-selected="false" aria-controls="painelConteudo" tabindex="-1">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10 2.5 12 7l4.8.5-3.6 3.2 1 4.8-4.2-2.4-4.2 2.4 1-4.8-3.6-3.2L8 7l2-4.5Z"></path>
+            <!-- "Distribuições" e não "Sorteios": a aba lista também as rodadas
+                 que vieram de uma ata publicada, e chamar essas de sorteio seria
+                 falso. O id e o data-aba continuam sendo os internos. -->
+            </svg><span>Distribuições</span>
+          </button>
+          <button id="abaAuditoria" class="admin-aba" type="button" role="tab" data-aba="auditoria"
+            aria-selected="false" aria-controls="painelConteudo" tabindex="-1">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 3.5h8M6 7.8h8M6 12.1h5M4 2.5h12a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1Z"></path>
+            </svg><span>Auditoria</span>
+          </button>
+        </nav>
+
+        <section id="painelConteudo" class="admin-panel" role="tabpanel" aria-labelledby="abaSessoes" tabindex="-1">
+          <header class="admin-panel-header">
+            <div class="admin-panel-heading">
+              <span class="admin-eyebrow">Consulta e correção</span>
+              <h2 id="painelTitulo" tabindex="-1">Sessões de julgamento</h2>
+              <!-- Igual ao texto que admin.js grava em pintarSessoes: se as duas
+                   versões divergirem, qual aparece passa a depender do caminho
+                   de carregamento — no estado de erro, por exemplo, fica esta. -->
+              <p id="painelDescricao">Selecione a data da sessão para corrigir voto, status, pauta ou a própria data.</p>
+            </div>
+          </header>
+
+          <div id="painelCarregando" class="painel-carregando" hidden></div>
+          <div id="painelErro" class="load-error admin-state" role="alert" hidden>
+            <p></p>
+            <button id="btnTentarNovamente" class="button-secondary" type="button">Tentar novamente</button>
+            <p id="painelErroDetalhe" class="form-hint" hidden></p>
+          </div>
+          <div id="painelVazio" class="empty-state admin-state" role="status" hidden>
+            <div class="empty-state-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 7.5h16M4 12h16M4 16.5h9"></path>
+                <path d="M3 3.5h18a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z"></path>
+              </svg>
+            </div>
+            <div>
+              <h3 id="painelVazioTitulo">Nada para mostrar</h3>
+              <p id="painelVazioTexto"></p>
+            </div>
+          </div>
+
+          <!-- admin.js mede a rolagem real e esconde a dica, e tira a parada de
+               tabulação, quando a tabela cabe inteira na tela. -->
+          <p id="tabelaInstrucao" class="admin-scroll-hint" hidden>
+            Deslize horizontalmente para consultar todas as colunas.
+          </p>
+          <div class="table-scroll admin-table-wrap" role="region" aria-labelledby="painelTitulo"
+            aria-describedby="tabelaInstrucao" tabindex="-1">
+            <table id="painelTable" class="admin-table"></table>
+          </div>
+
+          <footer class="admin-panel-footer">
+            <div class="admin-panel-status" role="status" aria-live="polite" aria-atomic="true">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span id="painelStatus">Carregando…</span>
+            </div>
+            <!-- Só a auditoria cresce sem limite, e só ela mostra este botão: as
+                 demais listas vêm inteiras numa consulta. admin.js o revela
+                 quando a resposta indica que há registro anterior à página. -->
+            <button id="btnMaisAntigas" class="button-secondary admin-mais-antigas" type="button" hidden>
+              Mostrar correções anteriores
+            </button>
+            <span id="painelHint" class="admin-panel-hint">Abra uma sessão para consultar seus processos.</span>
+          </footer>
+        </section>
+      </div>
+
+      <!-- Edição e confirmação no mesmo dialog nativo: nenhuma alteração é
+           gravada antes da segunda etapa. -->
+      <dialog id="edicaoDialog" class="detalhe-dialog admin-dialog" aria-labelledby="edicaoTitulo">
+        <header class="detalhe-header">
+          <div class="detalhe-identidade">
+            <span id="edicaoEtapaRotulo" class="admin-dialog-step">Etapa 1 de 2</span>
+            <h2 id="edicaoTitulo">Corrigir registro</h2>
+            <p id="edicaoResumo" class="detalhe-resumo"></p>
+          </div>
+          <div class="detalhe-acoes">
+            <button id="btnFecharEdicao" class="nav-action detalhe-fechar" type="button" aria-label="Fechar janela de correção">
+              <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+                <path d="m6 6 8 8"></path><path d="m14 6-8 8"></path>
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="detalhe-corpo">
+          <form id="edicaoForm">
+            <div id="edicaoEtapaCampos">
+              <div id="edicaoCampos" class="admin-campos"></div>
+            </div>
+
+            <div id="edicaoEtapaConfirmacao" tabindex="-1" hidden>
+              <div class="admin-review-intro">
+                <span class="admin-review-icon" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1.8 10S4.9 4.5 10 4.5 18.2 10 18.2 10 15.1 15.5 10 15.5 1.8 10 1.8 10Z"></path>
+                    <circle cx="10" cy="10" r="2.3"></circle>
+                  </svg>
+                </span>
+                <div><h3>Revise antes de gravar</h3><p>Nada foi alterado até você confirmar.</p></div>
+              </div>
+              <ul id="edicaoDelta" class="admin-delta"></ul>
+              <div id="edicaoImpacto" class="admin-impacto" hidden>
+                <h3 id="edicaoImpactoTitulo">Julgados que serão alterados junto</h3>
+                <ul id="edicaoImpactoLista"></ul>
+              </div>
+            </div>
+
+            <!-- Fora das duas etapas de propósito: o motivo vai para o histórico
+                 de auditoria, e escondê-lo na hora de confirmar tirava da vista
+                 justamente o texto que a tela promete gravar. -->
+            <div class="admin-campo admin-campo-largo admin-campo-motivo">
+              <label for="edicaoMotivo">Motivo da alteração <span class="small">opcional</span></label>
+              <input id="edicaoMotivo" type="text" maxlength="200" placeholder="Ex.: ata da sessão confirma a alteração">
+              <p class="form-hint">O motivo também fará parte do histórico de auditoria.</p>
+            </div>
+
+            <div id="edicaoErro" class="load-error admin-dialog-error" role="alert" hidden><p></p></div>
+
+            <div class="admin-dialog-actions">
+              <button id="btnCancelarEdicao" class="button-secondary" type="button">Cancelar</button>
+              <button id="btnAvancarEdicao" class="button-primary" type="submit">Revisar alteração</button>
+            </div>
+          </form>
+        </div>
+      </dialog>
+    </div>
+  </main>
+
+  <footer class="page-footer">
+    <div class="footer-container">
+      <div class="logo footer-logo">
+        <img src="assets/img/logo_footer.png" alt="Estado de Goiás" width="104" height="48" />
+      </div>
+      <p class="footer-info">
+        Área restrita a administradores. Correção de registros já gravados pelo sorteio<br>
+        ou vindos das pautas publicadas pela AGR, com autor, horário e valor anterior guardados.
+      </p>
+      <div class="footer-meta">
+        <div class="footer-version">Versão 3.9</div>
+        <p class="footer-credit">Desenvolvido por <strong>Lucas Lustosa Coelho e Leonardo Ferreira Amichi</strong>.</p>
+      </div>
+    </div>
+  </footer>
+
+</body>
+
+</html>
