@@ -679,6 +679,7 @@ Chaves e índices que sustentam as regras:
 | `acervo_creg_distribuicao_unica (num_processo, data_distribuicao, unidade)` | o mesmo sorteio CREG não é gravado duas vezes |
 | `acervo_cj_distribuicao_unica (num_processo, data_distribuicao, relator)` | sorteio/importação repetidos não duplicam; é o índice da busca do processo |
 | `julgados_cj_sessao_unica (num_processo, data_sessao)` | um processo não é julgado duas vezes na mesma sessão |
+| `acervo_cj_num_processo_check` e `julgados_cj_num_processo_check` | número fora do padrão SEI (15 dígitos) é recusado pelo banco, e não só pelo navegador; o relator fica sem restrição de formato porque o histórico guarda nomes |
 | `pautas_cj.url` único | o mesmo PDF não é processado duas vezes |
 | `idx_julgados_cj_pendentes` (parcial) | a fila de trabalho da página de registro, do tamanho da fila e não da tabela |
 | `idx_julgados_cj_acervo` | navegar do julgado até a distribuição de origem |

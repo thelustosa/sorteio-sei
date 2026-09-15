@@ -155,6 +155,24 @@ create table if not exists public.julgados_cj (
 
 create index if not exists idx_julgados_cj_acervo on public.julgados_cj (acervo_id);
 
+-- Número SEI: 15 dígitos, só dígitos — a regra que acervo_creg e julgados_creg
+-- têm no CREATE TABLE. Na Câmara ela chega por ALTER porque as tabelas nasceram
+-- antes dela, e o drop/add mantém o script reaplicável. O navegador já barrava,
+-- mas acervo_cj aceita INSERT direto de quem tem acesso à CJ: só o banco fecha
+-- essa porta.
+--
+-- relator fica sem restrição de formato de propósito: o histórico em backup_cj
+-- e a importação da planilha guardam pelo nome quem não está em cadeiras_cj.
+alter table public.acervo_cj
+  drop constraint if exists acervo_cj_num_processo_check;
+alter table public.acervo_cj
+  add constraint acervo_cj_num_processo_check check (num_processo ~ '^[0-9]{15}$');
+
+alter table public.julgados_cj
+  drop constraint if exists julgados_cj_num_processo_check;
+alter table public.julgados_cj
+  add constraint julgados_cj_num_processo_check check (num_processo ~ '^[0-9]{15}$');
+
 -- Numeração da pauta: cuidado ao usar em relatório.
 --
 -- Até 2025 a coluna guarda o número interno da Câmara, que conta PAUTAS
@@ -2635,8 +2653,9 @@ declare
 begin
   perform public.admin_exigir('CJ');
 
-  -- O check de 15 dígitos existe em acervo_creg e não na Câmara; a porta exige
-  -- nos dois, para não abrir aqui o ERRO "Número de processo fora do padrão".
+  -- acervo_cj e julgados_cj também recusam número fora dos 15 dígitos, mas com o
+  -- erro cru da restrição; a porta valida antes, com a mensagem pensada para a
+  -- tela.
   if coalesce(p_num_atual, '') !~ '^[0-9]{15}$'
      or coalesce(p_num_novo, '') !~ '^[0-9]{15}$' then
     raise exception 'numero de processo fora do padrao (15 digitos)' using errcode = '22023';

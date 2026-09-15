@@ -212,7 +212,7 @@ Antes de reaplicá-lo numa base já populada, rode
 repetida”, decida qual registro conservar: o índice único do schema falha com
 segurança, sem apagar ou escolher dados automaticamente.
 
-Os dois acervos aceitam somente número SEI com 15 dígitos, e a unidade do CREG
+Acervos e julgados dos dois colegiados aceitam somente número SEI com 15 dígitos, e a unidade do CREG
 tem de ser `CREG1`, `CREG2`… Se uma base antiga tiver número fora do padrão,
 corrija-o pela fonte oficial antes de reaplicar o schema; a validação falha sem
 completar ou apagar números por inferência.
