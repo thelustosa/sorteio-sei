@@ -663,6 +663,29 @@ def creg_novo_exige_numero_de_processo_com_15_digitos(cur):
 
 
 @teste
+def cj_exige_numero_de_processo_com_15_digitos(cur):
+    """Acervo e julgados da Câmara recusam processo fora do padrão SEI.
+
+    A regra do Conselho, que a Câmara não tinha: acervo_cj aceita INSERT direto
+    de quem tem acesso à CJ, e só o navegador barrava. O relator continua sem
+    restrição de formato — o histórico guarda pelo nome composições antigas.
+    """
+    for tabela, sql in (
+            ('acervo_cj', """insert into acervo_cj
+                               (num_processo, relator, data_distribuicao, origem)
+                             values ('ABC', 'CJ1', current_date, 'sorteio')"""),
+            ('julgados_cj', """insert into julgados_cj (num_processo, data_sessao)
+                               values ('1234', current_date)""")):
+        try:
+            cur.execute(sql)
+        except psycopg2.errors.CheckViolation:
+            continue
+        finally:
+            cur.connection.rollback()
+        raise AssertionError(f'{tabela} aceitou processo fora de 15 dígitos')
+
+
+@teste
 def migracao_levou_o_sorteio_antigo_para_o_acervo(cur):
     """A cadeia inteira que aposentou a tabela antiga, medida no resultado.
 
@@ -2055,6 +2078,12 @@ def migracoes_a_aplicar():
 def preparar_upgrade_da_migracao():
     """Volta só os deltas desta migração ao estado do schema no HEAD."""
     PG.executar("""
+        -- As tabelas da Câmara sem o check de 15 dígitos, como produção estava
+        -- até 15/09/2026: quem tem de devolvê-lo é a migração, e
+        -- cj_exige_numero_de_processo_com_15_digitos mede o resultado dela.
+        alter table public.acervo_cj drop constraint acervo_cj_num_processo_check;
+        alter table public.julgados_cj drop constraint julgados_cj_num_processo_check;
+
         -- A tabela do sorteio antigo do Conselho, recriada no formato que ela
         -- tinha antes desta migração: sem a restrição de 15 dígitos, sem o
         -- índice de distribuição única e sem a coluna interessado, que só
