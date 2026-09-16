@@ -426,6 +426,76 @@ test('CREG recusa processo sem 15 dígitos antes do sorteio', async () => {
   assert.equal(document.activeElement, row.querySelector('.col-processo input'));
 });
 
+// Uma linha por item de `defesas` ('Sim'/'Não'), na ordem. `excluidas` tira
+// cadeiras do sorteio pela pill — o clique vai no container, que é quem escuta.
+async function preencherCj(page, defesasDaLinha, excluidas = []) {
+  const { document, tbody } = page;
+  document.getElementById('btnCj').dispatch('click');
+  document.getElementById('numRows').value = String(defesasDaLinha.length);
+  document.getElementById('createRows').dispatch('click');
+  await wait();
+
+  const pills = document.getElementById('pillsContainer');
+  pills.children
+    .filter(pill => excluidas.includes(pill.dataset.creg))
+    .forEach(pill => pills.dispatch('click', { target: pill }));
+
+  defesasDaLinha.forEach((defesa, i) => {
+    const row = tbody.children[i];
+    row.querySelector('.num').textContent = String(i + 1);
+    row.querySelector('.col-processo input').value = `90000000000${String(i + 1).padStart(4, '0')}`;
+    row.querySelector('.col-decisao select').value = defesa;
+  });
+  return tbody.children;
+}
+
+const unidadesDe = linhas => linhas.map(r => r.dataset.unidade);
+const resumoDe = page => page.document.getElementById('resumoContagem')
+  .querySelectorAll('.unidade-badge').map(badge => badge.textContent);
+
+test('processo sem defesa vai para a CJ1 sem passar pelo sorteio', async () => {
+  let corpo;
+  const page = indexPage({ api: async (_tabela, opcoes) => { corpo = JSON.parse(opcoes.body); } });
+  // A CJ1 fica FORA do sorteio: se mesmo assim ela levar os dois sem defesa — e
+  // nenhum dos com defesa —, é porque esse lote não passou pelo sorteio.
+  const linhas = await preencherCj(page, ['Não', 'Sim', 'Não', 'Sim', 'Sim', 'Sim'], ['CJ1']);
+  page.document.getElementById('sortear').dispatch('click');
+  await wait();
+
+  assert.match(page.document.getElementById('processSetupHint').textContent,
+    /Defesa "Não" não entra no sorteio: vai direto para a CJ1/,
+    'a tela tem de avisar a regra antes, não só mostrar o resultado');
+
+  assert.deepEqual(unidadesDe([linhas[0], linhas[2]]), ['CJ1', 'CJ1']);
+  // Quatro com defesa para as quatro cadeiras que sobraram: uma para cada.
+  assert.deepEqual(unidadesDe([linhas[1], linhas[3], linhas[4], linhas[5]]).sort(),
+    ['CJ2', 'CJ3', 'CJ4', 'CJ5']);
+
+  // O resumo mostra a CJ1 mesmo excluída do sorteio: ela recebeu processo.
+  assert.deepEqual(resumoDe(page), ['CJ1: 2 processos', 'CJ2: 1 processo',
+    'CJ3: 1 processo', 'CJ4: 1 processo', 'CJ5: 1 processo']);
+
+  const semDefesa = corpo.filter(p => !p.defesa);
+  assert.deepEqual(semDefesa.map(p => p.num_processo), ['900000000000001', '900000000000003']);
+  assert.deepEqual(semDefesa.map(p => p.relator), ['CJ1', 'CJ1']);
+  assert.ok(corpo.filter(p => p.defesa).every(p => p.relator !== 'CJ1'),
+    'com a CJ1 excluída, nenhum processo com defesa pode cair nela');
+});
+
+test('o lote sem defesa não tira da CJ1 a parte dela no sorteio', async () => {
+  const page = indexPage();
+  const linhas = await preencherCj(page,
+    ['Não', 'Não', 'Não', 'Sim', 'Sim', 'Sim', 'Sim', 'Sim']);
+  page.document.getElementById('sortear').dispatch('click');
+  await wait();
+
+  assert.deepEqual(unidadesDe(linhas.slice(0, 3)), ['CJ1', 'CJ1', 'CJ1']);
+  // Cinco com defesa para as cinco cadeiras: uma para cada, a CJ1 inclusive —
+  // os três sem defesa não descontam da parte dela.
+  assert.deepEqual(unidadesDe(linhas.slice(3)).sort(), ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5']);
+  assert.equal(resumoDe(page)[0], 'CJ1: 4 processos');
+});
+
 test('autenticação envia credenciais e devolve o par de tokens', async () => {
   let requisicao;
   const app = supabaseApp(async (url, options) => {
