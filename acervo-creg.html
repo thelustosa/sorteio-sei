@@ -9,11 +9,11 @@
   <title>Acervo não julgado — Conselho Regulador | Sorteio de Processos SEI</title>
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=4dc6b8895b" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=dff28a694b" />
   <script>
     (function () {
       try {
-        if (sessionStorage.getItem('sorteio-sei.access-token')) {
+        if (sessionStorage.getItem('sorteio-sei.access-token') || localStorage.getItem('sorteio-sei.access-token')) {
           document.documentElement.classList.add('has-session');
         }
       } catch (_) {}
@@ -32,8 +32,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=4dc6b8895b"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=4dc6b8895b"></script>
+  <script defer src="assets/js/supabase.min.js?v=dff28a694b"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=dff28a694b"></script>
 </head>
 
 <body class="dashboard-page" data-page="acervo-creg" data-colegiado="creg">
@@ -133,6 +133,7 @@
             <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
             <label for="loginSenha">Senha</label>
             <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+            <label class="login-lembrar"><input id="loginLembrar" type="checkbox"> Lembrar-me neste computador</label>
             <button id="btnEntrar" type="submit">Abrir painel regulatório</button>
             <div id="loginErro" role="alert" aria-live="assertive"></div>
           </form>
