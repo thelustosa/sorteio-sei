@@ -776,7 +776,12 @@ createBtn.addEventListener('click', async () => {
   try {
     await createRows(n);
     sortearBtn.hidden = false;
-    tbody.querySelector('input')?.focus();
+    const primeiroProcesso = tbody.querySelector('.col-processo input');
+    if (primeiroProcesso) {
+      primeiroProcesso.focus();
+      const fim = primeiroProcesso.value.length;
+      primeiroProcesso.setSelectionRange(fim, fim);
+    }
   } finally {
     numRowsInput.disabled = false;
     addRowBtn.disabled = false;
