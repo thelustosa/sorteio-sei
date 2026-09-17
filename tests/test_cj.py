@@ -1730,6 +1730,17 @@ def historico_lista_so_o_que_o_sistema_sorteou(cur):
     assert [linha[0] for linha in cur.fetchall()] == [date(2026, 8, 27)], \
         'ata posterior ao marco entrou no histórico'
 
+    # O mesmo na Câmara: a ata 016 (16/09/2026) entrou como 'sorteio' porque
+    # acervo_cj não aceitava 'ata', e apareceu no histórico.
+    cur.execute("""insert into public.acervo_cj
+                     (num_processo, relator, data_distribuicao, defesa, ordem,
+                      sorteado_em, origem)
+                   values ('202600029000106', 'CJ1', date '2026-09-16', false, 1,
+                           null, 'ata')""")
+    cur.execute("select data_sorteio from public.historico_sorteios('CJ')")
+    assert [linha[0] for linha in cur.fetchall()] == [date(2026, 9, 28), date(2026, 9, 14)], \
+        'ata da Câmara posterior ao marco entrou no histórico'
+
     # E a lista está ordenada do mais recente para o mais antigo.
     cur.execute("select data_sorteio from public.historico_sorteios('CJ')")
     datas = [linha[0] for linha in cur.fetchall()]
@@ -2083,6 +2094,13 @@ def preparar_upgrade_da_migracao():
         -- cj_exige_numero_de_processo_com_15_digitos mede o resultado dela.
         alter table public.acervo_cj drop constraint acervo_cj_num_processo_check;
         alter table public.julgados_cj drop constraint julgados_cj_num_processo_check;
+
+        -- A origem da Câmara sem 'ata', como produção estava até 17/09/2026:
+        -- historico_lista_so_o_que_o_sistema_sorteou grava uma ata da CJ e só
+        -- passa se a migração devolver a opção.
+        alter table public.acervo_cj drop constraint acervo_cj_origem_check;
+        alter table public.acervo_cj add constraint acervo_cj_origem_check
+          check (origem in ('sorteio', 'planilha'));
 
         -- A tabela do sorteio antigo do Conselho, recriada no formato que ela
         -- tinha antes desta migração: sem a restrição de 15 dígitos, sem o

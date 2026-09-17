@@ -98,8 +98,9 @@ create table if not exists public.acervo_cj (
   recurso           text,
 
   sorteado_em       timestamptz,
+  -- 'ata': distribuição lida do PDF da ata de sorteio, sem passar pela tela.
   origem            text        not null default 'sorteio'
-                    check (origem in ('sorteio', 'planilha')),
+                    check (origem in ('sorteio', 'planilha', 'ata')),
   criado_em         timestamptz not null default now(),
 
   -- Reexecutar um sorteio ou uma importação não duplica o acervo. É também o
@@ -172,6 +173,15 @@ alter table public.julgados_cj
   drop constraint if exists julgados_cj_num_processo_check;
 alter table public.julgados_cj
   add constraint julgados_cj_num_processo_check check (num_processo ~ '^[0-9]{15}$');
+
+-- Origem 'ata', como no Conselho: sem ela, a carga das atas entrava como
+-- 'sorteio' e aparecia no histórico como rodada feita na tela (migração
+-- 20260917123135). Repetido aqui porque o CREATE TABLE acima não altera tabela
+-- que já existe.
+alter table public.acervo_cj
+  drop constraint if exists acervo_cj_origem_check;
+alter table public.acervo_cj
+  add constraint acervo_cj_origem_check check (origem in ('sorteio', 'planilha', 'ata'));
 
 -- Numeração da pauta: cuidado ao usar em relatório.
 --
