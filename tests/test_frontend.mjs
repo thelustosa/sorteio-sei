@@ -28,6 +28,8 @@ class Node {
     this.disabled = false;
     this.value = '';
     this.textContent = '';
+    this.selectionStart = 0;
+    this.selectionEnd = 0;
   }
 
   set className(value) { this.classList = new ClassList(); this.classList.add(...value.split(/\s+/).filter(Boolean)); }
@@ -54,6 +56,10 @@ class Node {
   getBoundingClientRect() { return { width: 100 }; }
   scrollIntoView() {}
   focus() { this.document.activeElement = this; }
+  setSelectionRange(start, end) {
+    this.selectionStart = start;
+    this.selectionEnd = end;
+  }
   contains(node) { return node === this || this.children.some(child => child.contains(node)); }
   closest(selector) { return this.matches(selector) ? this : this.parentNode?.closest(selector) || null; }
   matches(selector) {
@@ -331,6 +337,19 @@ test('linhas de CJ e CREG começam com o prefixo editável do processo', async (
       assert.equal(processo.getAttribute('readonly'), null);
     }
   }
+});
+
+test('posiciona o cursor após o prefixo na primeira linha gerada', async () => {
+  const { document, tbody } = indexPage();
+  document.getElementById('btnCj').dispatch('click');
+  document.getElementById('numRows').value = '1';
+  document.getElementById('createRows').dispatch('click');
+  await wait();
+
+  const processo = tbody.children[0].querySelector('.col-processo input');
+  assert.equal(document.activeElement, processo);
+  assert.equal(processo.selectionStart, 11);
+  assert.equal(processo.selectionEnd, 11);
 });
 
 test('oferece backup após falha sem baixá-lo automaticamente', async () => {
