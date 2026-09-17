@@ -1,6 +1,7 @@
 const assuntosCreg = ['Auto de Infração', 'Chamamento Público', 'Gratuidade', 'Manifestação', 'Minuta', 'Nota Técnica', 'Ouvidoria', 'Requerimento', 'Plano de Racionamento', 'Quadro de Horários', 'Reajuste', 'Outros'];
 const assuntosCj = ['Auto de Infração'];
 const recursos = ['Com recurso', 'Sem recurso', 'Não se aplica', 'Pedido de revisão'];
+const PREFIXO_PROCESSO = '20260002900';
 // Na Câmara de Julgamento a mesma coluna registra outra coisa: se o autuado
 // apresentou defesa. É o campo que os julgados herdam do acervo.
 const defesas = ['Sim', 'Não'];
@@ -218,7 +219,7 @@ function createRowElement(index) {
   const tdProc = document.createElement('td');
   tdProc.className = 'col-processo';
   tdProc.dataset.label = 'Nº Processo';
-  const inpProc = document.createElement('input'); inpProc.type = 'text'; inpProc.placeholder = 'Digite o nº do processo'; inpProc.setAttribute('aria-label', `Número do processo, linha ${index}`);
+  const inpProc = document.createElement('input'); inpProc.type = 'text'; inpProc.value = PREFIXO_PROCESSO; inpProc.placeholder = 'Digite o nº do processo'; inpProc.setAttribute('aria-label', `Número do processo, linha ${index}`);
   tdProc.appendChild(inpProc);
   const tdInt = document.createElement('td');
   tdInt.className = 'col-interessado';

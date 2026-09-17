@@ -300,6 +300,24 @@ test('não adiciona a 501ª linha', async () => {
   assert.equal(tbody.children.length, 500);
 });
 
+test('linhas de CJ e CREG começam com o prefixo editável do processo', async () => {
+  for (const modo of ['Cj', 'Creg']) {
+    const { document, tbody } = indexPage();
+    document.getElementById(`btn${modo}`).dispatch('click');
+    document.getElementById('numRows').value = '1';
+    document.getElementById('createRows').dispatch('click');
+    await wait();
+    document.getElementById('addRowBtn').dispatch('click');
+
+    for (const row of tbody.children) {
+      const processo = row.querySelector('.col-processo input');
+      assert.equal(processo.value, '20260002900');
+      assert.equal(processo.disabled, false);
+      assert.equal(processo.getAttribute('readonly'), null);
+    }
+  }
+});
+
 test('oferece backup após falha sem baixá-lo automaticamente', async () => {
   const avisos = [];
   const page = indexPage({
