@@ -526,15 +526,22 @@ test('processo sem defesa vai para a CJ1 sem passar pelo sorteio', async () => {
   assert.deepEqual(semDefesa.map(p => p.relator), ['CJ1', 'CJ1']);
 });
 
-test('a CJ1 não recebe processo com defesa nem aparece nas pills', async () => {
+test('a CJ1 não recebe processo com defesa e a pill dela não alterna', async () => {
   const page = indexPage();
   // Dez com defesa: se a CJ1 estivesse no sorteio, levaria dois deles.
   const linhas = await preencherCj(page, Array(10).fill('Sim'));
+
+  const pills = page.document.getElementById('pillsContainer');
+  assert.deepEqual(pills.children.map(p => p.dataset.creg), ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5']);
+  pills.dispatch('click', { target: pills.children[0] });
+  assert.equal(pills.children[0].classList.contains('excluded'), false,
+    'excluir a CJ1 não mudaria nada: a pill não pode fingir que muda');
+  assert.equal(pills.children[0].getAttribute('aria-pressed'), 'false');
+  assert.equal(pills.children[0].getAttribute('aria-disabled'), 'true');
+  assert.equal(pills.children[1].getAttribute('aria-disabled'), null);
+
   page.document.getElementById('sortear').dispatch('click');
   await wait();
-
-  assert.deepEqual(page.document.getElementById('pillsContainer').children.map(p => p.dataset.creg),
-    ['CJ2', 'CJ3', 'CJ4', 'CJ5']);
   assert.ok(unidadesDe(linhas).every(u => u !== 'CJ1'), 'processo com defesa caiu na CJ1');
   // Dez entre quatro: duas ou três para cada, sem sobra para ninguém de fora.
   const porCadeira = ['CJ2', 'CJ3', 'CJ4', 'CJ5'].map(c => unidadesDe(linhas).filter(u => u === c).length);
@@ -763,6 +770,20 @@ test('falha ao renovar não apaga a sessão automaticamente', async () => {
   });
   assert.equal(app.storage.get('sorteio-sei.access-token'), 'access-antigo');
   assert.equal(app.storage.get('sorteio-sei.refresh-token'), 'refresh-antigo');
+});
+
+test('instabilidade do servidor de auth não vira sessão vencida', async () => {
+  // 401 faz o bootstrap sair sozinho e apagar a sessão; um 503 ou 429 na
+  // renovação é do servidor, e o refresh token continua valendo.
+  for (const status of [503, 429]) {
+    const app = supabaseApp(async (url) => url.includes('grant_type=refresh_token')
+      ? { ok: false, status, json: async () => ({}) }
+      : { ok: false, status: 401 });
+    app.salvarSessao({ access_token: 'access', refresh_token: 'refresh' });
+
+    await assert.rejects(() => app.api('dados'), { status });
+    assert.equal(app.storage.get('sorteio-sei.refresh-token'), 'refresh');
+  }
 });
 
 test('saída manual apaga os dois tokens da sessão', () => {
@@ -1279,11 +1300,17 @@ test('sessão vencida descarta os tokens e recarrega a página no login', async 
   let encerrou = 0;
   let scriptsCarregados = 0;
   const destinos = [];
+  let recarregou = 0;
   const page = bootstrapPage(async () => {}, 'acervo-cj', {
     buscarOrgaos: async () => { throw Object.assign(new Error('renovação recusada'), { status: 401 }); },
     encerrarSessaoNoServidor: async () => { encerrou++; },
     carregar: async () => { scriptsCarregados++; },
-    location: { href: 'https://exemplo/acervo-cj.html', replace(destino) { destinos.push(destino); } }
+    // Com #fragmento, replace(href) só rolaria a página: tem de ser reload().
+    location: {
+      href: 'https://exemplo/acervo-cj.html#conteudo-principal',
+      replace(destino) { destinos.push(destino); },
+      reload() { recarregou++; }
+    }
   });
 
   const originalConsoleError = console.error;
@@ -1295,7 +1322,8 @@ test('sessão vencida descarta os tokens e recarrega a página no login', async 
   }
 
   assert.equal(encerrou, 1);
-  assert.deepEqual(destinos, ['https://exemplo/acervo-cj.html']);
+  assert.equal(recarregou, 1);
+  assert.deepEqual(destinos, []);
   assert.equal(page.sessionLoading.children.length, 1,
     'sem mensagem de erro nem "Tentar novamente": só o indicador até recarregar');
   assert.equal(scriptsCarregados, 0);
@@ -1760,14 +1788,14 @@ test('sorteio da CJ mostra a cadeira e o conselheiro no hover', () => {
   document.getElementById('btnCj').dispatch('click');
 
   const pills = document.getElementById('pillsContainer').children;
-  // A CJ1 não tem pill: só recebe o lote sem defesa, que não passa pelo sorteio.
-  assert.deepEqual(pills.map(p => p.textContent), ['CJ2', 'CJ3', 'CJ4', 'CJ5'],
+  assert.deepEqual(pills.map(p => p.textContent), ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'],
     'o sorteio precisa gravar a cadeira, que é o que acervo_cj guarda');
-  assert.equal(pills[0].title, 'Deusdete Cardoso Belém');
-  assert.equal(pills[1].title, 'Dorivan de Souza Lima');
-  assert.equal(pills[2].title, 'Paulo Henrique Oliveira Marques');
-  assert.equal(pills[3].title, 'Lorena Patricia de Oliveira');
-  assert.equal(pills[0]['aria-label'], 'CJ2 — Deusdete Cardoso Belém',
+  assert.equal(pills[0].title, 'Paulo Otoni Ribeiro');
+  assert.equal(pills[1].title, 'Deusdete Cardoso Belém');
+  assert.equal(pills[2].title, 'Dorivan de Souza Lima');
+  assert.equal(pills[3].title, 'Paulo Henrique Oliveira Marques');
+  assert.equal(pills[4].title, 'Lorena Patricia de Oliveira');
+  assert.equal(pills[0]['aria-label'], 'CJ1 — Paulo Otoni Ribeiro',
     'o leitor de tela precisa anunciar a pessoa, não soletrar a cadeira');
 });
 

@@ -158,9 +158,7 @@ function iniciarSorteador(modo, unidades) {
   sortearBtn.textContent = `Sortear ${modo} e Exportar`;
 
   const fragmentoPills = document.createDocumentFragment();
-  // As pills são quem participa do sorteio. Na CJ a cadeira do sem defesa não
-  // participa, então não tem pill: excluí-la ou incluí-la não mudaria nada.
-  unidadesList.filter(unit => modo !== 'CJ' || unit !== CADEIRA_SEM_DEFESA).forEach(unit => {
+  unidadesList.forEach(unit => {
     const pill = document.createElement('button');
     pill.type = 'button';
     pill.className = 'pill';
@@ -169,6 +167,8 @@ function iniciarSorteador(modo, unidades) {
     pill.textContent = unit;
     // A cadeira sozinha não diz quem é: o nome vai no hover e no aria-label.
     rotularCadeira(pill, unit);
+    // A CJ1 fica à vista, mas fixa: o clique nela é ignorado (ver o listener).
+    if (modo === 'CJ' && unit === CADEIRA_SEM_DEFESA) pill.setAttribute('aria-disabled', 'true');
     fragmentoPills.appendChild(pill);
   });
   pillsContainer.replaceChildren(fragmentoPills);
@@ -176,7 +176,7 @@ function iniciarSorteador(modo, unidades) {
   processEntry.hidden = true;
   sortearBtn.hidden = true;
   // A regra do sem defesa é do sorteio, não da digitação: avisá-la aqui evita
-  // que a CJ1 fora das pills e no resultado pareça engano.
+  // que a CJ1 fixa nas pills e no resultado pareça engano.
   processSetupHint.textContent = 'Defina a quantidade e gere as linhas para começar o preenchimento.'
     + (modo === 'CJ' ? ` Processo com Defesa "Não" não entra no sorteio: vai direto para a ${CADEIRA_SEM_DEFESA}, que só recebe esses. Os com defesa são sorteados entre as demais cadeiras.` : '');
   processSetupHint.hidden = false;
@@ -301,6 +301,9 @@ async function createRows(n) {
 pillsContainer.addEventListener('click', event => {
   const pill = event.target.closest('.pill');
   if (!pill || !pillsContainer.contains(pill)) return;
+  // A CJ1 não entra no sorteio da CJ nem sai do lote sem defesa: excluí-la não
+  // mudaria nada, então a pill dela não alterna — só mostra quem é a cadeira.
+  if (modoSorteio === 'CJ' && pill.dataset.creg === CADEIRA_SEM_DEFESA) return;
   const excluido = pill.classList.toggle('excluded');
   pill.setAttribute('aria-pressed', String(excluido));
 });

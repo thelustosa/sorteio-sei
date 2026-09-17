@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '27accad41f';
+const ASSET_VERSION = 'dff28a694b';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -220,10 +220,17 @@ async function executarRenovacao() {
   });
   const dados = await resp.json().catch(() => ({}));
 
+  // Só a recusa do token (4xx) é sessão morta, e só ela vira 401 — que o
+  // bootstrap trata saindo sozinho. Instabilidade do servidor de auth (5xx,
+  // 429, resposta sem token) não apaga a sessão de ninguém: sobe com o status
+  // real e a página oferece "Tentar novamente".
   if (!resp.ok || !dados.access_token) {
+    const recusado = resp.status >= 400 && resp.status < 500 && resp.status !== 429;
     throw Object.assign(
-      new Error('Não foi possível renovar a sessão. Use Sair e entre novamente.'),
-      { status: 401 });
+      new Error(recusado
+        ? 'Não foi possível renovar a sessão. Use Sair e entre novamente.'
+        : 'O servidor de autenticação não respondeu como esperado.'),
+      { status: recusado ? 401 : (resp.ok ? 502 : resp.status) });
   }
 
   // O Supabase pode rotacionar o refresh token. salvarSessao conserva o atual
