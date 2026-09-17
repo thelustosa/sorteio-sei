@@ -287,7 +287,7 @@ for (const [pagina, identidade] of loginsEspecificos) {
   assert.match(login, /class="app-login-form-card"/,
     `${pagina}: falta o painel de identificação do login`);
 
-  for (const id of ['loginForm', 'loginEmail', 'loginSenha', 'btnEntrar', 'loginErro']) {
+  for (const id of ['loginForm', 'loginEmail', 'loginSenha', 'loginLembrar', 'btnEntrar', 'loginErro']) {
     assert.equal((login.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1,
       `${pagina}: o contrato de autenticação exige um único #${id}`);
   }
