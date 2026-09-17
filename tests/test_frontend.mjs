@@ -137,6 +137,8 @@ class Document {
 }
 
 const wait = () => new Promise(resolve => setImmediate(resolve));
+// Access token no formato do Supabase: só o `sub` do payload importa aqui.
+const jwt = (sub, marca) => `cabecalho.${Buffer.from(JSON.stringify({ sub, marca })).toString('base64url')}.assinatura`;
 const source = file => readFileSync(new URL(`../assets/js/${file}`, import.meta.url), 'utf8');
 
 // `local` é um Map: passe o mesmo a dois apps para simular duas abas do mesmo
@@ -326,7 +328,7 @@ test('linhas de CJ e CREG começam com o prefixo editável do processo', async (
 
     for (const row of tbody.children) {
       const processo = row.querySelector('.col-processo input');
-      assert.equal(processo.value, '20260002900');
+      assert.equal(processo.value, `${new Date().getFullYear()}0002900`);
       assert.equal(processo.disabled, false);
       assert.equal(processo.getAttribute('readonly'), null);
     }
@@ -344,6 +346,41 @@ test('posiciona o cursor após o prefixo na primeira linha gerada', async () => 
   assert.equal(document.activeElement, processo);
   assert.equal(processo.selectionStart, 11);
   assert.equal(processo.selectionEnd, 11);
+});
+
+test('Tab numa linha seguinte não deixa o prefixo selecionado, e colar o número inteiro o substitui', async () => {
+  const { document, tbody } = indexPage();
+  document.getElementById('btnCj').dispatch('click');
+  document.getElementById('numRows').value = '2';
+  document.getElementById('createRows').dispatch('click');
+  await wait();
+
+  const processo = tbody.children[1].querySelector('.col-processo input');
+  // O Tab chega com o texto todo selecionado.
+  processo.setSelectionRange(0, 11);
+  tbody.dispatch('focusin', { target: processo });
+  assert.deepEqual([processo.selectionStart, processo.selectionEnd], [11, 11]);
+
+  // Seleção feita pela pessoa, com o prefixo já editado, fica como está.
+  processo.value = '202500029000084';
+  processo.setSelectionRange(0, 15);
+  tbody.dispatch('focusin', { target: processo });
+  assert.deepEqual([processo.selectionStart, processo.selectionEnd], [0, 15]);
+
+  processo.value = `${new Date().getFullYear()}0002900`;
+  let evitado = false;
+  tbody.dispatch('paste', {
+    target: processo,
+    clipboardData: { getData: () => ' 202500029000084\n' },
+    preventDefault() { evitado = true; }
+  });
+  assert.equal(processo.value, '202500029000084');
+  assert.equal(evitado, true);
+
+  // Trecho que não é o número inteiro segue a colagem normal do navegador.
+  evitado = false;
+  tbody.dispatch('paste', { target: processo, clipboardData: { getData: () => '0084' }, preventDefault() { evitado = true; } });
+  assert.equal(evitado, false);
 });
 
 test('oferece backup após falha sem baixá-lo automaticamente', async () => {
@@ -567,6 +604,8 @@ test('sem cadeira no sorteio, só o lote sem defesa pode ser distribuído', asyn
   assert.equal(comDefesa.document.getElementById('processFormMessage').hidden, false);
   assert.match(comDefesa.document.getElementById('processFormMessage').textContent,
     /cadeiras que recebem processo com defesa estão excluídas/);
+  assert.equal(comDefesa.document.activeElement.dataset.creg, 'CJ2',
+    'o foco não pode cair na CJ1, que não alterna');
   assert.deepEqual(unidadesDe(linhasComDefesa), [undefined, undefined]);
 });
 
@@ -854,14 +893,14 @@ test('renovação usa o refresh token que outra aba já rotacionou', async () =>
   const fetch = async (url, options) => {
     if (url.includes('grant_type=refresh_token')) {
       corpos.push(JSON.parse(options.body).refresh_token);
-      return { ok: true, status: 200, json: async () => ({ access_token: `access-${corpos.length}`, refresh_token: `refresh-${corpos.length}` }) };
+      return { ok: true, status: 200, json: async () => ({ access_token: jwt('usuario-x', corpos.length), refresh_token: `refresh-${corpos.length}` }) };
     }
-    return options.headers.Authorization === 'Bearer access-antigo'
+    return options.headers.Authorization === `Bearer ${jwt('usuario-x', 'antigo')}`
       ? { ok: false, status: 401 }
       : { ok: true, status: 200, json: async () => [] };
   };
   const abaA = supabaseApp(fetch, {}, null, local);
-  abaA.salvarSessao({ access_token: 'access-antigo', refresh_token: 'refresh-antigo' }, true);
+  abaA.salvarSessao({ access_token: jwt('usuario-x', 'antigo'), refresh_token: 'refresh-antigo' }, true);
   const abaB = supabaseApp(fetch, {}, null, local);
   abaB.restaurarSessao();
 
@@ -869,6 +908,33 @@ test('renovação usa o refresh token que outra aba já rotacionou', async () =>
   await abaB.api('dados');
 
   assert.deepEqual(corpos, ['refresh-antigo', 'refresh-1']);
+});
+
+test('renovação não adota a sessão lembrada de outro usuário', async () => {
+  // Computador compartilhado: X entra com "Lembrar-me" na aba A e depois Y,
+  // também com "Lembrar-me", na aba B. A aba A continua sendo de X.
+  const local = new Map();
+  const corpos = [];
+  const fetch = async (url, options) => {
+    if (url.includes('grant_type=refresh_token')) {
+      corpos.push(JSON.parse(options.body).refresh_token);
+      return { ok: true, status: 200, json: async () => ({ access_token: jwt('usuario-x', 'novo'), refresh_token: 'refresh-x-novo' }) };
+    }
+    return options.headers.Authorization === `Bearer ${jwt('usuario-x', 'antigo')}`
+      ? { ok: false, status: 401 }
+      : { ok: true, status: 200, json: async () => [] };
+  };
+  const abaA = supabaseApp(fetch, {}, null, local);
+  abaA.salvarSessao({ access_token: jwt('usuario-x', 'antigo'), refresh_token: 'refresh-x' }, true);
+  const abaB = supabaseApp(fetch, {}, null, local);
+  abaB.salvarSessao({ access_token: jwt('usuario-y', 1), refresh_token: 'refresh-y' }, true);
+
+  await abaA.api('dados');
+
+  assert.deepEqual(corpos, ['refresh-x']);
+  assert.deepEqual(abaA.estadoSessao(), { accessToken: jwt('usuario-x', 'novo'), refreshToken: 'refresh-x-novo' });
+  assert.equal(abaA.storage.get('sorteio-sei.refresh-token'), 'refresh-x-novo');
+  assert.equal(local.get('sorteio-sei.refresh-token'), 'refresh-y', 'a sessão lembrada de Y não é da aba A');
 });
 
 test('saída manual apaga os tokens dos dois armazenamentos', () => {

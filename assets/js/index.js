@@ -1,7 +1,10 @@
 const assuntosCreg = ['Auto de Infração', 'Chamamento Público', 'Gratuidade', 'Manifestação', 'Minuta', 'Nota Técnica', 'Ouvidoria', 'Requerimento', 'Plano de Racionamento', 'Quadro de Horários', 'Reajuste', 'Outros'];
 const assuntosCj = ['Auto de Infração'];
 const recursos = ['Com recurso', 'Sem recurso', 'Não se aplica', 'Pedido de revisão'];
-const PREFIXO_PROCESSO = '20260002900';
+// Ano + unidade: fixar o ano faria o processo de janeiro seguinte sair com o
+// ano errado e passar na checagem de 15 dígitos. Processo de ano anterior
+// continua exigindo corrigir o prefixo à mão.
+const PREFIXO_PROCESSO = `${new Date().getFullYear()}0002900`;
 // Na Câmara de Julgamento a mesma coluna registra outra coisa: se o autuado
 // apresentou defesa. É o campo que os julgados herdam do acervo.
 const defesas = ['Sim', 'Não'];
@@ -329,6 +332,33 @@ tbody.addEventListener('change', event => {
   decisao.classList.toggle('placeholder-select', !decisao.value);
 });
 
+// Entrar no campo pelo Tab seleciona o texto inteiro, e o primeiro dígito
+// digitado apagaria o prefixo. Só o prefixo intacto e todo selecionado perde a
+// seleção; um clique no meio dele fica onde foi. Chrome e Edge selecionam antes
+// do evento de foco e o Firefox logo depois, na mesma tarefa: por isso agora e
+// no setTimeout. Um rAF chegaria tarde demais quando a janela demora a pintar.
+tbody.addEventListener('focusin', event => {
+  const campo = event.target;
+  if (!campo.closest('.col-processo')) return;
+  const soltarPrefixo = () => {
+    const fim = campo.value.length;
+    if (campo.value === PREFIXO_PROCESSO && campo.selectionStart === 0 && campo.selectionEnd === fim) {
+      campo.setSelectionRange(fim, fim);
+    }
+  };
+  soltarPrefixo();
+  setTimeout(soltarPrefixo);
+});
+
+// Colar o número completo do SEI substitui o campo, em vez de somá-lo ao prefixo.
+tbody.addEventListener('paste', event => {
+  const campo = event.target;
+  const colado = (event.clipboardData?.getData('text') || '').trim();
+  if (!campo.closest('.col-processo') || !/^\d{15}$/.test(colado)) return;
+  event.preventDefault();
+  campo.value = colado;
+});
+
 tbody.addEventListener('click', event => {
   const botao = event.target.closest('.btn-excluir');
   if (!botao || !tbody.contains(botao)) return;
@@ -418,7 +448,8 @@ function sortearProcessos() {
     mostrarMensagemFormulario(modoSorteio === 'CJ'
       ? `Todas as cadeiras que recebem processo com defesa estão excluídas. Selecione pelo menos uma para participar.`
       : `Todos os ${modoSorteio}s estão excluídos. Selecione pelo menos um para participar.`,
-      pillsContainer.querySelector('button'));
+      // A CJ1 fixa não resolve o erro: o foco vai para a primeira que alterna.
+      [...pillsContainer.children].find(pill => pill.getAttribute('aria-disabled') !== 'true'));
     return;
   }
 
