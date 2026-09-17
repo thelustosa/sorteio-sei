@@ -742,6 +742,10 @@ select.fixed-field:disabled {
 }
 .pill.excluded:hover { background: var(--danger-hover); }
 .pill:active { transform: translateY(1px); }
+/* CJ1 no sorteio da CJ: fica à vista, mas não alterna (recebe só sem defesa). */
+.pill[aria-disabled="true"] { cursor: default; }
+.pill[aria-disabled="true"]:hover { background: var(--accent-soft-strong); }
+.pill[aria-disabled="true"]:active { transform: none; }
 
 /* Tabelas e resultados */
 .table-scroll { overflow-x: auto; overscroll-behavior-inline: contain; }
@@ -1116,6 +1120,28 @@ tbody tr:hover td { background: var(--table-row-hover); }
 #loginScreen.app-login #loginForm input { background: var(--surface-subtle); }
 #loginScreen.app-login #loginForm input:focus { background: var(--surface-raised); }
 #loginScreen.app-login #btnEntrar { width: 100%; margin-top: 5px; }
+/* "Lembrar-me": o rótulo inteiro é o alvo de toque (44px), então a caixa fica no
+   tamanho de caixa, sem herdar altura, recuo e fundo dos campos de texto. */
+#loginScreen.app-login #loginForm .login-lembrar {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--muted);
+  font-weight: 400;
+  cursor: pointer;
+}
+#loginScreen.app-login #loginForm .login-lembrar input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 
 /* Sorteio: a rede triangular remete ao balanceamento entre destinos. */
 .app-login[data-login-art='sorteio'] .app-login-symbol { border-radius: 50%; }

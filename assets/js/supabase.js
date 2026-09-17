@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '4dc6b8895b';
+const ASSET_VERSION = 'dff28a694b';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -34,20 +34,37 @@ function rotularCadeira(el, valor) {
   return el;
 }
 
-// O token fica somente na aba atual: navegar entre as páginas preserva a sessão,
-// mas fechar a aba a encerra. Senhas nunca são armazenadas.
+// Por padrão o token fica somente na aba atual (sessionStorage): navegar entre as
+// páginas preserva a sessão, mas fechar a aba a encerra. Com "Lembrar-me"
+// marcado no login ele vai para o localStorage e sobrevive ao fechamento do
+// navegador. Senhas nunca são armazenadas.
 const SESSION_ACCESS_TOKEN_KEY = 'sorteio-sei.access-token';
 const SESSION_REFRESH_TOKEN_KEY = 'sorteio-sei.refresh-token';
 let accessToken = '';
 let refreshToken = '';
+let lembrarSessao = false;
 let renovacaoEmAndamento = null;
 
-function salvarSessao(sessao) {
+function apagarTokens(armazenamento) {
+  try {
+    armazenamento.removeItem(SESSION_ACCESS_TOKEN_KEY);
+    armazenamento.removeItem(SESSION_REFRESH_TOKEN_KEY);
+  } catch (_) {
+    // A sessão em memória já foi descartada.
+  }
+}
+
+// `lembrar` só vem do login; a renovação omite e grava onde a sessão já mora.
+function salvarSessao(sessao, lembrar = lembrarSessao) {
   accessToken = sessao.access_token || accessToken;
   refreshToken = sessao.refresh_token || refreshToken;
+  lembrarSessao = lembrar;
   try {
-    sessionStorage.setItem(SESSION_ACCESS_TOKEN_KEY, accessToken);
-    sessionStorage.setItem(SESSION_REFRESH_TOKEN_KEY, refreshToken);
+    const destino = lembrar ? localStorage : sessionStorage;
+    destino.setItem(SESSION_ACCESS_TOKEN_KEY, accessToken);
+    destino.setItem(SESSION_REFRESH_TOKEN_KEY, refreshToken);
+    // Uma cópia no outro armazenamento seria uma sessão que ninguém renova nem apaga.
+    apagarTokens(lembrar ? sessionStorage : localStorage);
   } catch (_) {
     // Sem armazenamento disponível, a sessão continua válida até a próxima navegação.
   }
@@ -56,8 +73,15 @@ function salvarSessao(sessao) {
 
 function restaurarSessao() {
   try {
+    // A aba primeiro; uma aba nova de quem marcou "Lembrar-me" começa vazia e
+    // encontra a sessão no localStorage.
     accessToken = sessionStorage.getItem(SESSION_ACCESS_TOKEN_KEY) || '';
     refreshToken = sessionStorage.getItem(SESSION_REFRESH_TOKEN_KEY) || '';
+    lembrarSessao = !accessToken && Boolean(localStorage.getItem(SESSION_ACCESS_TOKEN_KEY));
+    if (lembrarSessao) {
+      accessToken = localStorage.getItem(SESSION_ACCESS_TOKEN_KEY);
+      refreshToken = localStorage.getItem(SESSION_REFRESH_TOKEN_KEY) || '';
+    }
   } catch (_) {
     accessToken = '';
     refreshToken = '';
@@ -67,15 +91,14 @@ function restaurarSessao() {
   return temSessao;
 }
 
+// Limpa os dois armazenamentos, marcado ou não: a opção pode ter mudado entre
+// um login e outro.
 function encerrarSessao() {
   accessToken = '';
   refreshToken = '';
-  try {
-    sessionStorage.removeItem(SESSION_ACCESS_TOKEN_KEY);
-    sessionStorage.removeItem(SESSION_REFRESH_TOKEN_KEY);
-  } catch (_) {
-    // A sessão em memória já foi descartada.
-  }
+  lembrarSessao = false;
+  apagarTokens(sessionStorage);
+  apagarTokens(localStorage);
   document.documentElement?.classList?.remove('has-session');
 }
 
@@ -173,6 +196,17 @@ async function autenticar(email, senha) {
 }
 
 async function executarRenovacao() {
+  // Com "Lembrar-me", as abas dividem o mesmo localStorage e outra aba pode já
+  // ter rotacionado o refresh token. Reapresentar o da memória, já consumido,
+  // faria o Supabase revogar a sessão inteira — em todas as abas.
+  if (lembrarSessao) {
+    try {
+      refreshToken = localStorage.getItem(SESSION_REFRESH_TOKEN_KEY) || refreshToken;
+    } catch (_) {
+      // Sem armazenamento, segue com o da memória.
+    }
+  }
+
   if (!refreshToken) {
     throw Object.assign(
       new Error('Não foi possível renovar a sessão. Use Sair e entre novamente.'),
@@ -186,10 +220,17 @@ async function executarRenovacao() {
   });
   const dados = await resp.json().catch(() => ({}));
 
+  // Só a recusa do token (4xx) é sessão morta, e só ela vira 401 — que o
+  // bootstrap trata saindo sozinho. Instabilidade do servidor de auth (5xx,
+  // 429, resposta sem token) não apaga a sessão de ninguém: sobe com o status
+  // real e a página oferece "Tentar novamente".
   if (!resp.ok || !dados.access_token) {
+    const recusado = resp.status >= 400 && resp.status < 500 && resp.status !== 429;
     throw Object.assign(
-      new Error('Não foi possível renovar a sessão. Use Sair e entre novamente.'),
-      { status: 401 });
+      new Error(recusado
+        ? 'Não foi possível renovar a sessão. Use Sair e entre novamente.'
+        : 'O servidor de autenticação não respondeu como esperado.'),
+      { status: recusado ? 401 : (resp.ok ? 502 : resp.status) });
   }
 
   // O Supabase pode rotacionar o refresh token. salvarSessao conserva o atual
@@ -419,6 +460,7 @@ function ligarLogin(aoEntrar) {
   const loginForm = document.getElementById('loginForm');
   const loginEmail = document.getElementById('loginEmail');
   const loginSenha = document.getElementById('loginSenha');
+  const loginLembrar = document.getElementById('loginLembrar');
   const loginErro = document.getElementById('loginErro');
   const btnEntrar = document.getElementById('btnEntrar');
   const btnSair = document.getElementById('btnSair');
@@ -428,7 +470,8 @@ function ligarLogin(aoEntrar) {
     alternarBotaoCarregando(btnEntrar, true, 'Entrando…');
 
     try {
-      salvarSessao(await autenticar(loginEmail.value.trim(), loginSenha.value));
+      salvarSessao(await autenticar(loginEmail.value.trim(), loginSenha.value),
+        Boolean(loginLembrar?.checked));
       loginForm.reset();
       loginScreen.hidden = true;
       btnSair.hidden = false;
