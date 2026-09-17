@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fixture visual — Resultado do sorteio da CJ</title>
+  <style>
+    html, body, iframe { box-sizing: border-box; width: 100%; height: 100%; margin: 0; border: 0; }
+    body { overflow: hidden; background: #f4f7f5; }
+  </style>
+</head>
+<body>
+  <!-- Usa a página publicada e substitui somente o estado final por uma massa
+       fictícia. Assim a revisão visual enxerga o HTML e o CSS reais. -->
+  <script>
+    const frame = document.createElement('iframe');
+    frame.id = 'aplicacao';
+    frame.title = 'Resultado demonstrativo do sorteio da Câmara de Julgamento';
+    // Preserva o acesso ao HTML/CSS pelo pai, mas impede que autenticação,
+    // bootstrap ou qualquer script da página real alcance serviços externos.
+    frame.setAttribute('sandbox', 'allow-same-origin');
+
+    const parametros = new URLSearchParams(location.search);
+    const viewport = parametros.get('viewport');
+    if (viewport === 'mobile') {
+      document.body.style.display = 'grid';
+      document.body.style.placeItems = 'start center';
+      document.body.style.overflow = 'auto';
+      document.body.style.padding = '24px';
+      frame.style.width = '390px';
+      frame.style.height = '844px';
+      frame.style.boxShadow = '0 18px 50px rgba(17,39,32,.22)';
+    } else if (viewport === 'tablet') {
+      document.body.style.display = 'grid';
+      document.body.style.placeItems = 'start center';
+      document.body.style.overflow = 'auto';
+      document.body.style.padding = '24px';
+      frame.style.width = '768px';
+      frame.style.height = '920px';
+      frame.style.boxShadow = '0 18px 50px rgba(17,39,32,.18)';
+    }
+
+    const cadeiras = {
+      CJ1: 'Paulo Otoni Ribeiro',
+      CJ2: 'Deusdete Cardoso Belém',
+      CJ3: 'Dorivan de Souza Lima',
+      CJ4: 'Paulo Henrique Oliveira Marques',
+      CJ5: 'Lorena Patricia de Oliveira'
+    };
+    const processos = [
+      ['000000000000001', 'CJ1'],
+      ['000000000000002', 'CJ2'],
+      ['000000000000003', 'CJ3'],
+      ['000000000000004', 'CJ4'],
+      ['000000000000005', 'CJ5'],
+      ['000000000000006', 'CJ1'],
+      ['000000000000007', 'CJ2'],
+      ['000000000000008', 'CJ3'],
+      ['000000000000009', 'CJ4'],
+      ['000000000000010', 'CJ5']
+    ];
+
+    function preencherDestino(elemento, cadeira, principal) {
+      const codigo = document.createElement('span');
+      codigo.className = 'cadeira-codigo';
+      codigo.textContent = principal;
+      const nome = document.createElement('span');
+      nome.className = 'cadeira-nome';
+      nome.textContent = cadeiras[cadeira];
+      elemento.append(codigo, nome);
+      elemento.title = cadeiras[cadeira];
+      elemento.setAttribute('aria-label', `${principal} — ${cadeiras[cadeira]}`);
+    }
+
+    frame.addEventListener('load', () => {
+      const doc = frame.contentDocument;
+      doc.documentElement.classList.add('has-session');
+      for (const id of ['sessionLoading', 'loginScreen', 'modeSelector', 'processSetupHint',
+        'processEntry', 'sortControls', 'resultadoStatus', 'baixarBackup']) {
+        const elemento = doc.getElementById(id);
+        if (elemento) elemento.hidden = true;
+      }
+
+      doc.getElementById('sorteadorContent').hidden = false;
+      doc.getElementById('resultadoSorteio').hidden = false;
+      doc.getElementById('btnVoltar').hidden = false;
+      doc.getElementById('txtModo').textContent = 'Câmara de Julgamento (CJ)';
+      doc.getElementById('thUnidadeResult').textContent = 'Sorteado Para (Câmara de Julgamento)';
+
+      const demonstracao = doc.createElement('p');
+      demonstracao.className = 'small';
+      demonstracao.textContent = 'Demonstração visual com dados fictícios.';
+      doc.querySelector('.resultado-header').after(demonstracao);
+
+      const resumo = doc.createElement('div');
+      resumo.className = 'resumo-wrapper';
+      for (const cadeira of Object.keys(cadeiras)) {
+        const badge = doc.createElement('div');
+        badge.className = 'unidade-badge';
+        preencherDestino(badge, cadeira, `${cadeira}: 2 processos`);
+        resumo.appendChild(badge);
+      }
+      doc.getElementById('resumoContagem').replaceChildren(resumo);
+
+      const corpo = doc.querySelector('#resultTable tbody');
+      const linhas = doc.createDocumentFragment();
+      for (const [numero, cadeira] of processos) {
+        const linha = doc.createElement('tr');
+        const processo = doc.createElement('td');
+        processo.textContent = numero;
+        const assunto = doc.createElement('td');
+        assunto.textContent = 'Auto de Infração';
+        const destino = doc.createElement('td');
+        destino.className = 'sorteado-unidade';
+        preencherDestino(destino, cadeira, cadeira);
+        linha.append(processo, assunto, destino);
+        linhas.appendChild(linha);
+      }
+      corpo.replaceChildren(linhas);
+      doc.getElementById('resultadoSorteioTitle').focus({ preventScroll: true });
+    });
+
+    frame.src = '../../index.html';
+    document.body.appendChild(frame);
+  </script>
+</body>
+</html>

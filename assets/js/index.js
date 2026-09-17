@@ -113,8 +113,8 @@ btnCreg.addEventListener('click', () => {
 // As cadeiras da CJ vêm de CADEIRAS_CJ (supabase.js), compartilhado com as
 // telas de julgados e do acervo. O que vai para o banco é a CADEIRA — ela é
 // estável quando a composição da Câmara muda, e é assim que acervo_cj.relator
-// guarda. O nome só aparece no title de cada unidade, para quem escolhe não
-// precisar decorar o número da cadeira.
+// guarda. O nome acompanha a cadeira apenas na apresentação, sem alterar o
+// valor usado pelo sorteio e pela persistência.
 btnCj.addEventListener('click', () => {
   iniciarSorteador('CJ', Object.keys(CADEIRAS_CJ));
 });
@@ -328,6 +328,29 @@ function getParticipantes() {
   return unidadesList.filter(c => !excluidos.includes(c));
 }
 
+function renderizarDestino(elemento, modo, unidade, rotuloPrincipal = unidade) {
+  const nome = modo === 'CJ' ? CADEIRAS_CJ[unidade] : '';
+  if (!nome) {
+    elemento.textContent = rotuloPrincipal;
+    return;
+  }
+
+  const codigo = document.createElement('span');
+  codigo.className = 'cadeira-codigo';
+  codigo.textContent = rotuloPrincipal;
+  const conselheiro = document.createElement('span');
+  conselheiro.className = 'cadeira-nome';
+  conselheiro.textContent = nome;
+  elemento.append(codigo, conselheiro);
+  elemento.title = nome;
+  elemento.setAttribute('aria-label', `${rotuloPrincipal} — ${nome}`);
+}
+
+function destinoPorExtenso(modo, unidade) {
+  const nome = modo === 'CJ' ? CADEIRAS_CJ[unidade] : '';
+  return nome ? `${unidade} — ${nome}` : unidade;
+}
+
 function sortearProcessos() {
   const rows = Array.from(tbody.querySelectorAll('tr'));
   if (rows.length === 0) {
@@ -456,8 +479,12 @@ function sortearProcessos() {
       
       const badge = document.createElement('div');
       badge.className = 'unidade-badge';
-      badge.textContent = `${p}: ${totalProcessosUnidade} ${totalProcessosUnidade === 1 ? 'processo' : 'processos'}`;
-      if (CADEIRAS_CJ[p]) badge.title = CADEIRAS_CJ[p];
+      renderizarDestino(
+        badge,
+        modoSorteio,
+        p,
+        `${p}: ${totalProcessosUnidade} ${totalProcessosUnidade === 1 ? 'processo' : 'processos'}`
+      );
       
       countWrapper.appendChild(badge);
     });
@@ -480,7 +507,7 @@ function sortearProcessos() {
 
       const tdUn = document.createElement('td');
       tdUn.className = 'sorteado-unidade';
-      tdUn.textContent = unidadeSorteada;
+      renderizarDestino(tdUn, modoSorteio, unidadeSorteada);
 
       tr.append(tdProc, tdAss, tdUn);
       fragmentoResultado.appendChild(tr);
@@ -621,7 +648,7 @@ function exportarWord(sorteio) {
   dados.forEach(d => {
     const celulas = sorteio.modo === 'CREG'
       ? [d.ordem, d.numProcesso, d.interessado, d.assunto, decisaoDe(d), d.unidade]
-      : [d.ordem, d.numProcesso, d.assunto, decisaoDe(d), d.unidade];
+      : [d.ordem, d.numProcesso, d.assunto, decisaoDe(d), destinoPorExtenso(sorteio.modo, d.unidade)];
     tableHtml += '<tr>' + celulas.map(c => `<td>${escaparHtml(c ?? '')}</td>`).join('') + '</tr>';
   });
   tableHtml += '</table>';
