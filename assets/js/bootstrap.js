@@ -132,6 +132,17 @@ async function carregarPaginaAutenticada() {
       sessionLoading.replaceChildren();
       return;
     }
+    // Sessão vencida — um "Lembrar-me" cujo refresh token o servidor já não
+    // aceita — não se resolve tentando de novo, e mandar a pessoa usar Sair é
+    // pedir um passo que o sistema pode dar sozinho. Descarta os tokens e
+    // recarrega a própria página: ela abre no login, e depois de entrar a
+    // pessoa continua onde estava. Recarregar, e não só reexibir o login, porque
+    // o 401 pode chegar com a tela da página já montada.
+    if (err.status === 401) {
+      await sair().catch(() => {});
+      redirecionarSemTransicao(location.href);
+      return;
+    }
     // Se o carregamento local falhar, o erro volta ao contêiner geral para não
     // depender do estado parcial que a página conseguiu montar.
     sessionLoading.hidden = false;
@@ -139,25 +150,16 @@ async function carregarPaginaAutenticada() {
     estado.className = 'load-error';
     estado.setAttribute('role', 'alert');
 
-    // Sessão vencida não se resolve tentando de novo: sem dizer o que houve, o
-    // botão de retentativa vira um laço que sempre termina no mesmo 401.
-    const sessaoVencida = err.status === 401;
     const texto = document.createElement('p');
-    texto.textContent = sessaoVencida
-      ? 'Sua sessão não é mais válida. Use Sair e entre novamente.'
-      : `Não foi possível preparar esta página (${err.message}). Verifique sua conexão e tente novamente.`;
+    texto.textContent = `Não foi possível preparar esta página (${err.message}). Verifique sua conexão e tente novamente.`;
 
-    estado.appendChild(texto);
+    const tentarNovamente = document.createElement('button');
+    tentarNovamente.type = 'button';
+    tentarNovamente.className = 'button-secondary';
+    tentarNovamente.textContent = 'Tentar novamente';
+    tentarNovamente.addEventListener('click', carregarPaginaAutenticada, { once: true });
 
-    if (!sessaoVencida) {
-      const tentarNovamente = document.createElement('button');
-      tentarNovamente.type = 'button';
-      tentarNovamente.className = 'button-secondary';
-      tentarNovamente.textContent = 'Tentar novamente';
-      tentarNovamente.addEventListener('click', carregarPaginaAutenticada, { once: true });
-      estado.appendChild(tentarNovamente);
-    }
-
+    estado.append(texto, tentarNovamente);
     sessionLoading.replaceChildren(estado);
   }
 }

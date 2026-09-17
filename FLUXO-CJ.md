@@ -586,11 +586,17 @@ centraliza autenticação, renovação da sessão e tratamento de erro.
 ### Sessão
 
 Os tokens de acesso e renovação vivem em `sessionStorage`, para navegar entre as
-páginas sem pedir login de novo. Quando o token de acesso vence, `api()` renova
-o par e repete a chamada uma vez. A interface e o trabalho em andamento
-permanecem abertos mesmo se a renovação falhar. O botão **Sair** revoga a sessão
-atual no Supabase e apaga os tokens locais; fechar a aba também descarta o
-`sessionStorage`. Senha nunca é armazenada.
+páginas sem pedir login de novo; fechar a aba encerra a sessão. Com **Lembrar-me
+neste computador** marcado no login (padrão desmarcado), eles vão para o
+`localStorage` e sobrevivem ao fechamento do navegador. Quando o token de acesso
+vence, `api()` renova o par e repete a chamada uma vez — relendo antes o refresh
+token do `localStorage`, que outra aba pode já ter rotacionado. A interface e o
+trabalho em andamento permanecem abertos mesmo se a renovação falhar; já ao abrir
+uma página, sessão recusada pelo servidor descarta os tokens e recarrega a página
+no login. O projeto não limita a duração das sessões, então o refresh token de um
+"Lembrar-me" segue válido depois de dias parado. O botão **Sair** revoga a sessão
+atual no Supabase e apaga os tokens dos dois armazenamentos. Senha nunca é
+armazenada.
 
 ### Segurança: cada tabela recebe o mínimo
 

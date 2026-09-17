@@ -133,7 +133,9 @@ class Document {
 const wait = () => new Promise(resolve => setImmediate(resolve));
 const source = file => readFileSync(new URL(`../assets/js/${file}`, import.meta.url), 'utf8');
 
-function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null) {
+// `local` é um Map: passe o mesmo a dois apps para simular duas abas do mesmo
+// navegador, que dividem o localStorage e não o sessionStorage.
+function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null, local = new Map()) {
   const document = new Document();
   const ouvintes = new Map();
   const window = {
@@ -154,10 +156,15 @@ function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null) {
     setItem(chave, valor) { storage.set(chave, String(valor)); },
     removeItem(chave) { storage.delete(chave); }
   };
+  const localStorage = {
+    getItem(chave) { return local.get(chave) ?? null; },
+    setItem(chave, valor) { local.set(chave, String(valor)); },
+    removeItem(chave) { local.delete(chave); }
+  };
   const codigo = apiSubstituta
     ? `${source('supabase.js').replace('async function api(', 'async function apiOriginal(')}\nconst api = apiSubstituta;`
     : source('supabase.js');
-  const app = new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'fetch', 'apiSubstituta',
+  const app = new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'localStorage', 'fetch', 'apiSubstituta',
     `${codigo}\nreturn {
       autenticar, salvarSessao, restaurarSessao, encerrarSessao, revogarSessaoAtual, sair, api, ligarLogin,
       buscarOrgaosAutorizados: typeof buscarOrgaosAutorizados === 'function' ? buscarOrgaosAutorizados : undefined,
@@ -166,8 +173,8 @@ function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null) {
       CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicador,
       alternarBotaoCarregando, redirecionarSemTransicao,
       estadoSessao: () => ({ accessToken, refreshToken })
-    };`)(document, window, navigator, location, sessionStorage, fetch, apiSubstituta);
-  return { ...app, document, navegacoes, storage,
+    };`)(document, window, navigator, location, sessionStorage, localStorage, fetch, apiSubstituta);
+  return { ...app, document, navegacoes, storage, local,
     dispararPagereveal: evento => ouvintes.get('pagereveal')?.forEach(ouvinte => ouvinte(evento)) };
 }
 
@@ -198,7 +205,7 @@ function paginaServidaComBundles(fetch) {
   document.body.append(controleCj, controleCreg);
 
   const navegacoes = [];
-  const app = new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'fetch',
+  const app = new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'localStorage', 'fetch',
     `${scripts.map(caminho => readFileSync(new URL(`../${caminho}`, import.meta.url), 'utf8')).join('\n')}\nreturn {
       buscarOrgaosAutorizados: typeof buscarOrgaosAutorizados === 'function' ? buscarOrgaosAutorizados : undefined,
       aplicarVisibilidadePorOrgao: typeof aplicarVisibilidadePorOrgao === 'function' ? aplicarVisibilidadePorOrgao : undefined,
@@ -207,6 +214,7 @@ function paginaServidaComBundles(fetch) {
     };`) (
     document, { inicializarAcervo() {}, addEventListener() {} }, {},
     { replace(destino) { navegacoes.push(destino); } },
+    { getItem() { return null; }, setItem() {}, removeItem() {} },
     { getItem() { return null; }, setItem() {}, removeItem() {} }, fetch);
 
   return { app, controleCj, controleCreg, document, navegacoes };
@@ -709,6 +717,111 @@ test('saída manual apaga os dois tokens da sessão', () => {
   assert.equal(app.storage.has('sorteio-sei.refresh-token'), false);
 });
 
+test('sem "Lembrar-me" a sessão fica só na aba', () => {
+  const app = supabaseApp(async () => {});
+  app.salvarSessao({ access_token: 'access', refresh_token: 'refresh' }, false);
+
+  assert.equal(app.storage.get('sorteio-sei.access-token'), 'access');
+  assert.equal(app.local.size, 0, 'fechar o navegador tem de encerrar a sessão');
+});
+
+test('"Lembrar-me" leva a sessão para uma aba aberta depois', () => {
+  const local = new Map();
+  const primeiraAba = supabaseApp(async () => {}, {}, null, local);
+  primeiraAba.salvarSessao({ access_token: 'access', refresh_token: 'refresh' }, true);
+
+  assert.equal(primeiraAba.storage.has('sorteio-sei.access-token'), false);
+  assert.equal(local.get('sorteio-sei.refresh-token'), 'refresh');
+
+  // Navegador fechado e aberto de novo: sessionStorage vazio, localStorage intacto.
+  const novaAba = supabaseApp(async () => {}, {}, null, local);
+  assert.equal(novaAba.restaurarSessao(), true);
+  assert.deepEqual(novaAba.estadoSessao(), { accessToken: 'access', refreshToken: 'refresh' });
+});
+
+test('login sem "Lembrar-me" apaga a sessão lembrada de antes', () => {
+  const local = new Map([['sorteio-sei.access-token', 'velho'], ['sorteio-sei.refresh-token', 'velho']]);
+  const app = supabaseApp(async () => {}, {}, null, local);
+
+  app.salvarSessao({ access_token: 'access', refresh_token: 'refresh' }, false);
+
+  assert.equal(local.size, 0);
+});
+
+test('renovação de sessão lembrada grava no localStorage', async () => {
+  const local = new Map();
+  const app = supabaseApp(async (url, options) => {
+    if (url.includes('grant_type=refresh_token')) {
+      return { ok: true, status: 200, json: async () => ({ access_token: 'access-novo', refresh_token: 'refresh-novo' }) };
+    }
+    return options.headers.Authorization === 'Bearer access-antigo'
+      ? { ok: false, status: 401 }
+      : { ok: true, status: 200, json: async () => [] };
+  }, {}, null, local);
+  app.salvarSessao({ access_token: 'access-antigo', refresh_token: 'refresh-antigo' }, true);
+
+  await app.api('dados');
+
+  assert.equal(local.get('sorteio-sei.refresh-token'), 'refresh-novo');
+  assert.equal(app.storage.size, 0);
+});
+
+test('renovação usa o refresh token que outra aba já rotacionou', async () => {
+  // Reapresentar um refresh token já consumido faz o Supabase revogar a sessão
+  // inteira, derrubando todas as abas de quem marcou "Lembrar-me".
+  const local = new Map();
+  const corpos = [];
+  const fetch = async (url, options) => {
+    if (url.includes('grant_type=refresh_token')) {
+      corpos.push(JSON.parse(options.body).refresh_token);
+      return { ok: true, status: 200, json: async () => ({ access_token: `access-${corpos.length}`, refresh_token: `refresh-${corpos.length}` }) };
+    }
+    return options.headers.Authorization === 'Bearer access-antigo'
+      ? { ok: false, status: 401 }
+      : { ok: true, status: 200, json: async () => [] };
+  };
+  const abaA = supabaseApp(fetch, {}, null, local);
+  abaA.salvarSessao({ access_token: 'access-antigo', refresh_token: 'refresh-antigo' }, true);
+  const abaB = supabaseApp(fetch, {}, null, local);
+  abaB.restaurarSessao();
+
+  await abaA.api('dados');
+  await abaB.api('dados');
+
+  assert.deepEqual(corpos, ['refresh-antigo', 'refresh-1']);
+});
+
+test('saída manual apaga os tokens dos dois armazenamentos', () => {
+  const local = new Map([['sorteio-sei.access-token', 'lembrado'], ['sorteio-sei.refresh-token', 'lembrado']]);
+  const app = supabaseApp(async () => {}, {
+    'sorteio-sei.access-token': 'aba', 'sorteio-sei.refresh-token': 'aba'
+  }, null, local);
+
+  app.encerrarSessao();
+
+  assert.equal(app.storage.size, 0);
+  assert.equal(local.size, 0);
+});
+
+test('login lê a caixa "Lembrar-me"', async () => {
+  const app = supabaseApp(async () => ({
+    ok: true, status: 200, json: async () => ({ access_token: 'access', refresh_token: 'refresh' })
+  }));
+  ['loginScreen', 'loginEmail', 'loginSenha', 'loginErro'].forEach(id => app.document.add(id, 'div'));
+  const loginForm = app.document.add('loginForm', 'form');
+  loginForm.reset = () => {};
+  app.document.add('loginLembrar', 'input').checked = true;
+  app.document.add('btnEntrar', 'button').textContent = 'Entrar';
+  app.document.add('btnSair', 'button');
+
+  app.ligarLogin(async () => {});
+  loginForm.dispatch('submit', { preventDefault() {} });
+  await wait();
+
+  assert.equal(app.local.get('sorteio-sei.access-token'), 'access');
+  assert.equal(app.storage.has('sorteio-sei.access-token'), false);
+});
+
 test('saída manual revoga a sessão atual antes de apagar os tokens locais', async () => {
   let requisicao;
   let concluirLogout;
@@ -1098,6 +1211,34 @@ test('nega usuário sem órgãos, revoga a sessão e não carrega o módulo', as
   assert.equal(page.loginScreen.hidden, false);
   assert.equal(page.btnSair.hidden, true);
   assert.match(page.loginErro.textContent, /sem permissão/i);
+  assert.equal(scriptsCarregados, 0);
+});
+
+test('sessão vencida descarta os tokens e recarrega a página no login', async () => {
+  // Um "Lembrar-me" parado cujo refresh token o servidor recusa: nada de
+  // "use Sair e entre novamente" — o sistema sai sozinho e mostra o login.
+  let encerrou = 0;
+  let scriptsCarregados = 0;
+  const destinos = [];
+  const page = bootstrapPage(async () => {}, 'acervo-cj', {
+    buscarOrgaos: async () => { throw Object.assign(new Error('renovação recusada'), { status: 401 }); },
+    encerrarSessaoNoServidor: async () => { encerrou++; },
+    carregar: async () => { scriptsCarregados++; },
+    location: { href: 'https://exemplo/acervo-cj.html', replace(destino) { destinos.push(destino); } }
+  });
+
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    await page.iniciar();
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(encerrou, 1);
+  assert.deepEqual(destinos, ['https://exemplo/acervo-cj.html']);
+  assert.equal(page.sessionLoading.children.length, 1,
+    'sem mensagem de erro nem "Tentar novamente": só o indicador até recarregar');
   assert.equal(scriptsCarregados, 0);
 });
 
