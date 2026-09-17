@@ -464,44 +464,62 @@ const resumoDe = page => page.document.getElementById('resumoContagem')
 test('processo sem defesa vai para a CJ1 sem passar pelo sorteio', async () => {
   let corpo;
   const page = indexPage({ api: async (_tabela, opcoes) => { corpo = JSON.parse(opcoes.body); } });
-  // A CJ1 fica FORA do sorteio: se mesmo assim ela levar os dois sem defesa — e
-  // nenhum dos com defesa —, é porque esse lote não passou pelo sorteio.
-  const linhas = await preencherCj(page, ['Não', 'Sim', 'Não', 'Sim', 'Sim', 'Sim'], ['CJ1']);
+  const linhas = await preencherCj(page, ['Não', 'Sim', 'Não', 'Sim', 'Sim', 'Sim']);
   page.document.getElementById('sortear').dispatch('click');
   await wait();
 
   assert.match(page.document.getElementById('processSetupHint').textContent,
-    /Defesa "Não" não entra no sorteio: vai direto para a CJ1/,
+    /Defesa "Não" não entra no sorteio: vai direto para a CJ1, que só recebe esses/,
     'a tela tem de avisar a regra antes, não só mostrar o resultado');
 
   assert.deepEqual(unidadesDe([linhas[0], linhas[2]]), ['CJ1', 'CJ1']);
-  // Quatro com defesa para as quatro cadeiras que sobraram: uma para cada.
+  // Quatro com defesa para as quatro cadeiras do sorteio: uma para cada.
   assert.deepEqual(unidadesDe([linhas[1], linhas[3], linhas[4], linhas[5]]).sort(),
     ['CJ2', 'CJ3', 'CJ4', 'CJ5']);
 
-  // O resumo mostra a CJ1 mesmo excluída do sorteio: ela recebeu processo.
   assert.deepEqual(resumoDe(page), ['CJ1: 2 processos', 'CJ2: 1 processo',
     'CJ3: 1 processo', 'CJ4: 1 processo', 'CJ5: 1 processo']);
 
   const semDefesa = corpo.filter(p => !p.defesa);
   assert.deepEqual(semDefesa.map(p => p.num_processo), ['900000000000001', '900000000000003']);
   assert.deepEqual(semDefesa.map(p => p.relator), ['CJ1', 'CJ1']);
-  assert.ok(corpo.filter(p => p.defesa).every(p => p.relator !== 'CJ1'),
-    'com a CJ1 excluída, nenhum processo com defesa pode cair nela');
 });
 
-test('o lote sem defesa não tira da CJ1 a parte dela no sorteio', async () => {
+test('a CJ1 não recebe processo com defesa nem aparece nas pills', async () => {
   const page = indexPage();
-  const linhas = await preencherCj(page,
-    ['Não', 'Não', 'Não', 'Sim', 'Sim', 'Sim', 'Sim', 'Sim']);
+  // Dez com defesa: se a CJ1 estivesse no sorteio, levaria dois deles.
+  const linhas = await preencherCj(page, Array(10).fill('Sim'));
   page.document.getElementById('sortear').dispatch('click');
   await wait();
 
-  assert.deepEqual(unidadesDe(linhas.slice(0, 3)), ['CJ1', 'CJ1', 'CJ1']);
-  // Cinco com defesa para as cinco cadeiras: uma para cada, a CJ1 inclusive —
-  // os três sem defesa não descontam da parte dela.
-  assert.deepEqual(unidadesDe(linhas.slice(3)).sort(), ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5']);
-  assert.equal(resumoDe(page)[0], 'CJ1: 4 processos');
+  assert.deepEqual(page.document.getElementById('pillsContainer').children.map(p => p.dataset.creg),
+    ['CJ2', 'CJ3', 'CJ4', 'CJ5']);
+  assert.ok(unidadesDe(linhas).every(u => u !== 'CJ1'), 'processo com defesa caiu na CJ1');
+  // Dez entre quatro: duas ou três para cada, sem sobra para ninguém de fora.
+  const porCadeira = ['CJ2', 'CJ3', 'CJ4', 'CJ5'].map(c => unidadesDe(linhas).filter(u => u === c).length);
+  assert.ok(porCadeira.every(n => n === 2 || n === 3), `distribuição desigual: ${porCadeira}`);
+  assert.equal(porCadeira.reduce((x, y) => x + y), 10);
+  assert.equal(resumoDe(page).some(badge => badge.startsWith('CJ1')), false);
+});
+
+test('sem cadeira no sorteio, só o lote sem defesa pode ser distribuído', async () => {
+  const todas = ['CJ2', 'CJ3', 'CJ4', 'CJ5'];
+
+  const soSemDefesa = indexPage();
+  const linhas = await preencherCj(soSemDefesa, ['Não', 'Não'], todas);
+  soSemDefesa.document.getElementById('sortear').dispatch('click');
+  await wait();
+  assert.equal(soSemDefesa.document.getElementById('processFormMessage').hidden, true);
+  assert.deepEqual(unidadesDe(linhas), ['CJ1', 'CJ1']);
+
+  const comDefesa = indexPage();
+  const linhasComDefesa = await preencherCj(comDefesa, ['Não', 'Sim'], todas);
+  comDefesa.document.getElementById('sortear').dispatch('click');
+  await wait();
+  assert.equal(comDefesa.document.getElementById('processFormMessage').hidden, false);
+  assert.match(comDefesa.document.getElementById('processFormMessage').textContent,
+    /cadeiras que recebem processo com defesa estão excluídas/);
+  assert.deepEqual(unidadesDe(linhasComDefesa), [undefined, undefined]);
 });
 
 test('autenticação envia credenciais e devolve o par de tokens', async () => {
@@ -1701,14 +1719,14 @@ test('sorteio da CJ mostra a cadeira e o conselheiro no hover', () => {
   document.getElementById('btnCj').dispatch('click');
 
   const pills = document.getElementById('pillsContainer').children;
-  assert.deepEqual(pills.map(p => p.textContent), ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'],
+  // A CJ1 não tem pill: só recebe o lote sem defesa, que não passa pelo sorteio.
+  assert.deepEqual(pills.map(p => p.textContent), ['CJ2', 'CJ3', 'CJ4', 'CJ5'],
     'o sorteio precisa gravar a cadeira, que é o que acervo_cj guarda');
-  assert.equal(pills[0].title, 'Paulo Otoni Ribeiro');
-  assert.equal(pills[1].title, 'Deusdete Cardoso Belém');
-  assert.equal(pills[2].title, 'Dorivan de Souza Lima');
-  assert.equal(pills[3].title, 'Paulo Henrique Oliveira Marques');
-  assert.equal(pills[4].title, 'Lorena Patricia de Oliveira');
-  assert.equal(pills[0]['aria-label'], 'CJ1 — Paulo Otoni Ribeiro',
+  assert.equal(pills[0].title, 'Deusdete Cardoso Belém');
+  assert.equal(pills[1].title, 'Dorivan de Souza Lima');
+  assert.equal(pills[2].title, 'Paulo Henrique Oliveira Marques');
+  assert.equal(pills[3].title, 'Lorena Patricia de Oliveira');
+  assert.equal(pills[0]['aria-label'], 'CJ2 — Deusdete Cardoso Belém',
     'o leitor de tela precisa anunciar a pessoa, não soletrar a cadeira');
 });
 

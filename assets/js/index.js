@@ -6,6 +6,7 @@ const recursos = ['Com recurso', 'Sem recurso', 'Não se aplica', 'Pedido de rev
 const defesas = ['Sim', 'Não'];
 // Processo sem defesa não é sorteado: é o lote de homologação de auto de
 // infração, que a Câmara distribui inteiro para uma cadeira só (ver FLUXO-CJ.md).
+// Essa cadeira fica só com esse lote: não entra no sorteio dos com defesa.
 const CADEIRA_SEM_DEFESA = 'CJ1';
 
 // ── Aleatoriedade do sorteio ─── início do bloco verificado por tests/test_sorteio.mjs
@@ -156,7 +157,9 @@ function iniciarSorteador(modo, unidades) {
   sortearBtn.textContent = `Sortear ${modo} e Exportar`;
 
   const fragmentoPills = document.createDocumentFragment();
-  unidadesList.forEach(unit => {
+  // As pills são quem participa do sorteio. Na CJ a cadeira do sem defesa não
+  // participa, então não tem pill: excluí-la ou incluí-la não mudaria nada.
+  unidadesList.filter(unit => modo !== 'CJ' || unit !== CADEIRA_SEM_DEFESA).forEach(unit => {
     const pill = document.createElement('button');
     pill.type = 'button';
     pill.className = 'pill';
@@ -172,9 +175,9 @@ function iniciarSorteador(modo, unidades) {
   processEntry.hidden = true;
   sortearBtn.hidden = true;
   // A regra do sem defesa é do sorteio, não da digitação: avisá-la aqui evita
-  // que a CJ1 no resultado pareça engano de quem a excluiu do sorteio.
+  // que a CJ1 fora das pills e no resultado pareça engano.
   processSetupHint.textContent = 'Defina a quantidade e gere as linhas para começar o preenchimento.'
-    + (modo === 'CJ' ? ` Processo com Defesa "Não" não entra no sorteio: vai direto para a ${CADEIRA_SEM_DEFESA}.` : '');
+    + (modo === 'CJ' ? ` Processo com Defesa "Não" não entra no sorteio: vai direto para a ${CADEIRA_SEM_DEFESA}, que só recebe esses. Os com defesa são sorteados entre as demais cadeiras.` : '');
   processSetupHint.hidden = false;
   sortControls.hidden = false;
   esconderMensagemFormulario();
@@ -331,7 +334,8 @@ tbody.addEventListener('click', event => {
 
 function getParticipantes() {
   const excluidos = Array.from(document.querySelectorAll('#pillsContainer .excluded')).map(p => p.dataset.creg);
-  return unidadesList.filter(c => !excluidos.includes(c));
+  return unidadesList.filter(c => !excluidos.includes(c)
+    && !(modoSorteio === 'CJ' && c === CADEIRA_SEM_DEFESA));
 }
 
 function sortearProcessos() {
@@ -373,9 +377,21 @@ function sortearProcessos() {
     numerosVistos.set(numProc, idx + 1);
   }
 
+  // Regra da Câmara: processo sem defesa não é sorteado — vai todo para a CJ1,
+  // que é quem recebe o lote de homologação de auto de infração. E a CJ1 só
+  // recebe esse lote: getParticipantes() a deixa fora do sorteio dos com defesa.
+  const semDefesa = new Set(modoSorteio === 'CJ'
+    ? rows.filter(r => r.querySelector('.col-decisao select').value === 'Não')
+    : []);
+
+  // Sem ninguém no sorteio só dá erro se houver o que sortear: um lote todo sem
+  // defesa vai inteiro para a CJ1 e não precisa de participante.
   const participantes = getParticipantes();
-  if (participantes.length === 0) {
-    mostrarMensagemFormulario(`Todos os ${modoSorteio}s estão excluídos. Selecione pelo menos um para participar.`, pillsContainer.querySelector('button'));
+  if (participantes.length === 0 && rows.length > semDefesa.size) {
+    mostrarMensagemFormulario(modoSorteio === 'CJ'
+      ? `Todas as cadeiras que recebem processo com defesa estão excluídas. Selecione pelo menos uma para participar.`
+      : `Todos os ${modoSorteio}s estão excluídos. Selecione pelo menos um para participar.`,
+      pillsContainer.querySelector('button'));
     return;
   }
 
@@ -383,15 +399,6 @@ function sortearProcessos() {
 
   const totalPorUnidade = {};
   participantes.forEach(c => { totalPorUnidade[c] = 0; });
-
-  // Regra da Câmara: processo sem defesa não é sorteado — vai todo para a CJ1,
-  // que é quem recebe o lote de homologação de auto de infração. Vale mesmo com
-  // a CJ1 fora do sorteio: a pill exclui do SORTEIO, e estes processos não
-  // passam por ele. Também não entram na contagem que equilibra o resto: o que
-  // se reparte entre as cadeiras é só o que foi sorteado.
-  const semDefesa = new Set(modoSorteio === 'CJ'
-    ? rows.filter(r => r.querySelector('.col-decisao select').value === 'Não')
-    : []);
 
   const linhasPorAssunto = {};
   rows.filter(r => !semDefesa.has(r)).forEach(r => {
@@ -466,8 +473,8 @@ function sortearProcessos() {
     const countWrapper = document.createElement('div');
     countWrapper.className = 'resumo-wrapper';
 
-    // A CJ1 aparece no resumo mesmo excluída do sorteio, quando levou processo
-    // sem defesa: o resumo é o que cada cadeira recebeu, não quem participou.
+    // A CJ1 aparece no resumo mesmo fora do sorteio, quando levou processo sem
+    // defesa: o resumo é o que cada cadeira recebeu, não quem participou.
     unidadesList.filter(u => u in totalPorUnidade).forEach(p => {
       const totalProcessosUnidade = totalPorUnidade[p];
 
