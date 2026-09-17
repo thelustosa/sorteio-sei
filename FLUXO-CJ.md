@@ -12,7 +12,8 @@ até 27/08/2026, quando ganhou o mesmo par de tabelas — ver
 > histórico importado da planilha saiu das tabelas de produção e ficou guardado
 > no schema `backup_cj`. Dois dias depois, uma carga de recuperação repôs o que
 > a planilha não alcançava, lendo as atas de sorteio e as pautas publicadas. Ver
-> *Reinício da série*, mais abaixo.
+> *Reinício da série*, mais abaixo. Em 17/09/2026 uma segunda carga trouxe as
+> atas de sorteio 015 e 016 — ver *A carga das atas 015 e 016*.
 
 ---
 
@@ -21,7 +22,7 @@ até 27/08/2026, quando ganhou o mesmo par de tabelas — ver
 ```mermaid
 flowchart TD
     A["Secretária sorteia<br/>index.html"] -->|"POST /rest/v1/acervo_cj"| B[("acervo_cj<br/>uma linha por distribuição")]
-    C["Site da AGR<br/>pautas das reuniões"] -->|"GitHub Actions, de hora em hora"| D["sincronizar.py<br/>baixa PDF e extrai processos"]
+    C["Site da AGR<br/>pautas das reuniões"] -->|"GitHub Actions, duas vezes ao dia"| D["sincronizar.py<br/>baixa PDF e extrai processos"]
     D -->|"INSERT direto no banco"| E[("julgados_cj<br/>uma linha por sessão")]
     D --> F[("pautas_cj<br/>documentos processados")]
     B -.->|"gatilho preenche<br/>relator, defesa, data DIST"| E
@@ -124,9 +125,15 @@ Não existe servidor nosso, então o "endpoint" virou um job agendado — que ai
 tem a vantagem de deixar o log de cada rodada na aba Actions, coerente com a
 proposta de auditoria do projeto.
 
-Dispara sozinho de hora em hora, das 07:00 às 20:00 de Goiás, ou à mão em
+Dispara sozinho duas vezes ao dia, antes das consultas das 12:00 e das 17:00 de
+Goiás (cada janela com duas tentativas, porque o agendamento do Actions descarta
+rodadas em pico — os motivos estão no próprio workflow), ou à mão em
 **Actions → Sincronizar Julgados → Run workflow**, com opção de simular. A
 mesma rodada sincroniza o Conselho Regulador.
+
+Consequência prática: a pauta publicada de manhã só entra na rodada de 11:20.
+Quem precisar dela antes dispara o workflow à mão — foi o que se fez com a 34ª
+reunião em 17/09/2026.
 
 ### Como um processo é identificado no PDF
 
@@ -318,10 +325,10 @@ sem os campos derivados — **sem inventar dado nenhum** — e o número sai lis
 em `pautas_cj.processos_sem_acervo` para a secretaria completar o acervo. Na
 planilha, o equivalente era a fórmula devolver "Não encontrado".
 
-Hoje é raro: depois da carga de recuperação de 21/08/2026, 150 dos 151 julgados
-de 2026 encontram a distribuição. O único que não encontra é o
+Hoje é raro: depois da carga das atas 015 e 016, em 17/09/2026, 245 dos 246
+julgados de 2026 encontram a distribuição. O único que não encontra é o
 `202600029001283`, da 25ª reunião, cuja distribuição não está em fonte nenhuma —
-nem nas atas de sorteio 010 a 014, nem na planilha. Dele se sabe o relator,
+nem nas atas de sorteio 010 a 016, nem na planilha. Dele se sabe o relator,
 porque a própria pauta o diz; a data da distribuição é que não existe em lugar
 nenhum, e sem ela não há linha de acervo a criar.
 
@@ -546,6 +553,51 @@ são *Julgado sem processo no acervo* (o `1283`) e *Relator divergente do acervo
 vinculado* (o `2208`). A conferência também mantém como `AVISO` os números CREG
 legados fora do padrão, até que uma fonte oficial permita corrigi-los.
 
+### A carga das atas 015 e 016 (17/09/2026)
+
+O acervo parou em 14/08, a ata 014. Os dois sorteios seguintes não passaram pela
+tela, e a sincronização seguiu gravando as pautas: a 32ª (03/09) e a 33ª (10/09)
+entraram com **35 julgados órfãos** — sem relator, defesa, data de distribuição
+nem `acervo_id` —, todos listados em `pautas_cj.processos_sem_acervo`. Era o
+vão da seção anterior se repetindo.
+
+A carga foi feita pelas mesmas regras da de 21/08, direto no banco, num bloco só:
+
+| ata | data | sem defesa (CJ1) | com defesa | total |
+|---|---|---|---|---|
+| 014 | 14/08/2026 | 22 | 12 | 34 — já estava; conferida linha a linha, ordem e cadeira |
+| **015** | **24/08/2026** | **47** | **13** | **60** |
+| **016** | **16/09/2026** | **20** | **12** | **32** |
+
+- **Formato das linhas** igual ao da ata 014 no banco: `relator` com a cadeira
+  (`CJ1`..`CJ5`, pelo `cadeiras_cj`), `ordem` da ata, `origem = 'sorteio'`,
+  `sorteado_em` nulo — a ata não traz a hora.
+- **Defesa pela cadeira**, a regra de *Três coisas que a ata de sorteio não
+  traz*. Antes de gravar, as pautas da 32ª e da 33ª foram lidas: os 35 órfãos
+  batem com a ata 015 relator por relator, e o rótulo *"Processos sem defesa:"*
+  só aparece no bloco do Paulo Otoni Ribeiro. Nenhuma exceção desta vez.
+- **Nenhum processo das duas atas** já estava no acervo — não há
+  redistribuição nesta carga.
+- **Depois do insert**, o `update` de [`rederivar_cj.sql`](sql/rederivar_cj.sql)
+  religou os 35 órfãos, e `processos_sem_acervo` das duas pautas foi recalculado
+  a partir de `julgados_cj`: as duas ficaram vazias.
+
+Na mesma manhã a pauta da **34ª reunião (17/09)** já estava no ar e a rodada
+agendada ainda não tinha passado; o workflow foi disparado à mão só para a CJ.
+Os 23 processos dela entraram vinculados, e os blocos de relator da pauta
+conferem com as atas 014 e 015.
+
+| | antes | depois |
+|---|---|---|
+| `acervo_cj` | 194 distribuições (até 14/08) | **286** (até 16/09) |
+| `julgados_cj` | 223, 36 órfãos | **246**, 1 órfão (o `1283`) |
+| `pautas_cj` | o marco + 13 documentos | o marco + **14** (até a 34ª) |
+| distribuições sem julgamento | — | **41** (CJ1 20, CJ3 6, CJ5 6, CJ2 5, CJ4 4) |
+
+Os 23 da 34ª são a fila de voto e status da secretaria. As conferências de
+[`verificacao_cj.sql`](sql/verificacao_cj.sql) fecham sem `ERRO`, com os mesmos
+dois avisos de antes (o `1283` e o `2208`).
+
 ### Restaurar
 
 Todo script desta seção é **um comando só** — um único bloco `do $$ … $$`. Não é
@@ -735,13 +787,17 @@ entrou nem impede o processamento dos demais.
 
 ## 10. O que ainda não está resolvido
 
-Revisto depois da carga de recuperação, em 21/08/2026.
+Revisto depois da carga das atas 015 e 016, em 17/09/2026.
 
 ### Do sistema
 
+- **Sorteio fora da tela abre vão no acervo.** As atas 011 a 016 foram todas
+  lançadas depois, por carga. Enquanto a ata não entra, cada pauta sincronizada
+  grava órfãos, e só o `rederivar_cj.sql` os religa. O banco não tem como saber
+  que um sorteio aconteceu; quem sabe é a ata.
 - **Um julgado sem distribuição.** O `202600029001283`, da 25ª reunião
-  (16/07/2026), é o único dos 151 que a carga de recuperação não conseguiu
-  ligar ao acervo. Ele não está nas atas de sorteio 010 a 014 nem no histórico
+  (16/07/2026), é o único dos 246 julgados da série sem vínculo com o
+  acervo. Ele não está nas atas de sorteio 010 a 016 nem no histórico
   da planilha, que cobre tudo até 10/06 — a mesma data da ata 010, com as mesmas
   32 distribuições. Relator e defesa foram gravados no julgado, porque a pauta
   diz de quem é, mas `acervo_id` e `data_distribuicao` ficam nulos e o número
