@@ -925,6 +925,10 @@ tbody tr:hover td { background: var(--table-row-hover); }
 #resumoContagem { margin-bottom: 18px; }
 
 .unidade-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   padding: 8px 14px;
   border-radius: var(--radius-pill);
   background: var(--accent);
@@ -953,6 +957,26 @@ tbody tr:hover td { background: var(--table-row-hover); }
 #resultTable td.sorteado-unidade {
   color: var(--accent);
   font-weight: 700;
+}
+
+.cadeira-codigo,
+.cadeira-nome {
+  display: block;
+}
+
+.unidade-badge .cadeira-nome {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.3;
+  opacity: 0.82;
+}
+
+#resultTable td.sorteado-unidade .cadeira-nome {
+  margin-top: 2px;
+  color: var(--muted-strong);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 /* Login e estados vazios */
