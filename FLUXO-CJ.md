@@ -570,8 +570,17 @@ A carga foi feita pelas mesmas regras da de 21/08, direto no banco, num bloco s�
 | **016** | **16/09/2026** | **20** | **12** | **32** |
 
 - **Formato das linhas** igual ao da ata 014 no banco: `relator` com a cadeira
-  (`CJ1`..`CJ5`, pelo `cadeiras_cj`), `ordem` da ata, `origem = 'sorteio'`,
-  `sorteado_em` nulo — a ata não traz a hora.
+  (`CJ1`..`CJ5`, pelo `cadeiras_cj`), `ordem` da ata e `sorteado_em` nulo — a
+  ata não traz a hora.
+- **`origem = 'ata'`**, e não `'sorteio'`. A carga entrou primeiro como
+  `'sorteio'`, copiando as linhas de 21/08, porque `acervo_cj` só aceitava
+  `sorteio` e `planilha`. O efeito apareceu no mesmo dia: o **Histórico de
+  sorteios** lista `origem = 'sorteio'` a partir do marco de 27/08 e passou a
+  mostrar a ata 016 como rodada feita na tela. A migração `20260917123135`
+  trouxe a opção `'ata'` do Conselho e reclassificou as seis rodadas vindas de
+  ata — as quatro da carga de recuperação (011 a 014) e as duas desta. O
+  histórico da Câmara voltou a ficar vazio, como deve até o primeiro sorteio
+  pela tela.
 - **Defesa pela cadeira**, a regra de *Três coisas que a ata de sorteio não
   traz*. Antes de gravar, as pautas da 32ª e da 33ª foram lidas: os 35 órfãos
   batem com a ata 015 relator por relator, e o rótulo *"Processos sem defesa:"*
@@ -701,7 +710,7 @@ erDiagram
         int ordem
         timestamptz sorteado_em
         text recurso "legado CREG"
-        text origem "sorteio|planilha"
+        text origem "sorteio|planilha|ata"
     }
     julgados_cj {
         bigint id PK
