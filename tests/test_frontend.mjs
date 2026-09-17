@@ -28,6 +28,8 @@ class Node {
     this.disabled = false;
     this.value = '';
     this.textContent = '';
+    this.selectionStart = 0;
+    this.selectionEnd = 0;
   }
 
   set className(value) { this.classList = new ClassList(); this.classList.add(...value.split(/\s+/).filter(Boolean)); }
@@ -54,6 +56,10 @@ class Node {
   getBoundingClientRect() { return { width: 100 }; }
   scrollIntoView() {}
   focus() { this.document.activeElement = this; }
+  setSelectionRange(start, end) {
+    this.selectionStart = start;
+    this.selectionEnd = end;
+  }
   contains(node) { return node === this || this.children.some(child => child.contains(node)); }
   closest(selector) { return this.matches(selector) ? this : this.parentNode?.closest(selector) || null; }
   matches(selector) {
@@ -221,6 +227,7 @@ const { CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicad
 function indexPage({ api = async () => null, aviso = () => {},
   supabaseUrl = 'url', supabaseKey = 'key', token = 'token' } = {}) {
   const document = new Document();
+  const blobs = [];
   const add = (id, tag) => document.add(id, tag);
   const tbody = add('processTableBody', 'tbody');
   add('resultTableBody', 'tbody');
@@ -242,10 +249,10 @@ function indexPage({ api = async () => null, aviso = () => {},
     'CADEIRAS_CJ', 'rotularCadeira',
     `${source('index.js')}\nreturn { inicializarSorteio, avisarPendenciasDeJulgamento };`)(
     document, { matchMedia: () => ({ matches: true }) }, { getRandomValues: values => values.fill(0) },
-    { createObjectURL: () => 'blob:test', revokeObjectURL() {} }, Blob, () => 0,
+    { createObjectURL: blob => { blobs.push(blob); return 'blob:test'; }, revokeObjectURL() {} }, Blob, () => 0,
     callback => callback(), supabaseUrl, supabaseKey, token, api,
     () => document.createElement('div'), () => {}, aviso, CADEIRAS_CJ, rotularCadeira);
-  return { document, tbody, ...app };
+  return { document, tbody, blobs, ...app };
 }
 
 async function preencherCreg(page, numero, recurso = 'Com recurso') {
@@ -260,6 +267,20 @@ async function preencherCreg(page, numero, recurso = 'Com recurso') {
   row.querySelector('.col-processo input').value = numero;
   row.querySelector('.col-assunto select').value = 'Auto de Infração';
   row.querySelector('.col-decisao select').value = recurso;
+}
+
+async function preencherCj(page) {
+  const { document, tbody } = page;
+  document.getElementById('btnCj').dispatch('click');
+  document.getElementById('numRows').value = '5';
+  document.getElementById('createRows').dispatch('click');
+  await wait();
+
+  tbody.children.forEach((row, indice) => {
+    row.querySelector('.num').textContent = String(indice + 1);
+    row.querySelector('.col-processo input').value = `20260002900${String(indice + 1).padStart(4, '0')}`;
+    row.querySelector('.col-decisao select').value = indice % 2 === 0 ? 'Sim' : 'Não';
+  });
 }
 
 function julgadosPage(registrar) {
@@ -298,6 +319,37 @@ test('não adiciona a 501ª linha', async () => {
   document.getElementById('addRowBtn').dispatch('click');
 
   assert.equal(tbody.children.length, 500);
+});
+
+test('linhas de CJ e CREG começam com o prefixo editável do processo', async () => {
+  for (const modo of ['Cj', 'Creg']) {
+    const { document, tbody } = indexPage();
+    document.getElementById(`btn${modo}`).dispatch('click');
+    document.getElementById('numRows').value = '1';
+    document.getElementById('createRows').dispatch('click');
+    await wait();
+    document.getElementById('addRowBtn').dispatch('click');
+
+    for (const row of tbody.children) {
+      const processo = row.querySelector('.col-processo input');
+      assert.equal(processo.value, '20260002900');
+      assert.equal(processo.disabled, false);
+      assert.equal(processo.getAttribute('readonly'), null);
+    }
+  }
+});
+
+test('posiciona o cursor após o prefixo na primeira linha gerada', async () => {
+  const { document, tbody } = indexPage();
+  document.getElementById('btnCj').dispatch('click');
+  document.getElementById('numRows').value = '1';
+  document.getElementById('createRows').dispatch('click');
+  await wait();
+
+  const processo = tbody.children[0].querySelector('.col-processo input');
+  assert.equal(document.activeElement, processo);
+  assert.equal(processo.selectionStart, 11);
+  assert.equal(processo.selectionEnd, 11);
 });
 
 test('oferece backup após falha sem baixá-lo automaticamente', async () => {
@@ -1501,10 +1553,72 @@ test('sorteio da CJ mostra a cadeira e o conselheiro no hover', () => {
     'o leitor de tela precisa anunciar a pessoa, não soletrar a cadeira');
 });
 
-// ── Card de detalhe ──────────────────────────────────────────────────────────
+// ── Resultado do sorteio ─────────────────────────────────────────────────────
+test('resultado da CJ mostra o conselheiro abaixo de cada cadeira', async () => {
+  const page = indexPage();
+  await preencherCj(page);
+  page.document.getElementById('sortear').dispatch('click');
+  await wait();
+
+  const nomesPorCadeira = {
+    CJ1: 'Paulo Otoni Ribeiro',
+    CJ2: 'Deusdete Cardoso Belém',
+    CJ3: 'Dorivan de Souza Lima',
+    CJ4: 'Paulo Henrique Oliveira Marques',
+    CJ5: 'Lorena Patricia de Oliveira'
+  };
+  const destinos = page.document.getElementById('resultTableBody').children
+    .map(row => row.querySelector('.sorteado-unidade'));
+  assert.equal(destinos.length, 5);
+  for (const destino of destinos) {
+    assert.equal(destino.children.length, 2, 'cadeira e nome precisam de linhas visuais próprias');
+    assert.equal(destino.children[1].textContent, nomesPorCadeira[destino.children[0].textContent]);
+  }
+
+  const badges = page.document.getElementById('resumoContagem').children[0].children;
+  assert.equal(badges.length, 5);
+  badges.forEach((badge, indice) => {
+    const cadeira = `CJ${indice + 1}`;
+    assert.equal(badge.children.length, 2);
+    assert.equal(badge.children[0].textContent, `${cadeira}: 1 processo`);
+    assert.equal(badge.children[1].textContent, nomesPorCadeira[cadeira]);
+  });
+});
+
+test('ata do sorteio da CJ identifica cadeira e conselheiro', async () => {
+  const page = indexPage();
+  await preencherCj(page);
+  page.document.getElementById('sortear').dispatch('click');
+  await wait();
+
+  const ata = await page.blobs[0].text();
+  for (const destino of [
+    'CJ1 — Paulo Otoni Ribeiro',
+    'CJ2 — Deusdete Cardoso Belém',
+    'CJ3 — Dorivan de Souza Lima',
+    'CJ4 — Paulo Henrique Oliveira Marques',
+    'CJ5 — Lorena Patricia de Oliveira'
+  ]) assert.match(ata, new RegExp(destino));
+});
+
+test('resultado do CREG continua exibindo somente o código da unidade', async () => {
+  const page = indexPage();
+  await preencherCreg(page, '202600029000900');
+  page.document.getElementById('sortear').dispatch('click');
+  await wait();
+
+  const destino = page.document.getElementById('resultTableBody').children[0]
+    .querySelector('.sorteado-unidade');
+  assert.match(destino.textContent, /^CREG[1-4]$/);
+  assert.equal(destino.children.length, 0);
+  const badges = page.document.getElementById('resumoContagem').children[0].children;
+  assert.ok(badges.every(badge => /^CREG[1-4]: \d+ processos?$/.test(badge.textContent)));
+  assert.ok(badges.every(badge => badge.children.length === 0));
+});
+
+// ── Card de detalhe ───────────────────────────────────────────────────────────────────────────────
 // Clicar num bloco com número abre a lista daquele recorte. O que o teste fixa
 // é o contrato com o banco: quais filtros o card pede em cada tipo de célula.
-
 const matriz = [
   { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 2 },
   { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ5', conselheiro: 'Lorena Patricia de Oliveira', processos: 0 },
