@@ -1,6 +1,7 @@
 const assuntosCreg = ['Auto de Infração', 'Chamamento Público', 'Gratuidade', 'Manifestação', 'Minuta', 'Nota Técnica', 'Ouvidoria', 'Requerimento', 'Plano de Racionamento', 'Quadro de Horários', 'Reajuste', 'Outros'];
 const assuntosCj = ['Auto de Infração'];
 const recursos = ['Com recurso', 'Sem recurso', 'Não se aplica', 'Pedido de revisão'];
+const PREFIXO_PROCESSO = '20260002900';
 // Na Câmara de Julgamento a mesma coluna registra outra coisa: se o autuado
 // apresentou defesa. É o campo que os julgados herdam do acervo.
 const defesas = ['Sim', 'Não'];
@@ -116,8 +117,8 @@ btnCreg.addEventListener('click', () => {
 // As cadeiras da CJ vêm de CADEIRAS_CJ (supabase.js), compartilhado com as
 // telas de julgados e do acervo. O que vai para o banco é a CADEIRA — ela é
 // estável quando a composição da Câmara muda, e é assim que acervo_cj.relator
-// guarda. O nome só aparece no title de cada unidade, para quem escolhe não
-// precisar decorar o número da cadeira.
+// guarda. O nome acompanha a cadeira apenas na apresentação, sem alterar o
+// valor usado pelo sorteio e pela persistência.
 btnCj.addEventListener('click', () => {
   iniciarSorteador('CJ', Object.keys(CADEIRAS_CJ));
 });
@@ -228,7 +229,7 @@ function createRowElement(index) {
   const tdProc = document.createElement('td');
   tdProc.className = 'col-processo';
   tdProc.dataset.label = 'Nº Processo';
-  const inpProc = document.createElement('input'); inpProc.type = 'text'; inpProc.placeholder = 'Digite o nº do processo'; inpProc.setAttribute('aria-label', `Número do processo, linha ${index}`);
+  const inpProc = document.createElement('input'); inpProc.type = 'text'; inpProc.value = PREFIXO_PROCESSO; inpProc.placeholder = 'Digite o nº do processo'; inpProc.setAttribute('aria-label', `Número do processo, linha ${index}`);
   tdProc.appendChild(inpProc);
   const tdInt = document.createElement('td');
   tdInt.className = 'col-interessado';
@@ -336,6 +337,29 @@ function getParticipantes() {
   const excluidos = Array.from(document.querySelectorAll('#pillsContainer .excluded')).map(p => p.dataset.creg);
   return unidadesList.filter(c => !excluidos.includes(c)
     && !(modoSorteio === 'CJ' && c === CADEIRA_SEM_DEFESA));
+}
+
+function renderizarDestino(elemento, modo, unidade, rotuloPrincipal = unidade) {
+  const nome = modo === 'CJ' ? CADEIRAS_CJ[unidade] : '';
+  if (!nome) {
+    elemento.textContent = rotuloPrincipal;
+    return;
+  }
+
+  const codigo = document.createElement('span');
+  codigo.className = 'cadeira-codigo';
+  codigo.textContent = rotuloPrincipal;
+  const conselheiro = document.createElement('span');
+  conselheiro.className = 'cadeira-nome';
+  conselheiro.textContent = nome;
+  elemento.append(codigo, conselheiro);
+  elemento.title = nome;
+  elemento.setAttribute('aria-label', `${rotuloPrincipal} — ${nome}`);
+}
+
+function destinoPorExtenso(modo, unidade) {
+  const nome = modo === 'CJ' ? CADEIRAS_CJ[unidade] : '';
+  return nome ? `${unidade} — ${nome}` : unidade;
 }
 
 function sortearProcessos() {
@@ -480,8 +504,12 @@ function sortearProcessos() {
 
       const badge = document.createElement('div');
       badge.className = 'unidade-badge';
-      badge.textContent = `${p}: ${totalProcessosUnidade} ${totalProcessosUnidade === 1 ? 'processo' : 'processos'}`;
-      if (CADEIRAS_CJ[p]) badge.title = CADEIRAS_CJ[p];
+      renderizarDestino(
+        badge,
+        modoSorteio,
+        p,
+        `${p}: ${totalProcessosUnidade} ${totalProcessosUnidade === 1 ? 'processo' : 'processos'}`
+      );
       
       countWrapper.appendChild(badge);
     });
@@ -504,7 +532,7 @@ function sortearProcessos() {
 
       const tdUn = document.createElement('td');
       tdUn.className = 'sorteado-unidade';
-      tdUn.textContent = unidadeSorteada;
+      renderizarDestino(tdUn, modoSorteio, unidadeSorteada);
 
       tr.append(tdProc, tdAss, tdUn);
       fragmentoResultado.appendChild(tr);
@@ -645,7 +673,7 @@ function exportarWord(sorteio) {
   dados.forEach(d => {
     const celulas = sorteio.modo === 'CREG'
       ? [d.ordem, d.numProcesso, d.interessado, d.assunto, decisaoDe(d), d.unidade]
-      : [d.ordem, d.numProcesso, d.assunto, decisaoDe(d), d.unidade];
+      : [d.ordem, d.numProcesso, d.assunto, decisaoDe(d), destinoPorExtenso(sorteio.modo, d.unidade)];
     tableHtml += '<tr>' + celulas.map(c => `<td>${escaparHtml(c ?? '')}</td>`).join('') + '</tr>';
   });
   tableHtml += '</table>';
@@ -773,7 +801,12 @@ createBtn.addEventListener('click', async () => {
   try {
     await createRows(n);
     sortearBtn.hidden = false;
-    tbody.querySelector('input')?.focus();
+    const primeiroProcesso = tbody.querySelector('.col-processo input');
+    if (primeiroProcesso) {
+      primeiroProcesso.focus();
+      const fim = primeiroProcesso.value.length;
+      primeiroProcesso.setSelectionRange(fim, fim);
+    }
   } finally {
     numRowsInput.disabled = false;
     addRowBtn.disabled = false;
