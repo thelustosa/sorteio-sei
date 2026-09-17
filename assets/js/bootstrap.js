@@ -137,10 +137,12 @@ async function carregarPaginaAutenticada() {
     // pedir um passo que o sistema pode dar sozinho. Descarta os tokens e
     // recarrega a própria página: ela abre no login, e depois de entrar a
     // pessoa continua onde estava. Recarregar, e não só reexibir o login, porque
-    // o 401 pode chegar com a tela da página já montada.
+    // o 401 pode chegar com a tela da página já montada. reload(), e não
+    // replace(location.href): com #fragmento na URL (o link "pular para o
+    // conteúdo" deixa um) o replace só rola a página e o indicador fica no ar.
     if (err.status === 401) {
       await sair().catch(() => {});
-      redirecionarSemTransicao(location.href);
+      location.reload();
       return;
     }
     // Se o carregamento local falhar, o erro volta ao contêiner geral para não
