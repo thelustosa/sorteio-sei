@@ -21,7 +21,7 @@ const VOCABULARIO = {
     destinoPadrao: /^CJ[1-9][0-9]*$/,
     decisao: 'Defesa',
     campoDestino: 'relator',
-    votos: ['Manter', 'Anular', 'Vista'],
+    votos: ['Manter', 'Anular', 'Retirado', 'Vista'],
     status: ['Julgado', 'Retornou', 'Retirado', 'Vista'],
     assuntoObrigatorio: true,
     temInteressado: false
