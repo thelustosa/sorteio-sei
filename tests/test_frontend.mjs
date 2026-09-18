@@ -137,6 +137,8 @@ class Document {
 }
 
 const wait = () => new Promise(resolve => setImmediate(resolve));
+// Access token no formato do Supabase: só o `sub` do payload importa aqui.
+const jwt = (sub, marca) => `cabecalho.${Buffer.from(JSON.stringify({ sub, marca })).toString('base64url')}.assinatura`;
 const source = file => readFileSync(new URL(`../assets/js/${file}`, import.meta.url), 'utf8');
 
 // `local` é um Map: passe o mesmo a dois apps para simular duas abas do mesmo
@@ -326,7 +328,7 @@ test('linhas de CJ e CREG começam com o prefixo editável do processo', async (
 
     for (const row of tbody.children) {
       const processo = row.querySelector('.col-processo input');
-      assert.equal(processo.value, '20260002900');
+      assert.equal(processo.value, `${new Date().getFullYear()}0002900`);
       assert.equal(processo.disabled, false);
       assert.equal(processo.getAttribute('readonly'), null);
     }
@@ -344,6 +346,41 @@ test('posiciona o cursor após o prefixo na primeira linha gerada', async () => 
   assert.equal(document.activeElement, processo);
   assert.equal(processo.selectionStart, 11);
   assert.equal(processo.selectionEnd, 11);
+});
+
+test('Tab numa linha seguinte não deixa o prefixo selecionado, e colar o número inteiro o substitui', async () => {
+  const { document, tbody } = indexPage();
+  document.getElementById('btnCj').dispatch('click');
+  document.getElementById('numRows').value = '2';
+  document.getElementById('createRows').dispatch('click');
+  await wait();
+
+  const processo = tbody.children[1].querySelector('.col-processo input');
+  // O Tab chega com o texto todo selecionado.
+  processo.setSelectionRange(0, 11);
+  tbody.dispatch('focusin', { target: processo });
+  assert.deepEqual([processo.selectionStart, processo.selectionEnd], [11, 11]);
+
+  // Seleção feita pela pessoa, com o prefixo já editado, fica como está.
+  processo.value = '202500029000084';
+  processo.setSelectionRange(0, 15);
+  tbody.dispatch('focusin', { target: processo });
+  assert.deepEqual([processo.selectionStart, processo.selectionEnd], [0, 15]);
+
+  processo.value = `${new Date().getFullYear()}0002900`;
+  let evitado = false;
+  tbody.dispatch('paste', {
+    target: processo,
+    clipboardData: { getData: () => ' 202500029000084\n' },
+    preventDefault() { evitado = true; }
+  });
+  assert.equal(processo.value, '202500029000084');
+  assert.equal(evitado, true);
+
+  // Trecho que não é o número inteiro segue a colagem normal do navegador.
+  evitado = false;
+  tbody.dispatch('paste', { target: processo, clipboardData: { getData: () => '0084' }, preventDefault() { evitado = true; } });
+  assert.equal(evitado, false);
 });
 
 test('oferece backup após falha sem baixá-lo automaticamente', async () => {
@@ -567,6 +604,8 @@ test('sem cadeira no sorteio, só o lote sem defesa pode ser distribuído', asyn
   assert.equal(comDefesa.document.getElementById('processFormMessage').hidden, false);
   assert.match(comDefesa.document.getElementById('processFormMessage').textContent,
     /cadeiras que recebem processo com defesa estão excluídas/);
+  assert.equal(comDefesa.document.activeElement.dataset.creg, 'CJ2',
+    'o foco não pode cair na CJ1, que não alterna');
   assert.deepEqual(unidadesDe(linhasComDefesa), [undefined, undefined]);
 });
 
@@ -854,14 +893,14 @@ test('renovação usa o refresh token que outra aba já rotacionou', async () =>
   const fetch = async (url, options) => {
     if (url.includes('grant_type=refresh_token')) {
       corpos.push(JSON.parse(options.body).refresh_token);
-      return { ok: true, status: 200, json: async () => ({ access_token: `access-${corpos.length}`, refresh_token: `refresh-${corpos.length}` }) };
+      return { ok: true, status: 200, json: async () => ({ access_token: jwt('usuario-x', corpos.length), refresh_token: `refresh-${corpos.length}` }) };
     }
-    return options.headers.Authorization === 'Bearer access-antigo'
+    return options.headers.Authorization === `Bearer ${jwt('usuario-x', 'antigo')}`
       ? { ok: false, status: 401 }
       : { ok: true, status: 200, json: async () => [] };
   };
   const abaA = supabaseApp(fetch, {}, null, local);
-  abaA.salvarSessao({ access_token: 'access-antigo', refresh_token: 'refresh-antigo' }, true);
+  abaA.salvarSessao({ access_token: jwt('usuario-x', 'antigo'), refresh_token: 'refresh-antigo' }, true);
   const abaB = supabaseApp(fetch, {}, null, local);
   abaB.restaurarSessao();
 
@@ -869,6 +908,33 @@ test('renovação usa o refresh token que outra aba já rotacionou', async () =>
   await abaB.api('dados');
 
   assert.deepEqual(corpos, ['refresh-antigo', 'refresh-1']);
+});
+
+test('renovação não adota a sessão lembrada de outro usuário', async () => {
+  // Computador compartilhado: X entra com "Lembrar-me" na aba A e depois Y,
+  // também com "Lembrar-me", na aba B. A aba A continua sendo de X.
+  const local = new Map();
+  const corpos = [];
+  const fetch = async (url, options) => {
+    if (url.includes('grant_type=refresh_token')) {
+      corpos.push(JSON.parse(options.body).refresh_token);
+      return { ok: true, status: 200, json: async () => ({ access_token: jwt('usuario-x', 'novo'), refresh_token: 'refresh-x-novo' }) };
+    }
+    return options.headers.Authorization === `Bearer ${jwt('usuario-x', 'antigo')}`
+      ? { ok: false, status: 401 }
+      : { ok: true, status: 200, json: async () => [] };
+  };
+  const abaA = supabaseApp(fetch, {}, null, local);
+  abaA.salvarSessao({ access_token: jwt('usuario-x', 'antigo'), refresh_token: 'refresh-x' }, true);
+  const abaB = supabaseApp(fetch, {}, null, local);
+  abaB.salvarSessao({ access_token: jwt('usuario-y', 1), refresh_token: 'refresh-y' }, true);
+
+  await abaA.api('dados');
+
+  assert.deepEqual(corpos, ['refresh-x']);
+  assert.deepEqual(abaA.estadoSessao(), { accessToken: jwt('usuario-x', 'novo'), refreshToken: 'refresh-x-novo' });
+  assert.equal(abaA.storage.get('sorteio-sei.refresh-token'), 'refresh-x-novo');
+  assert.equal(local.get('sorteio-sei.refresh-token'), 'refresh-y', 'a sessão lembrada de Y não é da aba A');
 });
 
 test('saída manual apaga os tokens dos dois armazenamentos', () => {
@@ -2748,7 +2814,8 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
    'edicaoEtapaCampos', 'edicaoEtapaConfirmacao', 'edicaoDelta', 'edicaoImpacto',
    'edicaoImpactoTitulo', 'edicaoImpactoLista', 'edicaoErro', 'edicaoEtapaRotulo',
    'painelEyebrow', 'metaFiltros', 'metaResumo',
-   'detalheTitulo', 'detalheResumo', 'detalheLoading', 'detalheErro', 'detalheCorpo']
+   'detalheTitulo', 'detalheResumo', 'detalheLoading', 'detalheErro', 'detalheCorpo',
+   'edicaoMotivoRotulo', 'edicaoMotivoOpcional', 'edicaoRevisaoTitulo', 'edicaoRevisaoTexto']
     .forEach(id => document.add(id, 'div'));
   document.add('metaAno', 'select');
   // O <option selected> do admin.html: agrupar por trimestre.
@@ -3123,7 +3190,7 @@ test('tabelas administrativas nomeiam a coluna e as operacoes sem abreviacoes am
     'os valores de Atualizado por precisam ficar centralizados sob o cabeçalho');
   const botoes = page.linhasDaTabela()[0].children[1].children[0].children;
   assert.deepEqual(botoes.map(botao => botao.textContent),
-    ['Corrigir dados', 'Corrigir número', 'Religar ao acervo']);
+    ['Corrigir dados', 'Corrigir número', 'Religar ao acervo', 'Excluir']);
 });
 
 test('tabela administrativa identifica o colegiado para dimensionar colunas exclusivas', async () => {
@@ -4190,4 +4257,255 @@ test('o titulo da lista de impacto diz o que ela lista', async () => {
   assert.equal(page.document.getElementById('edicaoImpacto').hidden, false);
   assert.equal(titulo.textContent, 'Julgados que serão alterados junto',
     'a janela seguinte não herda o título da anterior');
+});
+
+// ── Exclusão ─────────────────────────────────────────────────────────────────
+// A primeira ação do painel que não deixa nada no lugar. O que se persegue: o
+// motivo é exigido nas duas etapas, a lista do que some não pode faltar, cada
+// alcance bate na sua porta, e uma correção aberta depois não herda o vermelho.
+const RESULTADO_EXCLUSAO = { operacao: 'excluir_julgado', num_processo: '202600000000001',
+                             acervo: [], julgados: [41], desvinculados: [] };
+
+async function abrirExclusaoNaSessao(chamadas, respostas = {}) {
+  const page = adminPage({ api: apiDoPainel(chamadas, respostas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+  page.acao(0, 'Excluir').dispatch('click');
+  return page;
+}
+
+async function abrirExclusaoNaDistribuicao(chamadas, respostas = {}) {
+  const page = adminPage({ api: apiDoPainel(chamadas, respostas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('sorteios').dispatch('click');
+  await wait();
+  page.acao(0, 'Abrir distribuição').dispatch('click');
+  await wait();
+  page.acao(0, 'Excluir').dispatch('click');
+  return page;
+}
+
+test('excluir e a ultima acao da linha e diz de qual processo', async () => {
+  for (const abrir of ['sessao', 'distribuicao']) {
+    const page = adminPage({ api: apiDoPainel([]) });
+    await page.inicializarAdmin(new Set(['CJ']));
+    if (abrir === 'distribuicao') {
+      page.botaoDeAba('sorteios').dispatch('click');
+      await wait();
+      page.acao(0, 'Abrir distribuição').dispatch('click');
+    } else {
+      page.acao(0, 'Abrir sessão').dispatch('click');
+    }
+    await wait();
+    const botoes = page.linhasDaTabela()[0].children
+      .find(c => c.dataset.label === 'Ações').children[0].children;
+    const ultimo = botoes.at(-1);
+    assert.equal(ultimo.textContent, 'Excluir', abrir);
+    assert.equal(ultimo.getAttribute('aria-label'), 'Excluir processo 202600000000001', abrir);
+    assert.ok(ultimo.classList.contains('admin-acao-perigo'), abrir);
+  }
+});
+
+test('exclusao nao avanca sem motivo, nem na revisao', async () => {
+  const chamadas = [];
+  const page = await abrirExclusaoNaSessao(chamadas);
+  const motivo = page.document.getElementById('edicaoMotivo');
+  assert.equal(motivo.required, true);
+  assert.equal(page.document.getElementById('edicaoMotivoOpcional').hidden, true);
+  assert.equal(page.document.getElementById('edicaoMotivoRotulo').textContent, 'Motivo da exclusão');
+
+  page.form.dispatch('submit');
+  await wait();
+  assert.equal(page.document.getElementById('edicaoEtapaConfirmacao').hidden, true);
+  assert.match(page.document.getElementById('edicaoErro').children[0].textContent,
+    /Informe o motivo da exclusão/);
+
+  motivo.value = 'importado em duplicidade';
+  page.form.dispatch('submit');
+  await wait();
+  assert.equal(page.document.getElementById('edicaoEtapaConfirmacao').hidden, false);
+
+  motivo.value = '   ';
+  page.form.dispatch('submit');
+  await wait();
+  assert.ok(!chamadas.some(c => c.caminho.startsWith('rpc/admin_excluir')),
+    'o motivo apagado na revisão também barra a gravação');
+});
+
+test('excluir so o julgado chama a porta do julgado e diz o que continua', async () => {
+  const chamadas = [];
+  const page = await abrirExclusaoNaSessao(chamadas,
+    { 'rpc/admin_excluir_julgado_cj': RESULTADO_EXCLUSAO });
+  assert.equal(page.campo('alcance').value, 'julgado', 'o padrão é o alcance mais estreito');
+  page.document.getElementById('edicaoMotivo').value = 'importado em duplicidade';
+  page.form.dispatch('submit');
+  await wait();
+
+  assert.equal(page.document.getElementById('edicaoImpactoTitulo').textContent, 'Depois da exclusão');
+  assert.equal(page.document.getElementById('edicaoImpacto').dataset.tom, 'atencao');
+  assert.match(page.document.getElementById('edicaoImpactoLista').children.at(-1).textContent,
+    /republicar a pauta/);
+  assert.equal(page.document.getElementById('edicaoRevisaoTitulo').textContent, 'Revise antes de excluir');
+  assert.equal(page.dialogo.dataset.tom, 'perigo');
+  const botao = page.document.getElementById('btnAvancarEdicao');
+  assert.equal(botao.textContent, 'Excluir definitivamente');
+  assert.ok(botao.classList.contains('button-perigo'));
+
+  page.form.dispatch('submit');
+  await wait();
+  const gravacao = chamadas.find(c => c.caminho === 'rpc/admin_excluir_julgado_cj');
+  assert.deepEqual(gravacao.corpo, { p_id: 41, p_motivo: 'importado em duplicidade' });
+  assert.equal(page.avisos.at(-1).texto, 'Exclusão gravada: 1 julgado do processo 202600000000001.');
+  assert.equal(page.avisos.at(-1).tipo, 'sucesso');
+});
+
+test('excluir o julgado com a distribuicao usa o acervo_id e lista o que some', async () => {
+  const chamadas = [];
+  const page = await abrirExclusaoNaSessao(chamadas);
+  page.campo('alcance').value = 'tudo';
+  page.document.getElementById('edicaoMotivo').value = 'processo de outro órgão';
+  page.form.dispatch('submit');
+  await wait();
+
+  const lista = page.document.getElementById('edicaoImpactoLista').children;
+  assert.equal(page.document.getElementById('edicaoImpactoTitulo').textContent,
+    'Registros que serão excluídos');
+  assert.equal(page.document.getElementById('edicaoImpacto').dataset.tom, 'perigo');
+  assert.equal(lista[0].textContent, 'Distribuição de 18/06/2026 — CJ3');
+  assert.match(lista[1].textContent, /^Julgado da sessão de 09\/07\/2026 · pauta 24 — Manter \/ Julgado$/);
+
+  page.form.dispatch('submit');
+  await wait();
+  const gravacao = chamadas.find(c => c.caminho === 'rpc/admin_excluir_distribuicao_e_julgados_cj');
+  assert.deepEqual(gravacao.corpo, { p_id: 7, p_motivo: 'processo de outro órgão' });
+});
+
+test('excluir so a distribuicao avisa quem ficou sem vinculo', async () => {
+  const chamadas = [];
+  const page = await abrirExclusaoNaDistribuicao(chamadas, {
+    'rpc/admin_excluir_distribuicao_cj': {
+      operacao: 'excluir_distribuicao', num_processo: '202600000000001',
+      acervo: [7], julgados: [], desvinculados: [41]
+    }
+  });
+  assert.equal(page.campo('alcance').value, 'distribuicao');
+  page.document.getElementById('edicaoMotivo').value = 'lançada em dobro';
+  page.form.dispatch('submit');
+  await wait();
+  assert.match(page.document.getElementById('edicaoImpactoLista').children.at(-1).textContent,
+    /fica sem distribuição vinculada$/);
+  page.form.dispatch('submit');
+  await wait();
+
+  assert.ok(chamadas.some(c => c.caminho === 'rpc/admin_excluir_distribuicao_cj' && c.corpo.p_id === 7));
+  assert.equal(page.avisos.at(-1).tipo, 'atencao');
+  assert.match(page.avisos.at(-1).texto,
+    /^Exclusão gravada: 1 distribuição do processo 202600000000001\. 1 julgado ficou sem distribuição vinculada/);
+});
+
+test('falha ao listar o alcance impede a revisao da exclusao', async () => {
+  const chamadas = [];
+  const page = await abrirExclusaoNaDistribuicao(chamadas, {
+    'rpc/admin_julgados_do_acervo': () => { throw new Error('rede caiu'); }
+  });
+  page.campo('alcance').value = 'tudo';
+  page.document.getElementById('edicaoMotivo').value = 'duplicado';
+  page.form.dispatch('submit');
+  await wait();
+
+  assert.equal(page.document.getElementById('edicaoEtapaConfirmacao').hidden, true);
+  assert.match(page.document.getElementById('edicaoErro').children[0].textContent,
+    /Não foi possível listar o que a exclusão alcança/);
+  page.form.dispatch('submit');
+  await wait();
+  assert.ok(!chamadas.some(c => c.caminho.startsWith('rpc/admin_excluir')));
+});
+
+test('correcao aberta depois de uma exclusao nao herda o tom destrutivo', async () => {
+  const page = await abrirExclusaoNaSessao([]);
+  page.dialogo.close();
+  page.acao(0, 'Corrigir dados').dispatch('click');
+
+  assert.equal(page.dialogo.dataset.tom, '');
+  assert.equal(page.document.getElementById('edicaoMotivo').required, false);
+  assert.equal(page.document.getElementById('edicaoMotivoOpcional').hidden, false);
+  assert.equal(page.document.getElementById('edicaoMotivoRotulo').textContent, 'Motivo da alteração');
+  assert.equal(page.document.getElementById('edicaoRevisaoTitulo').textContent, 'Revise antes de gravar');
+  const botao = page.document.getElementById('btnAvancarEdicao');
+  assert.equal(botao.textContent, 'Revisar alteração');
+  assert.equal(botao.classList.contains('button-perigo'), false);
+});
+
+test('excluir o ultimo processo da sessao volta para a lista de datas', async () => {
+  const chamadas = [];
+  let excluido = false;
+  const page = await abrirExclusaoNaSessao(chamadas, {
+    'rpc/admin_excluir_julgado_cj': () => { excluido = true; return RESULTADO_EXCLUSAO; },
+    'rpc/admin_processos_sessao': () => (excluido ? [] : PROCESSOS_SESSAO)
+  });
+  page.document.getElementById('edicaoMotivo').value = 'duplicado';
+  page.form.dispatch('submit');
+  await wait();
+  page.form.dispatch('submit');
+  for (let i = 0; i < 4; i++) await wait();
+
+  assert.equal(chamadas.at(-1).caminho, 'rpc/admin_sessoes');
+  assert.equal(page.document.getElementById('btnVoltar').hidden, true);
+});
+
+test('o html do dialogo expoe os textos que mudam com a intencao', () => {
+  const html = readFileSync(new URL('../admin.html', import.meta.url), 'utf8');
+  for (const id of ['edicaoMotivoRotulo', 'edicaoMotivoOpcional', 'edicaoRevisaoTitulo', 'edicaoRevisaoTexto']) {
+    assert.match(html, new RegExp(`id="${id}"`), id);
+  }
+  assert.match(html, /<label for="edicaoMotivo"><span id="edicaoMotivoRotulo">Motivo da alteração<\/span>/);
+});
+
+test('auditoria mostra o que o registro excluido guardava', async () => {
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_auditoria': [{
+        id: 9, operacao: 'excluir_julgado', tabela: 'julgados_cj', registro_id: 41,
+        num_processo: '202600000000001',
+        antes: { id: 41, num_processo: '202600000000001', data_sessao: '2026-07-09', pauta: 24,
+                 voto: 'Manter', status: 'Julgado', relator: 'CJ3', dias_dt: 21, periodo_dt: '3T26',
+                 acervo_id: 7, criado_em: '2026-07-09T12:00:00Z' },
+        depois: {}, motivo: 'duplicado', feito_por: 'admin@goias.gov.br',
+        feito_em: '2026-09-17T12:00:00Z'
+      }]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('auditoria').dispatch('click');
+  await wait();
+
+  const linha = page.linhasDaTabela()[0];
+  assert.equal(linha.children.find(c => c.dataset.label === 'Operação').textContent, 'Exclusão de julgado');
+  const itens = linha.children.find(c => c.dataset.label === 'Alteração')
+    .children[0].children.map(li => li.textContent);
+  assert.deepEqual(itens, ['Data da sessão: 09/07/2026', 'Número da pauta: 24', 'Relator: CJ3',
+                           'Voto: Manter', 'Status: Julgado'],
+    'o retrato vira "campo: valor", sem seta e sem colunas calculadas');
+});
+
+test('excluir so fica vermelho sob o ponteiro ou o foco, e a confirmacao usa os tokens de perigo', () => {
+  const css = readFileSync(new URL('../assets/css/index.css', import.meta.url), 'utf8');
+  assert.match(css, /\.admin-acao-perigo\s*\{[^}]*color:\s*var\(--muted\)/s,
+    'vermelho em repouso em toda linha seria um alarme permanente');
+  assert.match(css,
+    /\.admin-acao-perigo:hover,\s*\.admin-acao-perigo:focus-visible\s*\{[^}]*color:\s*var\(--danger\)/s);
+  assert.match(css, /\.admin-dialog-actions \.button-perigo\s*\{[^}]*background:\s*var\(--danger\)/s);
+  assert.match(css, /\.admin-impacto\[data-tom='perigo'\]\s*\{[^}]*background:\s*var\(--danger-panel\)/s);
+  assert.match(css, /\.admin-dialog\[data-tom='perigo'\] \.admin-review-icon\s*\{[^}]*color:\s*var\(--danger\)/s);
+
+  const largura = (visao, filho) => Number(css.match(new RegExp(
+    `\\.admin-table\\[data-visao='${visao}'\\] thead th:nth-child\\(${filho}\\)\\s*\\{[^}]*width:\\s*([\\d.]+)%`))?.[1]);
+  const minimo = visao => Number(css.match(new RegExp(
+    `\\.admin-table\\[data-visao='${visao}'\\]\\s*\\{[^}]*min-width:\\s*(\\d+)px`))?.[1]);
+  // 440px de botões medidos no Chrome, mais os 26px de padding da célula.
+  assert.ok(minimo('processos-sessao') * largura('processos-sessao', 2) / 100 >= 466,
+    'quatro botões cabem na coluna de Ações da sessão');
+  assert.ok(minimo('processos-sorteio') * largura('processos-sorteio', 3) / 100 >= 466,
+    'quatro botões cabem na coluna de Ações da distribuição');
 });

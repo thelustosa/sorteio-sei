@@ -139,9 +139,9 @@ Sequência do CI executada localmente depois da correção (Node 24, Python 3.14
 | :--- | :--- |
 | `node --check` em `assets/js`, `tools` e `tests` | ok |
 | `tests/test_assets.mjs` e `tests/test_sorteio.mjs` | ok |
-| `tests/test_frontend.mjs` | 153/153 |
+| `tests/test_frontend.mjs` | 183/183 |
 | `tests/test_acesso.py` | 11/11 |
-| `tests/test_admin.py` | 58/58 |
+| `tests/test_admin.py` | 68/68 |
 | `tests/test_cj.py` | 75/75 (10 pulados: dependem da planilha, que o CI também não tem) |
 | `tests/test_creg.py` | 46/46 |
 | `tests/test_sincronizacao.py` | 45/45 (1 pulado) |
