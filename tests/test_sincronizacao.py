@@ -441,8 +441,6 @@ def mesmo_documento_reprocessado_nao_duplica_julgados(cur):
     with fonte_com([23]):
         sincronizar.sincronizar(cur.connection, ano=2026, hoje=date(2026, 7, 5))
         antes = uma(cur, 'select count(*) from julgados_cj')
-        cur.execute('delete from pautas_cj')          # simula perder o registro
-        cur.connection.commit()
         r = sincronizar.sincronizar(cur.connection, ano=2026, hoje=date(2026, 7, 5),
                                     desde=date(2026, 6, 30))
 

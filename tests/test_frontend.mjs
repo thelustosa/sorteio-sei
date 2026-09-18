@@ -279,7 +279,7 @@ async function preencherCreg(page, numero, recurso = 'Com recurso') {
   row.querySelector('.col-decisao select').value = recurso;
 }
 
-function julgadosPage(registrar) {
+function julgadosPage(registrar, arquivo = 'julgados.js') {
   const document = new Document();
   const add = (id, tag) => document.add(id, tag);
   ['listaPautas', 'pautasContainer', 'semPendencia', 'pautasIntro', 'detalhePauta',
@@ -289,7 +289,7 @@ function julgadosPage(registrar) {
 
   const app = new Function('document', 'api', 'aviso', 'alternarBotaoCarregando', 'criarIndicadorCarregamento',
     'rotularCadeira',
-    `${source('julgados.js')}\nreturn { abrirPauta, salvar, inicializarJulgados, pendentesPorPauta };`)(
+    `${source(arquivo)}\nreturn { abrirPauta, salvar, inicializarJulgados: typeof inicializarJulgados === 'function' ? inicializarJulgados : inicializarJulgadosCreg, pendentesPorPauta };`)(
     document, registrar, () => {}, () => {}, () => document.createElement('div'), rotularCadeira);
   return { document, tbody, ...app };
 }
@@ -1061,7 +1061,7 @@ test('envia apenas o julgamento que foi alterado', async () => {
 
   await page.salvar();
 
-  assert.deepEqual(enviado, [{ id: 2, voto: '', status: 'Julgado' }]);
+  assert.deepEqual(enviado, [{ id: 2, anterior: { voto: null, status: null }, status: 'Julgado' }]);
 });
 
 test('julgados revela o conselheiro no hover da cadeira', () => {
@@ -1081,6 +1081,27 @@ test('julgados revela o conselheiro no hover da cadeira', () => {
   assert.equal(relator(0)['aria-label'], 'CJ1 — Paulo Otoni Ribeiro');
   assert.equal(relator(1).textContent, 'Conselheiro De Antes');
   assert.equal(relator(1).title, undefined, 'title repetindo o rótulo é ruído');
+});
+
+test('CJ e CREG enviam só o campo editado e preservam a tela após conflito', async () => {
+  for (const arquivo of ['julgados.js', 'julgados-creg.js']) {
+    let enviado;
+    const page = julgadosPage(async (_, options) => {
+      enviado = JSON.parse(options.body).itens;
+      throw Object.assign(new Error('Julgamento alterado por outra pessoa'), { status: 409 });
+    }, arquivo);
+    page.pendentesPorPauta.set('1|2026-08-21', [
+      { id: 1, num_processo: '123', relator: 'CJ1', unidade: 'CREG1', voto: 'Manter', status: null }
+    ]);
+    page.abrirPauta('1|2026-08-21');
+    const status = page.tbody.children[0].querySelector('.col-status select');
+    status.value = 'Julgado';
+    page.tbody.dispatch('change', { target: status });
+    await page.salvar();
+    assert.deepEqual(enviado, [{ id: 1, anterior: { voto: 'Manter', status: null }, status: 'Julgado' }]);
+    assert.equal(status.value, 'Julgado');
+    assert.equal(page.document.getElementById('detalhePauta').hidden, false);
+  }
 });
 
 test('preenche em massa só o que está em branco e marca a linha para salvar', async () => {
@@ -1113,8 +1134,8 @@ test('preenche em massa só o que está em branco e marca a linha para salvar', 
   await page.salvar();
 
   assert.deepEqual(enviado, [
-    { id: 1, voto: 'Manter', status: 'Julgado' },
-    { id: 2, voto: 'Anular', status: 'Julgado' }
+    { id: 1, anterior: { voto: null, status: null }, voto: 'Manter', status: 'Julgado' },
+    { id: 2, anterior: { voto: null, status: null }, voto: 'Anular', status: 'Julgado' }
   ]);
 });
 

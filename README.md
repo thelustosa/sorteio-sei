@@ -72,7 +72,7 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 
 O visual foi desenvolvido com base na identidade visual institucional do portal do **Estado de Goiás**:
 - **Paleta de Cores**: Uso do verde institucional (`#00534b`) como cor principal de realce e botões, fundo de tela branco, painel interno em tom de verde menta claro (`#E9F5EC`) e tokens de cores temáticas para cada card de serviço.
-- **Rodapé Institucional**: Banner verde com logotipo oficial do Estado de Goiás, versão atual da aplicação (Versão 3.9), créditos e informações de integridade e auditoria do sorteio.
+- **Rodapé Institucional**: Banner verde com logotipo oficial do Estado de Goiás, versão atual da aplicação (Versão 4.0), créditos e informações de integridade e auditoria do sorteio.
 - **Tipografia**: Títulos e elementos de destaque em **Montserrat**, complementados pela tipografia nativa do sistema operacional para o corpo de texto.
 
 ---
@@ -486,6 +486,30 @@ node tests/test_assets.mjs
 Não necessitam de Docker nem de banco de dados: exercitam a aleatoriedade uniforme do sorteio (Fisher-Yates sem viés), a navegação e interface do usuário (cards dinâmicos, modais, exportações em `.docx`, `.xlsx` e `.pdf`, autenticação contextual), além da integridade de minificação, lazy loading e versão de cache por hash.
 
 O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) repete essas verificações em todo push e pull request, validando sintaxe JavaScript (`node --check`), suítes Node.js, testes PostgreSQL/Python e garantindo que os arquivos `.min.*` estejam devidamente regenerados e alinhados ao versionador.
+
+### Atualização 4.0
+
+A migração `20260918130135_corrigir_concorrencia_votos.sql` deve ser aplicada
+antes de publicar o frontend 4.0. Ela mantém as assinaturas e os privilégios
+das RPCs de votos, mas compara os valores anteriores sob bloqueio de linha.
+As telas enviam somente os campos alterados; uma decisão substituída por outra
+pessoa gera conflito, preservando o formulário para conferência. Clientes
+antigos ainda podem preencher campos vazios ou reenviar valores idênticos,
+mas precisam atualizar a página para substituir decisões já preenchidas.
+
+Consultas de listagem buscam todas as páginas da Data API antes de apresentar
+ou exportar o resultado. As RPCs de escrita não são repetidas por paginação.
+
+Na sincronização, `--desde AAAA-MM-DD` força a releitura também das URLs já
+registradas após essa data e atualiza os metadados da última leitura. O
+reprocessamento acrescenta processos ausentes, sem apagar julgados nem mudar
+votos/status existentes. Remoções ou mudanças na data de uma sessão exigem
+conferência administrativa. PDFs com números de processo não reconhecidos
+falham integralmente e continuam disponíveis para nova tentativa; não são
+marcados como importação concluída.
+
+Regressões da revisão: `python tests/test_regressoes_review.py` e
+`node --test tests/test_api_paginacao.mjs`, além da suíte de frontend.
 
 ---
 

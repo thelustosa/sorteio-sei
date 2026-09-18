@@ -579,12 +579,12 @@ function buscar() {
   if (detalhe?.tipo === 'sessao') {
     // A pauta vai junto porque a lista agrupa por (data, pauta): sem ela, duas
     // pautas do mesmo dia abriam a mesma tabela, com o total das duas.
-    return api('rpc/admin_processos_sessao', {
+    return api('rpc/admin_processos_sessao', { paginar: true,
       method: 'POST', body: corpo({ p_data_sessao: detalhe.data, p_pauta: detalhe.pauta ?? null })
     });
   }
   if (detalhe?.tipo === 'sorteio') {
-    return api('rpc/admin_processos_acervo', {
+    return api('rpc/admin_processos_acervo', { paginar: true,
       method: 'POST',
       body: corpo({
         p_data: detalhe.data,
@@ -593,12 +593,12 @@ function buscar() {
       })
     });
   }
-  if (aba === 'sessoes') return api('rpc/admin_sessoes', { method: 'POST', body: corpo() });
-  if (aba === 'sorteios') return api('rpc/admin_sorteios', { method: 'POST', body: corpo() });
-  if (aba === 'meta') return api('rpc/admin_meta_45', { method: 'POST', body: corpo() });
+  if (aba === 'sessoes') return api('rpc/admin_sessoes', { paginar: true, method: 'POST', body: corpo() });
+  if (aba === 'sorteios') return api('rpc/admin_sorteios', { paginar: true, method: 'POST', body: corpo() });
+  if (aba === 'meta') return api('rpc/admin_meta_45', { paginar: true, method: 'POST', body: corpo() });
   // Um a mais que a página: se vier, é porque existe registro anterior — e é
   // como se sabe disso sem uma segunda consulta de contagem.
-  return api('rpc/admin_auditoria', {
+  return api('rpc/admin_auditoria', { paginar: true,
     method: 'POST',
     body: corpo({ p_limite: PAGINA_AUDITORIA + 1, p_antes_de: auditoria.cursor })
   });
@@ -929,7 +929,7 @@ async function abrirDetalheDaMeta(indice, recorte, meses, ano) {
 
   let processos;
   try {
-    processos = await api('rpc/admin_meta_45_processos', {
+    processos = await api('rpc/admin_meta_45_processos', { paginar: true,
       method: 'POST',
       body: JSON.stringify({ p_colegiado: colegiado, p_de: de, p_ate: ate })
     });
@@ -1581,7 +1581,7 @@ function abrirAlteracaoDeAcervo(linha, modo) {
     // O preview só faz sentido quando a alteração propaga: numa redistribuição
     // os julgados ficam intocados de propósito, e listá-los sugeriria o oposto.
     impacto: corrigindo ? async () => {
-      const julgados = await api('rpc/admin_julgados_do_acervo', {
+      const julgados = await api('rpc/admin_julgados_do_acervo', { paginar: true,
         method: 'POST',
         body: JSON.stringify({ p_colegiado: orgao, p_acervo_id: linha.id })
       });
@@ -1652,7 +1652,7 @@ function abrirCorrecaoDeNumero(numAtual) {
       ];
     },
     async impacto() {
-      const registros = await api('rpc/admin_registros_do_processo', {
+      const registros = await api('rpc/admin_registros_do_processo', { paginar: true,
         method: 'POST',
         body: JSON.stringify({ p_colegiado: orgao, p_num_processo: numAtual })
       });
@@ -1779,7 +1779,7 @@ function excluir(porta, id, motivo) {
 }
 
 async function julgadosVinculados(acervoId) {
-  const julgados = await api('rpc/admin_julgados_do_acervo', {
+  const julgados = await api('rpc/admin_julgados_do_acervo', { paginar: true,
     method: 'POST',
     body: JSON.stringify({ p_colegiado: orgao, p_acervo_id: acervoId })
   });

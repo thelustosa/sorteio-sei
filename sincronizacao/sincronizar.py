@@ -119,12 +119,20 @@ def gravar_julgados(cur, col, p, processos):
 
 
 def registrar_pauta(cur, col, p, sha256, encontrados, importados, sem_acervo):
+    # O registro descreve a última leitura bem-sucedida; --desde pode reler
+    # a mesma URL. Os julgados existentes continuam protegidos pelo DO NOTHING.
     cur.execute(f"""
         insert into public.{col['pautas']}
           (url, titulo, numero, data_sessao, sha256,
            processos_encontrados, processos_importados, processos_sem_acervo)
         values (%s, %s, %s, %s, %s, %s, %s, %s)
-        on conflict (url) do nothing
+        on conflict (url) do update set
+          titulo = excluded.titulo, numero = excluded.numero,
+          data_sessao = excluded.data_sessao, sha256 = excluded.sha256,
+          processos_encontrados = excluded.processos_encontrados,
+          processos_importados = excluded.processos_importados,
+          processos_sem_acervo = excluded.processos_sem_acervo,
+          processado_em = now()
     """, (p.url, p.titulo, p.numero, p.data_sessao, sha256,
           encontrados, importados, sem_acervo))
 
@@ -160,7 +168,8 @@ def pautas_pendentes(cur, col, ano=None, desde=None, hoje=None):
             falhas.append({'url': fonte, 'ano': a, 'erro': f'{type(e).__name__}: {e}'})
 
     pendentes = [p for p in todas
-                 if p.url not in ja_vistas and corte < p.data_sessao <= hoje]
+                 if (desde is not None or p.url not in ja_vistas)
+                 and corte < p.data_sessao <= hoje]
     return (todas, sorted(pendentes, key=lambda p: (p.data_sessao, p.numero)),
             corte, anos, falhas)
 
@@ -187,15 +196,14 @@ def processar_pauta(cur, col, p):
     #
     # O que separa a sessão vazia da AGR ter mudado o formato é numeros_sem_rotulo,
     # que já desconta o rodapé `Referência: Processo nº …`: sessão sem processo
-    # não tem número de 15 dígitos nenhum. Zero processos COM números soltos é
-    # parser quebrado, e registrar aí marcaria a URL como vista para sempre —
-    # a sessão se perderia em silêncio, com o job terminando verde, e voltar
-    # atrás depois exigiria apagar a linha de pautas_* à mão.
+    # não tem número de 15 dígitos nenhum. Mesmo uma extração PARCIAL com números
+    # soltos precisa falhar: registrar a URL esconderia os itens omitidos nas
+    # próximas execuções. A transação inteira é desfeita e a pauta pode voltar.
     processos = pauta.extrair_processos(texto)
-    if not processos and ignorados:
+    if ignorados:
         raise pauta.ErroPauta(
-            f'nenhum processo extraído, mas {len(ignorados)} número(s) de 15 '
-            f'dígitos no documento — o formato da AGR mudou: {ignorados}')
+            f'extração incompleta: {len(ignorados)} número(s) de 15 '
+            f'dígitos sem rótulo reconhecido — confira a pauta: {ignorados}')
     if not processos:
         log.warning('%s: nenhum processo no documento — registrado como sessão '
                     'sem processos', p.url)

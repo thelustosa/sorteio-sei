@@ -603,7 +603,7 @@ async function carregarAcervo({ carregamentoInicial = false } = {}) {
 
   let linhas;
   try {
-    linhas = await api(COL.resumo, { method: 'POST', body: '{}' });
+    linhas = await api(COL.resumo, { paginar: true, method: 'POST', body: '{}' });
   } catch (err) {
     if (carregamentoInicial) {
       esconderMolduraDoPainel();
@@ -667,7 +667,7 @@ async function abrirDetalhe(celulaEl) {
 
   let processos;
   try {
-    processos = await api(COL.processos, {
+    processos = await api(COL.processos, { paginar: true,
       method: 'POST',
       body: JSON.stringify({
         p_ordem: ordem ? Number(ordem) : null,

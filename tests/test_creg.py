@@ -461,6 +461,7 @@ def registrar_votos_nao_apaga_decisao_com_campo_em_branco(cur):
     # Trocar um rótulo por outro continua funcionando: o que sumiu foi só apagar.
     cur.execute("""select registrar_votos_creg(jsonb_build_array(
                      jsonb_build_object('id', %s::text, 'voto', 'Anular',
+                                        'anterior', jsonb_build_object('voto', 'Manter'),
                                         'status', 'Julgado')))""", (parcial,))
     assert campos(cur, parcial, 'voto')[0] == 'Anular'
 

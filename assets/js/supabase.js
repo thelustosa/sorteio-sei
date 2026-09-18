@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '041e367a57';
+const ASSET_VERSION = '03d0b5c130';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -345,6 +345,38 @@ function alternarBotaoCarregando(botao, carregando, texto) {
 // Chamada REST autenticada. Devolve o JSON da resposta (ou null quando vazia).
 // O erro carrega o status HTTP para quem precisa distinguir um caso específico.
 async function api(caminho, opcoes = {}) {
+  // Só consultas podem ser repetidas. RPCs de leitura optam explicitamente;
+  // um POST que grava dados nunca é paginado por causa do formato da resposta.
+  const { paginar = !opcoes.method || opcoes.method === 'GET', ...pedido } = opcoes;
+  const linhas = [];
+  let offset = 0;
+  const separador = caminho.includes('?') ? '&' : '?';
+  do {
+    const pagina = await apiPagina(
+      offset ? `${caminho}${separador}offset=${offset}` : caminho,
+      { ...pedido, headers: {
+        ...pedido.headers,
+        ...(paginar ? { Prefer: [pedido.headers?.Prefer, 'count=exact'].filter(Boolean).join(',') } : {})
+      } });
+    if (!paginar || !Array.isArray(pagina.dados)) return pagina.dados;
+    linhas.push(...pagina.dados);
+    const intervalo = /^(\d+)-(\d+)\/(\d+)$/.exec(pagina.intervalo || '');
+    if (!intervalo) {
+      if (pagina.intervalo && pagina.intervalo !== '*/0') {
+        throw new Error('Não foi possível confirmar o total de registros. Atualize a consulta.');
+      }
+      return linhas;
+    }
+    const inicio = Number(intervalo[1]), fim = Number(intervalo[2]), total = Number(intervalo[3]);
+    if (inicio !== offset || fim - inicio + 1 !== pagina.dados.length) {
+      throw new Error('A paginação retornou dados inconsistentes. Atualize a consulta.');
+    }
+    if (fim + 1 >= total) return linhas;
+    offset = fim + 1;
+  } while (true);
+}
+
+async function apiPagina(caminho, opcoes) {
   const requisitar = () => fetchComTimeout(`${baseUrl()}/rest/v1/${caminho}`, {
     ...opcoes,
     headers: {
@@ -365,7 +397,10 @@ async function api(caminho, opcoes = {}) {
     resp = await requisitar();
   }
 
-  if (resp.ok) return resp.status === 204 ? null : resp.json().catch(() => null);
+  if (resp.ok) return {
+    dados: resp.status === 204 ? null : await resp.json(),
+    intervalo: resp.headers?.get('Content-Range')
+  };
 
   if (resp.status === 401) {
     throw Object.assign(
