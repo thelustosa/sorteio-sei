@@ -4321,3 +4321,30 @@ test('o html do dialogo expoe os textos que mudam com a intencao', () => {
   }
   assert.match(html, /<label for="edicaoMotivo"><span id="edicaoMotivoRotulo">Motivo da alteração<\/span>/);
 });
+
+test('auditoria mostra o que o registro excluido guardava', async () => {
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_auditoria': [{
+        id: 9, operacao: 'excluir_julgado', tabela: 'julgados_cj', registro_id: 41,
+        num_processo: '202600000000001',
+        antes: { id: 41, num_processo: '202600000000001', data_sessao: '2026-07-09', pauta: 24,
+                 voto: 'Manter', status: 'Julgado', relator: 'CJ3', dias_dt: 21, periodo_dt: '3T26',
+                 acervo_id: 7, criado_em: '2026-07-09T12:00:00Z' },
+        depois: {}, motivo: 'duplicado', feito_por: 'admin@goias.gov.br',
+        feito_em: '2026-09-17T12:00:00Z'
+      }]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('auditoria').dispatch('click');
+  await wait();
+
+  const linha = page.linhasDaTabela()[0];
+  assert.equal(linha.children.find(c => c.dataset.label === 'Operação').textContent, 'Exclusão de julgado');
+  const itens = linha.children.find(c => c.dataset.label === 'Alteração')
+    .children[0].children.map(li => li.textContent);
+  assert.deepEqual(itens, ['Data da sessão: 09/07/2026', 'Número da pauta: 24', 'Relator: CJ3',
+                           'Voto: Manter', 'Status: Julgado'],
+    'o retrato vira "campo: valor", sem seta e sem colunas calculadas');
+});
