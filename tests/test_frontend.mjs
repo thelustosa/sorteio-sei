@@ -4348,3 +4348,23 @@ test('auditoria mostra o que o registro excluido guardava', async () => {
                            'Voto: Manter', 'Status: Julgado'],
     'o retrato vira "campo: valor", sem seta e sem colunas calculadas');
 });
+
+test('excluir so fica vermelho sob o ponteiro ou o foco, e a confirmacao usa os tokens de perigo', () => {
+  const css = readFileSync(new URL('../assets/css/index.css', import.meta.url), 'utf8');
+  assert.match(css, /\.admin-acao-perigo\s*\{[^}]*color:\s*var\(--muted\)/s,
+    'vermelho em repouso em toda linha seria um alarme permanente');
+  assert.match(css,
+    /\.admin-acao-perigo:hover,\s*\.admin-acao-perigo:focus-visible\s*\{[^}]*color:\s*var\(--danger\)/s);
+  assert.match(css, /\.admin-dialog-actions \.button-perigo\s*\{[^}]*background:\s*var\(--danger\)/s);
+  assert.match(css, /\.admin-impacto\[data-tom='perigo'\]\s*\{[^}]*background:\s*var\(--danger-panel\)/s);
+  assert.match(css, /\.admin-dialog\[data-tom='perigo'\] \.admin-review-icon\s*\{[^}]*color:\s*var\(--danger\)/s);
+
+  const largura = (visao, filho) => Number(css.match(new RegExp(
+    `\\.admin-table\\[data-visao='${visao}'\\] thead th:nth-child\\(${filho}\\)\\s*\\{[^}]*width:\\s*([\\d.]+)%`))?.[1]);
+  const minimo = visao => Number(css.match(new RegExp(
+    `\\.admin-table\\[data-visao='${visao}'\\]\\s*\\{[^}]*min-width:\\s*(\\d+)px`))?.[1]);
+  assert.ok(minimo('processos-sessao') * largura('processos-sessao', 2) / 100 >= 440,
+    'quatro botões cabem na coluna de Ações da sessão');
+  assert.ok(minimo('processos-sorteio') * largura('processos-sorteio', 3) / 100 >= 440,
+    'quatro botões cabem na coluna de Ações da distribuição');
+});
