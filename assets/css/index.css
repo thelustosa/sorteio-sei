@@ -1971,10 +1971,13 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 /* Seis colunas — duas delas de texto livre — não cabem em 390px por mais que se
    aperte o padding, e o overflow-x: hidden do corpo do card deixava as duas
    últimas fora de alcance. Rolar de lado dentro do card devolve o acesso a
-   elas. O card do acervo, com quatro colunas curtas, continua sem precisar. */
+   elas. O card do acervo, com quatro colunas curtas, continua sem precisar.
+   O da meta de 45 dias (admin), com cinco ou seis, precisa pelo mesmo motivo. */
 @media screen and (max-width: 620px) {
-  .detalhe-corpo:has(> .historico-detalhe) { overflow-x: auto; }
-  .detalhe-table.historico-detalhe { min-width: 520px; }
+  .detalhe-corpo:has(> .historico-detalhe),
+  .detalhe-corpo:has(> .admin-meta-detalhe) { overflow-x: auto; }
+  .detalhe-table.historico-detalhe,
+  .detalhe-table.admin-meta-detalhe { min-width: 520px; }
 }
 
 .acervo-table tbody td.acervo-zero {
@@ -3443,7 +3446,36 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-table[data-visao='meta'] tbody td:first-child { padding-inline: 16px; }
 .admin-table[data-visao='meta'] thead th:last-child,
 .admin-table[data-visao='meta'] tbody td:last-child { padding-inline: 16px; }
-.admin-table .admin-meta-total { font-weight: 700; }
+/* A contagem clicável é a pílula verde da contagem do histórico, em tamanho de
+   alvo: o fundo claro diz "tem mais aqui" sem gritar em cada célula. O total de
+   julgados sai cheio, que é o número de que os outros três são parte. */
+.admin-meta-contagem {
+  display: inline-flex;
+  min-width: 48px;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft-strong);
+  color: var(--accent);
+  font: inherit;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.admin-meta-contagem:hover { border-color: var(--accent); background: var(--accent-soft); }
+.admin-meta-contagem:active { transform: translateY(1px); }
+.admin-meta-contagem:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.admin-meta-contagem.is-total { background: var(--accent); color: var(--on-accent); }
+.admin-meta-contagem.is-total:hover { border-color: var(--accent-hover); background: var(--accent-hover); }
+.admin-table td.admin-meta-zero { color: var(--muted); }
+/* No card, como no do histórico: com a coluna Meta são seis, e a largura fixa
+   por igual cortava "Nº do Processo" — o número de 15 dígitos precisa da dele. */
+.detalhe-table.admin-meta-detalhe { table-layout: auto; font-variant-numeric: tabular-nums; }
 .admin-meta-periodo { display: grid; gap: 1px; justify-items: center; text-align: center; }
 .admin-meta-periodo span { color: var(--muted); font-size: var(--text-sm); }
 /* Medidor: o preenchimento é a parte dentro da meta; o trilho, do mesmo verde
@@ -3918,10 +3950,12 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .admin-aba,
-  .admin-acao { transition: none; }
+  .admin-acao,
+  .admin-meta-contagem { transition: none; }
 }
 
 @media (pointer: coarse) {
+  .admin-meta-contagem,
   .admin-aba,
   .admin-org-button,
   .admin-mais-antigas,

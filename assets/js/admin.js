@@ -158,6 +158,15 @@ const edicaoEtapaConfirmacao = document.getElementById('edicaoEtapaConfirmacao')
 const edicaoDelta = document.getElementById('edicaoDelta');
 const edicaoImpacto = document.getElementById('edicaoImpacto');
 const edicaoImpactoTitulo = document.getElementById('edicaoImpactoTitulo');
+
+const detalheDialog = document.getElementById('detalheDialog');
+const detalheTitulo = document.getElementById('detalheTitulo');
+const detalheResumo = document.getElementById('detalheResumo');
+const detalheLoading = document.getElementById('detalheLoading');
+const detalheErro = document.getElementById('detalheErro');
+const detalheCorpo = document.getElementById('detalheCorpo');
+const detalheTabela = document.getElementById('detalheTable');
+const btnFecharDetalhe = document.getElementById('btnFecharDetalhe');
 const edicaoImpactoLista = document.getElementById('edicaoImpactoLista');
 const edicaoErro = document.getElementById('edicaoErro');
 const edicaoEtapaRotulo = document.getElementById('edicaoEtapaRotulo');
@@ -768,12 +777,14 @@ const percentual = taxa =>
   `${taxa.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 const contagem = n => Number(n).toLocaleString('pt-BR');
 
+const nomeDoPeriodo = (indice, meses) => (meses === 1
+  ? MESES[indice][0].toUpperCase() + MESES[indice].slice(1)
+  : `${indice + 1}º ${PERIODOS[meses][0]}`);
+
 function celulaDoPeriodo({ indice }, meses, ano) {
   const inicio = indice * meses;
   const nome = document.createElement('strong');
-  nome.textContent = meses === 1
-    ? MESES[inicio][0].toUpperCase() + MESES[inicio].slice(1)
-    : `${indice + 1}º ${PERIODOS[meses][0]}`;
+  nome.textContent = nomeDoPeriodo(indice, meses);
 
   // O período corrente ainda recebe sessões: o percentual dele vai mudar.
   const hoje = hojeISO();
@@ -815,6 +826,114 @@ function celulaDaTaxa(periodo) {
   bloco.className = 'admin-meta-taxa';
   bloco.append(medidor, valor);
   return celula(bloco);
+}
+
+// Cada contagem abre o card com os julgados por trás dela. O recorte sai de
+// meta_45, a mesma coluna que admin_meta_45 conta: é o que garante que o card
+// traga o número que a célula mostrava.
+const RECORTES_META = {
+  julgados: { rotulo: 'Julgados', filtro: () => true },
+  dentro: { rotulo: 'Dentro da meta', filtro: p => p.meta_45 === true },
+  fora: { rotulo: 'Fora da meta', filtro: p => p.meta_45 === false },
+  semPrazo: { rotulo: 'Sem prazo aferível', filtro: p => p.meta_45 === null || p.meta_45 === undefined }
+};
+
+// A pílula é um <button> dentro da célula, como no acervo: o <td> continua
+// célula para o leitor de tela, e o botão nativo traz foco, Enter e Espaço.
+// Zero não abre nada, então fica texto.
+function celulaDaContagem(periodo, recorte, meses, ano) {
+  const quantidade = periodo[recorte];
+  if (!quantidade) return celula(contagem(quantidade), 'td', 'admin-meta-zero');
+
+  const botao = document.createElement('button');
+  botao.type = 'button';
+  botao.className = recorte === 'julgados' ? 'admin-meta-contagem is-total' : 'admin-meta-contagem';
+  botao.textContent = contagem(quantidade);
+  botao.setAttribute('aria-label', `${RECORTES_META[recorte].rotulo} em ${nomeDoPeriodo(periodo.indice, meses)}`
+    + ` de ${ano}: ver ${plural(quantidade, 'processo', 'processos')}`);
+  botao.addEventListener('click', () => abrirDetalheDaMeta(periodo.indice, recorte, meses, ano));
+  return celula(botao);
+}
+
+// Cada abertura invalida a anterior: fechar no Escape durante uma busca lenta e
+// abrir outra contagem não pode deixar a resposta atrasada sobrescrever o card.
+let detalheMetaPedido = 0;
+
+async function abrirDetalheDaMeta(indice, recorte, meses, ano) {
+  const pedido = ++detalheMetaPedido;
+  const colegiado = orgao;
+  const { rotulo, filtro } = RECORTES_META[recorte];
+  const doisDigitos = n => String(n).padStart(2, '0');
+  const inicio = indice * meses;
+  // Dia 0 do mês seguinte é o último dia do período — sem tabela de dias por mês
+  // nem conta de ano bissexto.
+  const ultimoDia = new Date(ano, inicio + meses, 0).getDate();
+  const de = `${ano}-${doisDigitos(inicio + 1)}-01`;
+  const ate = `${ano}-${doisDigitos(inicio + meses)}-${doisDigitos(ultimoDia)}`;
+
+  detalheTitulo.textContent = `${rotulo} · ${nomeDoPeriodo(indice, meses)} de ${ano}`;
+  detalheResumo.textContent = 'Carregando…';
+  detalheTabela.replaceChildren();
+  detalheErro.hidden = true;
+  detalheCorpo.hidden = true;
+  detalheLoading.replaceChildren(criarIndicadorCarregamento('Carregando julgados…'));
+  detalheLoading.hidden = false;
+  // showModal antes da busca: o card aparece com o indicador em vez de o clique
+  // parecer não ter feito nada.
+  if (!detalheDialog.open) detalheDialog.showModal();
+
+  let processos;
+  try {
+    processos = await api('rpc/admin_meta_45_processos', {
+      method: 'POST',
+      body: JSON.stringify({ p_colegiado: colegiado, p_de: de, p_ate: ate })
+    });
+  } catch (erro) {
+    if (pedido !== detalheMetaPedido) return;
+    detalheLoading.hidden = true;
+    detalheLoading.replaceChildren();
+    detalheResumo.textContent = '';
+    const mensagem = document.createElement('p');
+    mensagem.textContent = `Não foi possível carregar os julgados (${erro.message}).`;
+    detalheErro.replaceChildren(mensagem);
+    detalheErro.hidden = false;
+    return;
+  }
+
+  if (pedido !== detalheMetaPedido) return;
+  detalheLoading.hidden = true;
+  detalheLoading.replaceChildren();
+  detalheCorpo.hidden = false;
+  desenharDetalheDaMeta((processos || []).filter(filtro), recorte, colegiado, de, ate);
+}
+
+const SELOS_DA_META = new Map([[true, ['Dentro', 'sucesso']], [false, ['Fora', 'alerta']]]);
+
+function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
+  const vocabulario = VOCABULARIO[colegiado];
+  detalheResumo.textContent = [vocabulario.nome, plural(processos.length, 'julgado', 'julgados'),
+    `sessões de ${dataBR(de)} a ${dataBR(ate)}`].join(' · ');
+
+  // Só a lista de todos os julgados mistura as três situações; nas outras a
+  // coluna repetiria o título do card em cada linha.
+  const comMeta = recorte === 'julgados';
+  const colunas = ['Nº do Processo', vocabulario.destino, 'Distribuição', 'Sessão', 'Dias',
+    ...(comMeta ? ['Meta'] : [])];
+
+  const tbody = document.createElement('tbody');
+  processos.forEach(p => {
+    const tr = document.createElement('tr');
+    const numero = celula(p.num_processo, 'th');
+    numero.scope = 'row';
+    tr.append(numero, celula(ou(p.destino)), celula(dataBR(p.data_distribuicao)),
+      celula(dataBR(p.data_sessao)), celula(ou(p.dias)));
+    if (comMeta) {
+      const [texto, tom] = SELOS_DA_META.get(p.meta_45) || ['Sem prazo', 'neutro'];
+      tr.append(celula(badge(texto, tom)));
+    }
+    tbody.appendChild(tr);
+  });
+  detalheTabela.replaceChildren(cabecalho(colunas), tbody);
 }
 
 function pintarMeta(linhas) {
@@ -880,10 +999,7 @@ function repintarMeta() {
     { rotulo: '% dentro da meta', eixo: 'centro' }
   ], periodos.map(periodo => [
     celulaDoPeriodo(periodo, meses, ano),
-    celula(contagem(periodo.julgados), 'td', 'admin-meta-total'),
-    celula(contagem(periodo.dentro)),
-    celula(contagem(periodo.fora)),
-    celula(contagem(periodo.semPrazo)),
+    ...['julgados', 'dentro', 'fora', 'semPrazo'].map(recorte => celulaDaContagem(periodo, recorte, meses, ano)),
     celulaDaTaxa(periodo)
   ]));
   painelStatus.textContent = `${plural(periodos.length, ...PERIODOS[meses])} de ${ano}.`;
@@ -1581,6 +1697,12 @@ function inicializarAdmin(orgaosAdmin) {
   btnTentarNovamente.addEventListener('click', () => carregar());
   metaAno.addEventListener('change', repintarMeta);
   metaAgrupamento.addEventListener('change', repintarMeta);
+  btnFecharDetalhe.addEventListener('click', () => detalheDialog.close());
+  // Clique no ::backdrop chega como clique no próprio dialog: fechar ali é o que
+  // se espera de um card modal, e o <dialog> não faz isso sozinho.
+  detalheDialog.addEventListener('click', evento => {
+    if (evento.target === detalheDialog) detalheDialog.close();
+  });
   // A auditoria é a única lista que não cabe numa consulta só. O botão pede a
   // página anterior pelo cursor que admin_auditoria já aceitava, e ACRESCENTA à
   // tabela: quem está lendo o rastro não perde o que já leu.

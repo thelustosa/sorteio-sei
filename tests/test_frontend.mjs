@@ -2747,14 +2747,20 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
    'edicaoResumo', 'edicaoTitulo', 'edicaoCampos',
    'edicaoEtapaCampos', 'edicaoEtapaConfirmacao', 'edicaoDelta', 'edicaoImpacto',
    'edicaoImpactoTitulo', 'edicaoImpactoLista', 'edicaoErro', 'edicaoEtapaRotulo',
-   'painelEyebrow', 'metaFiltros', 'metaResumo']
+   'painelEyebrow', 'metaFiltros', 'metaResumo',
+   'detalheTitulo', 'detalheResumo', 'detalheLoading', 'detalheErro', 'detalheCorpo']
     .forEach(id => document.add(id, 'div'));
   document.add('metaAno', 'select');
   // O <option selected> do admin.html: agrupar por trimestre.
   document.add('metaAgrupamento', 'select').value = '3';
   ['btnTentarNovamente', 'btnMaisAntigas', 'btnVoltar', 'btnVoltarInicio', 'btnAvancarEdicao',
-   'btnCancelarEdicao', 'btnFecharEdicao'].forEach(id => document.add(id, 'button'));
+   'btnCancelarEdicao', 'btnFecharEdicao', 'btnFecharDetalhe'].forEach(id => document.add(id, 'button'));
   document.add('painelTable', 'table');
+  document.add('detalheTable', 'table');
+  const cardDetalhe = document.add('detalheDialog', 'dialog');
+  cardDetalhe.open = false;
+  cardDetalhe.showModal = () => { cardDetalhe.open = true; };
+  cardDetalhe.close = () => { cardDetalhe.open = false; };
   document.add('edicaoMotivo', 'input');
 
   const dialogo = document.add('edicaoDialog', 'dialog');
@@ -2930,7 +2936,8 @@ test('a meta de 45 dias agrupa os meses e deixa o prazo nao aferivel fora do per
   assert.equal(doc.getElementById('metaFiltros').hidden, false);
 
   const periodo = linha => linha.children[0].children[0].children[0].textContent;
-  const valores = linha => linha.children.slice(1, 5).map(c => c.textContent);
+  // As contagens diferentes de zero são pílulas: o número está no botão.
+  const valores = linha => linha.children.slice(1, 5).map(c => c.children[0]?.textContent ?? c.textContent);
   const taxa = linha => linha.children[5].children[0].children.at(-1)?.textContent
     ?? linha.children[5].children[0].textContent;
 
@@ -2962,6 +2969,48 @@ test('a meta de 45 dias agrupa os meses e deixa o prazo nao aferivel fora do per
   assert.deepEqual(linhas.map(periodo), ['Novembro']);
   assert.equal(taxa(linhas[0]), '100,0%');
   assert.equal(chamadas.length, consultas, 'trocar ano ou agrupamento não volta ao banco');
+});
+
+test('cada contagem da meta abre o card so com os julgados dela', async () => {
+  const chamadas = [];
+  const PERIODO = [
+    { num_processo: '202600000000003', destino: 'CJ2', data_distribuicao: '2026-01-05',
+      data_sessao: '2026-03-26', dias: 80, meta_45: false },
+    { num_processo: '202600000000001', destino: 'CJ3', data_distribuicao: '2026-02-02',
+      data_sessao: '2026-03-12', dias: 38, meta_45: true },
+    { num_processo: '202600000000002', destino: 'CJ4', data_distribuicao: null,
+      data_sessao: '2026-02-19', dias: null, meta_45: null }
+  ];
+  const page = adminPage({ api: apiDoPainel(chamadas, { 'rpc/admin_meta_45_processos': PERIODO }) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('meta').dispatch('click');
+  await wait();
+
+  const doc = page.document;
+  const [primeiro, vazio] = page.linhasDaTabela();
+  assert.equal(vazio.children[3].children.length, 0, 'zero não abre card: fica texto, sem pílula');
+
+  const fora = primeiro.children[3].children[0];
+  assert.equal(fora.className, 'admin-meta-contagem');
+  assert.equal(primeiro.children[1].children[0].className, 'admin-meta-contagem is-total');
+  fora.dispatch('click');
+  await wait();
+
+  assert.deepEqual(chamadas.at(-1),
+    { caminho: 'rpc/admin_meta_45_processos',
+      corpo: { p_colegiado: 'CJ', p_de: '2026-01-01', p_ate: '2026-03-31' } });
+  assert.equal(doc.getElementById('detalheDialog').open, true);
+  assert.equal(doc.getElementById('detalheTitulo').textContent, 'Fora da meta · 1º trimestre de 2026');
+  assert.equal(doc.getElementById('detalheResumo').textContent,
+    'Câmara de Julgamento · 1 julgado · sessões de 01/01/2026 a 31/03/2026');
+  const corpo = doc.getElementById('detalheTable').children[1];
+  assert.deepEqual(corpo.children.map(tr => tr.children[0].textContent), ['202600000000003']);
+
+  primeiro.children[1].children[0].dispatch('click');
+  await wait();
+  const linhas = doc.getElementById('detalheTable').children[1].children;
+  assert.equal(linhas.length, 3, 'Julgados abre o período inteiro');
+  assert.deepEqual(linhas.map(tr => tr.children.at(-1).children[0].textContent), ['Fora', 'Dentro', 'Sem prazo']);
 });
 
 test('filtro e resumo da meta nao aparecem fora dela nem sem julgado', async () => {
