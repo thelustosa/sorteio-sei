@@ -102,6 +102,12 @@ const escopoLegivel = valor => ESCOPOS.find(e => e.valor === valor)?.rotulo || v
 
 const campoLegivel = nome => CAMPOS_LEGIVEIS[nome] || nome;
 
+// O que identifica um registro excluído na auditoria. O retrato guarda a linha
+// inteira; colunas calculadas (dias_dt, periodo_dt), chaves e carimbos internos
+// só atrapalhariam a leitura de quem procura o que sumiu.
+const CAMPOS_DO_RETRATO = ['data_sessao', 'pauta', 'data_distribuicao', 'relator', 'unidade',
+                           'assunto', 'voto', 'status'];
+
 // "5 sessão(ões) registrada(s)" pede que a pessoa monte a frase de cabeça, e a
 // contagem que resolveria isso já está ali do lado.
 function plural(quantidade, singular, plural) {
@@ -767,10 +773,17 @@ function pintarAuditoria(pagina) {
   desenhar(['Quando', 'Operação', 'Registro', 'Alteração', 'Motivo', 'Quem'], linhas.map(linha => {
     const mudancas = document.createElement('ul');
     mudancas.className = 'admin-delta admin-delta-compacta';
-    Object.keys(linha.depois || {}).forEach(campo => {
+    // Exclusão grava `depois` vazio: não há "de → para", há o que o registro era.
+    const excluido = Object.keys(linha.depois || {}).length === 0;
+    const itens = excluido
+      ? CAMPOS_DO_RETRATO
+          .filter(campo => !vazio(linha.antes?.[campo]))
+          .map(campo => `${campoLegivel(campo)}: ${legivel(linha.antes[campo])}`)
+      : Object.keys(linha.depois).map(campo =>
+          `${campoLegivel(campo)}: ${legivel(linha.antes?.[campo])} → ${legivel(linha.depois[campo])}`);
+    itens.forEach(texto => {
       const item = document.createElement('li');
-      item.textContent =
-        `${campoLegivel(campo)}: ${legivel(linha.antes?.[campo])} → ${legivel(linha.depois?.[campo])}`;
+      item.textContent = texto;
       mudancas.appendChild(item);
     });
 
