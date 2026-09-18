@@ -307,6 +307,7 @@ Para forçar a rederivação de um campo, basta gravar `null` nele.
 |---|---|---|
 | `dias_dt` | `=-I+D` | coluna gerada: `data_sessao - data_distribuicao` |
 | `periodo_dt` | `IF` aninhado ano a ano | coluna gerada, trimestre calculado (`1T26`) |
+| `meta_45` | — (só a planilha do CREG tinha) | coluna gerada: até 45 dias; nula quando falta a distribuição ou a sessão veio antes dela |
 
 O `IF` da planilha parava em 2026; a versão calculada já funciona de 2027 em
 diante sem manutenção.
@@ -561,7 +562,7 @@ repetido, e termina o serviço mesmo se uma tentativa anterior parou no meio.
 O `restaurar_cj.sql` devolve as três tabelas ao estado do backup. Dois detalhes
 que fazem um restore ingênuo falhar, e por isso ele lista as colunas uma a uma:
 as colunas `id` são `generated always as identity` e exigem
-`overriding system value`; `dias_dt` e `periodo_dt` são geradas e recusam
+`overriding system value`; `dias_dt`, `periodo_dt` e `meta_45` são geradas e recusam
 qualquer valor — o banco as recalcula. O gatilho é desligado durante a carga
 para que os campos derivados voltem como estavam, e as sequências são
 reposicionadas no fim.
@@ -664,6 +665,7 @@ erDiagram
         date data_distribuicao "cópia do acervo"
         int dias_dt "calculado"
         text periodo_dt "calculado"
+        boolean meta_45 "calculado"
         text atualizado_por
     }
     pautas_cj {

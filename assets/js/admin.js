@@ -99,6 +99,18 @@ const escopoLegivel = valor => ESCOPOS.find(e => e.valor === valor)?.rotulo || v
 
 const campoLegivel = nome => CAMPOS_LEGIVEIS[nome] || nome;
 
+// A meta de 45 dias chega por mês; o agrupamento é só quantos meses cabem num
+// período. O valor de cada chave é o `value` do <select id="metaAgrupamento">.
+const PERIODOS = {
+  1: ['mês', 'meses'],
+  2: ['bimestre', 'bimestres'],
+  3: ['trimestre', 'trimestres'],
+  4: ['quadrimestre', 'quadrimestres'],
+  6: ['semestre', 'semestres']
+};
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho',
+               'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
 // "5 sessão(ões) registrada(s)" pede que a pessoa monte a frase de cabeça, e a
 // contagem que resolveria isso já está ali do lado.
 function plural(quantidade, singular, plural) {
@@ -111,6 +123,11 @@ const abas = document.getElementById('abas');
 const painel = document.getElementById('adminPainel');
 const painelConteudo = document.getElementById('painelConteudo');
 const painelTitulo = document.getElementById('painelTitulo');
+const painelEyebrow = document.getElementById('painelEyebrow');
+const metaFiltros = document.getElementById('metaFiltros');
+const metaResumo = document.getElementById('metaResumo');
+const metaAno = document.getElementById('metaAno');
+const metaAgrupamento = document.getElementById('metaAgrupamento');
 const painelDescricao = document.getElementById('painelDescricao');
 const painelTabela = document.getElementById('painelTable');
 const painelCarregando = document.getElementById('painelCarregando');
@@ -166,6 +183,10 @@ let dialogoAtual = null;
 const PAGINA_AUDITORIA = 100;
 let auditoria = { linhas: [], cursor: null, temMais: false };
 const reiniciarAuditoria = () => { auditoria = { linhas: [], cursor: null, temMais: false }; };
+
+// A última resposta de admin_meta_45: trocar ano ou agrupamento repinta a partir
+// dela, sem nova consulta.
+let metaLinhas = [];
 
 // ── Formatação ───────────────────────────────────────────────────────────────
 // Hoje em aaaa-mm-dd pelo calendário LOCAL: toISOString() converte para UTC e,
@@ -401,6 +422,11 @@ function navegarAbas(evento) {
 // descrevendo a aba anterior e a tabela mantinha o layout dela, de modo que a
 // pessoa lia "não foi possível carregar" sob um título de outro lugar.
 function moldura() {
+  // Filtro e resumo da meta só existem com a resposta dela na tela: durante a
+  // consulta, o resumo do colegiado anterior ao lado da tabela vazia mentiria.
+  metaFiltros.hidden = true;
+  metaResumo.hidden = true;
+
   if (detalhe?.tipo === 'sessao') {
     definirVisaoTabela('processos-sessao');
     return tituloDoPainel(
@@ -429,6 +455,14 @@ function moldura() {
     return tituloDoPainel('Distribuições registradas',
       'Selecione a data da distribuição para corrigir como um processo foi distribuído.',
       'Abra uma distribuição para consultar seus processos.');
+  }
+  if (aba === 'meta') {
+    definirVisaoTabela('meta');
+    return tituloDoPainel('Julgados na meta de 45 dias',
+      'Dias da distribuição até a sessão em que o processo foi julgado. Sem prazo aferível: '
+        + 'falta a data da distribuição, ou a sessão veio antes dela.',
+      'O percentual considera só os julgados com prazo aferível.',
+      'Indicador de prazo');
   }
   definirVisaoTabela('auditoria');
   return tituloDoPainel('Auditoria das correções',
@@ -520,6 +554,7 @@ function buscar() {
   }
   if (aba === 'sessoes') return api('rpc/admin_sessoes', { method: 'POST', body: corpo() });
   if (aba === 'sorteios') return api('rpc/admin_sorteios', { method: 'POST', body: corpo() });
+  if (aba === 'meta') return api('rpc/admin_meta_45', { method: 'POST', body: corpo() });
   // Um a mais que a página: se vier, é porque existe registro anterior — e é
   // como se sabe disso sem uma segunda consulta de contagem.
   return api('rpc/admin_auditoria', {
@@ -535,10 +570,12 @@ function pintar(linhas) {
   if (detalhe?.tipo === 'sorteio') return pintarProcessosDoSorteio(linhas);
   if (aba === 'sessoes') return pintarSessoes(linhas);
   if (aba === 'sorteios') return pintarSorteios(linhas);
+  if (aba === 'meta') return pintarMeta(linhas);
   return pintarAuditoria(linhas);
 }
 
-function tituloDoPainel(titulo, descricao, dica) {
+function tituloDoPainel(titulo, descricao, dica, sobrancelha = 'Consulta e correção') {
+  painelEyebrow.textContent = sobrancelha;
   painelTitulo.textContent = titulo;
   painelDescricao.textContent = descricao;
   painelHint.textContent = dica;
@@ -705,6 +742,151 @@ function pintarProcessosDoSorteio(linhas) {
     return celulas;
   }));
   painelStatus.textContent = `${plural(linhas.length, 'processo', 'processos')} nesta distribuição.`;
+}
+
+// Soma os meses de `ano` em períodos de `meses` meses e devolve do primeiro ao
+// último período com julgado. Antes do primeiro o sistema ainda não tinha o dado
+// (a série da CJ recomeça em jun/2026), e um zero ali afirmaria que ninguém foi
+// julgado. Entre eles o zero é verdade: período sem sessão.
+function agruparMeta(linhas, ano, meses) {
+  const periodos = Array.from({ length: 12 / meses }, (_, indice) =>
+    ({ indice, julgados: 0, dentro: 0, fora: 0, semPrazo: 0 }));
+  linhas.filter(linha => linha.ano === ano).forEach(linha => {
+    const periodo = periodos[Math.floor((linha.mes - 1) / meses)];
+    periodo.julgados += linha.julgados;
+    periodo.dentro += linha.dentro;
+    periodo.fora += linha.fora;
+    periodo.semPrazo += linha.sem_prazo;
+  });
+  const primeiro = periodos.findIndex(periodo => periodo.julgados);
+  return primeiro < 0 ? [] : periodos.slice(primeiro, periodos.findLastIndex(p => p.julgados) + 1);
+}
+
+// Sem prazo aferível fica fora do denominador: não é dentro nem fora.
+const taxaDentro = ({ dentro, fora }) => (dentro + fora ? (dentro / (dentro + fora)) * 100 : null);
+const percentual = taxa =>
+  `${taxa.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+const contagem = n => Number(n).toLocaleString('pt-BR');
+
+function celulaDoPeriodo({ indice }, meses, ano) {
+  const inicio = indice * meses;
+  const nome = document.createElement('strong');
+  nome.textContent = meses === 1
+    ? MESES[inicio][0].toUpperCase() + MESES[inicio].slice(1)
+    : `${indice + 1}º ${PERIODOS[meses][0]}`;
+
+  // O período corrente ainda recebe sessões: o percentual dele vai mudar.
+  const hoje = hojeISO();
+  const apoio = [];
+  if (meses > 1) apoio.push(`${MESES[inicio].slice(0, 3)}–${MESES[inicio + meses - 1].slice(0, 3)}`);
+  if (Number(hoje.slice(0, 4)) === ano && Math.floor((Number(hoje.slice(5, 7)) - 1) / meses) === indice) {
+    apoio.push('em andamento');
+  }
+
+  const bloco = document.createElement('div');
+  bloco.className = 'admin-meta-periodo';
+  bloco.appendChild(nome);
+  if (apoio.length) {
+    const detalheDoPeriodo = document.createElement('span');
+    detalheDoPeriodo.textContent = apoio.join(' · ');
+    bloco.appendChild(detalheDoPeriodo);
+  }
+  return celula(bloco);
+}
+
+// O medidor repete o percentual ao lado dele, por isso é aria-hidden: é o
+// número que se lê, a barra só deixa as linhas comparáveis de relance.
+function celulaDaTaxa(periodo) {
+  const taxa = taxaDentro(periodo);
+  if (taxa === null) return celula(valorOuSelo(null));
+
+  const medidor = document.createElement('span');
+  medidor.className = 'admin-meta-medidor';
+  medidor.setAttribute('aria-hidden', 'true');
+  const preenchido = document.createElement('span');
+  preenchido.style.width = `${taxa}%`;
+  medidor.appendChild(preenchido);
+
+  const valor = document.createElement('span');
+  valor.className = 'admin-meta-percentual';
+  valor.textContent = percentual(taxa);
+
+  const bloco = document.createElement('div');
+  bloco.className = 'admin-meta-taxa';
+  bloco.append(medidor, valor);
+  return celula(bloco);
+}
+
+function pintarMeta(linhas) {
+  metaLinhas = linhas;
+  const anos = [...new Set(linhas.map(linha => linha.ano))].sort((a, b) => b - a);
+  if (!anos.length) {
+    return semRegistros('Nenhum julgado registrado',
+      'Assim que um processo deste colegiado tiver status Julgado, ele entra na contagem.');
+  }
+
+  // Trocar de colegiado mantém o ano escolhido quando o outro também o tem.
+  const escolhido = anos.includes(Number(metaAno.value)) ? Number(metaAno.value) : anos[0];
+  metaAno.replaceChildren(...anos.map(ano => {
+    const opcao = document.createElement('option');
+    opcao.value = String(ano);
+    opcao.textContent = String(ano);
+    return opcao;
+  }));
+  metaAno.value = String(escolhido);
+  metaFiltros.hidden = false;
+  repintarMeta();
+}
+
+function repintarMeta() {
+  const ano = Number(metaAno.value);
+  const meses = Number(metaAgrupamento.value);
+  const periodos = agruparMeta(metaLinhas, ano, meses);
+  const total = periodos.reduce((soma, p) => ({
+    julgados: soma.julgados + p.julgados, dentro: soma.dentro + p.dentro,
+    fora: soma.fora + p.fora, semPrazo: soma.semPrazo + p.semPrazo
+  }), { julgados: 0, dentro: 0, fora: 0, semPrazo: 0 });
+
+  // Dentro e Fora repartem os aferíveis, então os dois saem em percentual, com a
+  // contagem embaixo: com um em % e o outro em número, "100,0%" ao lado de "0"
+  // parecia medir coisas diferentes.
+  const taxa = taxaDentro(total);
+  const julgados = n => `${contagem(n)} ${n === 1 ? 'julgado' : 'julgados'}`;
+  metaResumo.replaceChildren(...[
+    [`Julgados em ${ano}`, contagem(total.julgados), 'com status Julgado'],
+    ['Dentro da meta', taxa === null ? '—' : percentual(taxa), `${julgados(total.dentro)} em até 45 dias`],
+    ['Fora da meta', taxa === null ? '—' : percentual(100 - taxa), `${julgados(total.fora)} com mais de 45 dias`],
+    ['Sem prazo aferível', contagem(total.semPrazo), 'fora do percentual']
+  ].map(([rotulo, valor, apoio]) => {
+    const grupo = document.createElement('div');
+    const termo = document.createElement('dt');
+    termo.textContent = rotulo;
+    const dado = document.createElement('dd');
+    dado.textContent = valor;
+    const nota = document.createElement('dd');
+    nota.className = 'admin-meta-nota';
+    nota.textContent = apoio;
+    grupo.append(termo, dado, nota);
+    return grupo;
+  }));
+  metaResumo.hidden = false;
+
+  desenhar([
+    { rotulo: 'Período', eixo: 'centro' },
+    { rotulo: 'Julgados', eixo: 'centro' },
+    { rotulo: 'Dentro da meta', eixo: 'centro' },
+    { rotulo: 'Fora da meta', eixo: 'centro' },
+    { rotulo: 'Sem prazo aferível', eixo: 'centro' },
+    { rotulo: '% dentro da meta', eixo: 'centro' }
+  ], periodos.map(periodo => [
+    celulaDoPeriodo(periodo, meses, ano),
+    celula(contagem(periodo.julgados), 'td', 'admin-meta-total'),
+    celula(contagem(periodo.dentro)),
+    celula(contagem(periodo.fora)),
+    celula(contagem(periodo.semPrazo)),
+    celulaDaTaxa(periodo)
+  ]));
+  painelStatus.textContent = `${plural(periodos.length, ...PERIODOS[meses])} de ${ano}.`;
 }
 
 function pintarAuditoria(pagina) {
@@ -1397,6 +1579,8 @@ function inicializarAdmin(orgaosAdmin) {
     carregar();
   });
   btnTentarNovamente.addEventListener('click', () => carregar());
+  metaAno.addEventListener('change', repintarMeta);
+  metaAgrupamento.addEventListener('change', repintarMeta);
   // A auditoria é a única lista que não cabe numa consulta só. O botão pede a
   // página anterior pelo cursor que admin_auditoria já aceitava, e ACRESCENTA à
   // tabela: quem está lendo o rastro não perde o que já leu.

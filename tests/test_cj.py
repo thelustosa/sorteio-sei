@@ -137,6 +137,7 @@ def tabelas_criadas(cur):
         'data_sessao': 'date', 'pauta': 'integer',
         'voto': 'text', 'status': 'text', 'defesa': 'boolean', 'relator': 'text',
         'data_distribuicao': 'date', 'dias_dt': 'integer', 'periodo_dt': 'text',
+        'meta_45': 'boolean',
         'criado_em': 'timestamp with time zone',
         'atualizado_em': 'timestamp with time zone', 'atualizado_por': 'text',
     }
