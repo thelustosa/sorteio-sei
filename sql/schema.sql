@@ -552,11 +552,15 @@ begin
      order by a.num_processo, a.data_distribuicao desc, a.id desc
   ),
 
-  -- Todo relator do acervo vira coluna, mesmo sem processo parado: coluna que
+  -- Toda cadeira vigente vira coluna, mesmo sem processo parado: coluna que
   -- aparece e some conforme o dado muda faz a tabela dançar de um dia para o
   -- outro. É também o que faz o painel seguir a composição da Câmara sem
-  -- precisar de lista fixa no HTML.
-  relatores as (select distinct acervo_cj.relator from public.acervo_cj)
+  -- precisar de lista fixa no HTML. Relator fora das cadeiras vigentes só
+  -- aparece se tiver processo parado — senão o histórico de 2023 a 2025, gravado
+  -- pelo nome, viraria uma fileira de colunas zeradas.
+  relatores as (select c.cadeira as relator from public.cadeiras_cj c where c.ate is null
+                union
+                select pendentes.relator from pendentes)
 
   -- A tela mostra a cadeira e revela o conselheiro no hover. As duas saem da
   -- mesma consulta para que o front não precise repetir o de-para.
