@@ -414,7 +414,7 @@ begin
       -- '', que barraria também o campo em branco.
    where coalesce(i ->> 'id', '') !~ '^[0-9]+$'
       or (nullif(i ->> 'voto', '') is not null
-          and nullif(i ->> 'voto', '') not in ('Manter', 'Anular', 'Vista'))
+          and nullif(i ->> 'voto', '') not in ('Manter', 'Anular', 'Retirado', 'Vista'))
       or (nullif(i ->> 'status', '') is not null
           and nullif(i ->> 'status', '')
               not in ('Julgado', 'Retornou', 'Retirado', 'Vista'));
@@ -898,6 +898,7 @@ create table if not exists public.julgados_creg (
       when voto is null or voto_cj is null then null
       when status = 'Retirado' then null
       when voto in ('Retirado', 'Aprovação', 'Indeferimento', 'Arquivamento') then null
+      when voto_cj = 'Retirado' then null
       when voto_cj = voto then null
       when voto_cj = 'Anular' then 'Divergente-Não Revel'
       else 'Divergente'
@@ -2273,7 +2274,7 @@ begin
 
   -- Os mesmos rótulos de registrar_votos. Mudou lá, muda aqui.
   if p_campos ? 'voto' and nullif(p_campos ->> 'voto', '') is not null
-     and p_campos ->> 'voto' not in ('Manter', 'Anular', 'Vista') then
+     and p_campos ->> 'voto' not in ('Manter', 'Anular', 'Retirado', 'Vista') then
     raise exception 'voto fora do permitido: %', p_campos ->> 'voto' using errcode = '22023';
   end if;
 
