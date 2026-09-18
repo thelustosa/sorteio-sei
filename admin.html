@@ -6,13 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#00534b" />
   <meta name="description"
-    content="Painel administrativo do Sorteio de Processos SEI: correção auditável de registros de sorteio e de sessões de julgamento da AGR." />
+    content="Painel administrativo do Sorteio de Processos SEI: correção e exclusão auditáveis de registros de sorteio e de sessões de julgamento da AGR." />
   <title>Painel Administrativo — Sorteio de Processos SEI</title>
   <link rel="preconnect" href="https://giipnmpfclfudkzflwsv.supabase.co" crossorigin />
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=8bc14f3076" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=c5c08ce785" />
   <script>
     (function () {
       try {
@@ -25,8 +25,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=8bc14f3076"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=8bc14f3076"></script>
+  <script defer src="assets/js/supabase.min.js?v=c5c08ce785"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=c5c08ce785"></script>
 </head>
 
 <body class="admin-page" data-page="admin">
@@ -40,7 +40,7 @@
         <div class="header-copy">
           <p class="institution-name">Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</p>
           <h1>Painel Administrativo</h1>
-          <p class="lead">Correção dos registros de sorteio e das sessões de julgamento.</p>
+          <p class="lead">Correção e exclusão dos registros de sorteio e das sessões de julgamento.</p>
         </div>
       </header>
     </div>
@@ -261,7 +261,7 @@
                     <circle cx="10" cy="10" r="2.3"></circle>
                   </svg>
                 </span>
-                <div><h3>Revise antes de gravar</h3><p>Nada foi alterado até você confirmar.</p></div>
+                <div><h3 id="edicaoRevisaoTitulo">Revise antes de gravar</h3><p id="edicaoRevisaoTexto">Nada foi alterado até você confirmar.</p></div>
               </div>
               <ul id="edicaoDelta" class="admin-delta"></ul>
               <div id="edicaoImpacto" class="admin-impacto" hidden>
@@ -274,7 +274,7 @@
                  de auditoria, e escondê-lo na hora de confirmar tirava da vista
                  justamente o texto que a tela promete gravar. -->
             <div class="admin-campo admin-campo-largo admin-campo-motivo">
-              <label for="edicaoMotivo">Motivo da alteração <span class="small">opcional</span></label>
+              <label for="edicaoMotivo"><span id="edicaoMotivoRotulo">Motivo da alteração</span> <span id="edicaoMotivoOpcional" class="small">opcional</span></label>
               <input id="edicaoMotivo" type="text" maxlength="200" placeholder="Ex.: ata da sessão confirma a alteração">
               <p class="form-hint">O motivo também fará parte do histórico de auditoria.</p>
             </div>

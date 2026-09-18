@@ -3348,31 +3348,33 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 
 /* Sete colunas desde que "Vínculo" entrou entre o status e a autoria: sem ela, o
    julgado sem distribuição vinculada — o caso que "Religar ao acervo" existe
-   para resolver — era desenhado igual ao que está no lugar. */
+   para resolver — era desenhado igual ao que está no lugar. A coluna de Ações
+   cresceu com Excluir; o mínimo da tabela subiu (1360px na sessão, 1320px na
+   distribuição) para os quatro botões caberem sem apertar Vínculo. */
 .admin-table[data-visao='processos-sessao'] thead th:nth-child(1) { width: 13%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(2) { width: 30%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(3) { width: 7%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(4) { width: 8%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(5) { width: 10%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(6) { width: 18%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(7) { width: 14%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(2) { width: 35%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(3) { width: 6%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(4) { width: 7%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(5) { width: 9%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(6) { width: 17%; }
+.admin-table[data-visao='processos-sessao'] thead th:nth-child(7) { width: 13%; }
 
-.admin-table[data-visao='processos-sorteio'] thead th:nth-child(1) { width: 7%; }
-.admin-table[data-visao='processos-sorteio'] thead th:nth-child(2) { width: 16%; }
-.admin-table[data-visao='processos-sorteio'] thead th:nth-child(3) { width: 34%; }
-.admin-table[data-visao='processos-sorteio'] thead th:nth-child(4) { width: 9%; }
-.admin-table[data-visao='processos-sorteio'] thead th:nth-child(5) { width: 15%; }
-.admin-table[data-visao='processos-sorteio'] thead th:nth-child(6) { width: 10%; }
+.admin-table[data-visao='processos-sorteio'] thead th:nth-child(1) { width: 6%; }
+.admin-table[data-visao='processos-sorteio'] thead th:nth-child(2) { width: 14%; }
+.admin-table[data-visao='processos-sorteio'] thead th:nth-child(3) { width: 36%; }
+.admin-table[data-visao='processos-sorteio'] thead th:nth-child(4) { width: 8%; }
+.admin-table[data-visao='processos-sorteio'] thead th:nth-child(5) { width: 18%; }
+.admin-table[data-visao='processos-sorteio'] thead th:nth-child(6) { width: 9%; }
 
 /* O Conselho acrescenta "Interessado" antes de "Julgados". Sem a variante,
    os 9% restantes eram divididos entre as duas e cortavam ambos os rótulos. */
-.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(1) { width: 6%; }
-.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(2) { width: 14%; }
-.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(3) { width: 32%; }
-.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(4) { width: 8%; }
+.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(1) { width: 5%; }
+.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(2) { width: 13%; }
+.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(3) { width: 34%; }
+.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(4) { width: 7%; }
 .admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(5) { width: 12%; }
-.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(6) { width: 10%; }
-.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(7) { width: 12%; }
+.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(6) { width: 9%; }
+.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(7) { width: 14%; }
 .admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(8) { width: 6%; }
 
 .admin-table[data-visao='auditoria'] thead th:nth-child(1) { width: 15%; }
@@ -3408,8 +3410,8 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 }
 .admin-table[data-visao='sessoes'] { min-width: 660px; }
 .admin-table[data-visao='sorteios'] { min-width: 780px; }
-.admin-table[data-visao='processos-sessao'] { min-width: 1180px; }
-.admin-table[data-visao='processos-sorteio'] { min-width: 1180px; }
+.admin-table[data-visao='processos-sessao'] { min-width: 1360px; }
+.admin-table[data-visao='processos-sorteio'] { min-width: 1320px; }
 .admin-table[data-visao='auditoria'] { min-width: 1080px; }
 
 .admin-table thead th {
@@ -3494,6 +3496,14 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-acao:hover { border-color: var(--accent); background: var(--accent-soft); }
 .admin-acao-primario { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
 .admin-acao-primario:hover { border-color: var(--accent-hover); background: var(--accent-hover); }
+/* Excluir fica neutro em repouso: vermelho em toda linha da tabela seria um
+   alarme permanente, e a One Alert Color Rule guarda a cor para quando a ação
+   destrutiva está de fato sob o ponteiro ou o foco — o mesmo acordo do
+   .btn-excluir do sorteador. O anel de foco continua o verde de todo o sistema.
+   O afastamento extra separa o erro de mira mais caro da linha. */
+.admin-acao-perigo { margin-left: 6px; border-color: var(--border-subtle); color: var(--muted); }
+.admin-acao-perigo:hover,
+.admin-acao-perigo:focus-visible { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
 
 .admin-badge {
   display: inline-flex;
@@ -3674,6 +3684,15 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-impacto h3 { margin: 0 0 8px; color: var(--accent-secondary-text); font-size: var(--text-base); }
 .admin-impacto ul { display: grid; gap: 4px; margin: 0; padding-left: 18px; }
 .admin-impacto li { color: var(--accent-secondary-text); font-size: var(--text-sm); line-height: 1.45; }
+/* Exclusão: o mesmo diálogo, com o vermelho só onde há destruição — o ícone da
+   revisão, a lista do que deixa de existir e o botão que confirma. Quando a
+   lista é do que CONTINUA (data-tom='atencao'), ela fica no teal de sempre. */
+.admin-dialog[data-tom='perigo'] .admin-review-icon { background: var(--danger-soft); color: var(--danger); }
+.admin-impacto[data-tom='perigo'] { border-color: var(--danger-panel-border); background: var(--danger-panel); }
+.admin-impacto[data-tom='perigo'] h3,
+.admin-impacto[data-tom='perigo'] li { color: var(--danger-panel-text); }
+.admin-dialog-actions .button-perigo { border-color: var(--danger); background: var(--danger); }
+.admin-dialog-actions .button-perigo:hover:not(:disabled) { border-color: var(--danger-hover); background: var(--danger-hover); }
 .admin-dialog-error { margin: 16px 0 0; padding: 12px 14px; border-radius: var(--radius-control); background: var(--danger-soft); }
 .admin-dialog-actions {
   position: sticky;
@@ -3770,6 +3789,7 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   }
   .admin-acoes { align-items: stretch; flex-direction: column; }
   .admin-acao { width: 100%; }
+  .admin-acao-perigo { margin: 6px 0 0; }
 }
 
 @media screen and (max-width: 720px) {
