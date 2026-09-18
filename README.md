@@ -451,7 +451,7 @@ Testa o modelo de controle de acesso por órgão em Postgres real: checagem de i
 ```bash
 python tests/test_admin.py
 ```
-Testa as operações do painel administrativo em Postgres real: controle de perfil (`papel = 'admin'`), operações de correção com allowlist (voto, status, pauta, data, desfazer para vazio), renumeração em lote, correção de acervo, redistribuição com preservação de histórico, integridade transacional e gravação imutável na trilha `auditoria_admin`.
+Testa as operações do painel administrativo em Postgres real: controle de perfil (`papel = 'admin'`), operações de correção com allowlist (voto, status, pauta, data, desfazer para vazio), renumeração em lote, correção de acervo, redistribuição com preservação de histórico, exclusão de julgado e de distribuição (com ou sem os julgados vinculados, motivo obrigatório e retrato completo na auditoria), integridade transacional e gravação imutável na trilha `auditoria_admin`.
 
 #### Testes de sincronização e workflows
 

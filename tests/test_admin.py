@@ -1025,6 +1025,196 @@ def acervo_recusa_distribuicao_no_futuro(cur):
     assert 'distribuicao no futuro' in str(erro), erro
 
 
+# ── Exclusão ─────────────────────────────────────────────────────────────────
+# A primeira porta que DESTRÓI dado. O que se persegue: só admin chama, o
+# motivo é exigido, a auditoria guarda a linha inteira, e excluir só a
+# distribuição deixa os julgados de pé — sem vínculo, com a cópia intacta.
+
+@teste
+def exclusao_so_para_admin(cur):
+    _, acervo_cj, julgado_cj = cenario_cj(cur)
+    _, acervo_creg, julgado_creg = cenario_creg(cur)
+    cur.connection.commit()
+
+    escritas = [
+        ("select public.admin_excluir_julgado_cj(%s, 'teste')", (julgado_cj,)),
+        ("select public.admin_excluir_distribuicao_cj(%s, 'teste')", (acervo_cj,)),
+        ("select public.admin_excluir_distribuicao_e_julgados_cj(%s, 'teste')", (acervo_cj,)),
+        ("select public.admin_excluir_julgado_creg(%s, 'teste')", (julgado_creg,)),
+        ("select public.admin_excluir_distribuicao_creg(%s, 'teste')", (acervo_creg,)),
+        ("select public.admin_excluir_distribuicao_e_julgados_creg(%s, 'teste')", (acervo_creg,)),
+    ]
+    for sql, args in escritas:
+        for nome in OPERADORES + ['sem-acesso']:
+            autenticar(cur, nome)
+            deve_negar(cur, sql, args)
+
+
+@teste
+def corpo_da_remocao_nao_e_porta(cur):
+    """Só as funções que declaram a intenção ficam ao alcance do PostgREST."""
+    _, acervo_cj, _ = cenario_cj(cur)
+    _, acervo_creg, _ = cenario_creg(cur)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    deve_negar(cur, "select public.admin_remover_acervo_cj(%s, true, 'excluir_distribuicao', 'x')",
+               (acervo_cj,))
+    autenticar(cur, 'lucas')
+    deve_negar(cur, "select public.admin_remover_acervo_creg(%s, true, 'excluir_distribuicao', 'x')",
+               (acervo_creg,))
+
+
+@teste
+def exclusao_exige_motivo(cur):
+    _, acervo_id, julgado_id = cenario_cj(cur)
+    cur.connection.commit()
+    for sql, args in [
+        ('select public.admin_excluir_julgado_cj(%s, %s)', (julgado_id, '   ')),
+        ('select public.admin_excluir_distribuicao_cj(%s, %s)', (acervo_id, None)),
+        ('select public.admin_excluir_distribuicao_e_julgados_cj(%s, %s)', (acervo_id, '')),
+    ]:
+        autenticar(cur, 'lucas')
+        deve_falhar(cur, sql, args, codigo='22023')
+
+    cur.execute('reset role')
+    assert julgado(cur, 'julgados_cj', julgado_id, 'id') == (julgado_id,)
+    assert como_dono(cur, 'select count(*) from public.acervo_cj where id = %s', (acervo_id,)) == 1
+
+
+@teste
+def exclusao_recusa_registro_inexistente(cur):
+    autenticar(cur, 'lucas')
+    deve_falhar(cur, "select public.admin_excluir_julgado_cj(-1, 'x')", codigo='22023')
+    autenticar(cur, 'lucas')
+    deve_falhar(cur, "select public.admin_excluir_distribuicao_creg(-1, 'x')", codigo='22023')
+
+
+@teste
+def excluir_julgado_guarda_a_linha_inteira_na_auditoria(cur):
+    num, acervo_id, julgado_id = cenario_cj(cur)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    cur.execute("select public.admin_excluir_julgado_cj(%s, 'importado em duplicidade')",
+                (julgado_id,))
+    retorno = cur.fetchone()[0]
+    assert retorno['operacao'] == 'excluir_julgado'
+    assert retorno['num_processo'] == num
+    assert (retorno['acervo'], retorno['julgados'], retorno['desvinculados']) == ([], [julgado_id], [])
+
+    cur.execute('reset role')
+    assert julgado(cur, 'julgados_cj', julgado_id, 'id') is None
+    assert como_dono(cur, 'select count(*) from public.acervo_cj where id = %s', (acervo_id,)) == 1
+    [(operacao, antes, depois, motivo, feito_por)] = auditoria(cur, 'julgados_cj', julgado_id)
+    assert operacao == 'excluir_julgado'
+    assert (antes['num_processo'], antes['voto'], antes['relator']) == (num, 'Manter', 'CJ3')
+    assert depois == {}
+    assert motivo == 'importado em duplicidade'
+    assert feito_por == 'lucas@goias.gov.br'
+
+
+@teste
+def excluir_so_a_distribuicao_desvincula_e_preserva_a_copia(cur):
+    num, acervo_id, julgado_id = cenario_cj(cur)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    cur.execute("select public.admin_excluir_distribuicao_cj(%s, 'sorteio lançado em dobro')",
+                (acervo_id,))
+    retorno = cur.fetchone()[0]
+    assert (retorno['acervo'], retorno['julgados'], retorno['desvinculados']) == \
+        ([acervo_id], [], [julgado_id])
+
+    cur.execute('reset role')
+    assert como_dono(cur, 'select count(*) from public.acervo_cj where id = %s', (acervo_id,)) == 0
+    assert julgado(cur, 'julgados_cj', julgado_id,
+                   'acervo_id, relator, data_distribuicao::text') == (None, 'CJ3', '2026-06-18')
+    [(op_a, antes_a, depois_a, _, _)] = auditoria(cur, 'acervo_cj', acervo_id)
+    assert (op_a, antes_a['num_processo'], depois_a) == ('excluir_distribuicao', num, {})
+    [(op_j, antes_j, depois_j, _, _)] = auditoria(cur, 'julgados_cj', julgado_id)
+    assert (op_j, antes_j, depois_j) == \
+        ('excluir_distribuicao', {'acervo_id': acervo_id}, {'acervo_id': None})
+
+
+@teste
+def excluir_distribuicao_e_julgados_apaga_os_dois(cur):
+    num, acervo_id, julgado_id = cenario_cj(cur)
+    segundo = como_dono(cur, """
+        insert into public.julgados_cj (num_processo, data_sessao, pauta)
+        values (%s, '2026-08-06', 27) returning id""", (num,))
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    cur.execute("select public.admin_excluir_distribuicao_e_julgados_cj(%s, 'processo de outro órgão')",
+                (acervo_id,))
+    retorno = cur.fetchone()[0]
+    assert retorno['acervo'] == [acervo_id]
+    assert sorted(retorno['julgados']) == sorted([julgado_id, segundo])
+    assert retorno['desvinculados'] == []
+
+    cur.execute('reset role')
+    assert como_dono(cur, 'select count(*) from public.julgados_cj where num_processo = %s', (num,)) == 0
+    assert como_dono(cur, 'select count(*) from public.acervo_cj where num_processo = %s', (num,)) == 0
+    assert como_dono(cur, """select count(*) from public.auditoria_admin
+                              where operacao = 'excluir_distribuicao_e_julgados'
+                                and depois = '{}'::jsonb
+                                and antes ->> 'num_processo' = %s""", (num,)) == 3
+
+
+@teste
+def exclusao_do_conselho_segue_a_mesma_regra(cur):
+    num, acervo_id, julgado_id = cenario_creg(cur)
+    outro_num, outro_acervo, outro_julgado = cenario_creg(cur)
+    cur.connection.commit()
+    autenticar(cur, 'sec-agr')
+    cur.execute("select public.admin_excluir_distribuicao_creg(%s, 'unidade errada')", (acervo_id,))
+    assert cur.fetchone()[0]['desvinculados'] == [julgado_id]
+    cur.execute("select public.admin_excluir_distribuicao_e_julgados_creg(%s, 'duplicado')",
+                (outro_acervo,))
+    assert cur.fetchone()[0]['julgados'] == [outro_julgado]
+    cur.execute("select public.admin_excluir_julgado_creg(%s, 'pauta errada')", (julgado_id,))
+    assert cur.fetchone()[0]['julgados'] == [julgado_id]
+
+    cur.execute('reset role')
+    assert como_dono(cur, """select count(*) from public.julgados_creg
+                              where num_processo in (%s, %s)""", (num, outro_num)) == 0
+    [(_, antes, depois, _, _)] = auditoria(cur, 'acervo_creg', acervo_id)
+    assert (antes['interessado'], depois) == ('Fulano de Tal', {})
+
+
+@teste
+def auditoria_identifica_o_processo_de_um_registro_excluido(cur):
+    """Sem o retrato, a linha da exclusão dizia "processo não localizado"."""
+    num, _, julgado_id = cenario_cj(cur)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    cur.execute("select public.admin_corrigir_julgado_cj(%s, '{\"voto\":\"Anular\"}'::jsonb, null)",
+                (julgado_id,))
+    cur.execute("select public.admin_excluir_julgado_cj(%s, 'duplicado')", (julgado_id,))
+    cur.execute("""select operacao, num_processo from public.admin_auditoria('CJ', 10, null)
+                    where tabela = 'julgados_cj' and registro_id = %s
+                    order by id""", (julgado_id,))
+    assert cur.fetchall() == [('corrigir_julgado', num), ('excluir_julgado', num)]
+
+
+@teste
+def exclusoes_nao_deixam_erro_na_verificacao(cur):
+    _, acervo_cj, _ = cenario_cj(cur)
+    _, outro_cj, _ = cenario_cj(cur)
+    _, acervo_creg, julgado_creg = cenario_creg(cur)
+    cur.connection.commit()
+
+    autenticar(cur, 'lucas')
+    cur.execute("select public.admin_excluir_distribuicao_cj(%s, 'x')", (acervo_cj,))
+    cur.execute("select public.admin_excluir_distribuicao_e_julgados_cj(%s, 'x')", (outro_cj,))
+    cur.execute("select public.admin_excluir_distribuicao_creg(%s, 'x')", (acervo_creg,))
+    cur.execute("select public.admin_excluir_julgado_creg(%s, 'x')", (julgado_creg,))
+    cur.connection.commit()
+
+    cur.execute('reset role')
+    for arquivo in ['verificacao_cj.sql', 'verificacao_creg.sql']:
+        cur.execute((RAIZ / 'sql' / arquivo).read_text(encoding='utf-8'))
+        erros = [linha for linha in cur.fetchall() if linha[1] == 'ERRO']
+        assert not erros, f'{arquivo}: {erros}'
+
+
 # ── Integridade ──────────────────────────────────────────────────────────────
 
 @teste
