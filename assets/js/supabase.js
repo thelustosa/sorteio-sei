@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '03d0b5c130';
+const ASSET_VERSION = '50e8edfb1e';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -397,8 +397,11 @@ async function apiPagina(caminho, opcoes) {
     resp = await requisitar();
   }
 
+  // return=minimal pede resposta sem corpo: o insert do sorteio volta 201 vazio,
+  // e ler JSON dali seria acusar falha numa gravação que deu certo.
+  const semCorpo = resp.status === 204 || /return=minimal/.test(opcoes.headers?.Prefer || '');
   if (resp.ok) return {
-    dados: resp.status === 204 ? null : await resp.json(),
+    dados: semCorpo ? null : await resp.json(),
     intervalo: resp.headers?.get('Content-Range')
   };
 
