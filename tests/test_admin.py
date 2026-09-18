@@ -204,6 +204,8 @@ RPCS_LEITURA = {
         "select * from public.admin_processos_acervo('CJ', date '2026-06-18', null, null)",
         "select * from public.admin_julgados_do_acervo('CJ', 1)",
         "select * from public.admin_auditoria('CJ', 10, null)",
+        "select * from public.admin_meta_45('CJ')",
+        "select * from public.admin_meta_45_processos('CJ', date '2026-01-01', date '2026-12-31')",
     ],
     'CREG': [
         "select * from public.admin_sessoes('CREG')",
@@ -212,6 +214,8 @@ RPCS_LEITURA = {
         "select * from public.admin_processos_acervo('CREG', date '2026-06-18', null, null)",
         "select * from public.admin_julgados_do_acervo('CREG', 1)",
         "select * from public.admin_auditoria('CREG', 10, null)",
+        "select * from public.admin_meta_45('CREG')",
+        "select * from public.admin_meta_45_processos('CREG', date '2026-01-01', date '2026-12-31')",
     ],
 }
 
@@ -228,6 +232,27 @@ def leitura_administrativa_so_para_admin(cur):
             for nome in OPERADORES + ['sem-acesso']:
                 autenticar(cur, nome)
                 deve_negar(cur, rpc)
+
+
+@teste
+def meta_45_conta_so_julgado_e_separa_o_prazo_nao_aferivel(cur):
+    """Até 45 dias é dentro. Sessão anterior à distribuição, ou julgado sem data
+    de distribuição, não é dentro nem fora: vai para sem_prazo. E o que não tem
+    status Julgado fica fora da conta — Vista foi à mesa sem julgamento."""
+    for orgao, cenario in [('CJ', cenario_cj), ('CREG', cenario_creg)]:
+        cenario(cur, data_dist='2025-01-02', data_sessao='2025-02-16')
+        cenario(cur, data_dist='2025-01-02', data_sessao='2025-02-17')
+        cenario(cur, data_dist='2025-02-20', data_sessao='2025-02-10')
+        cenario(cur, data_dist='2025-01-02', data_sessao='2025-02-11', status='Vista')
+        como_dono(cur, f"""insert into public.julgados_{orgao.lower()}
+                             (num_processo, data_sessao, voto, status)
+                           values (%s, '2025-02-12', 'Manter', 'Julgado')""", (numero(),))
+        cur.connection.commit()
+
+        autenticar(cur, 'lucas')
+        cur.execute("""select ano, mes, julgados, dentro, fora, sem_prazo
+                         from public.admin_meta_45(%s) where ano = 2025""", (orgao,))
+        assert cur.fetchall() == [(2025, 2, 4, 1, 1, 2)], orgao
 
 
 @teste

@@ -24,11 +24,13 @@ falhas — está em **[FLUXO-CJ.md](FLUXO-CJ.md)** e não se repete aqui.
 | votos | Manter, Anular, Vista | Manter, Anular, Aprovação, Indeferimento, Extinção, Retirado, Vista |
 | status | Julgado, Retornou, Retirado, Vista | Julgado, Retirado, Vista, Sobrestado, Prejudicado |
 | página da AGR | `pautas-das-reunioes-{ano}` | `pautas-das-sessoes-do-conselho-regulador-{ano}` |
-| colunas calculadas | `dias_dt`, `periodo_dt` | `dias_dt`, `periodo_dt`, **`meta_45`**, **`dias_dist_cr_cj`**, **`em_relacao_cj`** |
+| colunas calculadas | `dias_dt`, `periodo_dt`, `meta_45` | `dias_dt`, `periodo_dt`, `meta_45`, **`dias_dist_cr_cj`**, **`em_relacao_cj`** |
 
-As três últimas são o que o Conselho acompanha e a Câmara não: se o processo
-chegou à mesa dentro de 45 dias, quanto tempo levou entre sair da CJ e ser
-distribuído no CREG, e se o Conselho decidiu diferente da Câmara.
+As duas últimas são o que o Conselho acompanha e a Câmara não: quanto tempo o
+processo levou entre sair da CJ e ser distribuído no CREG, e se o Conselho
+decidiu diferente da Câmara. `meta_45` nasceu no Conselho e chegou à Câmara em
+set/2026, com a mesma regra, para a aba Meta 45 do painel administrativo contar
+os dois colegiados do mesmo jeito.
 
 ---
 

@@ -156,6 +156,19 @@ create table if not exists public.julgados_cj (
 
 create index if not exists idx_julgados_cj_acervo on public.julgados_cj (acervo_id);
 
+-- "META 45": a mesma coluna de julgados_creg, com a mesma regra, para o painel
+-- administrativo contar os dois colegiados do mesmo jeito. Sessão anterior à
+-- distribuição, ou julgado sem data de distribuição, fica NULO: o prazo não é
+-- aferível, e contá-lo como "dentro" engordava o indicador da planilha do
+-- Conselho (ver julgados_creg.meta_45). Chega por ALTER porque a tabela já
+-- existe em produção.
+alter table public.julgados_cj
+  add column if not exists meta_45 boolean generated always as (
+    case when data_sessao >= data_distribuicao
+         then (data_sessao - data_distribuicao) <= 45
+    end
+  ) stored;
+
 -- Número SEI: 15 dígitos, só dígitos — a regra que acervo_creg e julgados_creg
 -- têm no CREATE TABLE. Na Câmara ela chega por ALTER porque as tabelas nasceram
 -- antes dela, e o drop/add mantém o script reaplicável. O navegador já barrava,
@@ -2074,6 +2087,85 @@ begin
    limit greatest(1, least(coalesce(p_limite, 50), 500));
 end;
 $$;
+
+-- Julgados dentro e fora da meta de 45 dias, por mês da sessão. O painel soma
+-- os meses em bimestre, trimestre, quadrimestre ou semestre, e filtra o ano: a
+-- resposta cabe inteira numa consulta (doze linhas por ano, no máximo), então
+-- trocar o agrupamento não volta ao banco.
+--
+-- Só status 'Julgado' conta. Retirado, Vista, Retornou, Sobrestado e
+-- Prejudicado foram à mesa sem julgamento, e status nulo ainda não foi
+-- registrado. Por isso um processo que teve Vista e depois foi julgado conta
+-- uma vez só, pela sessão do julgamento — e o prazo dessa linha já é o total
+-- desde a distribuição.
+--
+-- sem_prazo é meta_45 nulo: não entra nem em dentro nem em fora.
+create or replace function public.admin_meta_45(p_colegiado text)
+returns table (ano int, mes int, julgados int, dentro int, fora int, sem_prazo int)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.admin_exigir(p_colegiado);
+
+  return query
+  with linhas as (
+    select j.data_sessao as dia, j.meta_45 as meta
+      from public.julgados_cj j
+     where p_colegiado = 'CJ' and j.status = 'Julgado'
+    union all
+    select k.data_sessao, k.meta_45
+      from public.julgados_creg k
+     where p_colegiado = 'CREG' and k.status = 'Julgado'
+  )
+  select extract(year from l.dia)::int, extract(month from l.dia)::int,
+         count(*)::int,
+         count(*) filter (where l.meta)::int,
+         count(*) filter (where not l.meta)::int,
+         count(*) filter (where l.meta is null)::int
+    from linhas l
+   group by 1, 2
+   order by 1, 2;
+end;
+$$;
+
+revoke all on function public.admin_meta_45(text) from public, anon, service_role;
+grant execute on function public.admin_meta_45(text) to authenticated;
+
+-- Os julgados por trás de cada contagem da aba Meta 45; o painel recorta
+-- dentro, fora e sem prazo aferível a partir desta resposta.
+create or replace function public.admin_meta_45_processos(p_colegiado text, p_de date, p_ate date)
+returns table (num_processo text, destino text, data_distribuicao date, data_sessao date,
+               dias int, meta_45 boolean)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.admin_exigir(p_colegiado);
+
+  -- Mesmo recorte de admin_meta_45 (status 'Julgado', período pela sessão):
+  -- se os dois divergirem, o card abre um número diferente do que a célula
+  -- mostrava. Os mais atrasados primeiro, que é o que se procura na lista.
+  return query
+  select j.num_processo, j.relator, j.data_distribuicao, j.data_sessao, j.dias_dt, j.meta_45
+    from public.julgados_cj j
+   where p_colegiado = 'CJ' and j.status = 'Julgado'
+     and j.data_sessao between p_de and p_ate
+   union all
+  select k.num_processo, k.unidade, k.data_distribuicao, k.data_sessao, k.dias_dt, k.meta_45
+    from public.julgados_creg k
+   where p_colegiado = 'CREG' and k.status = 'Julgado'
+     and k.data_sessao between p_de and p_ate
+   order by 5 desc nulls last, 1;
+end;
+$$;
+
+revoke all on function public.admin_meta_45_processos(text, date, date) from public, anon, service_role;
+grant execute on function public.admin_meta_45_processos(text, date, date) to authenticated;
 
 revoke all on function public.admin_sessoes(text) from public, anon, service_role;
 revoke all on function public.admin_processos_sessao(text, date, int) from public, anon, service_role;
