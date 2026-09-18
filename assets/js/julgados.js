@@ -10,7 +10,7 @@
 // preencheu (ver schema.sql).
 
 // Os mesmos rótulos que a função do banco aceita. Mudou aqui, muda lá.
-const VOTOS = ['Manter', 'Anular', 'Vista'];
+const VOTOS = ['Manter', 'Anular', 'Retirado', 'Vista'];
 const STATUS = ['Julgado', 'Retornou', 'Retirado', 'Vista'];
 
 const listaPautas = document.getElementById('listaPautas');
