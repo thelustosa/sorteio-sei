@@ -4363,8 +4363,9 @@ test('excluir so fica vermelho sob o ponteiro ou o foco, e a confirmacao usa os 
     `\\.admin-table\\[data-visao='${visao}'\\] thead th:nth-child\\(${filho}\\)\\s*\\{[^}]*width:\\s*([\\d.]+)%`))?.[1]);
   const minimo = visao => Number(css.match(new RegExp(
     `\\.admin-table\\[data-visao='${visao}'\\]\\s*\\{[^}]*min-width:\\s*(\\d+)px`))?.[1]);
-  assert.ok(minimo('processos-sessao') * largura('processos-sessao', 2) / 100 >= 440,
+  // 440px de botões medidos no Chrome, mais os 26px de padding da célula.
+  assert.ok(minimo('processos-sessao') * largura('processos-sessao', 2) / 100 >= 466,
     'quatro botões cabem na coluna de Ações da sessão');
-  assert.ok(minimo('processos-sorteio') * largura('processos-sorteio', 3) / 100 >= 440,
+  assert.ok(minimo('processos-sorteio') * largura('processos-sorteio', 3) / 100 >= 466,
     'quatro botões cabem na coluna de Ações da distribuição');
 });

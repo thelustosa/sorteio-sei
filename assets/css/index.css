@@ -3349,8 +3349,8 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 /* Sete colunas desde que "Vínculo" entrou entre o status e a autoria: sem ela, o
    julgado sem distribuição vinculada — o caso que "Religar ao acervo" existe
    para resolver — era desenhado igual ao que está no lugar. A coluna de Ações
-   cresceu com Excluir; o mínimo da tabela subiu para 1320px para ela caber sem
-   apertar Vínculo. */
+   cresceu com Excluir; o mínimo da tabela subiu (1360px na sessão, 1320px na
+   distribuição) para os quatro botões caberem sem apertar Vínculo. */
 .admin-table[data-visao='processos-sessao'] thead th:nth-child(1) { width: 13%; }
 .admin-table[data-visao='processos-sessao'] thead th:nth-child(2) { width: 35%; }
 .admin-table[data-visao='processos-sessao'] thead th:nth-child(3) { width: 6%; }
@@ -3410,7 +3410,7 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 }
 .admin-table[data-visao='sessoes'] { min-width: 660px; }
 .admin-table[data-visao='sorteios'] { min-width: 780px; }
-.admin-table[data-visao='processos-sessao'] { min-width: 1320px; }
+.admin-table[data-visao='processos-sessao'] { min-width: 1360px; }
 .admin-table[data-visao='processos-sorteio'] { min-width: 1320px; }
 .admin-table[data-visao='auditoria'] { min-width: 1080px; }
 
