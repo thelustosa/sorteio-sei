@@ -205,6 +205,7 @@ RPCS_LEITURA = {
         "select * from public.admin_julgados_do_acervo('CJ', 1)",
         "select * from public.admin_auditoria('CJ', 10, null)",
         "select * from public.admin_meta_45('CJ')",
+        "select * from public.admin_meta_45_processos('CJ', date '2026-01-01', date '2026-12-31')",
     ],
     'CREG': [
         "select * from public.admin_sessoes('CREG')",
@@ -214,6 +215,7 @@ RPCS_LEITURA = {
         "select * from public.admin_julgados_do_acervo('CREG', 1)",
         "select * from public.admin_auditoria('CREG', 10, null)",
         "select * from public.admin_meta_45('CREG')",
+        "select * from public.admin_meta_45_processos('CREG', date '2026-01-01', date '2026-12-31')",
     ],
 }
 
