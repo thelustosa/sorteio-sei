@@ -799,9 +799,9 @@ function pintarProcessosDoSorteio(linhas) {
 }
 
 // Soma os meses de `ano` em períodos de `meses` meses e devolve do primeiro ao
-// último período com julgado. Antes do primeiro o sistema ainda não tinha o dado
-// (a série da CJ recomeça em jun/2026), e um zero ali afirmaria que ninguém foi
-// julgado. Entre eles o zero é verdade: período sem sessão.
+// último período com julgado. Antes do primeiro o sistema ainda não tinha o dado,
+// e um zero ali afirmaria que ninguém foi julgado. Entre eles o zero é verdade:
+// período sem sessão.
 function agruparMeta(linhas, ano, meses) {
   const periodos = Array.from({ length: 12 / meses }, (_, indice) =>
     ({ indice, julgados: 0, dentro: 0, fora: 0, semPrazo: 0 }));
