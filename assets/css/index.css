@@ -1971,10 +1971,13 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 /* Seis colunas — duas delas de texto livre — não cabem em 390px por mais que se
    aperte o padding, e o overflow-x: hidden do corpo do card deixava as duas
    últimas fora de alcance. Rolar de lado dentro do card devolve o acesso a
-   elas. O card do acervo, com quatro colunas curtas, continua sem precisar. */
+   elas. O card do acervo, com quatro colunas curtas, continua sem precisar.
+   O da meta de 45 dias (admin), com cinco ou seis, precisa pelo mesmo motivo. */
 @media screen and (max-width: 620px) {
-  .detalhe-corpo:has(> .historico-detalhe) { overflow-x: auto; }
-  .detalhe-table.historico-detalhe { min-width: 520px; }
+  .detalhe-corpo:has(> .historico-detalhe),
+  .detalhe-corpo:has(> .admin-meta-detalhe) { overflow-x: auto; }
+  .detalhe-table.historico-detalhe,
+  .detalhe-table.admin-meta-detalhe { min-width: 520px; }
 }
 
 .acervo-table tbody td.acervo-zero {
@@ -3414,6 +3417,90 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-table[data-visao='processos-sorteio'] { min-width: 1320px; }
 .admin-table[data-visao='auditoria'] { min-width: 1080px; }
 
+/* Meta de 45 dias. Os filtros moram no cabeçalho, ao lado do título que eles
+   recortam; o resumo do ano fica entre o cabeçalho e a tabela. */
+.admin-meta-filtros { display: flex; flex: 0 0 auto; align-self: flex-end; gap: 12px; }
+.admin-meta-filtros .admin-campo { min-width: 150px; }
+.admin-meta-filtros select { background: var(--surface-raised); }
+/* O gap de 1px sobre o fundo de borda desenha as divisórias em qualquer número
+   de colunas: quatro no desktop, duas no celular. */
+.admin-meta-resumo {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--border-subtle);
+}
+.admin-meta-resumo > div { display: grid; align-content: start; gap: 3px; padding: 16px 24px; background: var(--surface-raised); }
+.admin-meta-resumo dt { color: var(--muted-strong); font-size: var(--text-sm); font-weight: 700; }
+.admin-meta-resumo dd { margin: 0; color: var(--text); font-size: var(--text-xl); font-weight: 700; line-height: 1.2; }
+.admin-meta-resumo dd.admin-meta-nota { color: var(--muted); font-size: var(--text-sm); font-weight: 400; line-height: 1.4; }
+
+.admin-table[data-visao='meta'] { min-width: 800px; }
+.admin-table[data-visao='meta'] thead th:nth-child(1) { width: 18%; }
+.admin-table[data-visao='meta'] thead th:nth-child(2) { width: 14%; }
+.admin-table[data-visao='meta'] thead th:nth-child(3) { width: 16%; }
+.admin-table[data-visao='meta'] thead th:nth-child(4) { width: 16%; }
+.admin-table[data-visao='meta'] thead th:nth-child(5) { width: 16%; }
+.admin-table[data-visao='meta'] thead th:nth-child(6) { width: 20%; }
+.admin-table[data-visao='meta'] thead th:first-child,
+.admin-table[data-visao='meta'] tbody td:first-child { padding-inline: 16px; }
+.admin-table[data-visao='meta'] thead th:last-child,
+.admin-table[data-visao='meta'] tbody td:last-child { padding-inline: 16px; }
+/* A contagem clicável é a pílula verde da contagem do histórico, em tamanho de
+   alvo: o fundo claro diz "tem mais aqui" sem gritar em cada célula. O total de
+   julgados sai cheio, que é o número de que os outros três são parte. */
+.admin-meta-contagem {
+  display: inline-flex;
+  min-width: 48px;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft-strong);
+  color: var(--accent);
+  font: inherit;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.admin-meta-contagem:hover { border-color: var(--accent); background: var(--accent-soft); }
+.admin-meta-contagem:active { transform: translateY(1px); }
+.admin-meta-contagem:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.admin-meta-contagem.is-total { background: var(--accent); color: var(--on-accent); }
+.admin-meta-contagem.is-total:hover { border-color: var(--accent-hover); background: var(--accent-hover); }
+.admin-table td.admin-meta-zero { color: var(--muted); }
+/* No card, como no do histórico: com a coluna Meta são seis, e a largura fixa
+   por igual cortava "Nº do Processo" — o número de 15 dígitos precisa da dele. */
+.detalhe-table.admin-meta-detalhe { table-layout: auto; font-variant-numeric: tabular-nums; }
+.admin-meta-periodo { display: grid; gap: 1px; justify-items: center; text-align: center; }
+.admin-meta-periodo span { color: var(--muted); font-size: var(--text-sm); }
+/* Medidor: o preenchimento é a parte dentro da meta; o trilho, do mesmo verde
+   mais claro, é a parte fora. Uma cor só, e o percentual escrito ao lado. */
+.admin-meta-taxa {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  max-width: 220px;
+  margin-inline: auto;
+}
+.admin-meta-medidor {
+  display: block;
+  height: 8px;
+  flex: 1 1 auto;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft-strong);
+}
+.admin-meta-medidor > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.admin-meta-percentual { flex: 0 0 6ch; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+
 .admin-table thead th {
   position: sticky;
   z-index: 2;
@@ -3449,7 +3536,7 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 /* Rótulo curto e fechado — selo de estado, código de cadeira: não há dígito para
    alinhar nem leitura corrida para ancorar, então centraliza. */
 .admin-table th.col-centro,
-.admin-table td.col-centro { text-align: center; }
+.admin-table td.col-centro { text-align: center; font-variant-numeric: tabular-nums; }
 .admin-table th.col-acoes,
 .admin-table td.col-acoes { text-align: center; }
 .admin-table tbody td {
@@ -3710,8 +3797,10 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 @media screen and (max-width: 960px) {
   .admin-commandbar { align-items: flex-start; flex-direction: column; }
   .admin-command-actions { width: 100%; justify-content: space-between; }
+  /* A barra ocupa a largura toda daqui para baixo: com os botões presos à
+     direita, sobrava um trilho cinza vazio à esquerda deles. */
   .admin-org-switcher { flex: 1 1 auto; }
-  .admin-org-switcher > div { justify-content: flex-end; }
+  .admin-org-button { flex: 1 1 0; justify-content: center; }
   .admin-panel-hint { display: none; }
 
   .admin-table[data-visao]:not([data-visao='auditoria']) {
@@ -3790,6 +3879,17 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   .admin-acoes { align-items: stretch; flex-direction: column; }
   .admin-acao { width: 100%; }
   .admin-acao-perigo { margin: 6px 0 0; }
+
+  .admin-panel-header { flex-direction: column; gap: 16px; }
+  .admin-meta-filtros { width: 100%; align-self: stretch; }
+  .admin-meta-filtros .admin-campo { min-width: 0; flex: 1 1 0; }
+  /* Sem coluna de ações, o cartão da meta tem duas colunas: o período como
+     título e o medidor na largura toda. */
+  .admin-panel .admin-table[data-visao='meta'] tbody tr { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-panel .admin-table[data-visao='meta'] tbody td:first-child,
+  .admin-panel .admin-table[data-visao='meta'] tbody td:last-child { grid-column: 1 / -1; padding-inline: 14px; }
+  .admin-panel .admin-table[data-visao='meta'] .admin-meta-periodo { justify-items: start; text-align: left; }
+  .admin-panel .admin-table[data-visao='meta'] .admin-meta-taxa { max-width: none; margin-inline: 0; }
 }
 
 @media screen and (max-width: 720px) {
@@ -3807,6 +3907,8 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   .admin-dialog .detalhe-corpo { padding: 20px 18px 0; }
   .admin-campos { grid-template-columns: 1fr; gap: 13px; }
   .admin-dialog-actions { margin-inline: -18px; padding: 13px 18px; }
+  .admin-meta-resumo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-meta-resumo > div { padding: 14px 18px; }
 }
 
 @media screen and (max-width: 480px) {
@@ -3817,6 +3919,9 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   /* Só os códigos cabem lado a lado mesmo a 390px — empilhar era herança de
      quando cada botão carregava o nome completo do colegiado. */
   .admin-org-button { flex: 1 1 0; }
+  /* Quatro abas numa linha não cabem a 390px: "Distribuições" estourava a barra
+     e abria rolagem horizontal na página inteira. Duas por linha cabem. */
+  .admin-abas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-aba { gap: 5px; padding-inline: 6px; font-size: var(--text-sm); }
   .admin-aba svg { width: 16px; height: 16px; }
   .admin-panel-header { padding: 18px 16px; }
@@ -3854,14 +3959,23 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
     border-top: 1px solid var(--border-subtle);
     border-left: 0;
   }
+  /* O cartão da meta só tem números curtos: rótulo ao lado do valor, uma linha
+     por campo, fazia de cada período uma coluna de seis linhas com os rótulos
+     quebrando. Fica o cartão de duas colunas do tablet, rótulo sobre o valor. */
+  .admin-panel .admin-table[data-visao='meta'] tbody tr { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-panel .admin-table[data-visao='meta'] tbody td:not(.col-acoes) { display: block; }
+  .admin-panel .admin-table[data-visao='meta'] tbody td:not(.col-acoes)::before { margin-bottom: 2px; }
+  .admin-panel .admin-table[data-visao='meta'] .admin-meta-periodo { justify-items: start; text-align: left; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .admin-aba,
-  .admin-acao { transition: none; }
+  .admin-acao,
+  .admin-meta-contagem { transition: none; }
 }
 
 @media (pointer: coarse) {
+  .admin-meta-contagem,
   .admin-aba,
   .admin-org-button,
   .admin-mais-antigas,
