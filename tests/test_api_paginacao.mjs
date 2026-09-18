@@ -82,6 +82,19 @@ test('não apresenta lista como completa se o servidor não confirmar a contagem
   await assert.rejects(api('julgados_cj'), /total de registros/);
 });
 
+test('insert com return=minimal (201 sem corpo) é sucesso', async () => {
+  let chamadas = 0;
+  const api = cliente(async () => {
+    chamadas++;
+    return { ok: true, status: 201, headers: { get: () => '*/*' },
+      json: async () => { throw new SyntaxError('Unexpected end of JSON input'); } };
+  });
+  assert.equal(await api('acervo_cj', {
+    method: 'POST', headers: { Prefer: 'return=minimal' }, body: '[]'
+  }), null);
+  assert.equal(chamadas, 1);
+});
+
 test('resposta JSON inválida é erro, não sucesso sem dados', async () => {
   const api = cliente(async () => ({ ok: true, status: 200, json: async () => { throw new Error('JSON inválido'); } }));
   await assert.rejects(api('julgados_cj'), /JSON inválido/);
