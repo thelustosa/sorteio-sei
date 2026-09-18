@@ -2746,8 +2746,12 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
    'painelVazioTexto', 'painelErroDetalhe', 'painelStatus', 'painelHint', 'tabelaInstrucao',
    'edicaoResumo', 'edicaoTitulo', 'edicaoCampos',
    'edicaoEtapaCampos', 'edicaoEtapaConfirmacao', 'edicaoDelta', 'edicaoImpacto',
-   'edicaoImpactoTitulo', 'edicaoImpactoLista', 'edicaoErro', 'edicaoEtapaRotulo']
+   'edicaoImpactoTitulo', 'edicaoImpactoLista', 'edicaoErro', 'edicaoEtapaRotulo',
+   'painelEyebrow', 'metaFiltros', 'metaResumo']
     .forEach(id => document.add(id, 'div'));
+  document.add('metaAno', 'select');
+  // O <option selected> do admin.html: agrupar por trimestre.
+  document.add('metaAgrupamento', 'select').value = '3';
   ['btnTentarNovamente', 'btnMaisAntigas', 'btnVoltar', 'btnVoltarInicio', 'btnAvancarEdicao',
    'btnCancelarEdicao', 'btnFecharEdicao'].forEach(id => document.add(id, 'button'));
   document.add('painelTable', 'table');
@@ -2779,7 +2783,7 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
     seletor.appendChild(botao);
   });
   const abas = document.getElementById('abas');
-  ['sessoes', 'sorteios', 'auditoria'].forEach(nome => {
+  ['sessoes', 'sorteios', 'meta', 'auditoria'].forEach(nome => {
     const botao = document.createElement('button');
     botao.id = `aba-${nome}`;
     botao.dataset.aba = nome;
@@ -2823,6 +2827,15 @@ const PROCESSOS_ACERVO = [
     origem: 'sorteio', julgados: 1 }
 ];
 
+// Fevereiro e março caem no 1º trimestre de 2026, julho no 3º, e o 2º fica
+// vazio no meio. 2025 existe para o filtro de ano ter o que oferecer.
+const META_45 = [
+  { ano: 2025, mes: 11, julgados: 5, dentro: 5, fora: 0, sem_prazo: 0 },
+  { ano: 2026, mes: 2, julgados: 10, dentro: 7, fora: 2, sem_prazo: 1 },
+  { ano: 2026, mes: 3, julgados: 4, dentro: 1, fora: 3, sem_prazo: 0 },
+  { ano: 2026, mes: 7, julgados: 6, dentro: 6, fora: 0, sem_prazo: 0 }
+];
+
 function apiDoPainel(chamadas, respostas = {}) {
   return async (caminho, opcoes) => {
     chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
@@ -2834,6 +2847,7 @@ function apiDoPainel(chamadas, respostas = {}) {
     if (caminho === 'rpc/admin_processos_sessao') return PROCESSOS_SESSAO;
     if (caminho === 'rpc/admin_sorteios') return SORTEIOS;
     if (caminho === 'rpc/admin_processos_acervo') return PROCESSOS_ACERVO;
+    if (caminho === 'rpc/admin_meta_45') return META_45;
     if (caminho === 'rpc/admin_julgados_do_acervo') {
       return [{ id: 41, num_processo: '202600000000001', data_sessao: '2026-07-09',
                 pauta: 24, voto: 'Manter', status: 'Julgado', destino: 'CJ3',
@@ -2896,6 +2910,83 @@ test('cada aba consulta a sua propria porta do banco', async () => {
   // ausência de coluna fixa e o formato tabular que a auditoria mantém.
   assert.equal(page.document.getElementById('painelTable').dataset.visao, 'auditoria',
     'a auditoria não vira cartão nem ganha coluna de ações fixa');
+});
+
+test('a meta de 45 dias agrupa os meses e deixa o prazo nao aferivel fora do percentual', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('meta').dispatch('click');
+  await wait();
+
+  assert.equal(chamadas.at(-1).caminho, 'rpc/admin_meta_45');
+  assert.equal(chamadas.at(-1).corpo.p_colegiado, 'CJ');
+
+  const doc = page.document;
+  const ano = doc.getElementById('metaAno');
+  assert.deepEqual(ano.children.map(opcao => opcao.value), ['2026', '2025'],
+    'o filtro oferece só os anos com julgado, do mais recente para o mais antigo');
+  assert.equal(ano.value, '2026');
+  assert.equal(doc.getElementById('metaFiltros').hidden, false);
+
+  const periodo = linha => linha.children[0].children[0].children[0].textContent;
+  const valores = linha => linha.children.slice(1, 5).map(c => c.textContent);
+  const taxa = linha => linha.children[5].children[0].children.at(-1)?.textContent
+    ?? linha.children[5].children[0].textContent;
+
+  let linhas = page.linhasDaTabela();
+  assert.deepEqual(linhas.map(periodo), ['1º trimestre', '2º trimestre', '3º trimestre'],
+    'o trimestre sem sessão entre dois com sessão continua na tabela');
+  assert.deepEqual(valores(linhas[0]), ['14', '8', '5', '1']);
+  assert.equal(taxa(linhas[0]), '61,5%', '8 de 13 aferíveis: o sem prazo não entra no denominador');
+  assert.deepEqual(valores(linhas[1]), ['0', '0', '0', '0']);
+  assert.equal(taxa(linhas[1]), '—', 'sem julgado aferível não há percentual');
+
+  const resumo = doc.getElementById('metaResumo');
+  assert.equal(resumo.hidden, false);
+  assert.deepEqual(resumo.children.map(grupo => grupo.children[1].textContent),
+    ['20', '73,7%', '26,3%', '1']);
+  assert.equal(resumo.children[2].children[2].textContent, '5 julgados com mais de 45 dias');
+  assert.equal(doc.getElementById('painelStatus').textContent, '3 trimestres de 2026.');
+
+  const consultas = chamadas.length;
+  const agrupamento = doc.getElementById('metaAgrupamento');
+  agrupamento.value = '1';
+  agrupamento.dispatch('change');
+  linhas = page.linhasDaTabela();
+  assert.deepEqual(linhas.map(periodo), ['Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho']);
+
+  ano.value = '2025';
+  ano.dispatch('change');
+  linhas = page.linhasDaTabela();
+  assert.deepEqual(linhas.map(periodo), ['Novembro']);
+  assert.equal(taxa(linhas[0]), '100,0%');
+  assert.equal(chamadas.length, consultas, 'trocar ano ou agrupamento não volta ao banco');
+});
+
+test('filtro e resumo da meta nao aparecem fora dela nem sem julgado', async () => {
+  const page = adminPage({ api: apiDoPainel([], { 'rpc/admin_meta_45': [] }) });
+  await page.inicializarAdmin(new Set(['CREG']));
+  const doc = page.document;
+
+  page.botaoDeAba('meta').dispatch('click');
+  await wait();
+  assert.equal(doc.getElementById('painelVazioTitulo').textContent, 'Nenhum julgado registrado');
+  assert.equal(doc.getElementById('metaFiltros').hidden, true);
+  assert.equal(doc.getElementById('metaResumo').hidden, true);
+
+  const comDados = adminPage({ api: apiDoPainel([]) });
+  await comDados.inicializarAdmin(new Set(['CREG']));
+  comDados.botaoDeAba('meta').dispatch('click');
+  await wait();
+  assert.equal(comDados.document.getElementById('metaFiltros').hidden, false);
+  assert.equal(comDados.document.getElementById('painelEyebrow').textContent, 'Indicador de prazo');
+
+  comDados.botaoDeAba('sessoes').dispatch('click');
+  await wait();
+  assert.equal(comDados.document.getElementById('metaFiltros').hidden, true);
+  assert.equal(comDados.document.getElementById('metaResumo').hidden, true);
+  assert.equal(comDados.document.getElementById('painelEyebrow').textContent, 'Consulta e correção');
 });
 
 test('abas administrativas seguem o padrao de teclado e mantem um unico foco', async () => {

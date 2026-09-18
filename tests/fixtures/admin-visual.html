@@ -74,6 +74,12 @@
       { feito_em: '2026-09-07T15:40:00-03:00', operacao: 'redistribuir', tabela: 'acervo_cj', registro_id: 8, antes: { relator: 'CJ3' }, depois: { relator: 'CJ1' }, motivo: 'Impedimento registrado', feito_por: 'lucas.coelho@goias.gov.br' },
       { feito_em: '2026-09-06T09:18:00-03:00', operacao: 'corrigir_processo', tabela: 'acervo_cj', registro_id: 7, antes: { num_processo: '202600000000010' }, depois: { num_processo: '202600000000001' }, motivo: 'Correção de digitação', feito_por: 'sec-agr@goias.gov.br' }
     ];
+    const META_45 = [
+      { ano: 2026, mes: 6, julgados: 28, dentro: 28, fora: 0, sem_prazo: 0 },
+      { ano: 2026, mes: 7, julgados: 69, dentro: 68, fora: 0, sem_prazo: 1 },
+      { ano: 2026, mes: 8, julgados: 73, dentro: 73, fora: 0, sem_prazo: 0 },
+      { ano: 2026, mes: 9, julgados: 76, dentro: 76, fora: 0, sem_prazo: 0 }
+    ];
 
     frame.addEventListener('load', () => {
       const win = frame.contentWindow;
@@ -119,6 +125,7 @@
         if (caminho === 'rpc/admin_sorteios') return SORTEIOS;
         if (caminho === 'rpc/admin_processos_acervo') return ACERVO;
         if (caminho === 'rpc/admin_auditoria') return AUDITORIA;
+        if (caminho === 'rpc/admin_meta_45') return META_45;
         if (caminho === 'rpc/admin_julgados_do_acervo') return PROCESSOS.slice(0, 2);
         return { alterados: {}, propagados: [] };
       };
@@ -128,7 +135,7 @@
       script.onload = async () => {
         await win.inicializarAdmin(new win.Set(['CJ', 'CREG']));
         const modo = parametros.get('view') || 'sessoes';
-        if (modo === 'sorteios' || modo === 'auditoria') {
+        if (modo === 'sorteios' || modo === 'auditoria' || modo === 'meta') {
           doc.querySelector(`[data-aba="${modo}"]`).click();
           await new Promise(resolve => setTimeout(resolve, 0));
         }

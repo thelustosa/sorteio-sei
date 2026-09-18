@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=dff28a694b" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=ddbeb1056b" />
   <script>
     (function () {
       try {
@@ -25,8 +25,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=dff28a694b"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=dff28a694b"></script>
+  <script defer src="assets/js/supabase.min.js?v=ddbeb1056b"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=ddbeb1056b"></script>
 </head>
 
 <body class="admin-page" data-page="admin">
@@ -164,6 +164,12 @@
                  falso. O id e o data-aba continuam sendo os internos. -->
             </svg><span>Distribuições</span>
           </button>
+          <button id="abaMeta" class="admin-aba" type="button" role="tab" data-aba="meta"
+            aria-selected="false" aria-controls="painelConteudo" tabindex="-1">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="10" cy="10.5" r="7"></circle><path d="M10 6.5v4l2.6 1.6M8 2h4"></path>
+            </svg><span>Meta 45</span>
+          </button>
           <button id="abaAuditoria" class="admin-aba" type="button" role="tab" data-aba="auditoria"
             aria-selected="false" aria-controls="painelConteudo" tabindex="-1">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -175,14 +181,34 @@
         <section id="painelConteudo" class="admin-panel" role="tabpanel" aria-labelledby="abaSessoes" tabindex="-1">
           <header class="admin-panel-header">
             <div class="admin-panel-heading">
-              <span class="admin-eyebrow">Consulta e correção</span>
+              <span id="painelEyebrow" class="admin-eyebrow">Consulta e correção</span>
               <h2 id="painelTitulo" tabindex="-1">Sessões de julgamento</h2>
               <!-- Igual ao texto que admin.js grava em pintarSessoes: se as duas
                    versões divergirem, qual aparece passa a depender do caminho
                    de carregamento — no estado de erro, por exemplo, fica esta. -->
               <p id="painelDescricao">Selecione a data da sessão para corrigir voto, status, pauta ou a própria data.</p>
             </div>
+            <!-- Só na aba Meta 45. Trocar ano ou agrupamento repinta a tabela com
+                 a resposta já carregada, sem voltar ao banco. -->
+            <div id="metaFiltros" class="admin-meta-filtros" hidden>
+              <div class="admin-campo">
+                <label for="metaAno">Ano</label>
+                <select id="metaAno"></select>
+              </div>
+              <div class="admin-campo">
+                <label for="metaAgrupamento">Agrupar por</label>
+                <select id="metaAgrupamento">
+                  <option value="1">Mês</option>
+                  <option value="2">Bimestre</option>
+                  <option value="3" selected>Trimestre</option>
+                  <option value="4">Quadrimestre</option>
+                  <option value="6">Semestre</option>
+                </select>
+              </div>
+            </div>
           </header>
+
+          <dl id="metaResumo" class="admin-meta-resumo" hidden></dl>
 
           <div id="painelCarregando" class="painel-carregando" hidden></div>
           <div id="painelErro" class="load-error admin-state" role="alert" hidden>
