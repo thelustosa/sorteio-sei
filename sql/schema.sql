@@ -2018,6 +2018,12 @@ $$;
 -- Mesmo motivo do drop de admin_processos_acervo: o retorno ganhou uma coluna.
 drop function if exists public.admin_auditoria(text, int, bigint);
 
+-- Registro excluído: a busca pelo número ATUAL volta vazia, e a linha dizia
+-- "processo não localizado" justamente no registro mais importante do rastro.
+-- O retrato da exclusão (depois = {}) guarda o último número; vale para a
+-- própria linha da exclusão e para as correções que o registro recebeu antes
+-- de sair. O índice (tabela, registro_id, id) atende a subconsulta.
+
 create or replace function public.admin_auditoria(
   p_colegiado text, p_limite int default 50, p_antes_de bigint default null)
 returns table (id bigint, operacao text, tabela text, registro_id bigint,
@@ -2038,11 +2044,6 @@ begin
          -- registro, não o da época da alteração — é ele que a pessoa tem em
          -- mãos ao procurar. Quando a própria alteração foi o número, o
          -- antes/depois do delta já conta a história.
-         --
-         -- Registro excluído: a busca pelo número atual volta vazia, e a linha
-         -- dizia "processo não localizado" justamente no registro mais
-         -- importante do rastro. O retrato da exclusão (depois = {}) guarda o
-         -- último número, para a própria exclusão e para as correções de antes.
          coalesce(
            case a.tabela
              when 'julgados_cj'   then (select j.num_processo from public.julgados_cj j
