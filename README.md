@@ -116,7 +116,10 @@ endereço não existe. Todo o resto está agrupado por natureza.
 │   ├── rederivar_cj.sql      religa ao acervo os julgados que entraram sem ele
 │   ├── rederivar_creg.sql    o mesmo, para o Conselho Regulador
 │   ├── backup_cj.sql         copia as tabelas da CJ para o schema backup_cj
-│   └── restaurar_cj.sql      a volta do backup
+│   ├── restaurar_cj.sql      a volta do backup
+│   ├── backup_pre_mesclagem_cj.sql  foto da CJ antes de trazer o histórico de volta
+│   ├── mesclar_historico_cj.sql     soma o histórico de backup_cj à nova série
+│   └── desfazer_mesclagem_cj.sql    tira só o que a mesclagem trouxe
 │
 ├── supabase/migrations/    histórico aplicado ao projeto hospedado
 ├── sincronizacao/          job que lê as pautas da AGR (roda no GitHub Actions)
@@ -410,6 +413,13 @@ banco, está em [`FLUXO-CJ.md`](FLUXO-CJ.md).
   risco.
 - [`restaurar_cj.sql`](sql/restaurar_cj.sql) é a volta: devolve as três tabelas ao
   estado do backup.
+
+Em 18/09/2026 o histórico voltou à produção, somado à nova série, para a CJ
+ter a mesma profundidade do CREG. O estado anterior ficou em
+`backup_cj_pre_mesclagem` ([`backup_pre_mesclagem_cj.sql`](sql/backup_pre_mesclagem_cj.sql)),
+e [`desfazer_mesclagem_cj.sql`](sql/desfazer_mesclagem_cj.sql) é a volta — tira
+só o que a mesclagem trouxe. Ver *A mesclagem do histórico* em
+[`FLUXO-CJ.md`](FLUXO-CJ.md).
 
 Cada um é **um único comando** — um bloco `do $$ … $$`. No SQL Editor do
 Supabase os comandos passam por um pooler em modo transação e podem cair em
