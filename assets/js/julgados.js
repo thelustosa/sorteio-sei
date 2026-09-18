@@ -98,7 +98,7 @@ async function carregarPautas(moverFoco = false) {
     pendentes = await api(
       'julgados_cj?select=id,num_processo,relator,data_sessao,pauta,voto,status'
       + '&or=(voto.is.null,status.is.null)'
-      + '&order=data_sessao.desc,num_processo.asc');
+      + '&order=data_sessao.desc,num_processo.asc,id.asc');
   } catch (err) {
     mostrarErroDeCarregamento();
     aviso(`Não foi possível carregar os julgados (${err.message}).`, 'erro');
@@ -267,6 +267,8 @@ function linhasDaTela() {
     id: Number(tr.dataset.id),
     voto: tr.querySelector('.col-voto select').value,
     status: tr.querySelector('.col-status select').value,
+    anterior: Object.fromEntries(['voto', 'status'].map(campo =>
+      [campo, tr.querySelector(`.col-${campo} select`).dataset.valorInicial || null])),
     alterada: tr.dataset.alterada === 'true'
   }));
 }
@@ -285,7 +287,11 @@ async function salvar() {
   // pendente e reaparece na próxima vez.
   const itens = linhasDaTela()
     .filter(l => l.alterada)
-    .map(({ id, voto, status }) => ({ id, voto, status }));
+    .map(({ id, voto, status, anterior }) => ({
+      id, anterior,
+      ...(voto !== (anterior.voto || '') ? { voto } : {}),
+      ...(status !== (anterior.status || '') ? { status } : {})
+    }));
   if (itens.length === 0) {
     aviso('Nada para salvar: preencha o voto ou o status de pelo menos um processo.', 'atencao');
     return;

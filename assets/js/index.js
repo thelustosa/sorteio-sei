@@ -95,7 +95,7 @@ function inicializarSorteio() {
 // paralelo com o resto da tela, sem atrasar nada: se falhar, o card de
 // "Registrar dados faltantes" simplesmente fica sem o aviso.
 async function avisarPendenciasDeJulgamento() {
-  const filtro = 'select=id&or=(voto.is.null,status.is.null)';
+  const filtro = 'select=id&or=(voto.is.null,status.is.null)&order=id.asc';
   let cj, creg;
   try {
     [cj, creg] = await Promise.all([api(`julgados_cj?${filtro}`), api(`julgados_creg?${filtro}`)]);

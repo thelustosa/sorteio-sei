@@ -968,7 +968,8 @@ def registrar_votos_permite_corrigir_o_proprio_registro(cur):
     """O que a página gravou, a página conserta."""
     ident, _, _ = julgado_pendente(cur, num='900000000000202')
     registrar(cur, [{'id': ident, 'voto': 'Manter', 'status': 'Julgado'}])
-    assert registrar(cur, [{'id': ident, 'voto': 'Anular', 'status': 'Julgado'}]) == 1
+    assert registrar(cur, [{'id': ident, 'voto': 'Anular', 'status': 'Julgado',
+                            'anterior': {'voto': 'Manter'}}]) == 1
 
     cur.execute('select voto, status from julgados_cj where id = %s', (ident,))
     assert cur.fetchone() == ('Anular', 'Julgado')

@@ -439,6 +439,33 @@ begin
   -- decisão administrativa, e vai ter porta própria — um painel de admin com
   -- permissão que a secretaria não tem. Enquanto ela não existe, o certo é a
   -- ausência da operação, não um branco que apaga em silêncio.
+  -- Trava em ordem de id antes de comparar e atualizar. Duas transações
+  -- concorrentes não podem validar a mesma fotografia e sobrescrever decisões.
+  perform j.id from public.julgados_cj j
+    where j.id in (select (i ->> 'id')::bigint from jsonb_array_elements(itens) i)
+    order by j.id for update;
+
+  if exists (
+    select 1 from public.julgados_cj j
+    join jsonb_array_elements(itens) i on j.id = (i ->> 'id')::bigint
+    cross join (values ('voto'), ('status')) c(campo)
+    where (j.voto is null or j.status is null or j.atualizado_em is not null)
+      and nullif(i ->> c.campo, '') is not null
+      and nullif(i ->> c.campo, '') is distinct from (to_jsonb(j) ->> c.campo)
+      and (
+        -- Clientes antigos podem preencher vazios, mas não substituir uma
+        -- decisão sem informar o valor anterior. Reenvio idêntico é seguro.
+        (not coalesce((i -> 'anterior') ? c.campo, false)
+          and (to_jsonb(j) ->> c.campo) is not null)
+        or (coalesce((i -> 'anterior') ? c.campo, false)
+          and nullif(i -> 'anterior' ->> c.campo, '')
+              is distinct from (to_jsonb(j) ->> c.campo))
+      )
+  ) then
+    raise exception 'Este julgamento foi alterado por outra pessoa. Suas escolhas foram preservadas; atualize a página para conferir os valores atuais antes de salvar.'
+      using errcode = '40001';
+  end if;
+
   update public.julgados_cj j
      set voto           = coalesce(nullif(i ->> 'voto', ''), j.voto),
          status         = coalesce(nullif(i ->> 'status', ''), j.status),
@@ -1116,6 +1143,33 @@ begin
   -- decisão administrativa, e vai ter porta própria — um painel de admin com
   -- permissão que a secretaria não tem. Enquanto ela não existe, o certo é a
   -- ausência da operação, não um branco que apaga em silêncio.
+  -- Trava em ordem de id antes de comparar e atualizar. Duas transações
+  -- concorrentes não podem validar a mesma fotografia e sobrescrever decisões.
+  perform j.id from public.julgados_creg j
+    where j.id in (select (i ->> 'id')::bigint from jsonb_array_elements(itens) i)
+    order by j.id for update;
+
+  if exists (
+    select 1 from public.julgados_creg j
+    join jsonb_array_elements(itens) i on j.id = (i ->> 'id')::bigint
+    cross join (values ('voto'), ('status')) c(campo)
+    where (j.voto is null or j.status is null or j.atualizado_em is not null)
+      and nullif(i ->> c.campo, '') is not null
+      and nullif(i ->> c.campo, '') is distinct from (to_jsonb(j) ->> c.campo)
+      and (
+        -- Clientes antigos podem preencher vazios, mas não substituir uma
+        -- decisão sem informar o valor anterior. Reenvio idêntico é seguro.
+        (not coalesce((i -> 'anterior') ? c.campo, false)
+          and (to_jsonb(j) ->> c.campo) is not null)
+        or (coalesce((i -> 'anterior') ? c.campo, false)
+          and nullif(i -> 'anterior' ->> c.campo, '')
+              is distinct from (to_jsonb(j) ->> c.campo))
+      )
+  ) then
+    raise exception 'Este julgamento foi alterado por outra pessoa. Suas escolhas foram preservadas; atualize a página para conferir os valores atuais antes de salvar.'
+      using errcode = '40001';
+  end if;
+
   update public.julgados_creg j
      set voto           = coalesce(nullif(i ->> 'voto', ''), j.voto),
          status         = coalesce(nullif(i ->> 'status', ''), j.status),

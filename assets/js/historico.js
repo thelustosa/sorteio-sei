@@ -385,7 +385,7 @@ async function carregarHistorico({ carregamentoInicial = false } = {}) {
 
   let sorteios;
   try {
-    sorteios = await api('rpc/historico_sorteios', {
+    sorteios = await api('rpc/historico_sorteios', { paginar: true,
       method: 'POST',
       body: JSON.stringify({ p_colegiado: COL.sigla })
     });
@@ -457,7 +457,7 @@ async function abrirDetalhe(botao) {
 
   let processos;
   try {
-    processos = await api('rpc/processos_sorteio', {
+    processos = await api('rpc/processos_sorteio', { paginar: true,
       method: 'POST',
       body: JSON.stringify({
         p_colegiado: COL.sigla,
