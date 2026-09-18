@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=ddbeb1056b" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=41cd7d5919" />
   <script>
     (function () {
       try {
@@ -25,8 +25,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=ddbeb1056b"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=ddbeb1056b"></script>
+  <script defer src="assets/js/supabase.min.js?v=41cd7d5919"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=41cd7d5919"></script>
 </head>
 
 <body class="admin-page" data-page="admin">
@@ -312,6 +312,32 @@
               <button id="btnAvancarEdicao" class="button-primary" type="submit">Revisar alteração</button>
             </div>
           </form>
+        </div>
+      </dialog>
+
+      <!-- O card de processos do acervo e do histórico, com a mesma estrutura:
+           cada contagem da aba Meta 45 abre os julgados por trás dela. Só
+           consulta — sem exportar, que é função dos painéis de cada colegiado. -->
+      <dialog id="detalheDialog" class="detalhe-dialog" aria-labelledby="detalheTitulo">
+        <header class="detalhe-header">
+          <div class="detalhe-identidade">
+            <h2 id="detalheTitulo">Julgados</h2>
+            <p id="detalheResumo" class="detalhe-resumo"></p>
+          </div>
+          <div class="detalhe-acoes">
+            <button id="btnFecharDetalhe" class="nav-action detalhe-fechar" type="button" aria-label="Fechar">
+              <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+                <path d="m6 6 8 8"></path><path d="m14 6-8 8"></path>
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <div id="detalheLoading" class="detalhe-loading" hidden></div>
+        <div id="detalheErro" class="load-error" role="alert" hidden><p></p></div>
+
+        <div id="detalheCorpo" class="detalhe-corpo">
+          <table id="detalheTable" class="detalhe-table admin-meta-detalhe"></table>
         </div>
       </dialog>
     </div>
