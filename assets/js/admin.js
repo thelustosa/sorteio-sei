@@ -45,7 +45,10 @@ const OPERACOES_LEGIVEIS = {
   religar_julgado: 'Religação ao acervo',
   corrigir_acervo: 'Correção de distribuição',
   redistribuir: 'Redistribuição',
-  corrigir_processo: 'Correção do número do processo'
+  corrigir_processo: 'Correção do número do processo',
+  excluir_julgado: 'Exclusão de julgado',
+  excluir_distribuicao: 'Exclusão de distribuição',
+  excluir_distribuicao_e_julgados: 'Exclusão de distribuição e julgados'
 };
 
 // A auditoria é lida por quem opera o sistema, não por quem o escreveu: nome de
@@ -98,6 +101,12 @@ const ESCOPOS = [
 const escopoLegivel = valor => ESCOPOS.find(e => e.valor === valor)?.rotulo || valor;
 
 const campoLegivel = nome => CAMPOS_LEGIVEIS[nome] || nome;
+
+// O que identifica um registro excluído na auditoria. O retrato guarda a linha
+// inteira; colunas calculadas (dias_dt, periodo_dt), chaves e carimbos internos
+// só atrapalhariam a leitura de quem procura o que sumiu.
+const CAMPOS_DO_RETRATO = ['data_sessao', 'pauta', 'data_distribuicao', 'relator', 'unidade',
+                           'assunto', 'voto', 'status'];
 
 // A meta de 45 dias chega por mês; o agrupamento é só quantos meses cabem num
 // período. O valor de cada chave é o `value` do <select id="metaAgrupamento">.
@@ -173,6 +182,29 @@ const edicaoEtapaRotulo = document.getElementById('edicaoEtapaRotulo');
 const btnAvancar = document.getElementById('btnAvancarEdicao');
 const btnCancelar = document.getElementById('btnCancelarEdicao');
 const btnFecharEdicao = document.getElementById('btnFecharEdicao');
+const edicaoMotivoRotulo = document.getElementById('edicaoMotivoRotulo');
+const edicaoMotivoOpcional = document.getElementById('edicaoMotivoOpcional');
+const edicaoRevisaoTitulo = document.getElementById('edicaoRevisaoTitulo');
+const edicaoRevisaoTexto = document.getElementById('edicaoRevisaoTexto');
+
+// As palavras do diálogo por intenção. Uma exclusão não pode pedir para "gravar
+// alteração" de algo que vai deixar de existir, nem prometer que "nada foi
+// alterado" quando o que está em jogo é o registro inteiro.
+const ROTULOS_DO_DIALOGO = {
+  correcao: {
+    revisar: 'Revisar alteração', confirmar: 'Confirmar e gravar', gravando: 'Gravando…',
+    gravado: 'Alteração gravada.', motivo: 'Motivo da alteração',
+    revisaoTitulo: 'Revise antes de gravar', revisaoTexto: 'Nada foi alterado até você confirmar.'
+  },
+  exclusao: {
+    revisar: 'Revisar exclusão', confirmar: 'Excluir definitivamente', gravando: 'Excluindo…',
+    gravado: 'Exclusão gravada.', motivo: 'Motivo da exclusão',
+    revisaoTitulo: 'Revise antes de excluir',
+    // Não repete a garantia de auditoria: a dica do motivo já a dá, e o
+    // DESIGN.md pede uma vez por tela. O que falta dizer é que não há volta.
+    revisaoTexto: 'Nada foi excluído até você confirmar. Este painel não desfaz a exclusão.'
+  }
+};
 
 let orgao = null;
 let aba = 'sessoes';
@@ -672,6 +704,12 @@ function pintarSorteios(linhas) {
 function pintarProcessosDaSessao(linhas) {
   const v = VOCABULARIO[orgao];
   if (!linhas.length) {
+    // A exclusão levou o último processo: a sessão deixou de existir, e só a
+    // lista de datas ainda diz a verdade.
+    if (detalhe.aposExclusao) {
+      detalhe = null;
+      return carregar();
+    }
     return semRegistros('Nenhum processo nesta sessão',
       'A sessão não tem processos registrados.');
   }
@@ -698,7 +736,8 @@ function pintarProcessosDaSessao(linhas) {
       celulaDeAcoes([
         botaoDeLinha('Corrigir dados', () => abrirCorrecaoDeJulgado(linha), { tom: 'primario' }),
         botaoDeLinha('Corrigir número', () => abrirCorrecaoDeNumero(linha.num_processo)),
-        botaoDeLinha('Religar ao acervo', () => religarJulgado(linha))
+        botaoDeLinha('Religar ao acervo', () => religarJulgado(linha)),
+        botaoExcluir(linha.num_processo, () => abrirExclusaoDeJulgado(linha))
       ]),
       destino,
       celula(valorOuSelo(linha.voto, 'info')),
@@ -716,6 +755,11 @@ function pintarProcessosDaSessao(linhas) {
 function pintarProcessosDoSorteio(linhas) {
   const v = VOCABULARIO[orgao];
   if (!linhas.length) {
+    // Mesmo caso da sessão: a exclusão levou o último processo da distribuição.
+    if (detalhe.aposExclusao) {
+      detalhe = null;
+      return carregar();
+    }
     return semRegistros('Nenhum processo nesta distribuição',
       'A distribuição não tem processos registrados.');
   }
@@ -740,7 +784,8 @@ function pintarProcessosDoSorteio(linhas) {
       celulaDeAcoes([
         botaoDeLinha('Corrigir dados', () => abrirAlteracaoDeAcervo(linha, 'corrigir'), { tom: 'primario' }),
         botaoDeLinha('Redistribuir', () => abrirAlteracaoDeAcervo(linha, 'redistribuir')),
-        botaoDeLinha('Corrigir número', () => abrirCorrecaoDeNumero(linha.num_processo))
+        botaoDeLinha('Corrigir número', () => abrirCorrecaoDeNumero(linha.num_processo)),
+        botaoExcluir(linha.num_processo, () => abrirExclusaoDeDistribuicao(linha))
       ]),
       destino,
       celula(ou(linha.assunto)),
@@ -1026,10 +1071,17 @@ function pintarAuditoria(pagina) {
   desenhar(['Quando', 'Operação', 'Registro', 'Alteração', 'Motivo', 'Quem'], linhas.map(linha => {
     const mudancas = document.createElement('ul');
     mudancas.className = 'admin-delta admin-delta-compacta';
-    Object.keys(linha.depois || {}).forEach(campo => {
+    // Exclusão grava `depois` vazio: não há "de → para", há o que o registro era.
+    const excluido = Object.keys(linha.depois || {}).length === 0;
+    const itens = excluido
+      ? CAMPOS_DO_RETRATO
+          .filter(campo => !vazio(linha.antes?.[campo]))
+          .map(campo => `${campoLegivel(campo)}: ${legivel(linha.antes[campo])}`)
+      : Object.keys(linha.depois).map(campo =>
+          `${campoLegivel(campo)}: ${legivel(linha.antes?.[campo])} → ${legivel(linha.depois[campo])}`);
+    itens.forEach(texto => {
       const item = document.createElement('li');
-      item.textContent =
-        `${campoLegivel(campo)}: ${legivel(linha.antes?.[campo])} → ${legivel(linha.depois?.[campo])}`;
+      item.textContent = texto;
       mudancas.appendChild(item);
     });
 
@@ -1133,15 +1185,29 @@ function valorDoCampo(nome) {
 // `tituloImpacto` nomeia a lista da etapa 2. O padrão é o da correção de
 // distribuição, que lista julgados; a renumeração lista distribuições E
 // julgados, e herdar o título fazia a lista dizer que eram só julgados.
+//
+// `perigo` é a exclusão: motivo obrigatório, lista do alcance obrigatória,
+// palavras próprias e o vermelho da ação destrutiva.
 function abrirDialogo({ titulo, resumo, campos, montarDelta, impacto, gravar, mensagem,
-                        tituloImpacto = 'Julgados que serão alterados junto' }) {
+                        tituloImpacto = 'Julgados que serão alterados junto', perigo = false }) {
   // avancar() é assíncrono nas DUAS etapas, e o <form> aceita submit por Enter
   // além do clique no botão. Sem a trava `avancando`, um segundo submit durante
   // a consulta de impacto reentrava com `delta` já preenchido e caía direto na
   // gravação: a etapa de confirmação era pulada justamente na operação que
   // propaga. A trava é DESTE diálogo, não da página: global, a gravação lenta de
   // uma janela fechada no meio deixava o botão da janela seguinte mudo.
-  dialogoAtual = { montarDelta, impacto, gravar, mensagem, delta: null, avancando: false };
+  const rotulos = ROTULOS_DO_DIALOGO[perigo ? 'exclusao' : 'correcao'];
+  dialogoAtual = { montarDelta, impacto, gravar, mensagem, perigo, rotulos,
+                   delta: null, avancando: false };
+
+  // A janela é uma só: tudo que a exclusão muda é desfeito aqui, senão uma
+  // correção aberta depois herdava o vermelho, o motivo obrigatório e as palavras.
+  dialogo.dataset.tom = perigo ? 'perigo' : '';
+  edicaoRevisaoTitulo.textContent = rotulos.revisaoTitulo;
+  edicaoRevisaoTexto.textContent = rotulos.revisaoTexto;
+  edicaoMotivoRotulo.textContent = rotulos.motivo;
+  edicaoMotivoOpcional.hidden = perigo;
+  edicaoMotivo.required = perigo;
 
   edicaoTitulo.textContent = titulo;
   edicaoResumo.textContent = resumo;
@@ -1149,6 +1215,7 @@ function abrirDialogo({ titulo, resumo, campos, montarDelta, impacto, gravar, me
   edicaoMotivo.value = '';
   edicaoErro.hidden = true;
   edicaoImpacto.hidden = true;
+  edicaoImpacto.dataset.tom = '';
   edicaoImpactoTitulo.textContent = tituloImpacto;
   edicaoImpactoLista.replaceChildren();
   edicaoEtapaCampos.hidden = false;
@@ -1158,7 +1225,8 @@ function abrirDialogo({ titulo, resumo, campos, montarDelta, impacto, gravar, me
   // ou "Gravando…". A espera dela não toca mais no botão (ver passo), então quem
   // o devolve ao estado da etapa 1 é quem abre a janela nova.
   alternarBotaoCarregando(btnAvancar, false);
-  btnAvancar.textContent = 'Revisar alteração';
+  btnAvancar.textContent = rotulos.revisar;
+  btnAvancar.classList.remove('button-perigo');
   btnAvancar.disabled = false;
 
   dialogo.showModal();
@@ -1196,6 +1264,16 @@ async function avancar() {
 async function passo(atual) {
   edicaoErro.hidden = true;
   const naTela = () => dialogoAtual === atual;
+  const { rotulos } = atual;
+
+  // O motivo é a única explicação que sobra de um registro excluído. Conferido
+  // nas duas etapas porque o campo continua editável na revisão; o banco confere
+  // de novo, mas responde com frase sem acento.
+  if (atual.perigo && !edicaoMotivo.value.trim()) {
+    mostrarErroNoDialogo('Informe o motivo da exclusão.');
+    edicaoMotivo.focus();
+    return;
+  }
 
   // Etapa 1 → 2: monta o delta e mostra a confirmação.
   if (!atual.delta) {
@@ -1228,20 +1306,37 @@ async function passo(atual) {
       // e clicável, ele dizia que a etapa 1 ainda não terminou enquanto a
       // resposta vinha.
       alternarBotaoCarregando(btnAvancar, true, 'Verificando…');
-      let afetados = [];
+      let resposta = [];
+      let falhou = false;
       try {
-        afetados = await atual.impacto();
+        resposta = await atual.impacto();
       } catch (_) {
-        // O preview é informativo: falhar nele não impede a confirmação, e
-        // inventar "nenhum julgado afetado" seria pior que omiti-lo.
+        // Na correção o preview é informativo: falhar nele não impede a
+        // confirmação, e inventar "nenhum julgado afetado" seria pior que
+        // omiti-lo. Na exclusão a lista É o que deixa de existir, e confirmar
+        // sem ela seria apagar às cegas.
+        falhou = true;
       }
 
       // A janela foi fechada enquanto o impacto vinha: não há etapa 2 para
       // montar, e a lista e o botão na tela, se houver, são de outra janela.
       if (!naTela()) return;
-      alternarBotaoCarregando(btnAvancar, false, 'Revisar alteração');
-      if (afetados.length) {
-        edicaoImpactoLista.replaceChildren(...afetados.map(texto => {
+      alternarBotaoCarregando(btnAvancar, false, rotulos.revisar);
+      if (falhou && atual.perigo) {
+        mostrarErroNoDialogo('Não foi possível listar o que a exclusão alcança. Tente novamente.');
+        return;
+      }
+
+      // A lista, ou `{ titulo, tom, itens }` quando título e tom dependem da
+      // escolha da etapa 1: o alcance da exclusão decide se a lista é do que
+      // some ou do que continua.
+      const { titulo, tom, itens = [] } = Array.isArray(resposta)
+        ? { itens: resposta }
+        : (resposta || {});
+      if (titulo) edicaoImpactoTitulo.textContent = titulo;
+      edicaoImpacto.dataset.tom = tom || '';
+      if (itens.length) {
+        edicaoImpactoLista.replaceChildren(...itens.map(texto => {
           const item = document.createElement('li');
           item.textContent = texto;
           return item;
@@ -1256,7 +1351,9 @@ async function passo(atual) {
     edicaoEtapaCampos.hidden = true;
     edicaoEtapaConfirmacao.hidden = false;
     edicaoEtapaRotulo.textContent = 'Etapa 2 de 2';
-    btnAvancar.textContent = 'Confirmar e gravar';
+    btnAvancar.textContent = rotulos.confirmar;
+    // Vermelho só aqui: na etapa 1 o botão apenas leva à revisão.
+    btnAvancar.classList.toggle('button-perigo', atual.perigo);
     // Sem isto o foco cai no <body>: o bloco que o continha acabou de ser
     // escondido. Quem usa teclado ou leitor de tela não era avisado de que o
     // formulário virou revisão — justo na etapa que existe para ser lida.
@@ -1265,7 +1362,7 @@ async function passo(atual) {
   }
 
   // Etapa 2: grava.
-  alternarBotaoCarregando(btnAvancar, true, 'Gravando…');
+  alternarBotaoCarregando(btnAvancar, true, rotulos.gravando);
   const descrever = atual.mensagem;
   try {
     // O que o gatilho de derivação fez por baixo da correção só é sabido depois
@@ -1282,13 +1379,13 @@ async function passo(atual) {
     // acervo não pode sair no mesmo verde de uma correção bem-sucedida.
     const anuncio = descrever && descrever(resultado);
     const { texto, tom } = typeof anuncio === 'string' ? { texto: anuncio } : (anuncio || {});
-    aviso(texto || 'Alteração gravada.', tom || 'sucesso');
+    aviso(texto || rotulos.gravado, tom || 'sucesso');
     await carregar();
   } catch (err) {
     if (naTela()) mostrarErroNoDialogo(err.message);
     aviso(`Não foi possível gravar: ${err.message}`, 'erro');
   } finally {
-    if (naTela()) alternarBotaoCarregando(btnAvancar, false, 'Confirmar e gravar');
+    if (naTela()) alternarBotaoCarregando(btnAvancar, false, rotulos.confirmar);
   }
 }
 
@@ -1666,6 +1763,177 @@ function religarJulgado(linha) {
           }
         : 'Religação gravada. Os campos derivados voltaram a sair da distribuição vinculada.';
     }
+  });
+}
+
+// ── Exclusão ─────────────────────────────────────────────────────────────────
+// Três portas por colegiado, e a intenção mora no nome de cada uma, como em
+// corrigir × redistribuir: excluir o julgado; excluir a distribuição, cujos
+// julgados ficam sem vínculo; excluir a distribuição com os julgados. Da sessão
+// se chega à terceira pelo acervo_id — é a mesma operação, vista do julgado.
+function excluir(porta, id, motivo) {
+  return api(`rpc/${porta}_${VOCABULARIO[orgao].sufixo}`, {
+    method: 'POST',
+    body: JSON.stringify({ p_id: id, p_motivo: motivo })
+  });
+}
+
+async function julgadosVinculados(acervoId) {
+  const julgados = await api('rpc/admin_julgados_do_acervo', {
+    method: 'POST',
+    body: JSON.stringify({ p_colegiado: orgao, p_acervo_id: acervoId })
+  });
+  return (Array.isArray(julgados) ? julgados : []).map(j =>
+    `Julgado da sessão de ${dataBR(j.data_sessao)}${vazio(j.pauta) ? '' : ` · pauta ${j.pauta}`}`
+      + ` — ${ou(j.voto)} / ${ou(j.status)}`);
+}
+
+// O que some junto com a distribuição: ela e TODOS os julgados que a copiaram,
+// inclusive os de sessões que a pessoa não está vendo agora.
+async function registrosDaDistribuicao(acervoId, dataDistribuicao, destino) {
+  return [`Distribuição de ${dataBR(dataDistribuicao)} — ${ou(destino)}`,
+          ...await julgadosVinculados(acervoId)];
+}
+
+// Último do grupo, e o CSS o afasta dos vizinhos: o erro de mira mais caro da
+// linha é cair em Excluir querendo Religar. "Excluir" se repete em toda linha,
+// então o nome acessível diz de qual processo.
+function botaoExcluir(numProcesso, aoClicar) {
+  const botao = botaoDeLinha('Excluir', aoClicar, { tom: 'perigo' });
+  botao.setAttribute('aria-label', `Excluir processo ${numProcesso}`);
+  return botao;
+}
+
+// A sessão ou a distribuição aberta pode ter perdido o último processo. Os
+// detalhes olham esta marca antes de desenhar a lista vazia.
+function marcarExclusao() {
+  if (detalhe) detalhe.aposExclusao = true;
+}
+
+function mensagemDeExclusao(resultado) {
+  const quantos = chave => (Array.isArray(resultado?.[chave]) ? resultado[chave].length : 0);
+  const partes = [];
+  if (quantos('acervo')) partes.push(plural(quantos('acervo'), 'distribuição', 'distribuições'));
+  if (quantos('julgados')) partes.push(plural(quantos('julgados'), 'julgado', 'julgados'));
+  if (!partes.length) return null;
+
+  const texto = `Exclusão gravada: ${partes.join(' e ')} do processo ${resultado.num_processo}.`;
+  const desvinculados = quantos('desvinculados');
+  // Julgado que perdeu o vínculo não é comemoração: sai no tom de atenção, como
+  // na renumeração, e diz o que fazer.
+  return desvinculados
+    ? {
+        texto: `${texto} ${plural(desvinculados, 'julgado ficou', 'julgados ficaram')} sem distribuição `
+          + 'vinculada — use "Religar ao acervo" se o processo tiver outra distribuição.',
+        tom: 'atencao'
+      }
+    : texto;
+}
+
+function abrirExclusaoDeJulgado(linha) {
+  const vinculado = !!linha.acervo_id;
+  const alcances = [
+    { valor: 'julgado', rotulo: 'Somente este julgado' },
+    ...(vinculado
+      ? [{ valor: 'tudo', rotulo: 'O julgado e a distribuição vinculada, com os demais julgados dela' }]
+      : [])
+  ];
+
+  abrirDialogo({
+    perigo: true,
+    titulo: 'Excluir julgado',
+    resumo: `Processo ${linha.num_processo} · sessão de ${dataBR(detalhe.data)}`
+      + (vazio(detalhe.pauta) ? '' : `, pauta ${detalhe.pauta}`),
+    // Uma opção só não é escolha: sem vínculo, o alcance é o próprio julgado.
+    campos: vinculado
+      ? [campoSelecao({ nome: 'alcance', rotulo: 'O que excluir', valor: 'julgado',
+                        opcoes: alcances, rotuloVazio: '— selecione —' })]
+      : [],
+    montarDelta() {
+      this.alcance = vinculado ? valorDoCampo('alcance') : 'julgado';
+      const escolhido = alcances.find(a => a.valor === this.alcance);
+      if (!escolhido) throw new Error('Escolha o que excluir.');
+      return [{ rotulo: 'O que excluir', texto: escolhido.rotulo }];
+    },
+    async impacto() {
+      if (this.alcance === 'tudo') {
+        return {
+          titulo: 'Registros que serão excluídos', tom: 'perigo',
+          itens: await registrosDaDistribuicao(linha.acervo_id, linha.data_distribuicao, linha.destino)
+        };
+      }
+      return {
+        titulo: 'Depois da exclusão', tom: 'atencao',
+        itens: [
+          ...(vinculado ? [`A distribuição de ${dataBR(linha.data_distribuicao)} continua no acervo.`] : []),
+          // sincronizar.py filtra por URL e insere com `on conflict do nothing`.
+          'Se a AGR republicar a pauta desta sessão, a sincronização volta a importar o processo.'
+        ]
+      };
+    },
+    async gravar(motivo) {
+      const resultado = this.alcance === 'tudo'
+        ? await excluir('admin_excluir_distribuicao_e_julgados', linha.acervo_id, motivo)
+        : await excluir('admin_excluir_julgado', linha.id, motivo);
+      marcarExclusao();
+      return resultado;
+    },
+    mensagem: mensagemDeExclusao
+  });
+}
+
+function abrirExclusaoDeDistribuicao(linha) {
+  const quantos = Number(linha.julgados) || 0;
+  const alcances = quantos
+    ? [
+        { valor: 'distribuicao',
+          rotulo: `Somente a distribuição — ${plural(quantos, 'julgado fica', 'julgados ficam')} sem vínculo` },
+        { valor: 'tudo',
+          rotulo: `A distribuição e ${plural(quantos, 'julgado vinculado', 'julgados vinculados')}` }
+      ]
+    : [{ valor: 'distribuicao', rotulo: 'A distribuição' }];
+
+  abrirDialogo({
+    perigo: true,
+    titulo: 'Excluir distribuição',
+    resumo: `Processo ${linha.num_processo} · distribuição de ${dataBR(detalhe.data)} · ${ou(linha.destino)}`,
+    campos: quantos
+      ? [campoSelecao({ nome: 'alcance', rotulo: 'O que excluir', valor: 'distribuicao',
+                        opcoes: alcances, rotuloVazio: '— selecione —' })]
+      : [],
+    montarDelta() {
+      this.alcance = quantos ? valorDoCampo('alcance') : 'distribuicao';
+      const escolhido = alcances.find(a => a.valor === this.alcance);
+      if (!escolhido) throw new Error('Escolha o que excluir.');
+      return [{ rotulo: 'O que excluir', texto: escolhido.rotulo }];
+    },
+    async impacto() {
+      if (this.alcance === 'tudo') {
+        return {
+          titulo: 'Registros que serão excluídos', tom: 'perigo',
+          itens: await registrosDaDistribuicao(linha.id, detalhe.data, linha.destino)
+        };
+      }
+      const julgados = quantos ? await julgadosVinculados(linha.id) : [];
+      return {
+        titulo: 'Depois da exclusão', tom: 'atencao',
+        itens: [
+          // O histórico e a ata só leem o que veio do sorteio eletrônico.
+          'O processo deixa de constar no acervo'
+            + (linha.origem === 'sorteio' ? ', no histórico de sorteios e na ata gerada a partir dele.' : '.'),
+          ...julgados.map(texto => `${texto} — fica sem distribuição vinculada`)
+        ]
+      };
+    },
+    async gravar(motivo) {
+      const porta = this.alcance === 'tudo'
+        ? 'admin_excluir_distribuicao_e_julgados'
+        : 'admin_excluir_distribuicao';
+      const resultado = await excluir(porta, linha.id, motivo);
+      marcarExclusao();
+      return resultado;
+    },
+    mensagem: mensagemDeExclusao
   });
 }
 

@@ -233,8 +233,9 @@ grava em `pautas_creg` o número que a AGR usa.
 O job do GitHub Actions sincroniza os **dois** colegiados na mesma rodada, um de
 cada vez. A Câmara reúne às quintas; o Conselho não tem dia fixo (em 2026 houve
 sessão em quarta, quinta e sexta), e a pauta pode ir ao ar em qualquer hora
-do expediente — por isso a busca é de hora em hora, das 07:00 às 20:00 de
-Goiás, e não uma rodada semanal.
+do expediente — por isso a busca é diária, antes das consultas das 12:00 e das
+17:00 de Goiás, e não uma rodada semanal. Pauta que não pode esperar a próxima
+janela sai à mão, em **Actions → Sincronizar Julgados → Run workflow**.
 
 ```bash
 python sincronizacao/sincronizar.py --colegiado CREG --simular --dsn "postgresql://…"
@@ -288,7 +289,7 @@ barrado na tela, com a linha nomeada, porque o banco recusaria a lista inteira.
 ## 6. Estado dos dados
 
 Estado de produção em 27/08/2026, depois das três cargas e das pautas de
-julho e agosto.
+julho e agosto. A conferência de 17/09/2026, mais abaixo, atualiza os números.
 
 | | |
 |---|---|
@@ -372,6 +373,52 @@ Nada disto impede o funcionamento; está aqui para não ser redescoberto.
 
 `sql/verificacao_creg.sql` conta todos esses casos e roda só leitura.
 
+### Conferência de 17/09/2026
+
+Feita junto com a carga das atas 015 e 016 da Câmara (ver
+[FLUXO-CJ.md](FLUXO-CJ.md)). No Conselho **não houve carga**: nada faltava entre
+acervo e julgados, e a conferência fica registrada para a próxima comparar.
+
+**As pautas estão todas no banco.** As seis publicadas pela AGR depois do marco
+de 30/06 constam de `pautas_creg`, nenhuma com `processos_sem_acervo`:
+
+| sessão | pauta | processos |
+|---|---|---|
+| 03/07 | 1ª Especial | 0 |
+| 17/07 | 4ª Extraordinária | 7 (já vinham da planilha) |
+| 05/08 | 14ª Ordinária | 59 |
+| 19/08 | 15ª Ordinária | 75 |
+| 02/09 | 16ª Ordinária | 17 (CREG2 8, CREG3 5, CREG4 4) |
+| 15/09 | 2ª Reunião Especial | 0 |
+
+A **2ª Reunião Especial** entrou com zero de propósito: o PDF foi lido, e a
+pauta é só a formação da lista tríplice para a presidência da AGR. O único
+número de 15 dígitos nele é o do rodapé `Referência: Processo nº …`.
+
+**O acervo recebeu dois sorteios pela tela**, os dois já em `acervo_creg`:
+27/08 (81, visto acima) e **14/09 (9 — três para cada CREG2, CREG3 e CREG4)**.
+Se houve sorteio fora da tela depois de 14/08, a última ata carregada, só a ata
+dele mostra.
+
+**Vínculo acervo → julgados:**
+
+- nenhum julgado órfão de 30/06 em diante;
+- os 1.444 órfãos são os já descritos na seção 3 — 1.397 anteriores às planilhas
+  de gabinete e 47 com o processo no acervo em outra data. O `rederivar_creg.sql`
+  não religa nenhum: nenhum tem distribuição de data exata para onde apontar;
+- nenhuma distribuição repetida, nenhum julgado apontando para processo ou data
+  diferente da do acervo vinculado;
+- fila da secretaria vazia: todos os julgados têm voto e status.
+
+| | 27/08/2026 | 17/09/2026 |
+|---|---|---|
+| distribuições no acervo | 3.181 | **3.190** (planilha 3.064 + ata 36 + sorteio 90) |
+| julgados | 4.698, em 136 sessões | **4.715**, em 137 sessões |
+| período | 05/01/2023 → 19/08/2026 | 05/01/2023 → **02/09/2026** |
+| **pendentes de julgamento** | 166 | **162** (CREG1 53, CREG4 41, CREG3 38, CREG2 30) |
+| dentro / fora / indefinido na META 45 | 3.519 / 1.169 / 10 | **3.532 / 1.173 / 10** |
+| fila da secretaria | 167 | **0** |
+
 ---
 
 ## 7. Ordem de execução
@@ -401,8 +448,13 @@ Todos os passos são idempotentes.
 ## 8. O que ainda não está resolvido
 
 - **O CREG1 não recebe distribuição desde 17/06/2026** e é a unidade com a
-  maior fila (55 pendentes). Confirmado nas nove atas de sorteio; pode ser
-  deliberado, para escoar o acervo, mas ninguém no sistema sabe dizer.
+  maior fila (53 pendentes em 17/09/2026). Confirmado nas nove atas de sorteio
+  e nos dois sorteios pela tela (27/08 e 14/09), que só distribuíram para
+  CREG2, CREG3 e CREG4; pode ser deliberado, para escoar o acervo, mas ninguém
+  no sistema sabe dizer.
+- **Atas de sorteio depois de 14/08/2026 não foram carregadas.** Os sorteios
+  pela tela já estão no acervo; um sorteio feito fora dela só aparece quando a
+  pauta trouxer o processo como órfão — até 17/09 não trouxe nenhum.
 - **A lista de recursos do sorteio diverge do histórico.** `index.js` oferece
   `Com recurso`, `Sem recurso`, `Não se aplica` e `Pedido de revisão`; o acervo
   registrado traz `Ad Referendum` (38 linhas) e `Reexame Necessário` (15), e

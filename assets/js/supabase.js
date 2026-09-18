@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '41cd7d5919';
+const ASSET_VERSION = 'c7f3cbff2e';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -55,16 +55,19 @@ function apagarTokens(armazenamento) {
 }
 
 // `lembrar` só vem do login; a renovação omite e grava onde a sessão já mora.
-function salvarSessao(sessao, lembrar = lembrarSessao) {
+function salvarSessao(sessao, lembrar) {
+  const login = lembrar !== undefined;
   accessToken = sessao.access_token || accessToken;
   refreshToken = sessao.refresh_token || refreshToken;
-  lembrarSessao = lembrar;
+  if (login) lembrarSessao = lembrar;
   try {
-    const destino = lembrar ? localStorage : sessionStorage;
+    const destino = lembrarSessao ? localStorage : sessionStorage;
     destino.setItem(SESSION_ACCESS_TOKEN_KEY, accessToken);
     destino.setItem(SESSION_REFRESH_TOKEN_KEY, refreshToken);
-    // Uma cópia no outro armazenamento seria uma sessão que ninguém renova nem apaga.
-    apagarTokens(lembrar ? sessionStorage : localStorage);
+    // Uma cópia no outro armazenamento seria uma sessão que ninguém renova nem
+    // apaga. Só o login limpa: na renovação, o outro armazenamento pode guardar
+    // a sessão lembrada de outra pessoa, e não cabe a esta aba apagá-la.
+    if (login) apagarTokens(lembrarSessao ? sessionStorage : localStorage);
   } catch (_) {
     // Sem armazenamento disponível, a sessão continua válida até a próxima navegação.
   }
@@ -195,13 +198,32 @@ async function autenticar(email, senha) {
   return dados;
 }
 
+// O `sub` do JWT é o id do usuário. Token ilegível devolve ''; os do Supabase
+// sempre trazem o `sub`.
+function usuarioDoToken(token) {
+  try {
+    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub || '';
+  } catch (_) {
+    return '';
+  }
+}
+
 async function executarRenovacao() {
   // Com "Lembrar-me", as abas dividem o mesmo localStorage e outra aba pode já
   // ter rotacionado o refresh token. Reapresentar o da memória, já consumido,
   // faria o Supabase revogar a sessão inteira — em todas as abas.
+  // Mas o localStorage só vale se ainda for do mesmo usuário: se outra pessoa
+  // entrou com "Lembrar-me" neste navegador, adotar o token dela faria esta aba
+  // gravar em nome de outro sem mudar a tela. A aba segue com a própria sessão,
+  // guardada só nela, e deixa a lembrada da outra pessoa em paz.
   if (lembrarSessao) {
     try {
-      refreshToken = localStorage.getItem(SESSION_REFRESH_TOKEN_KEY) || refreshToken;
+      const lembrado = localStorage.getItem(SESSION_ACCESS_TOKEN_KEY);
+      if (lembrado && usuarioDoToken(lembrado) === usuarioDoToken(accessToken)) {
+        refreshToken = localStorage.getItem(SESSION_REFRESH_TOKEN_KEY) || refreshToken;
+      } else {
+        lembrarSessao = false;
+      }
     } catch (_) {
       // Sem armazenamento, segue com o da memória.
     }

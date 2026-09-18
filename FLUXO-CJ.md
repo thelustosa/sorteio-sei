@@ -12,7 +12,13 @@ até 27/08/2026, quando ganhou o mesmo par de tabelas — ver
 > histórico importado da planilha saiu das tabelas de produção e ficou guardado
 > no schema `backup_cj`. Dois dias depois, uma carga de recuperação repôs o que
 > a planilha não alcançava, lendo as atas de sorteio e as pautas publicadas. Ver
-> *Reinício da série*, mais abaixo.
+> *Reinício da série*, mais abaixo. Em 17/09/2026 uma segunda carga trouxe as
+> atas de sorteio 015 e 016 — ver *A carga das atas 015 e 016*.
+>
+> **Histórico de volta em 18/09/2026.** O conteúdo de `backup_cj` foi mesclado
+> de novo às tabelas de produção, somado à nova série: a CJ passou a ter acervo
+> desde 06/2023 e julgados desde 01/2024, como o CREG. Ver *A mesclagem do
+> histórico*.
 
 ---
 
@@ -21,7 +27,7 @@ até 27/08/2026, quando ganhou o mesmo par de tabelas — ver
 ```mermaid
 flowchart TD
     A["Secretária sorteia<br/>index.html"] -->|"POST /rest/v1/acervo_cj"| B[("acervo_cj<br/>uma linha por distribuição")]
-    C["Site da AGR<br/>pautas das reuniões"] -->|"GitHub Actions, de hora em hora"| D["sincronizar.py<br/>baixa PDF e extrai processos"]
+    C["Site da AGR<br/>pautas das reuniões"] -->|"GitHub Actions, duas vezes ao dia"| D["sincronizar.py<br/>baixa PDF e extrai processos"]
     D -->|"INSERT direto no banco"| E[("julgados_cj<br/>uma linha por sessão")]
     D --> F[("pautas_cj<br/>documentos processados")]
     B -.->|"gatilho preenche<br/>relator, defesa, data DIST"| E
@@ -124,9 +130,15 @@ Não existe servidor nosso, então o "endpoint" virou um job agendado — que ai
 tem a vantagem de deixar o log de cada rodada na aba Actions, coerente com a
 proposta de auditoria do projeto.
 
-Dispara sozinho de hora em hora, das 07:00 às 20:00 de Goiás, ou à mão em
+Dispara sozinho duas vezes ao dia, antes das consultas das 12:00 e das 17:00 de
+Goiás (cada janela com duas tentativas, porque o agendamento do Actions descarta
+rodadas em pico — os motivos estão no próprio workflow), ou à mão em
 **Actions → Sincronizar Julgados → Run workflow**, com opção de simular. A
 mesma rodada sincroniza o Conselho Regulador.
+
+Consequência prática: a pauta publicada de manhã só entra na rodada de 11:20.
+Quem precisar dela antes dispara o workflow à mão — foi o que se fez com a 34ª
+reunião em 17/09/2026.
 
 ### Como um processo é identificado no PDF
 
@@ -181,8 +193,8 @@ rodou.
 ### O número da pauta não é chave — a data é
 
 De 2026 em diante `julgados_cj.pauta` guarda o número da AGR, gravado pela
-sincronização. O que segue vale para o histórico da planilha, hoje em
-`backup_cj`, e explica por que a data continua sendo a chave para agrupar:
+sincronização. O que segue vale para o histórico da planilha (até 18/06/2026),
+e explica por que a data continua sendo a chave para agrupar:
 
 | ano | numeração | confere com a AGR |
 |---|---|---|
@@ -198,8 +210,8 @@ ao longo do ano (até +3 em 2024 e +5 em 2025).
 
 Renumerar o histórico para seguir a AGR reescreveria 1.678 das 3.146 linhas e 62
 sessões de registro administrativo, trocando o número que a própria Câmara usou
-pelo de outra contagem. A decisão foi **não renumerar** — e, com o reinício da
-série, esse histórico saiu das tabelas de produção de qualquer forma.
+pelo de outra contagem. A decisão foi **não renumerar**, e continuou valendo
+quando o histórico voltou à produção em 18/09/2026.
 
 Em consequência:
 
@@ -319,10 +331,10 @@ sem os campos derivados — **sem inventar dado nenhum** — e o número sai lis
 em `pautas_cj.processos_sem_acervo` para a secretaria completar o acervo. Na
 planilha, o equivalente era a fórmula devolver "Não encontrado".
 
-Hoje é raro: depois da carga de recuperação de 21/08/2026, 150 dos 151 julgados
-de 2026 encontram a distribuição. O único que não encontra é o
+Hoje é raro: depois da carga das atas 015 e 016, em 17/09/2026, 245 dos 246
+julgados de 2026 encontram a distribuição. O único que não encontra é o
 `202600029001283`, da 25ª reunião, cuja distribuição não está em fonte nenhuma —
-nem nas atas de sorteio 010 a 014, nem na planilha. Dele se sabe o relator,
+nem nas atas de sorteio 010 a 016, nem na planilha. Dele se sabe o relator,
 porque a própria pauta o diz; a data da distribuição é que não existe em lugar
 nenhum, e sem ela não há linha de acervo a criar.
 
@@ -547,6 +559,163 @@ são *Julgado sem processo no acervo* (o `1283`) e *Relator divergente do acervo
 vinculado* (o `2208`). A conferência também mantém como `AVISO` os números CREG
 legados fora do padrão, até que uma fonte oficial permita corrigi-los.
 
+### A carga das atas 015 e 016 (17/09/2026)
+
+O acervo parou em 14/08, a ata 014. Os dois sorteios seguintes não passaram pela
+tela, e a sincronização seguiu gravando as pautas: a 32ª (03/09) e a 33ª (10/09)
+entraram com **35 julgados órfãos** — sem relator, defesa, data de distribuição
+nem `acervo_id` —, todos listados em `pautas_cj.processos_sem_acervo`. Era o
+vão da seção anterior se repetindo.
+
+A carga foi feita pelas mesmas regras da de 21/08, direto no banco, num bloco só:
+
+| ata | data | sem defesa (CJ1) | com defesa | total |
+|---|---|---|---|---|
+| 014 | 14/08/2026 | 22 | 12 | 34 — já estava; conferida linha a linha, ordem e cadeira |
+| **015** | **24/08/2026** | **47** | **13** | **60** |
+| **016** | **16/09/2026** | **20** | **12** | **32** |
+
+- **Formato das linhas** igual ao da ata 014 no banco: `relator` com a cadeira
+  (`CJ1`..`CJ5`, pelo `cadeiras_cj`), `ordem` da ata e `sorteado_em` nulo — a
+  ata não traz a hora.
+- **`origem = 'ata'`**, e não `'sorteio'`. A carga entrou primeiro como
+  `'sorteio'`, copiando as linhas de 21/08, porque `acervo_cj` só aceitava
+  `sorteio` e `planilha`. O efeito apareceu no mesmo dia: o **Histórico de
+  sorteios** lista `origem = 'sorteio'` a partir do marco de 27/08 e passou a
+  mostrar a ata 016 como rodada feita na tela. A migração `20260917123135`
+  trouxe a opção `'ata'` do Conselho e reclassificou as seis rodadas vindas de
+  ata — as quatro da carga de recuperação (011 a 014) e as duas desta. O
+  histórico da Câmara voltou a ficar vazio, como deve até o primeiro sorteio
+  pela tela.
+- **Defesa pela cadeira**, a regra de *Três coisas que a ata de sorteio não
+  traz*. Antes de gravar, as pautas da 32ª e da 33ª foram lidas: os 35 órfãos
+  batem com a ata 015 relator por relator, e o rótulo *"Processos sem defesa:"*
+  só aparece no bloco do Paulo Otoni Ribeiro. Nenhuma exceção desta vez.
+- **Nenhum processo das duas atas** já estava no acervo — não há
+  redistribuição nesta carga.
+- **Depois do insert**, o `update` de [`rederivar_cj.sql`](sql/rederivar_cj.sql)
+  religou os 35 órfãos, e `processos_sem_acervo` das duas pautas foi recalculado
+  a partir de `julgados_cj`: as duas ficaram vazias.
+
+Na mesma manhã a pauta da **34ª reunião (17/09)** já estava no ar e a rodada
+agendada ainda não tinha passado; o workflow foi disparado à mão só para a CJ.
+Os 23 processos dela entraram vinculados, e os blocos de relator da pauta
+conferem com as atas 014 e 015.
+
+| | antes | depois |
+|---|---|---|
+| `acervo_cj` | 194 distribuições (até 14/08) | **286** (até 16/09) |
+| `julgados_cj` | 223, 36 órfãos | **246**, 1 órfão (o `1283`) |
+| `pautas_cj` | o marco + 13 documentos | o marco + **14** (até a 34ª) |
+| distribuições sem julgamento | — | **41** (CJ1 20, CJ3 6, CJ5 6, CJ2 5, CJ4 4) |
+
+Os 23 da 34ª são a fila de voto e status da secretaria. As conferências de
+[`verificacao_cj.sql`](sql/verificacao_cj.sql) fecham sem `ERRO`, com os mesmos
+dois avisos de antes (o `1283` e o `2208`).
+
+### A mesclagem do histórico (18/09/2026)
+
+O reinício tirou o histórico da produção; a Câmara decidiu trazê-lo de volta
+para ficar com a mesma profundidade do CREG, que tem dados desde 2023. A fonte
+foi `backup_cj`, e não a planilha: o backup já é a planilha corrigida — sem as
+6 distribuições e os 2 julgados duplicados, e com os 20 julgados de 28/05 a
+20/06/2026 que a planilha tinha com data arrastada (um por dia) nas sessões
+reais.
+
+Não houve remapeamento. Medido antes: nenhum id do backup estava em uso, fora
+as 37 distribuições residuais do reinício, que eram as mesmas linhas; nenhum
+julgado repetia processo e sessão, porque o backup termina em 18/06 e a nova
+série começa em 25/06; as sequências já estavam acima dos ids do backup. A
+numeração das pautas emenda sem salto: 20ª em 18/06, 21ª em 25/06.
+
+| script | papel |
+|---|---|
+| [`backup_pre_mesclagem_cj.sql`](sql/backup_pre_mesclagem_cj.sql) | copia as quatro tabelas da CJ e a definição de `resumo_acervo_cj` para `backup_cj_pre_mesclagem` |
+| [`mesclar_historico_cj.sql`](sql/mesclar_historico_cj.sql) | insere o histórico com os ids originais, gatilho desligado |
+| [`desfazer_mesclagem_cj.sql`](sql/desfazer_mesclagem_cj.sql) | tira só o que a mesclagem trouxe e devolve a função; a nova série fica |
+
+- **Relator de 2026 virou cadeira** pelo de-para de `cadeiras_cj`, como na
+  migração `20260824180000`: a distribuição pela data dela, o julgado pela data
+  da sessão. **2023 a 2025 ficam pelo nome** — a composição daqueles anos não é
+  conhecida. `cadeiras_cj` não foi alterada.
+- **Gatilho desligado**, como no `restaurar_cj.sql`: os 13 relatores e 12 defesas
+  digitados à mão na planilha voltaram como estavam.
+- **Dez julgados antigos voltaram para a fila** da tela de registro — 7
+  `Retirado` sem voto, 2 sem voto nem status, 1 `Vista` sem status, de 07/2024 a
+  01/2025, todos julgados de novo numa sessão seguinte. A secretaria os preenche
+  pela tela; `registrar_votos` aceita porque falta voto ou status.
+- **Painel do acervo:** `resumo_acervo_cj` montava uma coluna para cada relator
+  que já apareceu no acervo, e ganharia sete colunas zeradas com os nomes do
+  histórico. A migração `20260918115004` passou a montar as colunas com as
+  cadeiras vigentes mais quem tem processo parado. Os pendentes não mudaram: 41
+  antes e depois (CJ1 20, CJ3 6, CJ5 6, CJ2 5, CJ4 4).
+
+| | antes | depois |
+|---|---|---|
+| `acervo_cj` | 286 (20/05 → 16/09/2026) | **3.448** (25/06/2023 → 16/09/2026) |
+| `julgados_cj` | 246 (25/06 → 17/09/2026) | **3.390** (04/01/2024 → 17/09/2026) |
+| fila da secretaria | 0 | **10** (os históricos acima) |
+
+Conferido depois da carga: nenhuma linha anterior mudou (comparação campo a
+campo com `backup_cj_pre_mesclagem`), todas as 3.199 distribuições e 3.144
+julgados do backup estão na produção com os mesmos valores, e o
+`verificacao_cj.sql` fecha sem `ERRO`. Os avisos que o histórico trouxe já eram
+conhecidos: as pautas 46 e 56 de 2025 em duas datas (e o recuo 47 → 46 que a
+primeira causa), 1 sessão anterior à distribuição em 2024, e as divergências de
+relator e defesa digitadas à mão.
+
+**O que ainda separa a CJ do CREG:** o CREG tem julgados desde 05/01/2023; a CJ
+desde 04/01/2024. A planilha da Câmara não tem sessão em 2023 — mas a AGR tem:
+ver a conferência abaixo.
+
+#### Conferência com a planilha e com a AGR (18/09/2026)
+
+Só leitura; nada foi gravado. As 185 pautas da CJ publicadas de 2023 a 2026
+foram lidas com o parser da sincronização e cruzadas sessão a sessão com
+`julgados_cj`; a planilha foi cruzada linha a linha com as duas tabelas.
+
+**Planilha → banco:** as 3.199 distribuições distintas estão no acervo com a
+mesma defesa. Dos 3.146 julgados, 3.121 casam por processo e sessão, 2 são as
+duplicatas e 23 são a data arrastada — todos da pauta 17, que o banco pôs em
+28/05/2026, e a AGR confirma. Voto, status e relator batem em todos. As
+diferenças restantes são as correções já descritas: 70 pautas da troca 13/14 de
+março de 2025 e 32 datas de distribuição em que a planilha pegava a maior data,
+posterior à sessão. Sobrava uma sem explicação: `202400029002394` em 18/07/2024
+tinha Defesa "Não" na planilha e `true` no banco (as duas distribuições dele
+dizem "Sim"). Corrigida para `false` no mesmo dia, porque a planilha é a base do
+histórico — com isso, planilha e banco concordam em todos os julgados.
+
+**AGR → banco, 2024 a 2026:** as 142 sessões conferem em data, uma a uma, sem
+sessão sobrando de nenhum lado; 126 conferem também processo a processo. Das
+aparições de processo, 3.379 de 3.408 estão no banco. O que diverge:
+
+- **21 pautados que a planilha registrou só na sessão seguinte**, 16 deles na 39ª
+  de 24/09/2024 (julgados em 03/10). A planilha anotava onde o processo foi
+  decidido, não cada vez que foi à pauta. O julgamento está certo; falta só a
+  passagem anterior.
+- **2 números com o ano trocado no PDF**: `202300029000185` (04/04/2024) e
+  `202300029004229` (14/11/2024). O banco tem `2024…` com distribuição no
+  acervo; o `2023…` não existe em fonte nenhuma.
+- **1 processo pautado que não está em lugar nenhum**: `202300029005392`, 13ª
+  reunião de 26/03/2024 — nem no acervo, nem nos julgados.
+- **7 julgados que nenhuma pauta traz** — 22/02/2024 (2), 11/03/2024,
+  05/09/2024, 06/03/2025 (2) e 26/06/2025. Este último está no PDF, mas sem o
+  rótulo `Processo nº`; os outros seis podem ter sido incluídos em mesa.
+
+**2023:** a AGR publicou **43 pautas da CJ**, com 665 aparições de 650
+processos, e o banco não tem nenhuma — só 4 desses processos estão no acervo.
+**Decidido em 18/09/2026: não importar.** A planilha é a base principal do
+histórico da Câmara, e o histórico da CJ começa onde ela começa; importar 2023
+criaria cerca de 650 julgados sem voto, sem status e sem distribuição de
+origem.
+
+**Acervo sem julgado:** as 37 distribuições que a planilha tinha no acervo e
+não nos julgados foram todas julgadas entre 25/06 e 23/07/2026, e cada julgado
+está ligado à distribuição da planilha e consta da pauta da AGR da mesma data.
+As 41 distribuições ainda sem julgado são todas de atas de 2026 e não aparecem
+em pauta nenhuma até a 34ª reunião (17/09/2026) — entram pela sincronização
+quando forem pautadas.
+
 ### Restaurar
 
 Todo script desta seção é **um comando só** — um único bloco `do $$ … $$`. Não é
@@ -650,7 +819,7 @@ erDiagram
         int ordem
         timestamptz sorteado_em
         text recurso "legado CREG"
-        text origem "sorteio|planilha"
+        text origem "sorteio|planilha|ata"
     }
     julgados_cj {
         bigint id PK
@@ -737,13 +906,17 @@ entrou nem impede o processamento dos demais.
 
 ## 10. O que ainda não está resolvido
 
-Revisto depois da carga de recuperação, em 21/08/2026.
+Revisto depois da carga das atas 015 e 016, em 17/09/2026.
 
 ### Do sistema
 
+- **Sorteio fora da tela abre vão no acervo.** As atas 011 a 016 foram todas
+  lançadas depois, por carga. Enquanto a ata não entra, cada pauta sincronizada
+  grava órfãos, e só o `rederivar_cj.sql` os religa. O banco não tem como saber
+  que um sorteio aconteceu; quem sabe é a ata.
 - **Um julgado sem distribuição.** O `202600029001283`, da 25ª reunião
-  (16/07/2026), é o único dos 151 que a carga de recuperação não conseguiu
-  ligar ao acervo. Ele não está nas atas de sorteio 010 a 014 nem no histórico
+  (16/07/2026), é o único dos 246 julgados da série sem vínculo com o
+  acervo. Ele não está nas atas de sorteio 010 a 016 nem no histórico
   da planilha, que cobre tudo até 10/06 — a mesma data da ata 010, com as mesmas
   32 distribuições. Relator e defesa foram gravados no julgado, porque a pauta
   diz de quem é, mas `acervo_id` e `data_distribuicao` ficam nulos e o número
@@ -773,10 +946,13 @@ Revisto depois da carga de recuperação, em 21/08/2026.
   falha se ela divergir da tabela.
 
   **Fronteira conhecida:** a conversão alcança quem está no de-para. O histórico
-  de 2024 e 2025, hoje em `backup_cj`, tem conselheiros de composições
-  anteriores sem cadeira conhecida — eles seguem pelo nome, porque inventar o
-  número seria pior. Se alguém rodar o `restaurar_cj.sql`, o painel passa a
-  misturar cadeiras e nomes até que essas composições sejam informadas.
+  de 2023 a 2025, de volta à produção desde 18/09/2026, tem conselheiros de
+  composições anteriores sem cadeira conhecida — eles seguem pelo nome, porque
+  inventar o número seria pior. O painel não mistura os dois: as colunas saem
+  das cadeiras vigentes, e um nome só vira coluna se tiver processo parado.
+  Quando a composição daqueles anos for conhecida, ela entra em `cadeiras_cj`
+  como linhas com `desde`/`ate`, e um `update` igual ao da migração
+  `20260824180000` troca os nomes pelas cadeiras.
 - ~~**CREG** continua numa tabela de sorteio à parte.~~ Resolvido em
   27/08/2026: o Conselho ganhou `acervo_creg`, `julgados_creg` e `pautas_creg`,
   e o sorteio passou a gravar no acervo. A tabela antiga foi removida do schema
