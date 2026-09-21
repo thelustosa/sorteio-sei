@@ -1127,6 +1127,7 @@ def resumo_do_acervo_conta_o_que_nao_foi_julgado(cur):
     por_celula = {(f, r): n for _, f, r, n in linhas}
     assert por_celula[('Até 15 dias', 'Fulano')] == 1
     assert por_celula[('Entre 6 meses e 1 ano', 'Fulano')] == 1
+    assert {f for o, f, _, _ in linhas if o >= 7} == {'Entre 1 e 2 anos', 'Há mais de 2 anos'}
     cur.connection.rollback()
 
 

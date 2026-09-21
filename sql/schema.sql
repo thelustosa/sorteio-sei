@@ -564,8 +564,8 @@ begin
       (4, 'Há 3 meses',            46,  90),
       (5, 'Entre 3 e 6 meses',     91, 180),
       (6, 'Entre 6 meses e 1 ano',181, 365),
-      (7, 'Há mais de 1 ano',     366, 730),
-      (8, 'Há 2 anos',            731, 2147483647)
+      (7, 'Entre 1 e 2 anos',     366, 730),
+      (8, 'Há mais de 2 anos',    731, 2147483647)
   ),
 
   -- Uma linha por PROCESSO, não por distribuição: um processo redistribuído
@@ -1223,8 +1223,8 @@ begin
       (4, 'Há 3 meses',            46,  90),
       (5, 'Entre 3 e 6 meses',     91, 180),
       (6, 'Entre 6 meses e 1 ano',181, 365),
-      (7, 'Há mais de 1 ano',     366, 730),
-      (8, 'Há 2 anos',            731, 2147483647)
+      (7, 'Entre 1 e 2 anos',     366, 730),
+      (8, 'Há mais de 2 anos',    731, 2147483647)
   ),
 
   -- Uma linha por PROCESSO, não por distribuição: um processo redistribuído

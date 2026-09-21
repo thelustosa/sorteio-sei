@@ -153,6 +153,59 @@ function dataBR(iso) {
   return `${dia}/${mes}/${ano}`;
 }
 
+// Mesmo prazo de "Dias passados", escrito por extenso: 56 → "1 mês e 26 dias".
+//
+// O fim do intervalo é a distribuição MAIS os dias que o banco contou, e não o
+// relógio do navegador. As duas colunas medem então exatamente o mesmo
+// intervalo: um cliente com a data adiantada mostraria "56" ao lado de um tempo
+// que vale 57 dias, e é essa discordância, na mesma linha, que o card não pode
+// ter. Como current_date - data_distribuicao é o próprio `dias`, somá-lo de
+// volta cai em hoje.
+//
+// Meses e anos são de calendário, não dias ÷ 30: o tempo tem que fechar com a
+// data de distribuição que está do lado.
+function tempoPorExtenso(iso, dias) {
+  const [ano, mes, dia] = String(iso).slice(0, 10).split('-').map(Number);
+  const total = Number(dias);
+  if (!Number.isFinite(ano + mes + dia + total)) return '—';
+  // Distribuído hoje é "0 dias", igual a Dias passados. Data no futuro é erro de
+  // cadastro; o piso em zero evita "-1 anos" na tela.
+  if (total <= 0) return '0 dias';
+
+  // Construtor com partes separadas, não `new Date(iso)`: o construtor lê data
+  // pura como UTC e, em fuso negativo, começaria a contagem no dia anterior.
+  const inicio = new Date(ano, mes - 1, dia);
+  const fim = new Date(ano, mes - 1, dia + total);
+
+  // Quantos meses cheios cabem: chuta pela diferença de calendário e recua um se
+  // o chute passou do fim.
+  let meses = (fim.getFullYear() - inicio.getFullYear()) * 12 + (fim.getMonth() - inicio.getMonth());
+  if (mesesDepois(inicio, meses) > fim) meses--;
+  // Math.round, não trunc: em fuso com horário de verão a diferença entre duas
+  // meias-noites é de 23h ou 25h, e a divisão exata perderia (ou ganharia) um dia.
+  const resto = Math.round((fim - mesesDepois(inicio, meses)) / 86400000);
+
+  const partes = [[Math.floor(meses / 12), 'ano', 'anos'],
+                  [meses % 12, 'mês', 'meses'],
+                  [resto, 'dia', 'dias']]
+    .filter(([n]) => n > 0)
+    .map(([n, um, varios]) => `${n} ${n === 1 ? um : varios}`);
+
+  // Partes zeradas somem: "1 ano e 2 dias", nunca "1 ano, 0 meses e 2 dias".
+  if (partes.length === 1) return partes[0];
+  return `${partes.slice(0, -1).join(', ')} e ${partes[partes.length - 1]}`;
+}
+
+// O dia é preso ao último do mês de destino: 31/01 mais um mês é 28/02, e não
+// 03/03, que é onde setMonth sozinho estoura. Sem isso, um processo distribuído
+// num dia 31 contaria um mês a menos na virada de fevereiro.
+function mesesDepois(data, meses) {
+  const alvo = new Date(data.getFullYear(), data.getMonth() + meses, 1);
+  const ultimo = new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate();
+  alvo.setDate(Math.min(data.getDate(), ultimo));
+  return alvo;
+}
+
 function dataArquivo() {
   const agora = new Date();
   const ano = agora.getFullYear();
@@ -430,7 +483,7 @@ function criarExcel(linhas) {
 // Uma linha por processo, nas mesmas colunas que o card mostra na tela.
 function planilhaDetalheXml(processos, titulo) {
   const colunas = ['Nº do Processo', COL.coluna, COL.segundaColuna.rotulo,
-                   'Distribuição', 'Dias passados'];
+                   'Distribuição', 'Dias passados', 'Tempo'];
   const texto = (col, linha, valor, estilo) =>
     `<c r="${colunaExcel(col)}${linha}" s="${estilo}" t="inlineStr"><is><t>${escaparXml(valor)}</t></is></c>`;
   const numero = (col, linha, valor, estilo) =>
@@ -453,6 +506,7 @@ function planilhaDetalheXml(processos, titulo) {
       // ali significa "nenhum processo". Aqui zero é o processo distribuído
       // hoje — a tela mostra 0 e o arquivo tem que mostrar o mesmo.
       + numero(4, linha, Number(p.dias) || 0, 14)
+      + texto(5, linha, tempoPorExtenso(p.data_distribuicao, p.dias), 5)
       + '</row>');
   });
 
@@ -460,15 +514,16 @@ function planilhaDetalheXml(processos, titulo) {
     + '<sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane ySplit="4" topLeftCell="A5" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
     + '<cols><col min="1" max="1" width="22" customWidth="1"/><col min="2" max="2" width="10" customWidth="1"/>'
     + '<col min="3" max="3" width="34" customWidth="1"/><col min="4" max="4" width="16" customWidth="1"/>'
-    + '<col min="5" max="5" width="14" customWidth="1"/></cols>'
+    + '<col min="5" max="5" width="14" customWidth="1"/>'
+    + '<col min="6" max="6" width="26" customWidth="1"/></cols>'
     + `<sheetData>${linhas.join('')}</sheetData>`
-    + '<mergeCells count="2"><mergeCell ref="A1:E1"/><mergeCell ref="A2:E2"/></mergeCells>'
+    + '<mergeCells count="2"><mergeCell ref="A1:F1"/><mergeCell ref="A2:F2"/></mergeCells>'
     + '</worksheet>';
 }
 
 function criarExcelDetalhe(processos, titulo) {
   const ultimaLinha = processos.length + 4;
-  const area = `<definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">'Detalhe'!$A$1:$E$${ultimaLinha}</definedName><definedName name="_xlnm.Print_Titles" localSheetId="0">'Detalhe'!$4:$4</definedName></definedNames>`;
+  const area = `<definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">'Detalhe'!$A$1:$F$${ultimaLinha}</definedName><definedName name="_xlnm.Print_Titles" localSheetId="0">'Detalhe'!$4:$4</definedName></definedNames>`;
   return pacoteExcel(planilhaDetalheXml(processos, titulo), 'Detalhe', area);
 }
 
@@ -706,7 +761,7 @@ function desenharDetalhe(processos) {
   // tipos, contra o auto de infração único da Câmara.
   ['Nº do Processo', COL.coluna,
    ...(COL.segundaColuna.naTela ? [COL.segundaColuna.rotulo] : []),
-   'Distribuição', 'Dias passados']
+   'Distribuição', 'Dias passados', 'Tempo']
     .forEach(rotulo => cabecalho.append(celula(rotulo, 'th')));
   thead.append(cabecalho);
 
@@ -725,6 +780,7 @@ function desenharDetalhe(processos) {
     if (COL.segundaColuna.naTela) tr.append(celula(p[COL.segundaColuna.campo] || '—'));
     tr.append(celula(dataBR(p.data_distribuicao)));
     tr.append(celula(p.dias));
+    tr.append(celula(tempoPorExtenso(p.data_distribuicao, p.dias)));
     tbody.append(tr);
   });
 
