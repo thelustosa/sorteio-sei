@@ -25,7 +25,7 @@ import pauta                              # noqa: E402
 import sincronizar                        # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent / 'fixtures'
-PG = banco.Postgres('sorteio_sei_sinc_test', 55434)
+PG = banco.Postgres('sorteio_sei_sinc_test')
 
 # A 23ª reunião, conferida à mão no PDF: 4 itens de pauta e o rodapé.
 PAUTA_023 = (FIXTURES / 'pauta-023-02.07.2026.txt').read_text(encoding='utf-8')

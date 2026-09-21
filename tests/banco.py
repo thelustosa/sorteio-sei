@@ -25,18 +25,25 @@ def uma(cur, sql, args=None):
 
 
 class Postgres:
-    def __init__(self, nome, porta):
+    def __init__(self, nome):
         self.nome = nome
-        self.porta = porta
-        self.dsn = f'host=localhost port={porta} dbname=cj user=postgres password=postgres'
+        self.dsn = None
 
     def subir(self):
         docker('rm', '-f', self.nome)
+        # Porta escolhida pelo docker: porta fixa no intervalo efêmero do kernel
+        # colide de vez em quando com uma conexão de saída do próprio runner.
         r = docker('run', '-d', '--rm', '--name', self.nome,
                    '-e', 'POSTGRES_PASSWORD=postgres', '-e', 'POSTGRES_DB=cj',
-                   '-p', f'{self.porta}:5432', IMAGEM)
+                   '-p', '5432', IMAGEM)
         if r.returncode:
             raise SystemExit(f'docker run falhou: {r.stderr}')
+
+        publicada = docker('port', self.nome, '5432/tcp')
+        if publicada.returncode or not publicada.stdout.strip():
+            raise SystemExit(f'docker port falhou: {publicada.stderr}')
+        self.porta = publicada.stdout.split()[0].rsplit(':', 1)[-1]
+        self.dsn = f'host=localhost port={self.porta} dbname=cj user=postgres password=postgres'
 
         for _ in range(60):
             try:

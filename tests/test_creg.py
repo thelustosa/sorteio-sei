@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import banco           # noqa: E402
 from banco import uma  # noqa: E402
 
-PG = banco.Postgres('sorteio_sei_creg_test', 55435)
+PG = banco.Postgres('sorteio_sei_creg_test')
 
 testes = []
 
