@@ -10,9 +10,23 @@ Aplicação web estática desenvolvida para a **Agência Goiana de Regulação, 
 
 Acesse a aplicação online em: [https://thelustosa.github.io/sorteio-sei/](https://thelustosa.github.io/sorteio-sei/)
 
-| Tela de Início | Interface do Sorteador |
+### Apresentação Visual do Sistema (Capturas em 1920×1080)
+
+| Tela de Início / Menu de Serviços | Sorteador de Processos (Modo CREG) |
 | :---: | :---: |
-| ![Tela de Início](assets/img/screenshot_start.png) | ![Interface do Sorteador](assets/img/screenshot.png) |
+| ![Tela de Início](assets/img/screenshot_start.png) | ![Interface do Sorteador CREG](assets/img/screenshot.png) |
+
+| Sorteador e Resultado com Relatores (Modo CJ) | Registro de Julgamentos e Pautas (CJ) |
+| :---: | :---: |
+| ![Sorteador e Resultado CJ](assets/img/screenshot_sorteador_cj.png) | ![Registro de Julgamentos](assets/img/screenshot_julgados.png) |
+
+| Painel do Acervo de Processos | Histórico de Sorteios e Emissão de Atas |
+| :---: | :---: |
+| ![Painel do Acervo](assets/img/screenshot_acervo.png) | ![Histórico de Sorteios](assets/img/screenshot_historico.png) |
+
+| Painel Administrativo, Ações e Meta 45 |
+| :---: |
+| ![Painel Administrativo](assets/img/screenshot_admin.png) |
 
 ---
 
@@ -41,29 +55,37 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 - **Exclusão de Unidades**: Seleção simples das unidades que NÃO vão participar da rodada de distribuição através de filtros de exclusão visual (pills).
 - **Validação Completa**: Impede a realização do sorteio caso existam campos em branco na tabela, formatos inválidos ou números de processo SEI repetidos, indicando as linhas em conflito.
 - **Regras Específicas por Colegiado**:
-  - **Câmara de Julgamento (CJ)**: todo processo é Auto de Infração (campo pré-fixado e travado, eliminando erro de digitação); a 6ª coluna registra se houve **Defesa** (Sim/Não) — dado herdado pelos julgamentos do acervo; os destinos correspondem às cadeiras `CJ1`..`CJ5`, mapeadas para os conselheiros relatores via `cadeiras_cj`. Processo com **Defesa = "Não"** não participa do sorteio: vai sempre para a `CJ1`, que é quem recebe o lote de homologação de auto de infração — e a `CJ1` recebe **só** esse lote. Os processos com defesa são sorteados entre as demais cadeiras (`CJ2`..`CJ5`). A pill da `CJ1` continua na tela, mas fixa — não pode ser excluída, porque não participa do sorteio; um lote todo sem defesa é distribuído mesmo com `CJ2`..`CJ5` excluídas.
-  - **Conselho Regulador (CREG)**: 11 assuntos disponíveis; **Travamento de Recurso Inteligente** que define automaticamente o campo como "Não se aplica" e o desabilita caso o assunto selecionado não seja "Auto de Infração"; campo adicional para identificação do **Interessado**; os destinos correspondem às unidades `CREG1`..`CREG4`.
-- **Exportação da Ata em Word**: geração automática da ata de distribuição em formato Word (`.doc`), nomeada dinamicamente (`Sorteio_CREG_DD.MM.AAAA.doc`). A ata traz cabeçalho institucional e as mesmas colunas da tela — ordem, processo, interessado (se houver), assunto, recurso (ou defesa, na CJ) e unidade sorteada — permitindo conferência da repartição por assunto sem depender do sistema.
+  - **Câmara de Julgamento (CJ)**: todo processo é Auto de Infração (campo pré-fixado e travado, eliminando erro de digitação); a 5ª coluna registra se houve **Defesa** (Sim/Não) — dado herdado pelos julgamentos do acervo; os destinos correspondem às cadeiras `CJ1`..`CJ5`, mapeadas para os conselheiros relatores via `cadeiras_cj`.
+    - **Regra da CJ1**: Processos com **Defesa = "Não"** não participam do sorteio: vão sempre para a `CJ1`, que recebe exclusivamente o lote de homologação de auto de infração. Os processos com defesa são sorteados igualitariamente entre as demais cadeiras (`CJ2`..`CJ5`). A pill da `CJ1` permanece visível, mas fixa (não pode ser excluída); um lote composto unicamente por processos sem defesa é distribuído diretamente mesmo com `CJ2`..`CJ5` excluídas.
+    - **Identificação dos Relatores**: Ao concluir o sorteio, a tela de resultados exibe cada cadeira acompanhada do nome oficial do respectivo conselheiro relator (`CJ1 — Paulo Otoni Ribeiro`, `CJ2 — Deusdete Cardoso Belém`, `CJ3 — Dorivan de Souza Lima`, `CJ4 — Paulo Henrique Oliveira Marques`, `CJ5 — Lorena Patricia de Oliveira`).
+    - **Decisões em Sessão**: A secretaria registra o voto entre as opções homologadas (`Manter`, `Anular`, `Vista` e `Retirado`) e o status (`Julgado`, `Retornou`, `Retirado` e `Vista`).
+  - **Conselho Regulador (CREG)**: 11 assuntos disponíveis; **Travamento de Recurso Inteligente** que define automaticamente o campo como "Não se aplica" e o desabilita caso o assunto selecionado não seja "Auto de Infração"; campo específico para identificação do **Interessado**; os destinos correspondem às unidades `CREG1`..`CREG4` (mantidas sem vinculação nominal pública de ocupantes por solicitação do colegiado). O sistema calcula automaticamente os indicadores `meta_45`, `dias_dist_cr_cj` e `em_relacao_cj`.
+- **Exportação da Ata em Word**: geração automática da ata de distribuição em formato Word (`.doc`), nomeada dinamicamente (`Sorteio_CREG_DD.MM.AAAA.doc` ou `Sorteio_CJ_DD.MM.AAAA.doc`). A ata traz cabeçalho institucional e as mesmas colunas da tela — ordem, processo, interessado (se houver), assunto, recurso (ou defesa, na CJ) e unidade sorteada — permitindo conferência da repartição por assunto sem depender do sistema.
 - **Registro de Julgamentos e Monitor de Pendências**:
   - Páginas dedicadas ([julgados-cj.html](julgados-cj.html) e [julgados-creg.html](julgados-creg.html)) onde a secretaria abre uma pauta e preenche o voto e o status de cada processo deliberado em sessão.
-  - **Aviso visual de pendências**: o card da tela principal monitora em tempo real processos sem voto ou sem status e exibe um alerta visual pulsante e badge com a contagem de pendências.
+  - Botões de ação em lote para conveniência operacional ("Marcar tudo como Manter", "Marcar tudo como Julgado").
+  - **Aviso visual de pendências**: o card da tela principal monitora em tempo real processos sem voto ou sem status e exibe um alerta visual pulsante e badge dinâmico com a contagem exata de pendências.
+  - **Concorrência Otimista com Bloqueio de Linha**: A gravação envia apenas os campos alterados pelo usuário e confere os valores prévios sob bloqueio de linha (`select for update`) no PostgreSQL. Caso outro usuário tenha alterado o processo simultaneamente, o sistema sinaliza conflito e preserva os dados para revisão, impedindo sobreposições silenciosas.
   - Processos chegam automaticamente das pautas publicadas pela AGR via rotina de sincronização, e o registro do voto/status anota auditoria de autoria e horário (`atualizado_por` e `atualizado_em`) via RPC protegida `registrar_votos`.
 - **Acervo de Processos**:
   - Painéis de consulta ([acervo-cj.html](acervo-cj.html) e [acervo-creg.html](acervo-creg.html)) para acompanhamento dos processos distribuídos que aguardam deliberação.
-  - Organização por faixas de permanência (menos de 30 dias, 30 a 60 dias, 60 a 90 dias, mais de 90 dias) e opções de exportação do acervo em planilha Excel (`.xlsx`) e documento PDF.
+  - Organização por faixas de permanência (menos de 30 dias, 30 a 60 dias, 60 a 90 dias, mais de 90 dias) e por conselheiro relator / unidade.
+  - Sinalização visual e acessível nas faixas críticas de permanência (a partir de 60 e 90 dias).
+  - Células interativas que abrem card modal com a listagem detalhada dos processos que compõem aquela contagem.
+  - Opções de exportação do acervo em planilha Excel (`.xlsx`) e documento PDF nativo.
 - **Histórico de Sorteios**:
   - Páginas dedicadas ([historico-creg.html](historico-creg.html) e [historico-cj.html](historico-cj.html)) acessíveis por botão na tela principal.
   - A lista traz uma rodada por linha, da mais recente para a mais antiga, com data, dia da semana, horário, quantidade total de processos e a distribuição detalhada por destino com sua respectiva contagem (ex.: `CJ1: 3`, `CJ2: 3`...), cuja soma compõe o total da linha.
-  - Clicar em **Ver processos** abre a rodada completa (ordem, processo, destino sorteado, relator da época na CJ, interessado no CREG, assunto e defesa/recurso).
+  - Clicar em **Ver processos** abre o modal com a rodada completa (ordem, processo, destino sorteado, relator da época na CJ, interessado no CREG, assunto e defesa/recurso).
   - Clicar na sigla de um destino abre o modal já filtrado exclusivamente para aquele destino.
   - **Exportação em Word (.docx)**: exporta os processos exibidos no modal em arquivo `.docx` nos moldes oficiais de ata da AGR (cabeçalho institucional, texto de abertura com data por extenso e tabela formatada), gerado diretamente no navegador via WordprocessingML sem bibliotecas externas.
   - O sorteio grava o resultado diretamente no acervo (`acervo_cj` e `acervo_creg`) com `origem = 'sorteio'`, entrando no histórico automaticamente a partir do marco inicial de `2026-08-27`. A antiga tabela provisória `processos_sorteados` foi completamente descontinuada.
-- **Painel Administrativo**: área restrita a administradores, em [admin.html](admin.html), para efetuar manutenções e correções em registros de sorteios e julgamentos já gravados — eliminando a necessidade de intervenções manuais via SQL direto.
+- **Painel Administrativo**: área restrita a administradores, em [admin.html](admin.html), para efetuar manutenções, correções e auditorias em registros de sorteios e julgamentos já gravados — eliminando a necessidade de intervenções manuais via SQL direto.
   - Cobre os dois colegiados com seletor de órgão na própria página e navegação por data de sessão de julgamento ou rodada de sorteio.
   - Operações atômicas com allowlist e validação rigorosa: corrigir voto, status, data da sessão e número da pauta (inclusive **desfazer**, retornando campos para vazio/null); corrigir distribuição gravada pelo sorteio; religar julgados ao acervo; corrigir número de processo (com propagação atômica para todos os registros que compartilham o número incorreto); e redistribuir processos preservando o histórico do julgado.
-  - Confirmação em duas etapas detalhando exatamente o impacto antes da gravação.
-  - Aba **Meta 45**: julgados com status `Julgado` dentro e fora da meta de 45 dias (da distribuição à sessão), por mês, bimestre, trimestre, quadrimestre ou semestre, com filtro de ano e um resumo do ano. Julgado sem data de distribuição, ou com sessão anterior a ela, aparece à parte como sem prazo aferível e fica fora do percentual. Lê a RPC `admin_meta_45`, que usa a coluna gerada `meta_45` das duas tabelas de julgados.
-  - Trilha de auditoria append-only em `auditoria_admin` gravada na mesma transação por funções `SECURITY DEFINER`, com consulta paginada de 100 em 100 registros na aba **Auditoria**.
+  - **Exclusão Segura de Processos**: Possibilita excluir um julgado de sessão, uma distribuição do acervo ou ambos de forma atômica (quando não existirem outros julgados dependentes), com confirmação obrigatória em duas etapas, justificativa documentada e preservação de um retrato completo (*snapshot* em JSON) do registro excluído em `auditoria_admin`.
+  - Aba **Meta 45**: Painel analítico de processos com status `Julgado` dentro (≤ 45 dias) e fora da meta de 45 dias (da distribuição à sessão), com agrupamento por mês, bimestre, trimestre, quadrimestre ou semestre, filtro por ano e resumo anual. Processo sem data de distribuição ou com sessão anterior a ela aparece separado como sem prazo aferível. Cada contagem é interativa: clicar nela abre card modal com a relação nominal dos julgados correspondentes.
+  - Trilha de auditoria append-only em `auditoria_admin` gravada na mesma transação por funções `SECURITY DEFINER`, com consulta paginada de 100 em 100 registros na aba **Auditoria**, apresentando autoria, horário, operação, motivo e estado antes/depois.
 - **Registro no Banco de Dados e Resiliência**: ao final do sorteio, os dados são gravados no banco (Supabase/PostgreSQL) no acervo correspondente. Em caso de instabilidade na conexão ou banco não configurado, a interface disponibiliza download do sorteio completo em `.json` como alternativa segura de contingência.
 
 ---
@@ -72,8 +94,9 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 
 O visual foi desenvolvido com base na identidade visual institucional do portal do **Estado de Goiás**:
 - **Paleta de Cores**: Uso do verde institucional (`#00534b`) como cor principal de realce e botões, fundo de tela branco, painel interno em tom de verde menta claro (`#E9F5EC`) e tokens de cores temáticas para cada card de serviço.
-- **Rodapé Institucional**: Banner verde com logotipo oficial do Estado de Goiás, versão atual da aplicação (Versão 3.9.2), créditos e informações de integridade e auditoria do sorteio.
+- **Rodapé Institucional**: Banner verde com logotipo oficial do Estado de Goiás, versão atual da aplicação (Versão 3.9.2), créditos aos desenvolvedores (**Lucas Lustosa Coelho e Leonardo Ferreira Amichi**) e informações de integridade e auditoria do sorteio.
 - **Tipografia**: Títulos e elementos de destaque em **Montserrat**, complementados pela tipografia nativa do sistema operacional para o corpo de texto.
+- **Acessibilidade e Usabilidade**: Gestão de foco nativo, semântica ARIA completa, alto contraste, suporte a `prefers-reduced-motion` e atalhos por teclado (Escape para fechar modais, setas para navegar abas).
 
 ---
 
@@ -108,7 +131,14 @@ endereço não existe. Todo o resto está agrupado por natureza.
 │   │   ├── supabase.js     cliente Supabase, autenticação, permissões por órgão e chamadas de API
 │   │   └── *.min.js        versões otimizadas servidas pelo site
 │   ├── fonts/              arquivos de fonte Montserrat em .woff2
-│   └── img/                logotipos, favicon e as capturas de tela do README
+│   └── img/                logotipos, favicon e capturas de tela do sistema em 1920x1080
+│       ├── screenshot_start.png         tela de início e canais de acesso
+│       ├── screenshot.png               sorteador de processos (modo CREG)
+│       ├── screenshot_sorteador_cj.png  sorteador e resultado com relatores (modo CJ)
+│       ├── screenshot_julgados.png      registro de julgamentos e pautas (CJ)
+│       ├── screenshot_acervo.png        painel do acervo de processos (CJ)
+│       ├── screenshot_historico.png     histórico de sorteios e emissão de atas (CJ)
+│       └── screenshot_admin.png         painel administrativo (sessões, Meta 45 e auditoria)
 │
 ├── sql/                      tudo que roda no SQL Editor do Supabase
 │   ├── schema.sql            tabelas, gatilho, função de registro e RLS
@@ -296,11 +326,11 @@ lista das pautas com pendência → clica no número da reunião
   → Salvar
 ```
 
-Voto (`Manter`, `Anular`, `Vista`) e Status (`Julgado`, `Retornou`, `Retirado`, `Vista`) são independentes: processo retirado de pauta fica com status e sem voto, e continua aparecendo como pendente enquanto faltar algum dos dois. Só as linhas em que o funcionário mexeu são enviadas.
+Voto (`Manter`, `Anular`, `Vista` e `Retirado`) e Status (`Julgado`, `Retornou`, `Retirado` e `Vista`) são campos independentes. A interface oferece botões de ação rápida ("Marcar tudo como Manter" e "Marcar tudo como Julgado") para acelerar o preenchimento de pautas regulares, permitindo ajustes pontuais nas exceções. Só as linhas em que o operador mexeu são transmitidas.
 
-Isso abriu, pela primeira vez, **leitura** do banco para o navegador — só da tabela `julgados_cj`, e só para usuário autenticado. A escrita continua fechada: não existe política de `UPDATE` em nenhuma tabela. Gravar passa pela função `registrar_votos`, que aceita apenas voto e status, recusa rótulo fora da lista e anota em `atualizado_por` / `atualizado_em` quem preencheu e quando.
+A gravação é protegida por concorrência otimista com bloqueio de linha no PostgreSQL: a aplicação envia os valores anteriores juntamente com as novas decisões; caso outro usuário tenha atualizado o mesmo registro nesse intervalo, o sistema sinaliza o conflito em vez de sobrescrever a decisão silenciosamente.
 
-E a função não encosta no histórico: linha que veio da planilha, já com voto e status, é imutável por essa porta. Só é editável o que ainda está pendente ou o que a própria página gravou antes — para corrigir um erro de digitação.
+Isso abriu leitura controlada do banco para o navegador — apenas das tabelas de julgados autorizadas para o usuário logado. A escrita direta permanece bloqueada: não existe política de `UPDATE` direto em nenhuma tabela. A gravação passa exclusivamente pela função `registrar_votos` (ou `registrar_votos_creg`), que valida a lista branca de votos e status, registra auditoria em `atualizado_por` e `atualizado_em` e garante a integridade histórica.
 
 ### Sincronização automática com as pautas da AGR
 
