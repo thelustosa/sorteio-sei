@@ -219,12 +219,14 @@ let busca = '';
 // número do processo. É um estado à parte porque cada abertura é um recorte
 // novo — abrir outra sessão começa sem o texto da anterior.
 let buscaProcesso = '';
-// A última resposta crua de admin_sessoes/admin_sorteios/admin_processos_*:
-// repintar a cada tecla digitada filtra daqui, sem nova consulta.
-let linhasSessoes = [];
-let linhasSorteios = [];
-let linhasProcessosSessao = [];
-let linhasProcessosSorteio = [];
+// Repinta a tela atual com a última resposta crua de admin_sessoes/
+// admin_sorteios/admin_processos_*, sem nova consulta: cada pintar* a arma com
+// as suas linhas, e carregar() a desarma — durante uma consulta, ou depois que
+// ela falha, não há linhas da tela atual para filtrar.
+let repintarBusca = null;
+// A dica do rodapé da tela atual: semRegistros a apaga, e a pesquisa que volta
+// a achar linhas precisa devolvê-la.
+let dicaDoPainel = '';
 // Onde estamos dentro da aba: null é a lista de datas; preenchido é o detalhe
 // de uma data. É o que o botão Voltar desfaz.
 let detalhe = null;
@@ -517,7 +519,7 @@ function moldura() {
     definirVisaoTabela('sessoes');
     painelBusca.hidden = false;
     buscaRotulo.textContent = 'Pesquisar por pauta ou data';
-    buscaInput.placeholder = 'Ex.: 214/2026 ou 03/2026';
+    buscaInput.placeholder = 'Ex.: 24 ou 03/2026';
     buscaInput.value = busca;
     return tituloDoPainel('Sessões de julgamento',
       'Selecione a data da sessão para corrigir voto, status, pauta ou a própria data.',
@@ -557,6 +559,7 @@ function moldura() {
 // botão que a pediu.
 async function carregar({ anexando = false } = {}) {
   const meu = ++pedido;
+  repintarBusca = null;
   // Os dois botões de volta se revezam, como em julgados.js: dentro de um
   // detalhe quem volta é o Voltar (para a lista), e fora dele o Início (para o
   // index.html). Uma saída de cada vez, a de dentro com precedência.
@@ -659,7 +662,7 @@ function tituloDoPainel(titulo, descricao, dica, sobrancelha = 'Consulta e corre
   painelEyebrow.textContent = sobrancelha;
   painelTitulo.textContent = titulo;
   painelDescricao.textContent = descricao;
-  painelHint.textContent = dica;
+  painelHint.textContent = dicaDoPainel = dica;
 }
 
 // `dica` é o que sobra no rodapé quando não há registro. Vazia por padrão:
@@ -682,7 +685,7 @@ const normaliza = valor => String(valor).toLowerCase().trim();
 const corresponde = (texto, termo) => normaliza(texto).includes(termo);
 
 function pintarSessoes(linhas) {
-  linhasSessoes = linhas;
+  repintarBusca = () => pintarSessoes(linhas);
   const termo = normaliza(busca);
   const filtradas = termo
     ? linhas.filter(l => corresponde(ou(l.pauta), termo) || corresponde(dataBR(l.data_sessao), termo))
@@ -721,7 +724,7 @@ function pintarSessoes(linhas) {
 }
 
 function pintarSorteios(linhas) {
-  linhasSorteios = linhas;
+  repintarBusca = () => pintarSorteios(linhas);
   const termo = normaliza(busca);
   const filtradas = termo ? linhas.filter(l => corresponde(dataBR(l.data_distribuicao), termo)) : linhas;
 
@@ -767,7 +770,7 @@ function pintarSorteios(linhas) {
 
 function pintarProcessosDaSessao(linhas) {
   const v = VOCABULARIO[orgao];
-  linhasProcessosSessao = linhas;
+  repintarBusca = () => pintarProcessosDaSessao(linhas);
   if (!linhas.length) {
     // A exclusão levou o último processo: a sessão deixou de existir, e só a
     // lista de datas ainda diz a verdade.
@@ -826,7 +829,7 @@ function pintarProcessosDaSessao(linhas) {
 
 function pintarProcessosDoSorteio(linhas) {
   const v = VOCABULARIO[orgao];
-  linhasProcessosSorteio = linhas;
+  repintarBusca = () => pintarProcessosDoSorteio(linhas);
   if (!linhas.length) {
     // Mesmo caso da sessão: a exclusão levou o último processo da distribuição.
     if (detalhe.aposExclusao) {
@@ -2050,19 +2053,15 @@ function inicializarAdmin(orgaosAdmin) {
   // de alvo conforme a tela: pauta/data na lista, número do processo dentro
   // de uma sessão ou distribuição aberta.
   buscaInput.addEventListener('input', () => {
-    if (detalhe?.tipo === 'sessao') {
-      buscaProcesso = buscaInput.value;
-      pintarProcessosDaSessao(linhasProcessosSessao);
-    } else if (detalhe?.tipo === 'sorteio') {
-      buscaProcesso = buscaInput.value;
-      pintarProcessosDoSorteio(linhasProcessosSorteio);
-    } else if (aba === 'sessoes') {
-      busca = buscaInput.value;
-      pintarSessoes(linhasSessoes);
-    } else if (aba === 'sorteios') {
-      busca = buscaInput.value;
-      pintarSorteios(linhasSorteios);
-    }
+    if (detalhe) buscaProcesso = buscaInput.value;
+    else busca = buscaInput.value;
+    if (!repintarBusca) return;
+    // A tela pode estar no "nenhum encontrado" da tecla anterior: a tabela é
+    // trocada por desenhar(), mas o aviso e o rodapé são só de quem os pôs.
+    estado({});
+    situacao('ok');
+    painelHint.textContent = dicaDoPainel;
+    repintarBusca();
   });
   btnFecharDetalhe.addEventListener('click', () => detalheDialog.close());
   // Clique no ::backdrop chega como clique no próprio dialog: fechar ali é o que
