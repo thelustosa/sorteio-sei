@@ -1788,6 +1788,12 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 .detalhe-dialog[open] { display: flex; flex-direction: column; min-height: 0; }
 
+/* O card do acervo passou a ter seis colunas no Conselho — cinco na Câmara —
+   e a última é texto por extenso. Em 46rem os rótulos do cabeçalho eram
+   cortados no meio ("Nº DO PROCESS"). 52rem é o que acomoda a linha inteira,
+   inclusive o maior tempo que a coluna pode escrever. */
+.detalhe-dialog:has(.acervo-processos) { width: min(52rem, calc(100vw - 2rem)); }
+
 .detalhe-dialog::backdrop {
   background: rgb(17 39 32 / 45%);
   backdrop-filter: blur(4px);
@@ -1885,6 +1891,28 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 .detalhe-table tbody td:last-child { font-variant-numeric: tabular-nums; }
 
+/* Dias passados deixou de ser a última coluna quando Tempo entrou ao lado dela,
+   e perderia o alinhamento de dígitos que a regra acima lhe dava. */
+.acervo-processos tbody td:nth-last-child(2) { font-variant-numeric: tabular-nums; }
+
+/* Colunas iguais funcionavam com quatro campos curtos. Com Tempo — "2 anos, 6
+   meses e 30 dias" ao lado de "CREG4" — a divisão em partes iguais dava folga
+   a quem não precisa e faltava justo na coluna larga, que quebrava em duas
+   linhas enquanto os cabeçalhos vizinhos eram cortados. Aqui cada coluna toma o
+   que o conteúdo dela pede, e o respiro entre elas fica igual porque o padding
+   é o mesmo em todas. */
+.acervo-processos { table-layout: auto; }
+
+/* Seis colunas cabem no card em tela cheia, mas não numa janela estreitada pela
+   metade — e o overflow-x: hidden do corpo deixava a coluna Tempo fora de
+   alcance, sem barra para chegar nela. Aqui a barra aparece só quando falta
+   espaço, em qualquer largura, em vez de depender de um breakpoint. */
+.detalhe-corpo:has(> .acervo-processos) { overflow-x: auto; }
+
+/* Rótulo por extenso nunca é cortado: se a janela apertar, ele quebra em duas
+   linhas em vez de virar "DIAS PASSADO". */
+.acervo-processos thead th { white-space: normal; }
+
 .detalhe-dialog .load-error { margin: 16px 20px 0; }
 
 .detalhe-loading {
@@ -1971,13 +1999,16 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 /* Seis colunas — duas delas de texto livre — não cabem em 390px por mais que se
    aperte o padding, e o overflow-x: hidden do corpo do card deixava as duas
    últimas fora de alcance. Rolar de lado dentro do card devolve o acesso a
-   elas. O card do acervo, com quatro colunas curtas, continua sem precisar.
-   O da meta de 45 dias (admin), com cinco ou seis, precisa pelo mesmo motivo. */
+   elas. O da meta de 45 dias (admin), com cinco ou seis, precisa pelo mesmo
+   motivo. O do acervo já rola de lado em qualquer largura (regra acima); o que
+   ele ganha aqui é só a largura mínima, para as colunas não serem espremidas
+   até o ilegível em vez de oferecerem a barra. */
 @media screen and (max-width: 620px) {
   .detalhe-corpo:has(> .historico-detalhe),
   .detalhe-corpo:has(> .admin-meta-detalhe) { overflow-x: auto; }
   .detalhe-table.historico-detalhe,
-  .detalhe-table.admin-meta-detalhe { min-width: 520px; }
+  .detalhe-table.admin-meta-detalhe,
+  .detalhe-table.acervo-processos { min-width: 520px; }
 }
 
 .acervo-table tbody td.acervo-zero {

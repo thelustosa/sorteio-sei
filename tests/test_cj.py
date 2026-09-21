@@ -28,7 +28,7 @@ from banco import uma  # noqa: E402
 sys.path.insert(0, str(RAIZ / 'dados'))  # importar_planilha, carregado sob demanda
 
 PLANILHA_PADRAO = Path.home() / 'Downloads' / 'Câmara de Julgamento - REG.xlsx'
-PG = banco.Postgres('sorteio_sei_test', 55433)
+PG = banco.Postgres('sorteio_sei_test')
 MIGRACAO = RAIZ / 'supabase' / 'migrations' / \
     '20260823165725_corrigir_integridade_creg_e_privilegios.sql'
 # Converte relator de nome para cadeira. Rodada em preparar_banco DEPOIS da
@@ -1127,6 +1127,7 @@ def resumo_do_acervo_conta_o_que_nao_foi_julgado(cur):
     por_celula = {(f, r): n for _, f, r, n in linhas}
     assert por_celula[('Até 15 dias', 'Fulano')] == 1
     assert por_celula[('Entre 6 meses e 1 ano', 'Fulano')] == 1
+    assert {f for o, f, _, _ in linhas if o >= 7} == {'Entre 1 e 2 anos', 'Há mais de 2 anos'}
     cur.connection.rollback()
 
 

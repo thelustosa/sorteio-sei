@@ -1564,7 +1564,7 @@ function acervoPage(api, { imprimir = () => {}, colegiado = 'cj' } = {}) {
   document.getElementById('btnAtualizar').hidden = true;  // como no acervo-cj.html
 
   const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador',
-    `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, criarExcelDetalhe, dadosTabulares, abrirDetalhe, exportarDetalhe };`)(
+    `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, criarExcelDetalhe, dadosTabulares, abrirDetalhe, exportarDetalhe, tempoPorExtenso };`)(
     document, { print: imprimir }, api, criarIndicadorCarregamento, aguardarIndicador);
   return { document, loginOnlyCard, dialog, painelCarregando, tabelaScroll, ...app };
 }
@@ -2025,8 +2025,8 @@ test('o card lista os processos e habilita a exportação', async () => {
 
   const linhas = page.document.getElementById('detalheTable').children[1].children;
   assert.deepEqual(linhas.map(tr => tr.children.map(c => c.textContent)), [
-    ['202600029001111', 'CJ1', '29/06/2026', '56'],
-    ['202600029002222', 'CJ1', '14/08/2026', '10']
+    ['202600029001111', 'CJ1', '29/06/2026', '56', '1 mês e 26 dias'],
+    ['202600029002222', 'CJ1', '14/08/2026', '10', '10 dias']
   ]);
   assert.equal(page.document.getElementById('btnExportarDetalhe').disabled, false);
 
@@ -2034,6 +2034,85 @@ test('o card lista os processos e habilita a exportação', async () => {
   assert.equal(cadeira.title, 'Paulo Otoni Ribeiro');
   assert.equal(cadeira['aria-label'], 'CJ1 — Paulo Otoni Ribeiro',
     'só no title, o nome do conselheiro existe para o mouse e não para o leitor de tela');
+});
+
+// ── Tempo por extenso ────────────────────────────────────────────────────────
+// A coluna Tempo escreve o MESMO prazo que Dias passados mede. O intervalo é
+// contado no calendário, e é por isso que ele fecha com a data de distribuição
+// que está na mesma linha — dias ÷ 30 não fecharia.
+test('tempo por extenso omite as partes zeradas e concorda em número', async () => {
+  const { tempoPorExtenso } = await acervoComDetalhe();
+  const tempo = (iso, dias) => tempoPorExtenso(iso, dias);
+
+  // Singular em cada posição: "1 anos" e "1 meses" é o erro que a coluna mais
+  // exibiria, porque toda faixa do painel passa por um aniversário.
+  assert.equal(tempo('2025-09-21', 365), '1 ano');
+  assert.equal(tempo('2026-08-21', 31), '1 mês');
+  assert.equal(tempo('2026-09-20', 1), '1 dia');
+  assert.equal(tempo('2025-09-21', 730), '2 anos');
+
+  // Partes zeradas somem, e a conjunção acompanha quantas sobraram.
+  assert.equal(tempo('2026-03-18', 187), '6 meses e 3 dias', 'sem "0 anos" na frente');
+  assert.equal(tempo('2025-09-19', 367), '1 ano e 2 dias', 'o mês zerado sai do meio');
+  assert.equal(tempo('2024-02-23', 941), '2 anos, 6 meses e 29 dias',
+    'três partes usam vírgula entre as duas primeiras e "e" antes da última');
+
+  // Distribuído hoje mostra o mesmo que Dias passados, e não vira vazio.
+  assert.equal(tempo('2026-09-21', 0), '0 dias');
+});
+
+test('tempo por extenso trata a virada de mês pelo calendário', async () => {
+  const { tempoPorExtenso } = await acervoComDetalhe();
+
+  // 31/01 → 28/02 é um mês cheio: fevereiro não tem dia 31, e o mês fecha no
+  // último dia dele. Somar 30 dias diria "28 dias" e brigaria com a data ao lado.
+  assert.equal(tempoPorExtenso('2026-01-31', 28), '1 mês');
+  // Um dia depois o mês já está fechado e o resto começa a contar.
+  assert.equal(tempoPorExtenso('2026-01-31', 29), '1 mês e 1 dia');
+  // 29/02 de ano bissexto fecha o ano em 28/02 do ano seguinte, que é o último
+  // dia daquele fevereiro — não sobra "menos um dia".
+  assert.equal(tempoPorExtenso('2024-02-29', 365), '1 ano');
+  // Meses reais, não de 30 dias: os MESMOS 31 dias valem um mês cheio saindo de
+  // janeiro e um mês e três dias saindo de fevereiro.
+  assert.equal(tempoPorExtenso('2026-01-15', 31), '1 mês');
+  assert.equal(tempoPorExtenso('2026-02-15', 31), '1 mês e 3 dias');
+});
+
+test('a coluna Tempo entra no cabeçalho e no Excel do card', async () => {
+  const page = await acervoComDetalhe();
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  const cabecalho = page.document.getElementById('detalheTable').children[0].children[0];
+  assert.deepEqual(cabecalho.children.map(c => c.textContent),
+    ['Nº do Processo', 'Relator', 'Distribuição', 'Dias passados', 'Tempo'],
+    'Tempo fica ao lado de Dias passados, que é o mesmo prazo em número');
+
+  // O arquivo repete as colunas do card: exportar não pode perder a coluna que
+  // a pessoa acabou de ver.
+  const xml = new TextDecoder().decode(new Uint8Array(
+    await page.criarExcelDetalhe(processosFalsos, 'Até 15 dias · CJ1').arrayBuffer()));
+  assert.match(xml, /<t>Tempo<\/t>/, 'o cabeçalho Tempo precisa estar na planilha');
+  assert.match(xml, /<c r="F5"[^>]*><is><t>1 mês e 26 dias<\/t><\/is><\/c>/,
+    'o tempo vai por extenso na coluna F, ao lado dos dias em E');
+});
+
+// O mesmo arquivo serve os dois colegiados, e o Conselho tem uma coluna a mais
+// no meio. Tempo precisa continuar no fim, depois de Dias passados.
+test('no Conselho o Assunto entra no meio e Tempo continua por último', async () => {
+  const page = acervoPage(async caminho => caminho.includes('processos_acervo_creg')
+    ? [{ num_processo: '202600029004444', unidade: 'CREG3', assunto: 'Auto de Infração',
+         data_distribuicao: '2026-06-29', dias: 56 }]
+    : [{ ordem: 1, faixa: 'Até 15 dias', unidade: 'CREG3', processos: 1 }],
+    { colegiado: 'creg' });
+  await page.inicializarAcervo();
+  await wait();
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  const [thead, tbody] = page.document.getElementById('detalheTable').children;
+  assert.deepEqual(celulas(thead.children[0]),
+    ['Nº do Processo', 'Unidade', 'Assunto', 'Distribuição', 'Dias passados', 'Tempo']);
+  assert.deepEqual(celulas(tbody.children[0]),
+    ['202600029004444', 'CREG3', 'Auto de Infração', '29/06/2026', '56', '1 mês e 26 dias']);
 });
 
 test('o card fecha e a falha aparece dentro dele', async () => {
