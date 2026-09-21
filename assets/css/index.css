@@ -3281,7 +3281,6 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-panel {
   display: flex;
   min-width: 0;
-  min-height: 360px;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border-subtle);
@@ -3654,8 +3653,8 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
-/* O painel tem 360px de altura mínima e o estado ocupava só a primeira faixa,
-   deixando o resto morto. Aqui ele toma o espaço livre e se centra nele. */
+/* O painel não tem altura mínima — uma tabela de uma linha não deixa vão
+   embaixo —, então o estado carrega a sua própria (220px) e se centra nela. */
 .admin-state {
   display: flex;
   min-height: 220px;
