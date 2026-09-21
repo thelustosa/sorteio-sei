@@ -517,10 +517,10 @@ Não necessitam de Docker nem de banco de dados: exercitam a aleatoriedade unifo
 
 O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) repete essas verificações em todo push e pull request, validando sintaxe JavaScript (`node --check`), suítes Node.js, testes PostgreSQL/Python e garantindo que os arquivos `.min.*` estejam devidamente regenerados e alinhados ao versionador.
 
-### Atualização 4.0
+### Atualização 3.9.2
 
 A migração `20260918130135_corrigir_concorrencia_votos.sql` deve ser aplicada
-antes de publicar o frontend 4.0. Ela mantém as assinaturas e os privilégios
+antes de publicar o frontend 3.9.2. Ela mantém as assinaturas e os privilégios
 das RPCs de votos, mas compara os valores anteriores sob bloqueio de linha.
 As telas enviam somente os campos alterados; uma decisão substituída por outra
 pessoa gera conflito, preservando o formulário para conferência. Clientes

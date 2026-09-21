@@ -15,7 +15,7 @@ import agr
 import pauta
 import sincronizar
 
-PG = banco.Postgres('sorteio_sei_review_regression', 55439)
+PG = banco.Postgres('sorteio_sei_review_regression')
 USUARIO = '00000000-0000-0000-0000-000000000013'
 testes = []
 
