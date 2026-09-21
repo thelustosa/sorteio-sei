@@ -3589,6 +3589,52 @@ test('pesquisa de sessoes sem resultado tem estado vazio proprio, diferente de l
   assert.match(page.document.getElementById('painelVazioTitulo').textContent, /encontrada/);
 });
 
+test('o aviso de nenhum encontrado some quando a pesquisa volta a achar linhas', async () => {
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_sessoes': [{ data_sessao: '2026-03-09', pauta: 24, processos: 1, pendentes: 0 }]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  const busca = page.document.getElementById('buscaInput');
+  const dica = page.document.getElementById('painelHint').textContent;
+
+  busca.value = 'nao existe';
+  busca.dispatch('input');
+  assert.equal(page.document.getElementById('painelVazio').hidden, false);
+
+  busca.value = '24';
+  busca.dispatch('input');
+  assert.equal(page.document.getElementById('painelVazio').hidden, true);
+  assert.equal(page.linhasDaTabela().length, 1);
+  assert.equal(page.document.getElementById('painelHint').textContent, dica);
+});
+
+test('digitar durante uma consulta em andamento nao repinta linhas da carga anterior', async () => {
+  let liberar;
+  let lentas = false;
+  const trava = new Promise(resolve => { liberar = resolve; });
+  const linhas = [{ data_sessao: '2026-03-09', pauta: 24, processos: 1, pendentes: 0 }];
+  const page = adminPage({
+    api: apiDoPainel([], { 'rpc/admin_sessoes': () => (lentas ? trava.then(() => linhas) : linhas) })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+
+  lentas = true;
+  page.botaoDeAba('sorteios').dispatch('click');
+  await wait();
+  page.botaoDeAba('sessoes').dispatch('click');
+  const busca = page.document.getElementById('buscaInput');
+  busca.value = '24';
+  busca.dispatch('input');
+  assert.equal(page.linhasDaTabela().length, 0, 'a tabela espera a resposta, não as linhas antigas');
+
+  liberar();
+  await wait();
+  assert.equal(page.linhasDaTabela().length, 1);
+  assert.equal(busca.value, '24', 'o que foi digitado durante a carga vale para o resultado');
+});
+
 test('a pesquisa de distribuicoes so olha a data', async () => {
   const page = adminPage({
     api: apiDoPainel([], {
