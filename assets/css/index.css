@@ -3422,6 +3422,8 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-meta-filtros { display: flex; flex: 0 0 auto; align-self: flex-end; gap: 12px; }
 .admin-meta-filtros .admin-campo { min-width: 150px; }
 .admin-meta-filtros select { background: var(--surface-raised); }
+.admin-busca { flex: 0 0 auto; width: fit-content; max-width: 100%; }
+.admin-busca input { width: auto; max-width: 100%; }
 /* O gap de 1px sobre o fundo de borda desenha as divisórias em qualquer número
    de colunas: quatro no desktop, duas no celular. */
 .admin-meta-resumo {
@@ -3883,6 +3885,8 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   .admin-panel-header { flex-direction: column; gap: 16px; }
   .admin-meta-filtros { width: 100%; align-self: stretch; }
   .admin-meta-filtros .admin-campo { min-width: 0; flex: 1 1 0; }
+  .admin-busca { width: 100%; max-width: none; }
+  .admin-busca input { width: 100%; }
   /* Sem coluna de ações, o cartão da meta tem duas colunas: o período como
      título e o medidor na largura toda. */
   .admin-panel .admin-table[data-visao='meta'] tbody tr { grid-template-columns: repeat(2, minmax(0, 1fr)); }

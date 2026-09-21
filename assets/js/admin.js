@@ -137,6 +137,9 @@ const metaFiltros = document.getElementById('metaFiltros');
 const metaResumo = document.getElementById('metaResumo');
 const metaAno = document.getElementById('metaAno');
 const metaAgrupamento = document.getElementById('metaAgrupamento');
+const painelBusca = document.getElementById('painelBusca');
+const buscaRotulo = document.getElementById('buscaRotulo');
+const buscaInput = document.getElementById('buscaInput');
 const painelDescricao = document.getElementById('painelDescricao');
 const painelTabela = document.getElementById('painelTable');
 const painelCarregando = document.getElementById('painelCarregando');
@@ -208,6 +211,20 @@ const ROTULOS_DO_DIALOGO = {
 
 let orgao = null;
 let aba = 'sessoes';
+// O que está no campo de pesquisa das abas Sessões e Distribuições. Sobrevive
+// a abrir uma sessão/distribuição e voltar — só troca de aba ou de órgão o
+// zera, porque aí a lista embaixo é outra.
+let busca = '';
+// O mesmo campo, mas dentro de uma sessão/distribuição aberta, filtra por
+// número do processo. É um estado à parte porque cada abertura é um recorte
+// novo — abrir outra sessão começa sem o texto da anterior.
+let buscaProcesso = '';
+// A última resposta crua de admin_sessoes/admin_sorteios/admin_processos_*:
+// repintar a cada tecla digitada filtra daqui, sem nova consulta.
+let linhasSessoes = [];
+let linhasSorteios = [];
+let linhasProcessosSessao = [];
+let linhasProcessosSorteio = [];
 // Onde estamos dentro da aba: null é a lista de datas; preenchido é o detalhe
 // de uma data. É o que o botão Voltar desfaz.
 let detalhe = null;
@@ -422,6 +439,8 @@ function selecionarOrgao(novo) {
     botao.classList.toggle('is-selected', botao.dataset.orgaoAdmin === orgao);
   });
   detalhe = null;
+  busca = '';
+  buscaInput.value = '';
   return carregar();
 }
 
@@ -434,6 +453,8 @@ function selecionarAba(nova) {
     if (selecionada) painelConteudo.setAttribute('aria-labelledby', botao.id);
   });
   detalhe = null;
+  busca = '';
+  buscaInput.value = '';
   return carregar();
 }
 
@@ -467,9 +488,16 @@ function moldura() {
   // consulta, o resumo do colegiado anterior ao lado da tabela vazia mentiria.
   metaFiltros.hidden = true;
   metaResumo.hidden = true;
+  // Fora dessas quatro telas — Meta e Auditoria — filtrar não é o que a tela
+  // pede, e o campo some.
+  painelBusca.hidden = true;
 
   if (detalhe?.tipo === 'sessao') {
     definirVisaoTabela('processos-sessao');
+    painelBusca.hidden = false;
+    buscaRotulo.textContent = 'Pesquisar por número do processo';
+    buscaInput.placeholder = 'Ex.: 202600029002147';
+    buscaInput.value = buscaProcesso;
     return tituloDoPainel(
       `Sessão de ${dataBR(detalhe.data)}${vazio(detalhe.pauta) ? '' : ` · pauta ${detalhe.pauta}`}`,
       'Corrija voto, status, pauta ou a data da sessão. Religar refaz o vínculo com o acervo.',
@@ -477,18 +505,30 @@ function moldura() {
   }
   if (detalhe?.tipo === 'sorteio') {
     definirVisaoTabela('processos-sorteio');
+    painelBusca.hidden = false;
+    buscaRotulo.textContent = 'Pesquisar por número do processo';
+    buscaInput.placeholder = 'Ex.: 202600029002147';
+    buscaInput.value = buscaProcesso;
     return tituloDoPainel(`Distribuição de ${dataBR(detalhe.data)}`,
       'Corrigir alcança também os julgados que copiaram este processo; redistribuir, não.',
       'Escolha uma ação na linha do processo que precisa de ajuste.');
   }
   if (aba === 'sessoes') {
     definirVisaoTabela('sessoes');
+    painelBusca.hidden = false;
+    buscaRotulo.textContent = 'Pesquisar por pauta ou data';
+    buscaInput.placeholder = 'Ex.: 214/2026 ou 03/2026';
+    buscaInput.value = busca;
     return tituloDoPainel('Sessões de julgamento',
       'Selecione a data da sessão para corrigir voto, status, pauta ou a própria data.',
       'Abra uma sessão para consultar seus processos.');
   }
   if (aba === 'sorteios') {
     definirVisaoTabela('sorteios');
+    painelBusca.hidden = false;
+    buscaRotulo.textContent = 'Pesquisar por data';
+    buscaInput.placeholder = 'Ex.: 15/03/2026 ou 03/2026';
+    buscaInput.value = busca;
     // Aba, título, botão e rodapé diziam sorteio, distribuição e rodada para o
     // mesmo registro. "Distribuição" é o termo que cobre os dois casos: a linha
     // pode ter vindo do sorteio eletrônico ou de uma ata publicada, e chamar de
@@ -635,10 +675,25 @@ function semRegistros(titulo, texto, dica = '') {
   estado({ vazioTitulo: titulo, vazioTexto: texto });
 }
 
+// A pesquisa compara com o texto como a pessoa o vê na tela — "03/2026" bate
+// com qualquer dia daquele mês porque é assim que ela aparece dentro de
+// "15/03/2026", sem entender de datas.
+const normaliza = valor => String(valor).toLowerCase().trim();
+const corresponde = (texto, termo) => normaliza(texto).includes(termo);
+
 function pintarSessoes(linhas) {
-  if (!linhas.length) {
-    return semRegistros('Nenhuma sessão registrada',
-      'Assim que uma pauta da AGR for sincronizada, ela aparece aqui.');
+  linhasSessoes = linhas;
+  const termo = normaliza(busca);
+  const filtradas = termo
+    ? linhas.filter(l => corresponde(ou(l.pauta), termo) || corresponde(dataBR(l.data_sessao), termo))
+    : linhas;
+
+  if (!filtradas.length) {
+    return linhas.length
+      ? semRegistros('Nenhuma sessão encontrada',
+          'Ajuste a pesquisa ou limpe o campo para ver todas as sessões.')
+      : semRegistros('Nenhuma sessão registrada',
+          'Assim que uma pauta da AGR for sincronizada, ela aparece aqui.');
   }
 
   const colunas = [
@@ -649,10 +704,11 @@ function pintarSessoes(linhas) {
     { rotulo: 'Pendentes', eixo: 'centro' }
   ];
 
-  desenhar(colunas, linhas.map(linha => [
+  desenhar(colunas, filtradas.map(linha => [
     celula(dataBR(linha.data_sessao), 'td', 'historico-data'),
     celulaDeAcoes([botaoDeLinha('Abrir sessão', () => {
       detalhe = { tipo: 'sessao', data: String(linha.data_sessao).slice(0, 10), pauta: linha.pauta };
+      buscaProcesso = '';
       carregar();
     }, { tom: 'primario' })]),
     celula(ou(linha.pauta), 'td', 'historico-numero'),
@@ -661,13 +717,20 @@ function pintarSessoes(linhas) {
       ? badge(plural(linha.pendentes, 'pendente', 'pendentes'), 'alerta')
       : badge('Em dia', 'sucesso'))
   ]));
-  painelStatus.textContent = `${plural(linhas.length, 'sessão registrada', 'sessões registradas')}.`;
+  painelStatus.textContent = `${plural(filtradas.length, 'sessão registrada', 'sessões registradas')}.`;
 }
 
 function pintarSorteios(linhas) {
-  if (!linhas.length) {
-    return semRegistros('Nenhuma distribuição registrada',
-      'O acervo deste colegiado ainda está vazio.');
+  linhasSorteios = linhas;
+  const termo = normaliza(busca);
+  const filtradas = termo ? linhas.filter(l => corresponde(dataBR(l.data_distribuicao), termo)) : linhas;
+
+  if (!filtradas.length) {
+    return linhas.length
+      ? semRegistros('Nenhuma distribuição encontrada',
+          'Ajuste a pesquisa ou limpe o campo para ver todas as distribuições.')
+      : semRegistros('Nenhuma distribuição registrada',
+          'O acervo deste colegiado ainda está vazio.');
   }
 
   const colunas = [
@@ -679,7 +742,7 @@ function pintarSorteios(linhas) {
     { rotulo: 'Destinos', eixo: 'centro' }
   ];
 
-  desenhar(colunas, linhas.map(linha => [
+  desenhar(colunas, filtradas.map(linha => [
     celula(dataBR(linha.data_distribuicao), 'td', 'historico-data'),
     celulaDeAcoes([botaoDeLinha('Abrir distribuição', () => {
       detalhe = {
@@ -688,6 +751,7 @@ function pintarSorteios(linhas) {
         carimbo: linha.sorteado_em || null,
         origem: linha.origem || null
       };
+      buscaProcesso = '';
       carregar();
     }, { tom: 'primario' })]),
     celula(linha.sorteado_em
@@ -698,11 +762,12 @@ function pintarSorteios(linhas) {
     celula((linha.destinos || []).join(', '))
   ]));
   painelStatus.textContent =
-    `${plural(linhas.length, 'distribuição registrada', 'distribuições registradas')}.`;
+    `${plural(filtradas.length, 'distribuição registrada', 'distribuições registradas')}.`;
 }
 
 function pintarProcessosDaSessao(linhas) {
   const v = VOCABULARIO[orgao];
+  linhasProcessosSessao = linhas;
   if (!linhas.length) {
     // A exclusão levou o último processo: a sessão deixou de existir, e só a
     // lista de datas ainda diz a verdade.
@@ -712,6 +777,13 @@ function pintarProcessosDaSessao(linhas) {
     }
     return semRegistros('Nenhum processo nesta sessão',
       'A sessão não tem processos registrados.');
+  }
+
+  const termo = normaliza(buscaProcesso);
+  const filtradas = termo ? linhas.filter(l => corresponde(l.num_processo, termo)) : linhas;
+  if (!filtradas.length) {
+    return semRegistros('Nenhum processo encontrado',
+      'Ajuste a pesquisa ou limpe o campo para ver todos os processos desta sessão.');
   }
 
   const colunas = [
@@ -728,7 +800,7 @@ function pintarProcessosDaSessao(linhas) {
     { rotulo: 'Atualizado por', eixo: 'centro' }
   ];
 
-  desenhar(colunas, linhas.map(linha => {
+  desenhar(colunas, filtradas.map(linha => {
     const destino = celula(ou(linha.destino));
     if (orgao === 'CJ') rotularCadeira(destino, linha.destino);
     return [
@@ -749,11 +821,12 @@ function pintarProcessosDaSessao(linhas) {
         'td', 'small')
     ];
   }));
-  painelStatus.textContent = `${plural(linhas.length, 'processo', 'processos')} nesta sessão.`;
+  painelStatus.textContent = `${plural(filtradas.length, 'processo', 'processos')} nesta sessão.`;
 }
 
 function pintarProcessosDoSorteio(linhas) {
   const v = VOCABULARIO[orgao];
+  linhasProcessosSorteio = linhas;
   if (!linhas.length) {
     // Mesmo caso da sessão: a exclusão levou o último processo da distribuição.
     if (detalhe.aposExclusao) {
@@ -762,6 +835,13 @@ function pintarProcessosDoSorteio(linhas) {
     }
     return semRegistros('Nenhum processo nesta distribuição',
       'A distribuição não tem processos registrados.');
+  }
+
+  const termo = normaliza(buscaProcesso);
+  const filtradas = termo ? linhas.filter(l => corresponde(l.num_processo, termo)) : linhas;
+  if (!filtradas.length) {
+    return semRegistros('Nenhum processo encontrado',
+      'Ajuste a pesquisa ou limpe o campo para ver todos os processos desta distribuição.');
   }
 
   const colunas = [
@@ -775,7 +855,7 @@ function pintarProcessosDoSorteio(linhas) {
   if (v.temInteressado) colunas.push('Interessado');
   colunas.push({ rotulo: 'Julgados', eixo: 'centro' });
 
-  desenhar(colunas, linhas.map(linha => {
+  desenhar(colunas, filtradas.map(linha => {
     const destino = celula(ou(linha.destino));
     if (orgao === 'CJ') rotularCadeira(destino, linha.destino);
     const celulas = [
@@ -795,7 +875,7 @@ function pintarProcessosDoSorteio(linhas) {
     celulas.push(celula(linha.julgados, 'td', 'historico-numero'));
     return celulas;
   }));
-  painelStatus.textContent = `${plural(linhas.length, 'processo', 'processos')} nesta distribuição.`;
+  painelStatus.textContent = `${plural(filtradas.length, 'processo', 'processos')} nesta distribuição.`;
 }
 
 // Soma os meses de `ano` em períodos de `meses` meses e devolve do primeiro ao
@@ -1965,6 +2045,25 @@ function inicializarAdmin(orgaosAdmin) {
   btnTentarNovamente.addEventListener('click', () => carregar());
   metaAno.addEventListener('change', repintarMeta);
   metaAgrupamento.addEventListener('change', repintarMeta);
+  // Filtra a lista já carregada a cada tecla, sem nova consulta — todas as
+  // telas recebem as linhas de uma vez (api paginar:true). O mesmo campo muda
+  // de alvo conforme a tela: pauta/data na lista, número do processo dentro
+  // de uma sessão ou distribuição aberta.
+  buscaInput.addEventListener('input', () => {
+    if (detalhe?.tipo === 'sessao') {
+      buscaProcesso = buscaInput.value;
+      pintarProcessosDaSessao(linhasProcessosSessao);
+    } else if (detalhe?.tipo === 'sorteio') {
+      buscaProcesso = buscaInput.value;
+      pintarProcessosDoSorteio(linhasProcessosSorteio);
+    } else if (aba === 'sessoes') {
+      busca = buscaInput.value;
+      pintarSessoes(linhasSessoes);
+    } else if (aba === 'sorteios') {
+      busca = buscaInput.value;
+      pintarSorteios(linhasSorteios);
+    }
+  });
   btnFecharDetalhe.addEventListener('click', () => detalheDialog.close());
   // Clique no ::backdrop chega como clique no próprio dialog: fechar ali é o que
   // se espera de um card modal, e o <dialog> não faz isso sozinho.
