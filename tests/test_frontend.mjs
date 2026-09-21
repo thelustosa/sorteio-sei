@@ -2834,13 +2834,14 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
    'edicaoResumo', 'edicaoTitulo', 'edicaoCampos',
    'edicaoEtapaCampos', 'edicaoEtapaConfirmacao', 'edicaoDelta', 'edicaoImpacto',
    'edicaoImpactoTitulo', 'edicaoImpactoLista', 'edicaoErro', 'edicaoEtapaRotulo',
-   'painelEyebrow', 'metaFiltros', 'metaResumo',
+   'painelEyebrow', 'metaFiltros', 'metaResumo', 'painelBusca', 'buscaRotulo',
    'detalheTitulo', 'detalheResumo', 'detalheLoading', 'detalheErro', 'detalheCorpo',
    'edicaoMotivoRotulo', 'edicaoMotivoOpcional', 'edicaoRevisaoTitulo', 'edicaoRevisaoTexto']
     .forEach(id => document.add(id, 'div'));
   document.add('metaAno', 'select');
   // O <option selected> do admin.html: agrupar por trimestre.
   document.add('metaAgrupamento', 'select').value = '3';
+  document.add('buscaInput', 'input');
   ['btnTentarNovamente', 'btnMaisAntigas', 'btnVoltar', 'btnVoltarInicio', 'btnAvancarEdicao',
    'btnCancelarEdicao', 'btnFecharEdicao', 'btnFecharDetalhe'].forEach(id => document.add(id, 'button'));
   document.add('painelTable', 'table');
@@ -3541,6 +3542,164 @@ test('a lista vazia explica o que falta, e nao fica em branco', async () => {
 
   assert.equal(page.document.getElementById('painelVazio').hidden, false);
   assert.match(page.document.getElementById('painelVazioTexto').textContent, /pauta da AGR/);
+});
+
+test('a pesquisa de sessoes filtra por pauta ou por data, sem nova consulta', async () => {
+  const chamadas = [];
+  const page = adminPage({
+    api: apiDoPainel(chamadas, {
+      'rpc/admin_sessoes': [
+        { data_sessao: '2026-03-09', pauta: 24, processos: 2, pendentes: 1 },
+        { data_sessao: '2026-07-14', pauta: 31, processos: 1, pendentes: 0 }
+      ]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  const busca = page.document.getElementById('buscaInput');
+  const total = chamadas.length;
+
+  busca.value = '24';
+  busca.dispatch('input');
+  assert.equal(page.linhasDaTabela().length, 1);
+  assert.match(page.document.getElementById('painelStatus').textContent, /^1 sessão registrada/);
+
+  // "03/2026" bate com "09/03/2026" mesmo sem a pessoa pensar em mês e ano.
+  busca.value = '03/2026';
+  busca.dispatch('input');
+  assert.equal(page.linhasDaTabela().length, 1);
+
+  busca.value = '';
+  busca.dispatch('input');
+  assert.equal(page.linhasDaTabela().length, 2);
+  // Filtrar de novo só releu o que já tinha vindo — nenhuma consulta nova.
+  assert.equal(chamadas.length, total);
+});
+
+test('pesquisa de sessoes sem resultado tem estado vazio proprio, diferente de lista vazia', async () => {
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_sessoes': [{ data_sessao: '2026-03-09', pauta: 24, processos: 1, pendentes: 0 }]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  const busca = page.document.getElementById('buscaInput');
+
+  busca.value = 'nao existe';
+  busca.dispatch('input');
+  assert.equal(page.document.getElementById('painelVazio').hidden, false);
+  assert.match(page.document.getElementById('painelVazioTitulo').textContent, /encontrada/);
+});
+
+test('a pesquisa de distribuicoes so olha a data', async () => {
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_sorteios': [
+        { data_distribuicao: '2026-06-18', sorteado_em: null, origem: 'sorteio', processos: 1, destinos: ['CJ3'] },
+        { data_distribuicao: '2026-06-25', sorteado_em: null, origem: 'sorteio', processos: 1, destinos: ['CJ4'] }
+      ]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('sorteios').dispatch('click');
+  await wait();
+
+  const busca = page.document.getElementById('buscaInput');
+  busca.value = '18/06/2026';
+  busca.dispatch('input');
+  assert.equal(page.linhasDaTabela().length, 1);
+});
+
+test('a pesquisa continua preenchida ao abrir uma sessao e voltar, mas some ao trocar de aba', async () => {
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_sessoes': [
+        { data_sessao: '2026-03-09', pauta: 24, processos: 1, pendentes: 0 },
+        { data_sessao: '2026-07-14', pauta: 31, processos: 1, pendentes: 0 }
+      ]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  const busca = page.document.getElementById('buscaInput');
+  busca.value = '24';
+  busca.dispatch('input');
+  assert.equal(page.linhasDaTabela().length, 1);
+
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+  // Dentro do detalhe o mesmo campo continua visível, mas troca de alvo — filtra
+  // por número do processo, não pela pauta/data da lista — e começa vazio.
+  assert.equal(page.document.getElementById('painelBusca').hidden, false);
+  assert.equal(busca.value, '', 'o campo começa vazio dentro de uma sessão recém-aberta');
+  assert.match(page.document.getElementById('buscaRotulo').textContent, /número do processo/);
+
+  page.document.getElementById('btnVoltar').dispatch('click');
+  await wait();
+  assert.equal(busca.value, '24', 'o texto digitado na lista sobrevive a abrir e voltar');
+  assert.equal(page.linhasDaTabela().length, 1);
+
+  page.botaoDeAba('sorteios').dispatch('click');
+  await wait();
+  page.botaoDeAba('sessoes').dispatch('click');
+  await wait();
+  assert.equal(busca.value, '', 'trocar de aba zera a pesquisa, porque a lista embaixo é outra');
+  assert.equal(page.linhasDaTabela().length, 2);
+});
+
+test('dentro de uma sessao ou distribuicao a pesquisa filtra por numero do processo', async () => {
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_processos_sessao': [
+        { id: 41, num_processo: '202600000000001', pauta: 24, voto: null, status: null,
+          destino: null, data_distribuicao: null, acervo_id: null, atualizado_por: null, atualizado_em: null },
+        { id: 42, num_processo: '202600000000099', pauta: 24, voto: null, status: null,
+          destino: null, data_distribuicao: null, acervo_id: null, atualizado_por: null, atualizado_em: null }
+      ]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+  assert.equal(page.linhasDaTabela().length, 2);
+
+  const busca = page.document.getElementById('buscaInput');
+  busca.value = '000099';
+  busca.dispatch('input');
+  assert.equal(page.linhasDaTabela().length, 1);
+
+  busca.value = 'nao existe';
+  busca.dispatch('input');
+  assert.equal(page.document.getElementById('painelVazio').hidden, false);
+  assert.match(page.document.getElementById('painelVazioTitulo').textContent, /Nenhum processo encontrado/);
+
+  busca.value = '';
+  busca.dispatch('input');
+  assert.equal(page.linhasDaTabela().length, 2, 'limpar o campo devolve todos, sem nova consulta');
+});
+
+test('a pesquisa por numero do processo tambem funciona dentro de uma distribuicao', async () => {
+  const page = adminPage({
+    api: apiDoPainel([], {
+      'rpc/admin_processos_acervo': [
+        { id: 7, ordem: 1, num_processo: '202600000000001', destino: 'CJ3',
+          assunto: 'Auto de Infração', decisao: 'Sim', defesa: true, interessado: null,
+          origem: 'sorteio', julgados: 0 },
+        { id: 8, ordem: 2, num_processo: '202600000000099', destino: 'CJ4',
+          assunto: 'Auto de Infração', decisao: 'Sim', defesa: true, interessado: null,
+          origem: 'sorteio', julgados: 0 }
+      ]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('sorteios').dispatch('click');
+  await wait();
+  page.acao(0, 'Abrir distribuição').dispatch('click');
+  await wait();
+  assert.equal(page.linhasDaTabela().length, 2);
+
+  const busca = page.document.getElementById('buscaInput');
+  busca.value = '000099';
+  busca.dispatch('input');
+  assert.equal(page.linhasDaTabela().length, 1);
 });
 
 test('o Conselho usa o proprio vocabulario no formulario', async () => {
