@@ -28,7 +28,7 @@ from banco import uma  # noqa: E402
 sys.path.insert(0, str(RAIZ / 'dados'))  # importar_planilha, carregado sob demanda
 
 PLANILHA_PADRAO = Path.home() / 'Downloads' / 'Câmara de Julgamento - REG.xlsx'
-PG = banco.Postgres('sorteio_sei_test', 55433)
+PG = banco.Postgres('sorteio_sei_test')
 MIGRACAO = RAIZ / 'supabase' / 'migrations' / \
     '20260823165725_corrigir_integridade_creg_e_privilegios.sql'
 # Converte relator de nome para cadeira. Rodada em preparar_banco DEPOIS da

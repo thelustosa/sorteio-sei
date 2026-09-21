@@ -19,7 +19,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import banco  # noqa: E402
 
-PG = banco.Postgres('sorteio_sei_admin_test', 55437)
+PG = banco.Postgres('sorteio_sei_admin_test')
 
 USUARIOS = {
     'alberto': '00000000-0000-0000-0000-000000000011',
