@@ -3281,7 +3281,6 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-panel {
   display: flex;
   min-width: 0;
-  min-height: 360px;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border-subtle);
@@ -3422,6 +3421,8 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-meta-filtros { display: flex; flex: 0 0 auto; align-self: flex-end; gap: 12px; }
 .admin-meta-filtros .admin-campo { min-width: 150px; }
 .admin-meta-filtros select { background: var(--surface-raised); }
+.admin-busca { flex: 0 0 auto; width: fit-content; max-width: 100%; }
+.admin-busca input { width: auto; max-width: 100%; }
 /* O gap de 1px sobre o fundo de borda desenha as divisórias em qualquer número
    de colunas: quatro no desktop, duas no celular. */
 .admin-meta-resumo {
@@ -3652,8 +3653,8 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
-/* O painel tem 360px de altura mínima e o estado ocupava só a primeira faixa,
-   deixando o resto morto. Aqui ele toma o espaço livre e se centra nele. */
+/* O painel não tem altura mínima — uma tabela de uma linha não deixa vão
+   embaixo —, então o estado carrega a sua própria (220px) e se centra nela. */
 .admin-state {
   display: flex;
   min-height: 220px;
@@ -3883,6 +3884,8 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   .admin-panel-header { flex-direction: column; gap: 16px; }
   .admin-meta-filtros { width: 100%; align-self: stretch; }
   .admin-meta-filtros .admin-campo { min-width: 0; flex: 1 1 0; }
+  .admin-busca { width: 100%; max-width: none; }
+  .admin-busca input { width: 100%; }
   /* Sem coluna de ações, o cartão da meta tem duas colunas: o período como
      título e o medidor na largura toda. */
   .admin-panel .admin-table[data-visao='meta'] tbody tr { grid-template-columns: repeat(2, minmax(0, 1fr)); }
