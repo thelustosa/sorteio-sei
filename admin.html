@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=5cb0de1440" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=e094b53eb1" />
   <script>
     (function () {
       try {
@@ -25,8 +25,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=5cb0de1440"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=5cb0de1440"></script>
+  <script defer src="assets/js/supabase.min.js?v=e094b53eb1"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=e094b53eb1"></script>
 </head>
 
 <body class="admin-page" data-page="admin">
@@ -200,11 +200,15 @@
                 <select id="metaAgrupamento">
                   <option value="1">Mês</option>
                   <option value="2">Bimestre</option>
-                  <option value="3" selected>Trimestre</option>
-                  <option value="4">Quadrimestre</option>
+                  <option value="3">Trimestre</option>
+                  <option value="4" selected>Quadrimestre</option>
                   <option value="6">Semestre</option>
                 </select>
               </div>
+            </div>
+            <div id="painelBusca" class="admin-campo admin-busca" hidden>
+              <label id="buscaRotulo" for="buscaInput">Pesquisar</label>
+              <input id="buscaInput" type="text" autocomplete="off" size="25">
             </div>
           </header>
 
@@ -353,7 +357,7 @@
         ou vindos das pautas publicadas pela AGR, com autor, horário e valor anterior guardados.
       </p>
       <div class="footer-meta">
-        <div class="footer-version">Versão 4.0</div>
+        <div class="footer-version">Versão 3.9.2</div>
         <p class="footer-credit">Desenvolvido por <strong>Lucas Lustosa Coelho e Leonardo Ferreira Amichi</strong>.</p>
       </div>
     </div>
