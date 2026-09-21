@@ -2839,8 +2839,8 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
    'edicaoMotivoRotulo', 'edicaoMotivoOpcional', 'edicaoRevisaoTitulo', 'edicaoRevisaoTexto']
     .forEach(id => document.add(id, 'div'));
   document.add('metaAno', 'select');
-  // O <option selected> do admin.html: agrupar por trimestre.
-  document.add('metaAgrupamento', 'select').value = '3';
+  // O <option selected> do admin.html: agrupar por quadrimestre.
+  document.add('metaAgrupamento', 'select').value = '4';
   document.add('buscaInput', 'input');
   ['btnTentarNovamente', 'btnMaisAntigas', 'btnVoltar', 'btnVoltarInicio', 'btnAvancarEdicao',
    'btnCancelarEdicao', 'btnFecharEdicao', 'btnFecharDetalhe'].forEach(id => document.add(id, 'button'));
@@ -3031,19 +3031,18 @@ test('a meta de 45 dias agrupa os meses e deixa o prazo nao aferivel fora do per
     ?? linha.children[5].children[0].textContent;
 
   let linhas = page.linhasDaTabela();
-  assert.deepEqual(linhas.map(periodo), ['1º trimestre', '2º trimestre', '3º trimestre'],
-    'o trimestre sem sessão entre dois com sessão continua na tabela');
+  assert.deepEqual(linhas.map(periodo), ['1º quadrimestre', '2º quadrimestre']);
   assert.deepEqual(valores(linhas[0]), ['14', '8', '5', '1']);
   assert.equal(taxa(linhas[0]), '61,5%', '8 de 13 aferíveis: o sem prazo não entra no denominador');
-  assert.deepEqual(valores(linhas[1]), ['0', '0', '0', '0']);
-  assert.equal(taxa(linhas[1]), '—', 'sem julgado aferível não há percentual');
+  assert.deepEqual(valores(linhas[1]), ['6', '6', '0', '0']);
+  assert.equal(taxa(linhas[1]), '100,0%');
 
   const resumo = doc.getElementById('metaResumo');
   assert.equal(resumo.hidden, false);
   assert.deepEqual(resumo.children.map(grupo => grupo.children[1].textContent),
     ['20', '73,7%', '26,3%', '1']);
   assert.equal(resumo.children[2].children[2].textContent, '5 julgados com mais de 45 dias');
-  assert.equal(doc.getElementById('painelStatus').textContent, '3 trimestres de 2026.');
+  assert.equal(doc.getElementById('painelStatus').textContent, '2 quadrimestres de 2026.');
 
   const consultas = chamadas.length;
   const agrupamento = doc.getElementById('metaAgrupamento');
@@ -3087,11 +3086,11 @@ test('cada contagem da meta abre o card so com os julgados dela', async () => {
 
   assert.deepEqual(chamadas.at(-1),
     { caminho: 'rpc/admin_meta_45_processos',
-      corpo: { p_colegiado: 'CJ', p_de: '2026-01-01', p_ate: '2026-03-31' } });
+      corpo: { p_colegiado: 'CJ', p_de: '2026-01-01', p_ate: '2026-04-30' } });
   assert.equal(doc.getElementById('detalheDialog').open, true);
-  assert.equal(doc.getElementById('detalheTitulo').textContent, 'Fora da meta · 1º trimestre de 2026');
+  assert.equal(doc.getElementById('detalheTitulo').textContent, 'Fora da meta · 1º quadrimestre de 2026');
   assert.equal(doc.getElementById('detalheResumo').textContent,
-    'Câmara de Julgamento · 1 julgado · sessões de 01/01/2026 a 31/03/2026');
+    'Câmara de Julgamento · 1 julgado · sessões de 01/01/2026 a 30/04/2026');
   const corpo = doc.getElementById('detalheTable').children[1];
   assert.deepEqual(corpo.children.map(tr => tr.children[0].textContent), ['202600000000003']);
 
