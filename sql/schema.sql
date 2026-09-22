@@ -1235,31 +1235,33 @@ revoke all privileges on sequence public.diligencias_creg_id_seq from anon, auth
 --
 -- Onde a Câmara mostra o conselheiro no hover, aqui não há o que mostrar: o
 -- Conselho não tem de-para de unidades, por decisão de quem as ocupa.
--- O retorno perdeu a coluna `conselheiro` junto com cadeiras_creg; trocar o
--- tipo de retorno exige derrubar a função antes.
 --
--- O RECORTE POR DILIGÊNCIA, e por que ele não olha a coluna `julgados`:
+-- O RECORTE POR DILIGÊNCIA:
 --
--- A planilha tem uma coluna JULGADOS que parece marcar o fim da diligência.
--- Não marca. Conferido contra a produção em 22/09/2026: dos 22 processos com
--- JULGADOS vazio que já não estavam pendentes, os 22 tinham sessão POSTERIOR à
--- data da diligência — o processo voltou, foi julgado, e ninguém fechou a
--- coluna. E nenhum dos 6 pendentes tinha JULGADOS preenchido. Nas linhas que
--- este painel enxerga, que são só as pendentes, a coluna não separou um único
--- caso em nenhuma das duas direções. RETORNO é 'SIM' em 100% das 44 linhas.
+--     RETORNO = NÃO  -> a diligência está aberta, o processo está fora
+--     RETORNO = SIM  -> o processo voltou
 --
--- Quem sabe que a diligência acabou é o banco: o processo foi julgado — e um
--- processo julgado já não é pendente, então já não está nesta matriz. Daí o
--- recorte não precisar de campo de status nenhum:
+-- Confirmado com a secretaria em 22/09/2026. Na planilha a linha encerrada
+-- também fica tachada e com o SIM em verde, mas o recorte NÃO lê formatação: o
+-- `?output=csv` que a sincronização consome não transporta tachado nem cor, e
+-- regra que depende de formatação muda de significado num copiar-colar.
 --
---     em diligência = pendente E tem diligência com
---                     data_diligencia >= data_distribuicao
+--     em diligência = pendente no acervo
+--                     E tem diligência com RETORNO = NÃO
+--                        e data_diligencia >= data_distribuicao
 --
--- A guarda de data é o que sobra de regra, e ela existe para a REDISTRIBUIÇÃO:
--- um processo que foi a diligência, voltou, foi julgado e depois foi
--- redistribuído volta a ser pendente sem estar em diligência. É a irmã da
--- correlação de datas que o CTE `pendentes` já faz com os julgados.
-drop function if exists public.resumo_acervo_creg();
+-- Não é "pendente e com diligência registrada": um processo que foi a
+-- diligência, VOLTOU e ainda não foi julgado estaria aguardando pauta, não
+-- fora com a área técnica. Foi assim que a primeira versão errou.
+--
+-- A guarda de data existe para a REDISTRIBUIÇÃO: um processo que foi a
+-- diligência, voltou, foi julgado e depois foi redistribuído volta a ser
+-- pendente sem estar em diligência. É a irmã da correlação de datas que o CTE
+-- `pendentes` já faz com os julgados.
+--
+-- Vazio não conta como aberta. A convenção é explícita, então célula em branco
+-- é linha que ninguém preencheu — o recorte prefere não mostrar nada a mostrar
+-- um processo que já voltou.
 drop function if exists public.resumo_acervo_creg(boolean);
 create function public.resumo_acervo_creg(p_diligencia boolean default null)
 returns table (ordem int, faixa text, unidade text, processos int)
@@ -1316,8 +1318,10 @@ begin
   -- errados — justamente o caso de redistribuição que a guarda de data existe
   -- para tratar.
   --
-  -- Mesma expressão, palavra por palavra, em processos_acervo_creg: se as duas
-  -- divergirem, a célula abre um número diferente do que mostrava.
+  -- A subconsulta lateral é a MESMA, palavra por palavra, de
+  -- processos_acervo_creg: se as duas divergirem, a célula abre um número
+  -- diferente do que mostrava. O translate normaliza a digitação à mão —
+  -- 'NÃO', 'NAO', 'não' e 'Não' são a mesma resposta.
   recorte as (
     select p.unidade, p.dias
       from pendentes p
@@ -1326,6 +1330,7 @@ begin
           from public.diligencias_creg x
          where x.num_processo = p.num_processo
            and x.data_diligencia >= p.data_distribuicao
+           and translate(upper(btrim(coalesce(x.retorno, ''))), 'ÃÁÀÂ', 'AAAA') = 'NAO'
       ) d on true
      where p_diligencia is null or (d.desde is not null) = p_diligencia
   ),
@@ -1353,24 +1358,10 @@ revoke all on function public.resumo_acervo_creg(boolean) from public, anon, ser
 grant execute on function public.resumo_acervo_creg(boolean) to authenticated;
 
 -- ── CREG · Detalhe de uma célula do painel ───────────────────────────────────
--- O painel conta; esta função lista. Os parâmetros são todos opcionais, e é
--- isso que faz qualquer número da tabela ser clicável com uma consulta só:
---
---   (ordem, unidade) -> a célula      (ordem, null) -> o total da linha
---   (null, unidade)  -> a coluna      (null,  null) -> o acervo pendente
---
--- p_diligencia atravessa os dois: é o recorte que o painel está mostrando, e
--- precisa chegar aqui igual, senão o card abre um número diferente do que a
--- célula clicada trazia.
---
--- A definição de pendente, as faixas e o recorte são os MESMOS de
--- resumo_acervo_creg.
---
--- `diligencia_desde` é a diligência mais recente que ainda vale para esta
--- distribuição — nula quando não há. Com meia dúzia de processos no recorte,
--- uma lista sem essa data não informa nada; e ela sai da mesma consulta que já
--- decide o filtro, sem visita a mais.
-drop function if exists public.processos_acervo_creg(int, text);
+-- `diligencia_desde` é a data da diligência ABERTA mais recente que ainda vale
+-- para esta distribuição — nula quando não há nenhuma aberta. Com o recorte
+-- ligado ela nunca é nula; sem o recorte, ela é o que distingue, na lista
+-- inteira, quem está fora de quem só aguarda pauta.
 drop function if exists public.processos_acervo_creg(int, text, boolean);
 create function public.processos_acervo_creg(
   p_ordem       int     default null,
@@ -1430,6 +1421,7 @@ begin
         from public.diligencias_creg x
        where x.num_processo = p.num_processo
          and x.data_diligencia >= p.data_distribuicao
+         and translate(upper(btrim(coalesce(x.retorno, ''))), 'ÃÁÀÂ', 'AAAA') = 'NAO'
     ) d on true
    where (p_ordem      is null or f.ordem = p_ordem)
      and (p_unidade    is null or p.unidade = p_unidade)

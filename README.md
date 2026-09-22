@@ -72,7 +72,7 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
   - Organização por faixas de permanência (menos de 30 dias, 30 a 60 dias, 60 a 90 dias, mais de 90 dias) e por conselheiro relator / unidade.
   - Sinalização visual e acessível nas faixas críticas de permanência (a partir de 60 e 90 dias).
   - Células interativas que abrem card modal com a listagem detalhada dos processos que compõem aquela contagem.
-  - **Recorte "Em diligência" (CREG)**: filtro no cabeçalho do painel que separa os processos parados por diligência dos que apenas aguardam julgamento. A matriz, os totais, o card de detalhe e as exportações passam a contar somente o recorte selecionado; "Todo o acervo" devolve a visão completa. O card ganha a coluna **Em diligência desde** quando a lista tem essa data. A fonte é a planilha de diligências mantida pela AGR, sincronizada para `diligencias_creg` (ver abaixo). A Câmara de Julgamento não tem registro equivalente e o painel dela segue sem o controle.
+  - **Recorte por diligência (CREG)**: controle segmentado no cabeçalho do painel, com três vistas — **Todo o acervo**, **Em diligência** e **Sem diligência** (todo o acervo pendente menos os que estão em diligência). A matriz, os totais, o card de detalhe e as exportações contam somente o recorte selecionado. O card ganha a coluna **Em diligência desde** quando a lista tem essa data — sem filtro, ela é o que distingue, na lista inteira, quem está fora de quem só aguarda pauta. A fonte é a planilha de diligências mantida pela AGR, sincronizada para `diligencias_creg` (ver abaixo). A Câmara de Julgamento não tem registro equivalente e o painel dela segue sem o controle.
   - Opções de exportação do acervo em planilha Excel (`.xlsx`) e documento PDF nativo.
 - **Histórico de Sorteios**:
   - Páginas dedicadas ([historico-creg.html](historico-creg.html) e [historico-cj.html](historico-cj.html)) acessíveis por botão na tela principal.
@@ -372,14 +372,26 @@ python sincronizacao/diligencias.py --simular --dsn "postgresql://..."
 
 O cabeçalho da planilha é o contrato: se ele mudar, a rodada para antes de apagar qualquer coisa, em vez de esvaziar a tabela em silêncio e fazer o filtro devolver zero sem erro nenhum. Linha com processo fora do formato de 15 dígitos ou com data impossível é descartada com aviso, sem derrubar as demais. A coluna `INTERESSADO` não é importada, pela mesma razão que `acervo_creg.interessado` não é preenchido por importação.
 
-**O recorte não usa as colunas de texto da planilha, e isso é deliberado.** `JULGADOS` parece marcar o fim da diligência, mas não marca: conferido contra a produção em 22/09/2026, dos 22 processos com a coluna vazia que já não estavam pendentes, os 22 tinham sessão posterior à data da diligência — o processo voltou, foi julgado, e ninguém fechou o campo; e nenhum dos 6 pendentes tinha a coluna preenchida. `RETORNO` é `SIM` em 100% das linhas. Quem sabe que a diligência acabou é o banco, porque o processo foi julgado — e julgado já não é pendente. O recorte é, então:
+**Quem marca o estado é a coluna `RETORNO`**, confirmado com a secretaria em 22/09/2026:
+
+| `RETORNO` | significado |
+| --- | --- |
+| `NÃO` | diligência aberta — o processo está fora |
+| `SIM` | o processo voltou |
 
 ```text
 em diligência = pendente no acervo
-                E tem diligência com data_diligencia >= data_distribuicao
+                E tem diligência com RETORNO = NÃO
+                   e data_diligencia >= data_distribuicao
 ```
 
-A guarda de data existe para a redistribuição: um processo que foi a diligência, voltou, foi julgado e depois foi sorteado de novo volta a ser pendente sem estar em diligência.
+Na planilha a linha encerrada também fica **tachada** e com o `SIM` em **verde**, mas o recorte não lê formatação: o `?output=csv` que a sincronização consome não transporta tachado nem cor, e regra que depende de formatação muda de significado num copiar-colar. `RETORNO` é texto, vem no CSV e é o campo que a equipe mantém.
+
+A guarda de data existe para a redistribuição: um processo que foi a diligência, voltou, foi julgado e depois foi sorteado de novo volta a ser pendente sem estar em diligência. Célula em branco não conta como aberta — a convenção é explícita, então branco é linha não preenchida.
+
+`JULGADOS` é campo de observação e não entra na regra: das 44 linhas de 22/09/2026, várias com a coluna vazia já tinham sessão registrada. Ele é guardado como veio, para conferência à mão.
+
+> Em 22/09/2026 as 44 linhas estavam em `SIM` — **nenhuma diligência aberta**. O filtro devolvendo zero é a resposta certa, não uma falha. A primeira versão desta funcionalidade lia "tem linha na planilha" como "está em diligência" e mostrava 6 processos que já haviam retornado.
 
 Nada disso reimplementa a regra Acervo → Julgados: quem preenche relator, defesa e data de distribuição continua sendo o gatilho do banco. Processo que aparece na pauta e não está no acervo é gravado assim mesmo, sem inventar dado, e sai listado em `pautas_cj.processos_sem_acervo` para a secretaria completar o acervo.
 
@@ -544,9 +556,15 @@ O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) repete essas v
 
 ### Atualização 3.10.0
 
-A migração `20260922100000_filtro_diligencia_creg.sql` deve ser aplicada **antes**
-de publicar o frontend 3.10.0. Ela cria `diligencias_creg` e troca a assinatura
-das duas funções do painel do Conselho:
+Duas migrações, nesta ordem, **antes** de publicar o frontend 3.10.0:
+`20260922100000_filtro_diligencia_creg.sql`, que cria `diligencias_creg` e troca
+a assinatura das duas funções do painel do Conselho, e
+`20260922130946_recorte_diligencia_pelo_retorno.sql`, que corrige a regra do
+recorte para ler `RETORNO` (a primeira versão contava como "em diligência"
+qualquer pendente com linha na planilha, inclusive os que já haviam retornado).
+A segunda só redefine as duas funções — não mexe na tabela nem nos dados.
+
+As assinaturas:
 
 | Antes | Depois |
 | --- | --- |

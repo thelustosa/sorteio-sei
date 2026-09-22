@@ -1575,7 +1575,7 @@ function acervoPage(api, { imprimir = () => {}, colegiado = 'cj' } = {}) {
   let recorteCampo = null;
   if (colegiado === 'creg') {
     recorteCampo = document.add('recorteAcervo', 'fieldset');
-    for (const valor of ['todos', 'diligencia']) {
+    for (const valor of ['todos', 'diligencia', 'sem-diligencia']) {
       const entrada = document.createElement('input');
       entrada.type = 'radio';
       entrada.value = valor;
@@ -2301,7 +2301,7 @@ function acervoCregComRecorte(resposta = () => matrizCreg) {
   return { ...page, pedidos };
 }
 
-test('trocar o recorte refaz a consulta com p_diligencia', async () => {
+test('os três recortes viram os três valores de p_diligencia', async () => {
   const page = acervoCregComRecorte();
   await page.inicializarAcervo();
   await wait();
@@ -2313,10 +2313,17 @@ test('trocar o recorte refaz a consulta com p_diligencia', async () => {
   await wait();
   assert.deepEqual(page.pedidos[1].corpo, { p_diligencia: true });
 
-  // Limpar o filtro devolve a visão completa, e não um terceiro estado.
+  // `false` é um recorte, não a ausência de um: "todos menos os em diligência".
+  // Um `||` no lugar do `??` o trocaria por null e o painel voltaria a mostrar
+  // tudo — o defeito mais fácil de introduzir aqui.
+  page.escolherRecorte('sem-diligencia');
+  await wait();
+  assert.deepEqual(page.pedidos[2].corpo, { p_diligencia: false });
+
+  // Limpar devolve a visão completa.
   page.escolherRecorte('todos');
   await wait();
-  assert.deepEqual(page.pedidos[2].corpo, { p_diligencia: null });
+  assert.deepEqual(page.pedidos[3].corpo, { p_diligencia: null });
 });
 
 test('a Câmara não tem recorte e não manda o parâmetro', async () => {
@@ -2354,7 +2361,7 @@ test('o card abre o mesmo recorte que a célula contava', async () => {
   assert.equal(detalhe.corpo.p_unidade, 'CREG1');
 });
 
-test('o total e o vazio mudam de frase sob o recorte, e voltam ao sair dele', async () => {
+test('o total e o vazio mudam de frase nos três recortes, e voltam ao sair', async () => {
   const page = acervoCregComRecorte(pedido => pedido === 1 ? matrizCreg : []);
   await page.inicializarAcervo();
   await wait();
@@ -2371,10 +2378,50 @@ test('o total e o vazio mudam de frase sob o recorte, e voltam ao sair dele', as
   assert.equal(vazio.querySelector('h3').textContent, 'Nenhum processo em diligência',
     '"Acervo zerado" é mentira sob o filtro: o acervo pode estar cheio');
 
+  // O terceiro recorte tem a sua própria leitura do vazio: se nada sobra fora
+  // da diligência, é porque todo o acervo está em diligência.
+  page.escolherRecorte('sem-diligencia');
+  await wait();
+  assert.equal(total.textContent, '0 processos sem diligência aberta');
+  assert.equal(vazio.querySelector('h3').textContent, 'Todo o acervo está em diligência');
+
   page.escolherRecorte('todos');
   await wait();
   assert.equal(vazio.querySelector('h3').textContent, 'Acervo zerado',
     'o texto da página precisa voltar quando o filtro sai');
+});
+
+test('acervo vazio mostra só a mensagem: a tabela sai e exportar desliga', async () => {
+  // A matriz vem do banco mesmo zerada — uma linha por célula, 8 faixas x 4
+  // unidades — então `linhasAtuais.length` é 32 e não diz que não há acervo.
+  // Desenhá-la ao lado do aviso é uma grade inteira de travessões repetindo o
+  // que a frase já disse, e as faixas críticas ainda sairiam pintadas de
+  // alerta com zero processo em todas.
+  const unidades = ['CREG1', 'CREG3'];
+  const matriz = contagem => [1, 4].flatMap(ordem => unidades.map(unidade => ({
+    ordem, faixa: ordem === 1 ? 'Até 15 dias' : 'Há 3 meses', unidade,
+    processos: contagem && ordem === 4 && unidade === 'CREG3' ? contagem : 0
+  })));
+
+  let contagem = 0;
+  const page = acervoPage(async caminho =>
+    caminho.includes('processos_acervo_creg') ? [] : matriz(contagem),
+  { colegiado: 'creg' });
+  await page.inicializarAcervo();
+  await wait();
+
+  const vazio = page.document.getElementById('acervoVazio');
+  assert.equal(page.tabelaScroll.hidden, true, 'a tabela de travessões precisa sair');
+  assert.equal(vazio.hidden, false);
+  assert.equal(page.document.getElementById('btnExportar').disabled, true,
+    'sem processo não há o que exportar');
+
+  // E com dado a tabela volta, junto com a exportação.
+  contagem = 4;
+  await page.carregarAcervo();
+  assert.equal(page.tabelaScroll.hidden, false);
+  assert.equal(vazio.hidden, true);
+  assert.equal(page.document.getElementById('btnExportar').disabled, false);
 });
 
 test('"Em diligência desde" entra quando a lista tem a data, e só então', async () => {
