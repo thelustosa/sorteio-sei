@@ -72,6 +72,7 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
   - Organização por faixas de permanência (menos de 30 dias, 30 a 60 dias, 60 a 90 dias, mais de 90 dias) e por conselheiro relator / unidade.
   - Sinalização visual e acessível nas faixas críticas de permanência (a partir de 60 e 90 dias).
   - Células interativas que abrem card modal com a listagem detalhada dos processos que compõem aquela contagem.
+  - **Recorte por diligência (CREG)**: controle segmentado no cabeçalho do painel, com três vistas — **Todo o acervo**, **Em diligência** e **Sem diligência** (todo o acervo pendente menos os que estão em diligência). A matriz, os totais, o card de detalhe e as exportações contam somente o recorte selecionado. O card ganha a coluna **Em diligência desde** quando a lista tem essa data — sem filtro, ela é o que distingue, na lista inteira, quem está fora de quem só aguarda pauta. A fonte é a planilha de diligências mantida pela AGR, sincronizada para `diligencias_creg` (ver abaixo). A Câmara de Julgamento não tem registro equivalente e o painel dela segue sem o controle.
   - Opções de exportação do acervo em planilha Excel (`.xlsx`) e documento PDF nativo.
 - **Histórico de Sorteios**:
   - Páginas dedicadas ([historico-creg.html](historico-creg.html) e [historico-cj.html](historico-cj.html)) acessíveis por botão na tela principal.
@@ -94,7 +95,7 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 
 O visual foi desenvolvido com base na identidade visual institucional do portal do **Estado de Goiás**:
 - **Paleta de Cores**: Uso do verde institucional (`#00534b`) como cor principal de realce e botões, fundo de tela branco, painel interno em tom de verde menta claro (`#E9F5EC`) e tokens de cores temáticas para cada card de serviço.
-- **Rodapé Institucional**: Banner verde com logotipo oficial do Estado de Goiás, versão atual da aplicação (Versão 3.9.2), créditos aos desenvolvedores (**Lucas Lustosa Coelho e Leonardo Ferreira Amichi**) e informações de integridade e auditoria do sorteio.
+- **Rodapé Institucional**: Banner verde com logotipo oficial do Estado de Goiás, versão atual da aplicação (Versão 3.10.0), créditos aos desenvolvedores (**Lucas Lustosa Coelho e Leonardo Ferreira Amichi**) e informações de integridade e auditoria do sorteio.
 - **Tipografia**: Títulos e elementos de destaque em **Montserrat**, complementados pela tipografia nativa do sistema operacional para o corpo de texto.
 - **Acessibilidade e Usabilidade**: Gestão de foco nativo, semântica ARIA completa, alto contraste, suporte a `prefers-reduced-motion` e atalhos por teclado (Escape para fechar modais, setas para navegar abas).
 
@@ -346,7 +347,7 @@ listagem da AGR → reuniões ainda não processadas → baixa o PDF
 
 Onde isso roda: **GitHub Actions**, não no site. O site é estático no Pages e o navegador nem conseguiria consultar `goias.gov.br`, que não libera CORS. O job roda de hora em hora, das 07:00 às 20:00 de Goiás, e sincroniza os dois colegiados na mesma passagem — a Câmara reúne às quintas, o Conselho não tem dia fixo e nenhum dos dois avisa a hora em que a pauta vai ao ar. Repetir a busca não duplica nada: a URL já registrada em `pautas_*` fica de fora da rodada seguinte. Se um colegiado falhar, o outro continua e a Action aponta qual foi. Pode ser disparado à mão em **Actions → Sincronizar Julgados → Run workflow**, com a opção `simular` para ver o resultado sem gravar nada e a opção de limitar a um colegiado. O log de cada rodada fica na aba Actions, o que mantém a sincronização tão auditável quanto o resto do projeto.
 
-Para funcionar, cadastre em **Settings → Secrets and variables → Actions** o segredo `SUPABASE_DB_URL` com a connection string do banco.
+Para funcionar, cadastre em **Settings → Secrets and variables → Actions** dois segredos: `SUPABASE_DB_URL`, com a connection string do banco, e `DILIGENCIAS_CSV_URL`, com o endereço da planilha de diligências (ver abaixo).
 
 Também dá para rodar da sua máquina:
 
@@ -355,6 +356,42 @@ python sincronizacao/sincronizar.py --simular --dsn "postgresql://..."
 ```
 
 Como o parser identifica um processo: número SEI de **15 dígitos precedido de `Processo nº`**. Conferido em 10 pautas de datas diferentes — 190 números de 15 dígitos, todos com o rótulo, e nenhum outro número do documento chega perto (auto de infração tem 5 dígitos, código verificador do SEI tem 8). O rodapé é retirado **antes** da busca, por contexto e nunca por lista de números proibidos: `Referência: Processo nº …` aponta para o processo do próprio documento no SEI e ele muda a cada ano. Se um dia aparecer um número de 15 dígitos sem o rótulo, a sincronização registra o aviso em vez de perdê-lo em silêncio.
+
+#### Planilha de diligências do CREG
+
+A mesma passagem do Actions sincroniza a planilha de diligências que a equipe da AGR mantém e publica na web. Não há API: o que existe é a publicação, e dela se pede a versão CSV — o `pubhtml` é uma casca de JavaScript, sem uma linha de dado no HTML. Cada rodada substitui `diligencias_creg` inteira, porque a planilha é a fonte e uma linha que sai dela deixou de existir.
+
+> **O endereço da planilha é segredo, e não constante de código.** O link de publicação do Google é uma credencial de leitura: quem o tem abre a planilha, sem login. A planilha **não é pública** — está publicada na web para que este job a leia —, e este repositório é. Escrever o id no código entregaria a leitura a qualquer pessoa que clonasse o projeto, pelo mesmo motivo que `SUPABASE_DB_URL` e `dados/*.sql` ficam fora do Git. O endereço vem da variável `DILIGENCIAS_CSV_URL`; sem ela o script para com erro, em vez de cair num endereço embutido. O resumo em JSON de cada rodada também não imprime a URL, porque ele vai para o log do Actions. Um teste (`o_endereco_da_planilha_nao_mora_no_codigo`) trava isso e quebra se alguém repuser um valor padrão.
+>
+> Vale notar o limite: o segredo tira a URL do repositório, mas não torna a planilha privada — quem já tiver o link continua lendo. Restringir o acesso na origem é decisão da AGR.
+
+```bash
+export DILIGENCIAS_CSV_URL="https://docs.google.com/spreadsheets/d/e/.../pub?gid=...&single=true&output=csv"
+python sincronizacao/diligencias.py --simular --dsn "postgresql://..."
+```
+
+O cabeçalho da planilha é o contrato: se ele mudar, a rodada para antes de apagar qualquer coisa, em vez de esvaziar a tabela em silêncio e fazer o filtro devolver zero sem erro nenhum. Linha com processo fora do formato de 15 dígitos ou com data impossível é descartada com aviso, sem derrubar as demais. A coluna `INTERESSADO` não é importada, pela mesma razão que `acervo_creg.interessado` não é preenchido por importação.
+
+**Quem marca o estado é a coluna `RETORNO`**, confirmado com a secretaria em 22/09/2026:
+
+| `RETORNO` | significado |
+| --- | --- |
+| `NÃO` | diligência aberta — o processo está fora |
+| `SIM` | o processo voltou |
+
+```text
+em diligência = pendente no acervo
+                E tem diligência com RETORNO = NÃO
+                   e data_diligencia >= data_distribuicao
+```
+
+Na planilha a linha encerrada também fica **tachada** e com o `SIM` em **verde**, mas o recorte não lê formatação: o `?output=csv` que a sincronização consome não transporta tachado nem cor, e regra que depende de formatação muda de significado num copiar-colar. `RETORNO` é texto, vem no CSV e é o campo que a equipe mantém.
+
+A guarda de data existe para a redistribuição: um processo que foi a diligência, voltou, foi julgado e depois foi sorteado de novo volta a ser pendente sem estar em diligência. Célula em branco não conta como aberta — a convenção é explícita, então branco é linha não preenchida.
+
+`JULGADOS` é campo de observação e não entra na regra: das 44 linhas de 22/09/2026, várias com a coluna vazia já tinham sessão registrada. Ele é guardado como veio, para conferência à mão.
+
+> Em 22/09/2026 as 44 linhas estavam em `SIM` — **nenhuma diligência aberta**. O filtro devolvendo zero é a resposta certa, não uma falha. A primeira versão desta funcionalidade lia "tem linha na planilha" como "está em diligência" e mostrava 6 processos que já haviam retornado.
 
 Nada disso reimplementa a regra Acervo → Julgados: quem preenche relator, defesa e data de distribuição continua sendo o gatilho do banco. Processo que aparece na pauta e não está no acervo é gravado assim mesmo, sem inventar dado, e sai listado em `pautas_cj.processos_sem_acervo` para a secretaria completar o acervo.
 
@@ -482,7 +519,7 @@ Sobe um Postgres descartável no Docker (mesmo motor do Supabase), aplica o sche
 ```bash
 python tests/test_creg.py
 ```
-Sobe um Postgres descartável e valida todas as regras, fórmulas e funções do Conselho Regulador (`meta_45`, `dias_dt`, `dias_dist_cr_cj`, `em_relacao_cj`, derivação de pautas e RPC de registro de votos).
+Sobe um Postgres descartável e valida todas as regras, fórmulas e funções do Conselho Regulador (`meta_45`, `dias_dt`, `dias_dist_cr_cj`, `em_relacao_cj`, derivação de pautas e RPC de registro de votos), incluindo o recorte "Em diligência" do painel do acervo: a guarda de data na redistribuição, a combinação com os filtros de faixa e unidade, a coerência entre o número do bloco e a lista do card em cada recorte, e a trava que mantém as funções da Câmara sem o parâmetro.
 
 ```bash
 python tests/test_acesso.py
@@ -499,12 +536,12 @@ Testa as operações do painel administrativo em Postgres real: controle de perf
 ```bash
 python tests/test_sincronizacao.py
 ```
-Testa o parser e a sincronização contra fixtures reais (HTML da listagem, texto e PDF de pautas de datas diferentes) e contra o Postgres descartável, sem depender do portal estar no ar. O parâmetro `--online` permite executar testes de integração contra o portal oficial da AGR para detectar eventuais mudanças de layout.
+Testa o parser e a sincronização contra fixtures reais (HTML da listagem, texto e PDF de pautas de datas diferentes) e contra o Postgres descartável, sem depender do portal estar no ar. A fixture das diligências do CREG reproduz a **estrutura** da planilha de 22/09/2026 — as 44 linhas, os 41 processos distintos, a data sem zero à esquerda, a proporção de `JULGADOS` preenchidos —, mas com conteúdo sintético: interessado, descrição, número de processo e texto de retorno foram substituídos, porque este repositório é público e a planilha não é. Cobre também as guardas: cabeçalho fora do contrato e planilha sem linhas válidas param a rodada sem apagar nada, linha inválida sai sozinha, e o endereço da planilha não pode voltar para dentro do código. O parâmetro `--online` executa testes de integração contra o portal oficial da AGR e, se `DILIGENCIAS_CSV_URL` estiver definida, contra a planilha publicada.
 
 ```bash
 python tests/test_workflows.py
 ```
-Valida o contrato dos workflows do GitHub Actions (`ci.yml` e `sincronizar-julgados.yml`): sincronização agendada periódica, cobertura de ambos os colegiados na mesma execução, disparo manual e tolerância a falhas isoladas entre colegiados.
+Valida o contrato dos workflows do GitHub Actions (`ci.yml` e `sincronizar-julgados.yml`): sincronização agendada periódica, cobertura de ambos os colegiados na mesma execução, disparo manual, tolerância a falhas isoladas entre colegiados e a independência da planilha de diligências em relação ao portal da AGR.
 
 #### Testes do frontend e assets (Node.js nativo)
 
@@ -516,6 +553,44 @@ node tests/test_assets.mjs
 Não necessitam de Docker nem de banco de dados: exercitam a aleatoriedade uniforme do sorteio (Fisher-Yates sem viés), a navegação e interface do usuário (cards dinâmicos, modais, exportações em `.docx`, `.xlsx` e `.pdf`, autenticação contextual), além da integridade de minificação, lazy loading e versão de cache por hash.
 
 O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) repete essas verificações em todo push e pull request, validando sintaxe JavaScript (`node --check`), suítes Node.js, testes PostgreSQL/Python e garantindo que os arquivos `.min.*` estejam devidamente regenerados e alinhados ao versionador.
+
+### Atualização 3.10.0
+
+Duas migrações, nesta ordem, **antes** de publicar o frontend 3.10.0:
+`20260922100000_filtro_diligencia_creg.sql`, que cria `diligencias_creg` e troca
+a assinatura das duas funções do painel do Conselho, e
+`20260922130946_recorte_diligencia_pelo_retorno.sql`, que corrige a regra do
+recorte para ler `RETORNO` (a primeira versão contava como "em diligência"
+qualquer pendente com linha na planilha, inclusive os que já haviam retornado).
+A segunda só redefine as duas funções — não mexe na tabela nem nos dados.
+
+As assinaturas:
+
+| Antes | Depois |
+| --- | --- |
+| `resumo_acervo_creg()` | `resumo_acervo_creg(p_diligencia boolean default null)` |
+| `processos_acervo_creg(int, text)` | `processos_acervo_creg(int, text, boolean default null)` |
+
+Os parâmetros têm default, então um cliente antigo continua funcionando sem
+alteração: `{}` cai no `null`, que é o acervo pendente inteiro — exatamente o
+que as funções devolviam antes. `processos_acervo_creg` ganhou a coluna
+`diligencia_desde` no retorno. As funções da Câmara (`resumo_acervo_cj` e
+`processos_acervo_cj`) não foram tocadas, e um teste trava as quatro
+assinaturas para que continuem assim.
+
+`diligencias_creg` é fechada ao navegador, como o acervo: RLS ligada, nenhuma
+policy de leitura, privilégios revogados de `anon` e `authenticated`. Quem lê
+são as duas funções `security definer`.
+
+Cadastre também o segredo `DILIGENCIAS_CSV_URL` (Settings → Secrets and
+variables → Actions) com o endereço `…/pub?gid=…&single=true&output=csv` da
+planilha. Depois de aplicar a migração, rode a primeira carga —
+`python sincronizacao/diligencias.py --dsn "postgresql://..."`, com a variável
+exportada — ou espere a próxima rodada do workflow **Sincronizar Julgados**,
+que passou a fazê-la junto com as pautas. Enquanto a tabela estiver vazia, o filtro simplesmente não
+encontra nada; o resto do painel continua igual.
+
+---
 
 ### Atualização 3.9.2
 

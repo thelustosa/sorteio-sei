@@ -6,6 +6,11 @@
 # cada rodada guardado na aba Actions, o que casa com a proposta de auditoria
 # do projeto.
 #
+# Além das pautas, a mesma passagem sincroniza a planilha de diligências do
+# CREG (sincronizacao/diligencias.py), que alimenta o recorte "Em diligência"
+# do painel do acervo. O workflow mantém o nome antigo de propósito: renomeá-lo
+# criaria outra entrada na aba Actions e deixaria o histórico para trás.
+#
 # Roda os DOIS colegiados na mesma passagem, um de cada vez. A Câmara de
 # Julgamento reúne às quintas e o Conselho Regulador não tem dia fixo (em 2026
 # houve sessão em quarta, quinta e sexta), e nenhum dos dois anuncia a hora em
@@ -141,6 +146,38 @@ jobs:
             echo "$colegiado=$estado" >> estados.txt
           done
           exit "$falhou"
+
+      # Outra fonte e outro destino: a planilha de diligências do CREG, que
+      # alimenta o recorte "Em diligência" do painel do acervo. Roda na mesma
+      # passagem porque o segredo, o Python e a cadência são os mesmos.
+      #
+      # `always()` porque as fontes são independentes: o portal da AGR fora do
+      # ar não é razão para a tabela de diligências envelhecer junto. A falha
+      # daqui pinta o job de vermelho como qualquer outra.
+      - name: Sincronizar diligências
+        if: always()
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          # O link de publicação do Google é credencial de leitura da planilha,
+          # e este repositório é público: ele é segredo, como o DSN do banco.
+          DILIGENCIAS_CSV_URL: ${{ secrets.DILIGENCIAS_CSV_URL }}
+          SIMULAR: ${{ inputs.simular }}
+        run: |
+          args=()
+          if [ "$SIMULAR" = "true" ]; then args+=(--simular); fi
+
+          estado=0
+          echo '::group::Diligências CREG'
+          python sincronizacao/diligencias.py "${args[@]}" \
+            | tee resumo-DILIGENCIAS.json || estado=1
+          echo '::endgroup::'
+
+          if [ "$estado" -ne 0 ]; then
+            echo "::error title=Sincronização Diligências::Falhou — abra o grupo \"Diligências CREG\" no log e o resumo do job."
+          fi
+          echo "DILIGENCIAS=$estado" >> estados.txt
+          exit "$estado"
 
       - name: Resumo
         if: always()

@@ -1189,6 +1189,45 @@ revoke all on function public.registrar_votos_creg(jsonb)
   from public, anon, service_role;
 grant execute on function public.registrar_votos_creg(jsonb) to authenticated;
 
+-- ── CREG · Diligências ───────────────────────────────────────────────────────
+-- Espelho de uma planilha que a equipe da AGR mantém à mão e publica na web.
+-- Uma linha por DILIGÊNCIA, não por processo: o mesmo processo volta à planilha
+-- cada vez que é mandado a diligência de novo (202300029006124 aparece três
+-- vezes). Quem sincroniza é sincronizacao/diligencias.py, que substitui a
+-- tabela inteira a cada rodada — a planilha é a fonte, e 44 linhas não pagam
+-- lógica de diferença.
+--
+-- O que NÃO entra: a coluna INTERESSADO da planilha, pela mesma razão que
+-- acervo_creg.interessado não é preenchido por importação (ver o comentário
+-- lá). Nas linhas recentes ela nem traz interessado — traz 'CREG3'.
+create table if not exists public.diligencias_creg (
+  id              bigint generated always as identity primary key,
+  num_processo    text        not null check (num_processo ~ '^[0-9]{15}$'),
+  data_diligencia date        not null,
+
+  -- Os três campos de texto da planilha, guardados como vieram. Nenhum deles
+  -- decide coisa alguma (ver o comentário do recorte, abaixo); estão aqui para
+  -- quem for conferir um caso à mão e para não perder o que a AGR escreveu.
+  descricao       text,
+  retorno         text,
+  julgados        text,
+
+  -- A posição na planilha. Desempata duas diligências do mesmo processo na
+  -- mesma data, que é o único critério que a planilha oferece para ordená-las.
+  linha           int         not null,
+  atualizado_em   timestamptz not null default now()
+);
+
+-- Por onde as duas funções do painel entram.
+create index if not exists diligencias_creg_processo
+  on public.diligencias_creg (num_processo, data_diligencia desc);
+
+-- Fechada ao navegador, como o acervo: quem lê são as funções security definer
+-- abaixo. Sem policy de select, nenhuma linha vaza pelo PostgREST.
+alter table public.diligencias_creg enable row level security;
+revoke all privileges on table public.diligencias_creg from anon, authenticated;
+revoke all privileges on sequence public.diligencias_creg_id_seq from anon, authenticated;
+
 -- ── CREG · Painel do acervo ──────────────────────────────────────────────────
 -- Mesma matriz do painel da Câmara: processos parados por faixa de tempo e por
 -- unidade. As faixas são as mesmas — quem lê os dois painéis compara sem
@@ -1196,10 +1235,39 @@ grant execute on function public.registrar_votos_creg(jsonb) to authenticated;
 --
 -- Onde a Câmara mostra o conselheiro no hover, aqui não há o que mostrar: o
 -- Conselho não tem de-para de unidades, por decisão de quem as ocupa.
--- O retorno perdeu a coluna `conselheiro` junto com cadeiras_creg; trocar o
--- tipo de retorno exige derrubar a função antes.
+--
+-- O RECORTE POR DILIGÊNCIA:
+--
+--     RETORNO = NÃO  -> a diligência está aberta, o processo está fora
+--     RETORNO = SIM  -> o processo voltou
+--
+-- Confirmado com a secretaria em 22/09/2026. Na planilha a linha encerrada
+-- também fica tachada e com o SIM em verde, mas o recorte NÃO lê formatação: o
+-- `?output=csv` que a sincronização consome não transporta tachado nem cor, e
+-- regra que depende de formatação muda de significado num copiar-colar.
+--
+--     em diligência = pendente no acervo
+--                     E tem diligência com RETORNO = NÃO
+--                        e data_diligencia >= data_distribuicao
+--
+-- Não é "pendente e com diligência registrada": um processo que foi a
+-- diligência, VOLTOU e ainda não foi julgado estaria aguardando pauta, não
+-- fora com a área técnica. Foi assim que a primeira versão errou.
+--
+-- A guarda de data existe para a REDISTRIBUIÇÃO: um processo que foi a
+-- diligência, voltou, foi julgado e depois foi redistribuído volta a ser
+-- pendente sem estar em diligência. É a irmã da correlação de datas que o CTE
+-- `pendentes` já faz com os julgados.
+--
+-- Vazio não conta como aberta. A convenção é explícita, então célula em branco
+-- é linha que ninguém preencheu — o recorte prefere não mostrar nada a mostrar
+-- um processo que já voltou.
+-- Derruba também a assinatura anterior: este arquivo é reaplicável e uma
+-- base criada antes do recorte ainda pode tê-la. Deixá-la ao lado da nova,
+-- cujo argumento tem default, torna a chamada sem argumentos ambígua.
 drop function if exists public.resumo_acervo_creg();
-create function public.resumo_acervo_creg()
+drop function if exists public.resumo_acervo_creg(boolean);
+create function public.resumo_acervo_creg(p_diligencia boolean default null)
 returns table (ordem int, faixa text, unidade text, processos int)
 language plpgsql
 stable
@@ -1237,7 +1305,9 @@ begin
   -- painel existe para mostrar.
   pendentes as (
     select distinct on (a.num_processo)
+           a.num_processo,
            a.unidade,
+           a.data_distribuicao,
            (current_date - a.data_distribuicao) as dias
       from public.acervo_creg a
      where not exists (select 1 from public.julgados_creg j
@@ -1246,6 +1316,32 @@ begin
      order by a.num_processo, a.data_distribuicao desc, a.id desc
   ),
 
+  -- O recorte vem DEPOIS do distinct on, e não dentro dele. Dentro, uma
+  -- distribuição antiga que casasse com o filtro sobreviveria à mais recente
+  -- que não casa, e o processo entraria na matriz com a unidade e o tempo
+  -- errados — justamente o caso de redistribuição que a guarda de data existe
+  -- para tratar.
+  --
+  -- A subconsulta lateral é a MESMA, palavra por palavra, de
+  -- processos_acervo_creg: se as duas divergirem, a célula abre um número
+  -- diferente do que mostrava. O translate normaliza a digitação à mão —
+  -- 'NÃO', 'NAO', 'não' e 'Não' são a mesma resposta.
+  recorte as (
+    select p.unidade, p.dias
+      from pendentes p
+      left join lateral (
+        select max(x.data_diligencia) as desde
+          from public.diligencias_creg x
+         where x.num_processo = p.num_processo
+           and x.data_diligencia >= p.data_distribuicao
+           and translate(upper(btrim(coalesce(x.retorno, ''))), 'ÃÁÀÂ', 'AAAA') = 'NAO'
+      ) d on true
+     where p_diligencia is null or (d.desde is not null) = p_diligencia
+  ),
+
+  -- Todas as unidades do acervo, e não só as que sobraram no recorte: a matriz
+  -- guarda a mesma forma quando o filtro liga e desliga, e uma coluna inteira
+  -- de travessões diz algo — aquela unidade não tem processo em diligência.
   unidades as (select distinct acervo_creg.unidade from public.acervo_creg)
 
   select f.ordem,
@@ -1254,7 +1350,7 @@ begin
          count(p.unidade)::int
     from faixas f
    cross join unidades u
-    left join pendentes p
+    left join recorte p
            on p.unidade = u.unidade
           and p.dias between f.de and f.ate
    group by f.ordem, f.faixa, u.unidade
@@ -1262,28 +1358,30 @@ begin
 end;
 $$;
 
-revoke all on function public.resumo_acervo_creg() from public, anon, service_role;
-grant execute on function public.resumo_acervo_creg() to authenticated;
+revoke all on function public.resumo_acervo_creg(boolean) from public, anon, service_role;
+grant execute on function public.resumo_acervo_creg(boolean) to authenticated;
 
 -- ── CREG · Detalhe de uma célula do painel ───────────────────────────────────
--- O painel conta; esta função lista. Os dois parâmetros são opcionais, e é isso
--- que faz qualquer número da tabela ser clicável com uma consulta só:
---
---   (ordem, unidade) -> a célula      (ordem, null) -> o total da linha
---   (null, unidade)  -> a coluna      (null,  null) -> o acervo pendente
---
--- A definição de pendente e as faixas são as MESMAS de resumo_acervo_creg.
+-- `diligencia_desde` é a data da diligência ABERTA mais recente que ainda vale
+-- para esta distribuição — nula quando não há nenhuma aberta. Com o recorte
+-- ligado ela nunca é nula; sem o recorte, ela é o que distingue, na lista
+-- inteira, quem está fora de quem só aguarda pauta.
+-- Mesma limpeza da assinatura legada de dois argumentos; a migração inicial
+-- já fazia isso, e o schema completo precisa manter a mesma propriedade.
 drop function if exists public.processos_acervo_creg(int, text);
+drop function if exists public.processos_acervo_creg(int, text, boolean);
 create function public.processos_acervo_creg(
-  p_ordem   int  default null,
-  p_unidade text default null
+  p_ordem       int     default null,
+  p_unidade     text    default null,
+  p_diligencia  boolean default null
 )
 returns table (
   num_processo      text,
   unidade           text,
   assunto           text,
   data_distribuicao date,
-  dias              int
+  dias              int,
+  diligencia_desde  date
 )
 language plpgsql
 stable
@@ -1321,18 +1419,27 @@ begin
          p.unidade,
          p.assunto,
          p.data_distribuicao,
-         p.dias
+         p.dias,
+         d.desde
     from pendentes p
     join faixas f on p.dias between f.de and f.ate
-   where (p_ordem   is null or f.ordem   = p_ordem)
-     and (p_unidade is null or p.unidade = p_unidade)
+    left join lateral (
+      select max(x.data_diligencia) as desde
+        from public.diligencias_creg x
+       where x.num_processo = p.num_processo
+         and x.data_diligencia >= p.data_distribuicao
+         and translate(upper(btrim(coalesce(x.retorno, ''))), 'ÃÁÀÂ', 'AAAA') = 'NAO'
+    ) d on true
+   where (p_ordem      is null or f.ordem = p_ordem)
+     and (p_unidade    is null or p.unidade = p_unidade)
+     and (p_diligencia is null or (d.desde is not null) = p_diligencia)
    order by p.data_distribuicao, p.num_processo;
 end;
 $$;
 
-revoke all on function public.processos_acervo_creg(int, text)
+revoke all on function public.processos_acervo_creg(int, text, boolean)
   from public, anon, service_role;
-grant execute on function public.processos_acervo_creg(int, text) to authenticated;
+grant execute on function public.processos_acervo_creg(int, text, boolean) to authenticated;
 
 -- ── CREG · Segurança (RLS) ───────────────────────────────────────────────────
 -- Mesma divisão da Câmara: o navegador insere no acervo, lê os julgados para
