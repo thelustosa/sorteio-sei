@@ -1262,6 +1262,10 @@ revoke all privileges on sequence public.diligencias_creg_id_seq from anon, auth
 -- Vazio não conta como aberta. A convenção é explícita, então célula em branco
 -- é linha que ninguém preencheu — o recorte prefere não mostrar nada a mostrar
 -- um processo que já voltou.
+-- Derruba também a assinatura anterior: este arquivo é reaplicável e uma
+-- base criada antes do recorte ainda pode tê-la. Deixá-la ao lado da nova,
+-- cujo argumento tem default, torna a chamada sem argumentos ambígua.
+drop function if exists public.resumo_acervo_creg();
 drop function if exists public.resumo_acervo_creg(boolean);
 create function public.resumo_acervo_creg(p_diligencia boolean default null)
 returns table (ordem int, faixa text, unidade text, processos int)
@@ -1362,6 +1366,9 @@ grant execute on function public.resumo_acervo_creg(boolean) to authenticated;
 -- para esta distribuição — nula quando não há nenhuma aberta. Com o recorte
 -- ligado ela nunca é nula; sem o recorte, ela é o que distingue, na lista
 -- inteira, quem está fora de quem só aguarda pauta.
+-- Mesma limpeza da assinatura legada de dois argumentos; a migração inicial
+-- já fazia isso, e o schema completo precisa manter a mesma propriedade.
+drop function if exists public.processos_acervo_creg(int, text);
 drop function if exists public.processos_acervo_creg(int, text, boolean);
 create function public.processos_acervo_creg(
   p_ordem       int     default null,

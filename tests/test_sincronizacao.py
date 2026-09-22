@@ -1050,6 +1050,38 @@ def o_resumo_nao_imprime_o_endereco():
 
 
 @teste
+def falha_de_rede_nao_imprime_o_endereco():
+    """A falha mais comum também não pode publicar a credencial da planilha."""
+    segredo = ('https://docs.google.com/spreadsheets/d/e/'
+               '2PACX-SEGREDO/pub?gid=123&output=csv')
+
+    class AbridorFalso:
+        def open(self, _pedido, timeout):
+            assert timeout == diligencias.TIMEOUT
+            # Até a exceção pode reproduzir a URL; o chamador deve descartá-la.
+            raise OSError(f'falha simulada em {segredo}')
+
+    abridor_anterior = diligencias._abridor
+    valor_anterior = os.environ.get(diligencias.VARIAVEL)
+    try:
+        diligencias._abridor = AbridorFalso()
+        os.environ[diligencias.VARIAVEL] = segredo
+        resumo = diligencias.sincronizar(None)
+    finally:
+        diligencias._abridor = abridor_anterior
+        if valor_anterior is None:
+            os.environ.pop(diligencias.VARIAVEL, None)
+        else:
+            os.environ[diligencias.VARIAVEL] = valor_anterior
+
+    publicado = json.dumps(resumo, ensure_ascii=False)
+    assert resumo['erros'], resumo
+    assert segredo not in publicado, publicado
+    assert '2PACX' not in publicado, publicado
+    assert 'gid=123' not in publicado, publicado
+
+
+@teste
 def endereco_fora_do_google_e_recusado():
     for url in ['http://docs.google.com/x',            # sem https
                 'https://docs.google.com.br/x',        # host parecido
