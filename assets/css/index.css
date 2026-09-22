@@ -1732,15 +1732,11 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 .acervo-table-shell .painel-carregando { flex: 1 1 auto; }
 
 /* Mesma razão do indicador acima: com a tabela fora do ar, quem toma o lugar
-   dela tem de tomar o espaço também. Sem o `flex`, a mensagem encostava no topo
-   e o resto do painel virava um vão branco maior do que ela. O painel mantém a
-   altura — é o conteúdo que se centraliza dentro. */
    dela tem de tomar o espaço também. O flex mantém o rodapé assentado na base
    do painel; a mensagem fica alinhada ao topo, onde a primeira linha da tabela
    começaria, e não solta no meio do vão branco. */
 .acervo-table-shell .empty-state {
   flex: 1 1 auto;
-  align-content: center;
   align-content: start;
   margin: 0;
   padding: 32px 28px;
