@@ -9,7 +9,7 @@
   <title>Acervo não julgado — Conselho Regulador | Sorteio de Processos SEI</title>
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=a9441e83df" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=e0eaab1f91" />
   <script>
     (function () {
       try {
@@ -32,8 +32,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=a9441e83df"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=a9441e83df"></script>
+  <script defer src="assets/js/supabase.min.js?v=e0eaab1f91"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=e0eaab1f91"></script>
 </head>
 
 <body class="dashboard-page" data-page="acervo-creg" data-colegiado="creg">
@@ -157,6 +157,39 @@
               </svg>
               <span id="acervoTotal">Processos aguardando julgamento</span>
             </div>
+
+            <!-- Um processo em diligência está parado por decisão do colegiado,
+                 não por atraso de quem o relata; sem separar os dois, a
+                 permanência longa de um vira o atraso do outro na mesma célula.
+
+                 Fica embaixo do escopo, e não numa faixa própria: o chip diz o
+                 que a tabela está contando e este controle diz o recorte que
+                 produziu aquela contagem — são a mesma frase em duas linhas.
+
+                 Radio nativo dentro de <fieldset>: papel, agrupamento, setas do
+                 teclado e o anúncio do grupo vêm prontos — a mesma escolha que
+                 o <dialog> do card fez. A legenda é só para o leitor de tela:
+                 na tela, o segmento preenchido já diz qual vista está aberta, e
+                 um rótulo acima só somaria ruído sobre a barra verde.
+
+                 Só existe aqui: a Câmara não tem registro de diligências, e
+                 acervo.js, que serve as duas telas, decide pela tabela
+                 COLEGIADOS. -->
+            <fieldset id="recorteAcervo" class="acervo-recorte">
+              <legend class="sr-only">Mostrar</legend>
+              <label class="acervo-recorte-opcao">
+                <input type="radio" name="recorte" value="todos" checked />
+                <span>Todo o acervo</span>
+              </label>
+              <label class="acervo-recorte-opcao">
+                <input type="radio" name="recorte" value="diligencia" />
+                <span>Em diligência</span>
+              </label>
+              <label class="acervo-recorte-opcao">
+                <input type="radio" name="recorte" value="sem-diligencia" />
+                <span>Sem diligência</span>
+              </label>
+            </fieldset>
           </div>
         </div>
       </header>
@@ -242,7 +275,7 @@
       </div>
       <p class="footer-info">Painel institucional para acompanhamento do acervo do Conselho Regulador.</p>
       <div class="footer-meta">
-        <div class="footer-version">Versão 3.9.2</div>
+        <div class="footer-version">Versão 3.10.0</div>
         <p class="footer-credit">Desenvolvido por <strong>Lucas Lustosa Coelho e Leonardo Ferreira Amichi</strong>.</p>
       </div>
     </div>

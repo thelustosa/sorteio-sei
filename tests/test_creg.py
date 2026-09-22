@@ -50,7 +50,8 @@ def teste(fn):
 # ── Cenário ──────────────────────────────────────────────────────────────────
 
 def limpar(cur):
-    cur.execute('delete from julgados_creg; delete from acervo_creg')
+    cur.execute('delete from julgados_creg; delete from acervo_creg;'
+                ' delete from diligencias_creg')
 
 
 def distribuir(cur, num, unidade, data, assunto='Auto de Infração',
@@ -60,6 +61,19 @@ def distribuir(cur, num, unidade, data, assunto='Auto de Infração',
                    values (%s, %s, %s, %s, %s, 'planilha') returning id""",
                 (num, unidade, data, assunto, recurso))
     return cur.fetchone()[0]
+
+
+def diligenciar(cur, num, data, linha=1, julgados='', retorno='NÃO'):
+    """Uma linha da planilha de diligências.
+
+    `retorno` é o que decide o recorte: 'NÃO' é diligência aberta (o processo
+    está fora), 'SIM' é processo que voltou. O padrão é 'NÃO' porque quase todo
+    teste daqui quer um processo EM diligência.
+    """
+    cur.execute("""insert into public.diligencias_creg
+                   (num_processo, data_diligencia, descricao, retorno, julgados, linha)
+                   values (%s, %s, 'Diligência para a CGST', %s, %s, %s)""",
+                (num, data, retorno, julgados, linha))
 
 
 def julgar(cur, num, sessao, **campos):
@@ -405,6 +419,268 @@ def o_painel_do_creg_nao_expoe_nome_de_pessoa(cur):
     cur.execute("select unidade from resumo_acervo_creg()"
                 " where ordem = 1 and processos > 0")
     assert cur.fetchall() == [('CREG1',)]
+
+
+# ── Painel · recorte por diligência ──────────────────────────────────────────
+# Um processo em diligência está parado por decisão do colegiado, não por
+# atraso de quem o relata. Sem o recorte, os dois casos somam na mesma célula.
+
+
+@teste
+def recorte_separa_quem_esta_em_diligencia(cur):
+    limpar(cur)
+    autenticado(cur)
+    distribuir(cur, '202400029000080', 'CREG1', date.today())
+    distribuir(cur, '202400029000081', 'CREG1', date.today())
+    diligenciar(cur, '202400029000081', date.today())
+
+    def soma(recorte):
+        cur.execute('select coalesce(sum(processos), 0) from resumo_acervo_creg(%s)',
+                    (recorte,))
+        return cur.fetchone()[0]
+
+    assert (soma(None), soma(True), soma(False)) == (2, 1, 1)
+
+    cur.execute('select num_processo from processos_acervo_creg(null, null, true)')
+    assert cur.fetchall() == [('202400029000081',)]
+    cur.execute('select num_processo from processos_acervo_creg(null, null, false)')
+    assert cur.fetchall() == [('202400029000080',)]
+
+
+@teste
+def diligencia_anterior_a_redistribuicao_nao_conta(cur):
+    """A guarda de data: redistribuído depois da diligência não está em diligência.
+
+    O processo foi a diligência, voltou, foi julgado e foi sorteado de novo. A
+    distribuição nova nada tem a ver com aquela diligência — sem comparar as
+    datas, ele ficaria marcado em diligência para sempre.
+    """
+    limpar(cur)
+    autenticado(cur)
+    distribuir(cur, '202400029000082', 'CREG1', date(2026, 1, 10))
+    diligenciar(cur, '202400029000082', date(2026, 2, 10))
+    julgar(cur, '202400029000082', date(2026, 3, 10),
+           voto='Manter', status='Julgado')
+    distribuir(cur, '202400029000082', 'CREG2', date.today())
+
+    cur.execute('select coalesce(sum(processos), 0) from resumo_acervo_creg(true)')
+    assert cur.fetchone()[0] == 0, 'a diligência antiga não segue a redistribuição'
+
+    # E ele continua no painel sem filtro, na unidade nova.
+    cur.execute('select unidade, processos from resumo_acervo_creg()'
+                ' where processos > 0')
+    assert cur.fetchall() == [('CREG2', 1)]
+
+
+@teste
+def recorte_escolhe_depois_de_achar_a_distribuicao_atual(cur):
+    """O filtro não pode ressuscitar uma distribuição que já foi substituída.
+
+    Aplicado antes do `distinct on`, o recorte deixaria a distribuição ANTIGA
+    (que casa com a diligência) vencer a atual (que não casa), e o processo
+    entraria na matriz com a unidade e o tempo errados.
+    """
+    limpar(cur)
+    autenticado(cur)
+    antiga = date.fromordinal(date.today().toordinal() - 400)
+    distribuir(cur, '202400029000083', 'CREG1', antiga)
+    diligenciar(cur, '202400029000083', antiga)
+    distribuir(cur, '202400029000083', 'CREG2', date.today())
+
+    cur.execute('select unidade, ordem, processos from resumo_acervo_creg()'
+                ' where processos > 0')
+    assert cur.fetchall() == [('CREG2', 1, 1)], 'vale a distribuição mais recente'
+
+    cur.execute('select coalesce(sum(processos), 0) from resumo_acervo_creg(true)')
+    assert cur.fetchone()[0] == 0, 'a distribuição antiga não pode voltar pelo filtro'
+
+
+@teste
+def quem_decide_o_recorte_e_o_retorno(cur):
+    """RETORNO = NÃO é diligência aberta; SIM é processo que voltou.
+
+    Voltar da diligência e ainda não ter sido julgado é AGUARDAR PAUTA, não
+    estar em diligência. A primeira versão deste recorte não fazia essa
+    distinção e mostrava 6 falsos positivos em produção — todos processos que
+    já tinham retornado.
+    """
+    limpar(cur)
+    autenticado(cur)
+    distribuir(cur, '202400029000084', 'CREG1', date.today())
+    distribuir(cur, '202400029000085', 'CREG1', date.today())
+    diligenciar(cur, '202400029000084', date.today(), retorno='NÃO')
+    diligenciar(cur, '202400029000085', date.today(), retorno='SIM')
+
+    cur.execute('select num_processo from processos_acervo_creg(null, null, true)')
+    assert cur.fetchall() == [('202400029000084',)], 'só a diligência aberta entra'
+
+    cur.execute('select num_processo from processos_acervo_creg(null, null, false)')
+    assert cur.fetchall() == [('202400029000085',)], 'quem voltou fica fora do recorte'
+
+
+@teste
+def julgados_e_a_digitacao_do_retorno_nao_atrapalham(cur):
+    """JULGADOS é campo de observação e não decide nada; NÃO/NAO/não são iguais.
+
+    A planilha é preenchida à mão. Conferido em 22/09/2026: das 44 linhas,
+    várias com JULGADOS vazio já tinham sessão — a coluna não é fechada com
+    disciplina e não pode entrar na regra.
+    """
+    limpar(cur)
+    autenticado(cur)
+    for i, grafia in enumerate(['NÃO', 'NAO', 'não', 'Não', ' não ']):
+        num = f'20240002900009{i}'
+        distribuir(cur, num, 'CREG1', date.today())
+        diligenciar(cur, num, date.today(), retorno=grafia,
+                    julgados='Julgado em sessão.')
+
+    cur.execute('select coalesce(sum(processos), 0) from resumo_acervo_creg(true)')
+    assert cur.fetchone()[0] == 5, 'toda grafia de NÃO conta como aberta'
+
+    # Vazio não é "aberta": a convenção é explícita, branco é linha não
+    # preenchida — e o recorte prefere não mostrar a mostrar quem já voltou.
+    limpar(cur)
+    distribuir(cur, '202400029000099', 'CREG1', date.today())
+    diligenciar(cur, '202400029000099', date.today(), retorno='')
+    cur.execute('select coalesce(sum(processos), 0) from resumo_acervo_creg(true)')
+    assert cur.fetchone()[0] == 0
+
+
+@teste
+def diligencia_desde_traz_a_mais_recente(cur):
+    """Diligências sucessivas: vale a última, que é a que está aberta."""
+    limpar(cur)
+    autenticado(cur)
+    distribuir(cur, '202400029000085', 'CREG3', date(2026, 1, 5))
+    diligenciar(cur, '202400029000085', date(2026, 2, 20), linha=1)
+    diligenciar(cur, '202400029000085', date(2026, 6, 10), linha=2)
+
+    cur.execute('select num_processo, diligencia_desde'
+                ' from processos_acervo_creg(null, null, true)')
+    assert cur.fetchall() == [('202400029000085', date(2026, 6, 10))]
+
+    # Sem diligência a coluna vem vazia, e não some da lista.
+    distribuir(cur, '202400029000086', 'CREG3', date(2026, 1, 5))
+    cur.execute('select diligencia_desde from processos_acervo_creg()'
+                " where num_processo = '202400029000086'")
+    assert cur.fetchall() == [(None,)]
+
+
+@teste
+def recorte_combina_com_ordem_e_unidade(cur):
+    """O filtro novo entra por `and`, sem precedência sobre os dois antigos."""
+    limpar(cur)
+    autenticado(cur)
+    hoje = date.today()
+    velha = date.fromordinal(hoje.toordinal() - 200)
+    distribuir(cur, '202400029000087', 'CREG1', hoje)
+    distribuir(cur, '202400029000088', 'CREG2', hoje)
+    distribuir(cur, '202400029000089', 'CREG2', velha)
+    for num in ['202400029000087', '202400029000088', '202400029000089']:
+        diligenciar(cur, num, hoje if num != '202400029000089' else velha)
+
+    cur.execute('select num_processo'
+                " from processos_acervo_creg(1, 'CREG2', true)")
+    assert cur.fetchall() == [('202400029000088',)]
+
+    cur.execute("select count(*) from processos_acervo_creg(null, 'CREG2', true)")
+    assert cur.fetchone()[0] == 2
+
+    cur.execute('select count(*) from processos_acervo_creg(1, null, true)')
+    assert cur.fetchone()[0] == 2
+
+
+@teste
+def detalhe_confere_celula_a_celula_em_cada_recorte(cur):
+    """O card abre o número que o bloco mostrava — com o filtro ligado também.
+
+    O recorte precisa chegar às duas funções igual. Se divergirem, a célula
+    conta um acervo e o card abre outro.
+    """
+    limpar(cur)
+    autenticado(cur)
+    hoje = date.today().toordinal()
+    for i, (unidade, dias, diligencia) in enumerate(
+            [('CREG1', 3, True), ('CREG1', 40, False),
+             ('CREG2', 200, True), ('CREG4', 800, False)]):
+        num = f'20240002900009{i}'
+        data = date.fromordinal(hoje - dias)
+        distribuir(cur, num, unidade, data)
+        if diligencia:
+            diligenciar(cur, num, data)
+
+    for recorte, esperado in [(None, 4), (True, 2), (False, 2)]:
+        cur.execute('select ordem, unidade, processos from resumo_acervo_creg(%s)',
+                    (recorte,))
+        for ordem, unidade, processos in cur.fetchall():
+            cur.execute('select count(*) from processos_acervo_creg(%s, %s, %s)',
+                        (ordem, unidade, recorte))
+            assert cur.fetchone()[0] == processos, (recorte, ordem, unidade)
+
+        cur.execute('select count(*) from processos_acervo_creg(null, null, %s)',
+                    (recorte,))
+        assert cur.fetchone()[0] == esperado, recorte
+
+
+@teste
+def a_matriz_mantem_as_colunas_sob_o_filtro(cur):
+    """Filtrar não pode fazer coluna sumir: a tabela mudaria de forma no clique.
+
+    Uma unidade inteira de travessões diz algo — ela não tem processo em
+    diligência.
+    """
+    limpar(cur)
+    autenticado(cur)
+    distribuir(cur, '202400029000100', 'CREG1', date.today())
+    distribuir(cur, '202400029000101', 'CREG4', date.today())
+    diligenciar(cur, '202400029000101', date.today())
+
+    def unidades(recorte):
+        cur.execute('select distinct unidade from resumo_acervo_creg(%s) order by 1',
+                    (recorte,))
+        return [u for (u,) in cur.fetchall()]
+
+    assert unidades(None) == unidades(True) == unidades(False) == ['CREG1', 'CREG4']
+
+
+@teste
+def a_camara_nao_ganhou_o_recorte(cur):
+    """Só o Conselho tem registro de diligências; a CJ fica como estava.
+
+    A trava é a assinatura: se alguém acrescentar o parâmetro às funções da
+    Câmara sem ter a fonte de dados dela, este teste cai.
+    """
+    cur.execute("""select p.proname, pg_get_function_identity_arguments(p.oid)
+                     from pg_proc p
+                     join pg_namespace n on n.oid = p.pronamespace
+                    where n.nspname = 'public'
+                      and p.proname in ('resumo_acervo_cj', 'processos_acervo_cj',
+                                        'resumo_acervo_creg', 'processos_acervo_creg')
+                    order by 1""")
+    assert cur.fetchall() == [
+        ('processos_acervo_cj',   'p_ordem integer, p_relator text'),
+        ('processos_acervo_creg', 'p_ordem integer, p_unidade text, p_diligencia boolean'),
+        ('resumo_acervo_cj',      ''),
+        ('resumo_acervo_creg',    'p_diligencia boolean'),
+    ]
+
+    assert uma(cur, "select to_regclass('public.diligencias_cj')") is None
+
+
+@teste
+def navegador_nao_le_as_diligencias(cur):
+    """A tabela é fechada como o acervo: quem lê são as funções do painel."""
+    limpar(cur)
+    distribuir(cur, '202400029000102', 'CREG1', date.today())
+    diligenciar(cur, '202400029000102', date.today())
+
+    for papel in ['anon', 'authenticated']:
+        try:
+            como(cur, papel, 'select * from public.diligencias_creg')
+        except psycopg2.Error:
+            cur.connection.rollback()
+            continue
+        raise AssertionError(f'{papel} leu diligencias_creg')
 
 
 # ── Registro do voto ─────────────────────────────────────────────────────────
@@ -958,6 +1234,15 @@ def a_pagina_do_creg_le_a_tabela_do_creg(cur):
     assert './julgados-creg.html' in index and './julgados-cj.html' in index
     assert (RAIZ / 'julgados-creg.html').is_file()
     assert (RAIZ / 'julgados-cj.html').is_file()
+
+
+@teste
+def schema_remove_assinaturas_antigas_do_painel(cur):
+    """Reaplicar schema.sql numa base antiga não deixa RPCs concorrentes."""
+    schema = (RAIZ / 'sql' / 'schema.sql').read_text(encoding='utf-8')
+    assert 'drop function if exists public.resumo_acervo_creg();' in schema
+    assert ('drop function if exists '
+            'public.processos_acervo_creg(int, text);') in schema
 
 
 @teste
