@@ -24,9 +24,10 @@ uma linha que sai dela deixou de existir. São 44 linhas — lógica de diferen�
 custaria mais do que a tabela toda.
 
 Quem usa o que entra aqui é o recorte "Em diligência" do painel do acervo, em
-resumo_acervo_creg e processos_acervo_creg. O recorte NÃO olha as colunas de
-texto desta planilha — ver o comentário em sql/schema.sql para os números que
-levaram a essa decisão.
+resumo_acervo_creg e processos_acervo_creg. Quem decide o recorte é a coluna
+RETORNO — `NÃO` é diligência aberta, `SIM` é processo que voltou. Este módulo
+não interpreta nada: grava as colunas como vieram e deixa a regra no banco, num
+lugar só (ver sql/schema.sql).
 """
 
 import argparse
@@ -78,6 +79,10 @@ CABECALHO = ['INTERESSADO', 'PROCESSO', 'ASSUNTO', 'DATA DA DILIGÊNCIA',
 # INTERESSADO fica de fora da tabela, pela mesma razão que acervo_creg não
 # recebe interessado por importação. Nas linhas recentes a coluna nem traz
 # interessado: traz a unidade ('CREG3').
+#
+# RETORNO entra inteiro e sem normalização: é ele quem decide o recorte do
+# painel, e normalizar em dois lugares é como as duas pontas divergem. Quem
+# trata 'NÃO'/'NAO'/'não' é o SQL, uma vez.
 
 
 @dataclass(frozen=True)

@@ -939,6 +939,20 @@ def a_planilha_de_diligencias_vira_44_linhas():
 
 
 @teste
+def a_planilha_de_22_09_nao_tem_diligencia_aberta():
+    """RETORNO = NÃO é diligência aberta; SIM é processo que voltou.
+
+    Em 22/09/2026 as 44 linhas estavam em SIM — nenhuma diligência aberta, e o
+    recorte do painel devolvendo zero é a resposta certa, não uma falha. A
+    primeira versão lia "tem linha na planilha" como "está em diligência" e
+    mostrava 6 processos que já haviam retornado.
+    """
+    lidas = diligencias.analisar(PLANILHA_DILIGENCIAS)
+    abertas = [d for d in lidas if d.retorno.strip().upper() != 'SIM']
+    assert abertas == [], f'a fixture ganhou diligência aberta: {abertas}'
+
+
+@teste
 def data_sem_zero_a_esquerda_e_aceita():
     """A planilha é digitada à mão e traz `23/9/2025` no meio dos `23/09/2025`."""
     assert '23/9/2025' in PLANILHA_DILIGENCIAS, 'o fixture perdeu o caso'
@@ -1068,7 +1082,11 @@ def sincronizar_diligencias_substitui_a_tabela(cur):
                         where num_processo = '202000029000001'""") == 0, (
         'a planilha é a fonte: o que sai dela sai da tabela')
 
-    # As colunas de texto são guardadas como vieram, mesmo sem decidir nada.
+    # RETORNO é o campo que decide o recorte do painel: precisa chegar intacto.
+    assert uma(cur, """select count(*) from diligencias_creg
+                        where upper(btrim(retorno)) = 'SIM'""") == 44
+
+    # JULGADOS é observação e não decide nada, mas é guardado como veio.
     assert uma(cur, """select julgados from diligencias_creg
                         where num_processo = '202500052000003'""") == 'Retorno anotado 2'
 

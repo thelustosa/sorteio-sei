@@ -63,11 +63,17 @@ def distribuir(cur, num, unidade, data, assunto='Auto de Infração',
     return cur.fetchone()[0]
 
 
-def diligenciar(cur, num, data, linha=1, julgados=''):
+def diligenciar(cur, num, data, linha=1, julgados='', retorno='NÃO'):
+    """Uma linha da planilha de diligências.
+
+    `retorno` é o que decide o recorte: 'NÃO' é diligência aberta (o processo
+    está fora), 'SIM' é processo que voltou. O padrão é 'NÃO' porque quase todo
+    teste daqui quer um processo EM diligência.
+    """
     cur.execute("""insert into public.diligencias_creg
                    (num_processo, data_diligencia, descricao, retorno, julgados, linha)
-                   values (%s, %s, 'Diligência para a CGST', 'SIM', %s, %s)""",
-                (num, data, julgados, linha))
+                   values (%s, %s, 'Diligência para a CGST', %s, %s, %s)""",
+                (num, data, retorno, julgados, linha))
 
 
 def julgar(cur, num, sessao, **campos):
@@ -490,25 +496,52 @@ def recorte_escolhe_depois_de_achar_a_distribuicao_atual(cur):
 
 
 @teste
-def coluna_julgados_da_planilha_nao_decide_o_recorte(cur):
-    """O recorte ignora JULGADOS e RETORNO — de propósito.
+def quem_decide_o_recorte_e_o_retorno(cur):
+    """RETORNO = NÃO é diligência aberta; SIM é processo que voltou.
 
-    Conferido contra a produção em 22/09/2026: dos 22 processos com JULGADOS
-    vazio que já não estavam pendentes, os 22 tinham sessão posterior à data da
-    diligência, e nenhum dos 6 pendentes tinha a coluna preenchida. A equipe da
-    AGR não fecha esse campo. Quem sabe que a diligência acabou é o julgamento,
-    e julgado já não é pendente.
+    Voltar da diligência e ainda não ter sido julgado é AGUARDAR PAUTA, não
+    estar em diligência. A primeira versão deste recorte não fazia essa
+    distinção e mostrava 6 falsos positivos em produção — todos processos que
+    já tinham retornado.
     """
     limpar(cur)
     autenticado(cur)
     distribuir(cur, '202400029000084', 'CREG1', date.today())
-    diligenciar(cur, '202400029000084', date.today(), julgados='Julgado em sessão.')
+    distribuir(cur, '202400029000085', 'CREG1', date.today())
+    diligenciar(cur, '202400029000084', date.today(), retorno='NÃO')
+    diligenciar(cur, '202400029000085', date.today(), retorno='SIM')
+
+    cur.execute('select num_processo from processos_acervo_creg(null, null, true)')
+    assert cur.fetchall() == [('202400029000084',)], 'só a diligência aberta entra'
+
+    cur.execute('select num_processo from processos_acervo_creg(null, null, false)')
+    assert cur.fetchall() == [('202400029000085',)], 'quem voltou fica fora do recorte'
+
+
+@teste
+def julgados_e_a_digitacao_do_retorno_nao_atrapalham(cur):
+    """JULGADOS é campo de observação e não decide nada; NÃO/NAO/não são iguais.
+
+    A planilha é preenchida à mão. Conferido em 22/09/2026: das 44 linhas,
+    várias com JULGADOS vazio já tinham sessão — a coluna não é fechada com
+    disciplina e não pode entrar na regra.
+    """
+    limpar(cur)
+    autenticado(cur)
+    for i, grafia in enumerate(['NÃO', 'NAO', 'não', 'Não', ' não ']):
+        num = f'20240002900009{i}'
+        distribuir(cur, num, 'CREG1', date.today())
+        diligenciar(cur, num, date.today(), retorno=grafia,
+                    julgados='Julgado em sessão.')
 
     cur.execute('select coalesce(sum(processos), 0) from resumo_acervo_creg(true)')
-    assert cur.fetchone()[0] == 1, 'texto em JULGADOS não tira do recorte'
+    assert cur.fetchone()[0] == 5, 'toda grafia de NÃO conta como aberta'
 
-    # E o que tira é a sessão posterior à distribuição, como em todo o painel.
-    julgar(cur, '202400029000084', date.today(), voto='Manter', status='Julgado')
+    # Vazio não é "aberta": a convenção é explícita, branco é linha não
+    # preenchida — e o recorte prefere não mostrar a mostrar quem já voltou.
+    limpar(cur)
+    distribuir(cur, '202400029000099', 'CREG1', date.today())
+    diligenciar(cur, '202400029000099', date.today(), retorno='')
     cur.execute('select coalesce(sum(processos), 0) from resumo_acervo_creg(true)')
     assert cur.fetchone()[0] == 0
 

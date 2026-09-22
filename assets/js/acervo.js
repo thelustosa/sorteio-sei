@@ -84,12 +84,22 @@ const recorteCampo = COL.diligencia ? document.getElementById('recorteAcervo') :
 // duas vezes.
 const vazioPadrao = [acervoVazio.querySelector('h3').textContent,
                      acervoVazio.querySelector('p').textContent];
-// null = todo o acervo pendente, como sempre foi; true = só o que está em
-// diligência. O banco também entende `false`, e é o que deixa isto ser um
-// filtro de verdade em vez de um sinalizador — a tela só não expõe o terceiro
-// estado porque ninguém pediu a lista do que NÃO está em diligência.
+// Os três recortes do painel, na ordem em que aparecem no controle. É o mesmo
+// parâmetro que as duas funções do banco recebem: `null` não filtra, `true` e
+// `false` são os dois lados da diligência.
+const RECORTES = {
+  'todos': null,
+  'diligencia': true,
+  'sem-diligencia': false
+};
+
+// Qual deles está ativo. Começa em `null`, o acervo pendente inteiro — o mesmo
+// que o painel mostrava antes de existir filtro.
 let recorte = null;
 let linhasAtuais = null;
+// Quantos processos a matriz soma. Guardado porque `linhasAtuais.length` conta
+// células, não processos — ver definirExportacaoOcupada.
+let totalAtual = 0;
 let detalheAtual = null;
 // Cada abertura invalida a anterior. Sem isso, fechar no Escape durante uma
 // busca lenta e clicar noutro bloco deixava a resposta atrasada chegar por
@@ -98,7 +108,10 @@ let detalheAtual = null;
 let detalhePedido = 0;
 
 recorteCampo?.addEventListener('change', evento => {
-  recorte = evento.target.value === 'diligencia' ? true : null;
+  // `?? null` e não `||`: `false` é um recorte válido, e `||` o trocaria por
+  // null — o painel voltaria a mostrar tudo em vez do que está fora de
+  // diligência.
+  recorte = RECORTES[evento.target.value] ?? null;
   carregarAcervo();
 });
 btnAtualizar.addEventListener('click', () => carregarAcervo());
@@ -286,7 +299,10 @@ function informarExportacao(mensagem = '', estado = '') {
 }
 
 function definirExportacaoOcupada(ocupada, rotulo = 'Exportar') {
-  btnExportar.disabled = ocupada || !linhasAtuais;
+  // `totalAtual`, e não `linhasAtuais.length`: a resposta do banco traz uma
+  // linha por célula da matriz mesmo quando todas contam zero, então o tamanho
+  // dela nunca é zero e não diz se há acervo.
+  btnExportar.disabled = ocupada || !linhasAtuais || totalAtual === 0;
   btnExportar.querySelector('.export-label').textContent = rotulo;
   if (ocupada) btnExportar.setAttribute('aria-busy', 'true');
   else btnExportar.removeAttribute('aria-busy');
@@ -371,11 +387,17 @@ function dadosTabulares(linhas) {
 const quantidadeProcessos = total => total === 1 ? '1 processo' : `${total} processos`;
 
 // A frase do total, que sai no cabeçalho do painel, no resumo do Excel e no
-// card. Sob o recorte ela precisa mudar junto: "12 processos aguardando
-// julgamento" e "12 processos em diligência" contam coisas diferentes, e um
-// arquivo exportado sem essa distinção não diz o que ele é.
-const frasePendentes = total =>
-  `${quantidadeProcessos(total)} ${recorte ? 'em diligência' : 'aguardando julgamento'}`;
+// card. Ela muda com o recorte: os três contam coisas diferentes, e um arquivo
+// exportado sem essa distinção não diz o que ele é.
+//
+// Comparação estrita com `true`/`false`: `recorte` tem três valores e um teste
+// de veracidade juntaria `false` com `null`.
+const escopoDoRecorte = () =>
+  recorte === true ? 'em diligência'
+    : recorte === false ? 'sem diligência aberta'
+      : 'aguardando julgamento';
+
+const frasePendentes = total => `${quantidadeProcessos(total)} ${escopoDoRecorte()}`;
 
 // O corpo que as duas RPCs do painel recebem. Na Câmara o parâmetro não existe
 // na função, então ele não pode sair daqui — e o `{}` de sempre é o que o
@@ -681,12 +703,16 @@ function desenhar(linhas) {
 }
 
 // "Acervo zerado" é verdade sem filtro e mentira com ele: sob o recorte, o
-// acervo pode estar cheio e só não ter nada em diligência.
+// acervo pode estar cheio e só não ter nada daquele lado da diligência.
+const VAZIO_DO_RECORTE = new Map([
+  [true, ['Nenhum processo em diligência',
+          'Nenhum processo pendente está em diligência no momento. Volte a "Todo o acervo" para ver a lista completa.']],
+  [false, ['Todo o acervo está em diligência',
+           'Não há processo pendente fora de diligência: os que restam estão todos com a área técnica.']]
+]);
+
 function ajustarVazio() {
-  const [titulo, texto] = recorte
-    ? ['Nenhum processo em diligência',
-       'Nenhum processo pendente está em diligência no momento. Volte a "Todo o acervo" para ver a lista completa.']
-    : vazioPadrao;
+  const [titulo, texto] = VAZIO_DO_RECORTE.get(recorte) || vazioPadrao;
   acervoVazio.querySelector('h3').textContent = titulo;
   acervoVazio.querySelector('p').textContent = texto;
 }
@@ -727,11 +753,22 @@ async function carregarAcervo({ carregamentoInicial = false } = {}) {
   revelarTabela();
   const total = desenhar(linhas || []);
   linhasAtuais = linhas || [];
-  btnExportar.disabled = false;
+  totalAtual = total;
   acervoTotal.textContent = frasePendentes(total);
   acervoAtualizado.textContent = `Atualizado em: ${dataHoraBR()}`;
+
+  // Acervo vazio mostra a mensagem e mais nada. A matriz continua vindo do
+  // banco — são as 8 faixas x as unidades, todas zeradas —, e desenhá-la ao
+  // lado do aviso não informa: é uma grade inteira de travessões repetindo o
+  // que a frase já disse. Pior no recorte, onde as faixas críticas saíam
+  // pintadas de alerta com zero processo em todas elas.
   ajustarVazio();
   acervoVazio.hidden = total > 0;
+  if (tabelaScroll) tabelaScroll.hidden = total === 0;
+
+  // Sem processo não há o que exportar: um Excel de travessões e um PDF da
+  // mensagem não são arquivo que alguém queira abrir.
+  definirExportacaoOcupada(false);
   return true;
 }
 

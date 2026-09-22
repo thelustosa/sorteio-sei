@@ -10,32 +10,48 @@
 
 ---
 
-## A regra do recorte, e por que não é a coluna da planilha
+## A regra do recorte
 
-A planilha tem uma coluna `JULGADOS` que parece marcar o fim da diligência. **Não marca.** Conferido contra o banco de produção em 22/09/2026:
+Quem marca o estado é a coluna `RETORNO` da planilha, confirmado com a
+secretaria em 22/09/2026:
 
-- 41 processos distintos na planilha; os 41 existem em `acervo_creg`.
-- 22 deles tinham `JULGADOS` vazio **e já tinham sessão posterior à data da diligência** — o processo voltou, foi julgado, e ninguém fechou a coluna.
-- Nenhum dos 6 pendentes tinha `JULGADOS` preenchido.
-- `RETORNO` é `SIM` em 100% das 44 linhas: não separa nada.
+| `RETORNO` | significado |
+|---|---|
+| `NÃO` | diligência aberta — o processo está fora |
+| `SIM` | o processo voltou |
 
-Ou seja, nas linhas que este painel enxerga — que são só as pendentes — `JULGADOS` não discrimina um único caso, em nenhuma direção. Quem sabe que a diligência acabou é o banco: o processo foi julgado.
+> **Em diligência** = pendente no acervo **e** com diligência de `RETORNO = NÃO`
+> e `data_diligencia >= data_distribuicao`.
 
-> **Em diligência** = o processo está pendente no acervo **e** tem uma linha na planilha com `data_diligencia >= data_distribuicao`.
+Na planilha a linha encerrada também fica tachada e com o `SIM` em verde, mas o
+recorte não lê formatação: o `?output=csv` não transporta tachado nem cor, e
+regra que depende de formatação muda de significado num copiar-colar.
 
-A guarda de data é um no-op hoje (confere: 4=4 e 2=2 nas duas faixas que têm ocorrência), e existe para o processo que for **redistribuído** depois de uma diligência antiga: ele volta a ser pendente sem estar em diligência. É a mesma correlação de datas que o CTE `pendentes` já usa em `sql/schema.sql`, e deve ser lida como irmã dela.
+A guarda de data cobre a **redistribuição**: um processo que foi a diligência,
+voltou, foi julgado e depois foi sorteado de novo volta a ser pendente sem estar
+em diligência. É a irmã da correlação de datas que o CTE `pendentes` já faz.
 
-Recorte real na produção de 22/09/2026 — 6 de 162 pendentes, todos CREG3:
+`JULGADOS` não entra na regra — é campo de observação, e das 44 linhas de
+22/09/2026 várias com a coluna vazia já tinham sessão. Célula de `RETORNO` em
+branco também não conta como aberta: a convenção é explícita.
 
-| Faixa | Em diligência | Pendentes CREG3 |
-|---|---|---|
-| Há 3 meses (46–90d) | 4 | 6 |
-| Entre 3 e 6 meses (91–180d) | 2 | 2 |
+### O erro da primeira versão, registrado
+
+A v1 definiu "em diligência" como *"pendente e com diligência registrada"* e
+mostrou **6 falsos positivos** em produção — processos que tinham ido a
+diligência, voltado, e apenas aguardavam pauta. "Aguarda pauta" não é "está
+fora com a área técnica".
+
+A causa raiz foi ter lido a planilha só pelo CSV: no texto puro, `RETORNO` era
+`SIM` em 100% das linhas e pareceu ruído sem sinal. Não era ruído — era a
+resposta, e as 44 linhas estavam todas encerradas. **O recorte devolvendo zero
+é o comportamento correto**, não uma falha.
 
 ## Global Constraints
 
 - **A CJ não muda.** `resumo_acervo_cj` e `processos_acervo_cj` não são tocadas; `acervo-cj.html` não ganha o controle. O que separa os dois colegiados é a tabela `COLEGIADOS` no topo de `assets/js/acervo.js`, e é só lá que a diferença pode morar.
-- `p_diligencia boolean default null`: `null` = todo o acervo pendente (o comportamento de hoje, byte a byte), `true` = só em diligência, `false` = só fora de diligência. O default é o que mantém o corpo `{}` que o front envia hoje funcionando.
+- `p_diligencia boolean default null`: `null` = todo o acervo pendente (o comportamento de hoje, byte a byte), `true` = só em diligência, `false` = só fora de diligência. Os três estão expostos na tela, como os três segmentos do controle. O default é o que mantém o corpo `{}` que o front envia hoje funcionando.
+- No JavaScript, o de-para valor→parâmetro usa `?? null` e nunca `||`: `false` é um recorte válido e `||` o trocaria por `null`, fazendo "Sem diligência" mostrar tudo.
 - O filtro compõe com `p_ordem` e `p_unidade` por `and`, como os dois já compõem entre si. Nenhum parâmetro tem precedência sobre outro.
 - A definição de "pendente" e a lista de faixas continuam existindo **uma vez em cada função** e idênticas entre as duas, como já estão. O filtro entra como mais um predicado sobre o CTE `pendentes`, nunca como um segundo CTE de faixas.
 - `resumo_acervo_creg` e `processos_acervo_creg` trocam de assinatura: precisam de `drop function if exists` com a assinatura **antiga** antes do `create`, e de `revoke`/`grant` com a assinatura **nova**. As duas já são `drop`+`create` no schema — atualizar as três linhas de cada.

@@ -1541,7 +1541,14 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
    e do corpo DELE; herdar a outra e sobrescrever seis propriedades sairia mais
    caro que estas linhas, e mexeria no sorteio sem necessidade. */
 .acervo-recorte {
-  display: flex;
+  /* Grade de colunas iguais, e não flex: com `flex: 1 1 0` num contêiner que
+     encolhe para caber no conteúdo não sobra espaço para distribuir, e os três
+     segmentos saíam com larguras diferentes (132/126/135px). `1fr` iguala
+     todos ao mais largo, que é o que faz isto se ler como um controle
+     segmentado e não como três botões encostados. */
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   margin: 0;
   padding: 3px;
   border: 1px solid rgba(255, 255, 255, 0.22);
@@ -1551,9 +1558,9 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 .acervo-recorte-opcao {
   position: relative;
-  /* Segmentos de mesma largura: o trilho não muda de tamanho quando a escolha
-     troca, e o rótulo mais curto não vira um alvo menor. */
-  flex: 1 1 0;
+  /* Quem iguala as larguras é a grade do pai. O segmento só se vira por dentro:
+     o trilho não muda de tamanho quando a escolha troca, e o rótulo mais curto
+     não vira um alvo menor que os outros. */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1724,13 +1731,25 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
    o lugar dela ocupar também o espaço dela. */
 .acervo-table-shell .painel-carregando { flex: 1 1 auto; }
 
+/* Mesma razão do indicador acima: com a tabela fora do ar, quem toma o lugar
+   dela tem de tomar o espaço também. Sem o `flex`, a mensagem encostava no topo
+   e o resto do painel virava um vão branco maior do que ela. O painel mantém a
+   altura — é o conteúdo que se centraliza dentro. */
+   dela tem de tomar o espaço também. O flex mantém o rodapé assentado na base
+   do painel; a mensagem fica alinhada ao topo, onde a primeira linha da tabela
+   começaria, e não solta no meio do vão branco. */
 .acervo-table-shell .empty-state {
+  flex: 1 1 auto;
+  align-content: center;
+  align-content: start;
   margin: 0;
   padding: 32px 28px;
   border-top: 0;
 }
 
 .acervo-table-shell .load-error {
+  flex: 1 1 auto;
+  align-content: center;
   margin: 0;
   padding: 24px 28px;
 }
@@ -2778,6 +2797,24 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .green-bar .container { gap: 8px; }
   .nav-actions { gap: 4px; }
   .nav-action { padding-inline: 10px; }
+
+  /* Três segmentos lado a lado pedem 400px; em 390 a coluna tem 309 e o
+     controle vazava do contêiner. Empilhados, cada recorte ganha a largura
+     inteira — e um alvo de toque maior do que tinha deitado. O raio deixa de
+     ser pílula porque uma pilha de pílulas lê como três botões soltos; o
+     trilho arredondado por fora é que segura os três como um controle só. */
+  .acervo-recorte {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    border-radius: var(--radius-card);
+  }
+
+  /* Deitados, os segmentos herdavam 32px de altura — alvo curto para o dedo.
+     Empilhados sobra altura, então cada um ganha folga vertical. */
+  .acervo-recorte-opcao {
+    padding-block: 11px;
+    border-radius: var(--radius-control);
+  }
 
   .controls,
   .pauta-header,
