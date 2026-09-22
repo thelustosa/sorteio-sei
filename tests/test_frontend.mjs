@@ -2326,6 +2326,41 @@ test('os três recortes viram os três valores de p_diligencia', async () => {
   assert.deepEqual(page.pedidos[3].corpo, { p_diligencia: null });
 });
 
+test('resposta atrasada de outro recorte não sobrescreve a vista atual', async () => {
+  const respostas = [];
+  const page = acervoCregComRecorte(() =>
+    new Promise(resolve => respostas.push(resolve)));
+
+  const inicial = page.inicializarAcervo();          // Todo o acervo
+  await wait();
+  page.escolherRecorte('diligencia');                // Em diligência
+  await wait();
+  assert.equal(page.painelCarregando.hidden, false,
+    'a troca de recorte usa o mesmo loading dos demais painéis');
+  assert.equal(page.painelCarregando.children[0].children[1].textContent, 'Atualizando o acervo…');
+  assert.equal(page.tabelaScroll.hidden, true,
+    'a tabela anterior sai inteira, em vez de desbotar durante a atualização');
+  assert.equal(page.tabelaScroll.getAttribute('inert'), '',
+    'a grade do recorte anterior não pode continuar interativa');
+
+  respostas[1]([{ ordem: 1, faixa: 'Até 15 dias', unidade: 'CREG3', processos: 1 }]);
+  await wait();
+  assert.equal(page.painelCarregando.hidden, true);
+  assert.equal(page.tabelaScroll.hidden, false);
+  assert.equal(page.tabelaScroll.getAttribute('inert'), null,
+    'a grade atual volta a ser interativa quando a resposta chega');
+  assert.equal(page.document.getElementById('acervoTotal').textContent,
+    '1 processo em diligência');
+
+  // A resposta completa chega por último, mas pertence a uma seleção que já
+  // saiu da tela. Aceitá-la rotularia seis processos como "em diligência".
+  respostas[0](matrizCreg);
+  await inicial;
+  await wait();
+  assert.equal(page.document.getElementById('acervoTotal').textContent,
+    '1 processo em diligência');
+});
+
 test('a Câmara não tem recorte e não manda o parâmetro', async () => {
   const pedidos = [];
   const page = acervoPage(async (caminho, opcoes) => {

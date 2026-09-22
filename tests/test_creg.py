@@ -1237,6 +1237,15 @@ def a_pagina_do_creg_le_a_tabela_do_creg(cur):
 
 
 @teste
+def schema_remove_assinaturas_antigas_do_painel(cur):
+    """Reaplicar schema.sql numa base antiga não deixa RPCs concorrentes."""
+    schema = (RAIZ / 'sql' / 'schema.sql').read_text(encoding='utf-8')
+    assert 'drop function if exists public.resumo_acervo_creg();' in schema
+    assert ('drop function if exists '
+            'public.processos_acervo_creg(int, text);') in schema
+
+
+@teste
 def o_painel_serve_os_dois_colegiados_pelo_mesmo_script(cur):
     """acervo.js atende CJ e CREG; quem escolhe é o data-colegiado do <body>.
 

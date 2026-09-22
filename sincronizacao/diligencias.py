@@ -106,7 +106,12 @@ def _conferir_origem(url):
     permitido = (hospedeiro in HOSTS_PERMITIDOS
                  or hospedeiro.endswith(SUFIXO_PERMITIDO))
     if partes.scheme != 'https' or not permitido:
-        raise ErroPlanilha(f'endereço fora da fonte oficial: {url}')
+        # O caminho e a query carregam o id de publicação da planilha. Mesmo
+        # numa configuração inválida eles continuam sendo credencial e não
+        # podem ir parar no log público do Actions. Esquema e host bastam para
+        # diagnosticar a origem recusada.
+        origem = f'{partes.scheme or "sem-esquema"}://{hospedeiro or "sem-host"}'
+        raise ErroPlanilha(f'endereço fora da fonte oficial ({origem})')
     return url
 
 
@@ -140,7 +145,11 @@ def baixar(url=None):
         with _abridor.open(pedido, timeout=TIMEOUT) as resposta:
             return resposta.read().decode('utf-8', 'replace')
     except (urllib.error.URLError, OSError, TimeoutError) as e:
-        raise ErroPlanilha(f'não foi possível baixar {url}: {e}') from e
+        # `url` é segredo, e a própria exceção de urllib também pode
+        # reproduzi-la. O tipo preserva informação operacional sem publicar a
+        # credencial no JSON, no log ou no resumo do job.
+        raise ErroPlanilha(
+            f'não foi possível baixar a planilha ({type(e).__name__})') from None
 
 
 def _data(texto):

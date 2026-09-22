@@ -100,6 +100,10 @@ let linhasAtuais = null;
 // Quantos processos a matriz soma. Guardado porque `linhasAtuais.length` conta
 // células, não processos — ver definirExportacaoOcupada.
 let totalAtual = 0;
+// Cada carga invalida a anterior. Trocar o recorte dispara outra consulta; sem
+// esta geração, uma resposta antiga que chegasse por último desenharia "Todo o
+// acervo" sob o rótulo atual "Em diligência" e contaminaria detalhe/exportação.
+let acervoPedido = 0;
 let detalheAtual = null;
 // Cada abertura invalida a anterior. Sem isso, fechar no Escape durante uma
 // busca lenta e clicar noutro bloco deixava a resposta atrasada chegar por
@@ -141,8 +145,11 @@ detalheDialog.addEventListener('click', evento => {
 function mostrarMolduraDoPainel() {
   if (loginOnlyCard) loginOnlyCard.hidden = true;
   acervoPanel.hidden = false;
+}
+
+function mostrarCarregamentoDaTabela(texto) {
   if (tabelaScroll) tabelaScroll.hidden = true;
-  painelCarregando.replaceChildren(criarIndicadorCarregamento('Carregando o acervo…'));
+  painelCarregando.replaceChildren(criarIndicadorCarregamento(texto));
   painelCarregando.hidden = false;
 }
 
@@ -718,6 +725,9 @@ function ajustarVazio() {
 }
 
 async function carregarAcervo({ carregamentoInicial = false } = {}) {
+  const pedido = ++acervoPedido;
+  const indicadorIniciadoEm = Date.now();
+  mostrarCarregamentoDaTabela(carregamentoInicial ? 'Carregando o acervo…' : 'Atualizando o acervo…');
   acervoErro.hidden = true;
   acervoVazio.hidden = true;
   acervoAtualizado.textContent = 'Carregando…';
@@ -725,12 +735,21 @@ async function carregarAcervo({ carregamentoInicial = false } = {}) {
   btnExportar.disabled = true;
   btnAtualizar.setAttribute('aria-busy', 'true');
   acervoPanel.setAttribute('aria-busy', 'true');
+  // Ao trocar o recorte, a grade ainda pertence à escolha anterior. Mantê-la
+  // visível evita salto de layout, mas `inert` impede abrir um detalhe que já
+  // não corresponde ao segmento selecionado; o CSS a atenua enquanto isso.
+  if (tabelaScroll) tabelaScroll.setAttribute('inert', '');
 
   let linhas;
   try {
     linhas = await api(COL.resumo, { paginar: true, method: 'POST',
       body: JSON.stringify(parametroDoRecorte()) });
+    await aguardarIndicador(indicadorIniciadoEm);
   } catch (err) {
+    // Uma consulta mais nova já assumiu a tela. A falha desta não pode apagar
+    // os dados dela nem trocar o estado atual por "indisponível".
+    if (pedido !== acervoPedido) return true;
+    await aguardarIndicador(indicadorIniciadoEm);
     if (carregamentoInicial) {
       esconderMolduraDoPainel();
       throw err;
@@ -742,14 +761,21 @@ async function carregarAcervo({ carregamentoInicial = false } = {}) {
     acervoTotal.textContent = '';
     acervoAtualizado.textContent = 'Atualização indisponível';
     acervoErro.querySelector('p').textContent = `Não foi possível carregar o acervo (${err.message}).`;
+    painelCarregando.hidden = true;
+    painelCarregando.replaceChildren();
     acervoErro.hidden = false;
     return false;
   } finally {
-    btnAtualizar.disabled = false;
-    btnAtualizar.removeAttribute('aria-busy');
-    acervoPanel.removeAttribute('aria-busy');
+    // A resposta antiga também não encerra o loading da consulta que continua.
+    if (pedido === acervoPedido) {
+      btnAtualizar.disabled = false;
+      btnAtualizar.removeAttribute('aria-busy');
+      acervoPanel.removeAttribute('aria-busy');
+      if (tabelaScroll) tabelaScroll.removeAttribute('inert');
+    }
   }
 
+  if (pedido !== acervoPedido) return true;
   revelarTabela();
   const total = desenhar(linhas || []);
   linhasAtuais = linhas || [];
