@@ -11,6 +11,9 @@ avisar quando o formato do portal mudar.
 Requisitos: docker, psycopg2 e pypdf.
 """
 
+import json
+import os
+import re
 import sys
 from datetime import date
 from pathlib import Path
@@ -23,6 +26,7 @@ from banco import uma                     # noqa: E402
 import agr                                # noqa: E402
 import pauta                              # noqa: E402
 import sincronizar                        # noqa: E402
+import diligencias                       # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent / 'fixtures'
 PG = banco.Postgres('sorteio_sei_sinc_test')
@@ -48,6 +52,14 @@ LISTAGEM_HTML = (FIXTURES / 'pautas-2026.html').read_bytes()
 # A página do Conselho Regulador é outra, e os títulos dela não nomeiam o
 # colegiado: "Pauta da 015ª Sessão Ordinária".
 LISTAGEM_CREG_HTML = (FIXTURES / 'pautas-creg-2026.html').read_bytes()
+
+# A planilha de diligências do CREG na forma em que a AGR a publicou em
+# 22/09/2026: mesma estrutura, mesmas 44 linhas, mesmos 41 processos
+# distintos, mesmo `23/9/2025` sem zero à esquerda, mesma proporção de
+# JULGADOS preenchidos. O CONTEÚDO é sintético — interessado, descrição da
+# diligência, número de processo e texto de retorno foram substituídos por
+# valores estáveis. Este repositório é público, e a planilha não é.
+PLANILHA_DILIGENCIAS = (FIXTURES / 'diligencias.csv').read_text(encoding='utf-8')
 
 testes = []
 online = False
@@ -903,6 +915,215 @@ def documento_sem_processo_mas_com_numero_solto_e_erro(cur):
     assert 'ErroPauta' in r['erros'][0]['erro']
     assert uma(cur, 'select count(*) from pautas_cj') == 0, (
         'a pauta não pode ficar marcada como vista')
+
+
+# ── Diligências do CREG ──────────────────────────────────────────────────────
+# Outra fonte, outro formato, outro destino: uma planilha publicada pela AGR,
+# lida em CSV, que alimenta o recorte "Em diligência" do painel do acervo.
+
+
+@teste
+def a_planilha_de_diligencias_vira_44_linhas():
+    """O fixture é a planilha real de 22/09/2026, conferida à mão."""
+    lidas = diligencias.analisar(PLANILHA_DILIGENCIAS)
+
+    assert len(lidas) == 44
+    assert len({d.num_processo for d in lidas}) == 41, (
+        'o mesmo processo volta à planilha a cada nova diligência')
+    assert lidas[0].num_processo == '202400029000001'
+    assert lidas[0].data_diligencia == date(2025, 8, 27)
+    assert lidas[-1].data_diligencia == date(2026, 9, 4)
+    assert all(len(d.num_processo) == 15 for d in lidas)
+    # A posição na planilha é o que desempata duas diligências na mesma data.
+    assert [d.linha for d in lidas] == list(range(1, 45))
+
+
+@teste
+def data_sem_zero_a_esquerda_e_aceita():
+    """A planilha é digitada à mão e traz `23/9/2025` no meio dos `23/09/2025`."""
+    assert '23/9/2025' in PLANILHA_DILIGENCIAS, 'o fixture perdeu o caso'
+
+    lida = next(d for d in diligencias.analisar(PLANILHA_DILIGENCIAS)
+                if d.num_processo == '202500052000003')
+    assert lida.data_diligencia == date(2025, 9, 23)
+
+
+@teste
+def linha_invalida_sai_sem_derrubar_a_rodada():
+    """Digitação errada descarta a linha; não pode custar as outras 44."""
+    texto = (PLANILHA_DILIGENCIAS
+             + 'Fulano,20250002900,Processo curto,10/09/2026,SIM,\n'
+             + 'Fulano,202600029009999,Dia impossível,31/02/2026,SIM,\n')
+
+    lidas = diligencias.analisar(texto)
+    assert len(lidas) == 44
+    assert '202600029009999' not in {d.num_processo for d in lidas}
+
+
+@teste
+def cabecalho_diferente_para_a_rodada():
+    """Planilha reestruturada não é planilha lida errado: é planilha nova.
+
+    Sem esta recusa, a tabela seria esvaziada em silêncio e o filtro do painel
+    passaria a devolver zero sem erro nenhum — o pior dos dois mundos.
+    """
+    trocado = PLANILHA_DILIGENCIAS.replace('DATA DA DILIGÊNCIA', 'DATA', 1)
+    for texto in [trocado, '', 'INTERESSADO,PROCESSO\nA,202600029000001\n']:
+        try:
+            diligencias.analisar(texto)
+        except diligencias.ErroPlanilha:
+            continue
+        raise AssertionError(f'aceitou uma planilha fora do contrato: {texto[:40]!r}')
+
+
+@teste
+def planilha_so_com_cabecalho_nao_esvazia_a_tabela():
+    """Zero linhas válidas levanta ANTES de qualquer delete."""
+    try:
+        diligencias.analisar(','.join(diligencias.CABECALHO) + '\n')
+    except diligencias.ErroPlanilha:
+        return
+    raise AssertionError('uma planilha sem linhas passou')
+
+
+@teste
+def o_endereco_da_planilha_nao_mora_no_codigo():
+    """Trava: o link de publicação é credencial, e o repositório é público.
+
+    Quem tem o link lê a planilha, sem login. Escrevê-lo no código entregaria
+    essa leitura a qualquer pessoa que clonasse o projeto — mesmo motivo de
+    SUPABASE_DB_URL e de dados/*.sql ficarem fora do Git. Se alguém "consertar"
+    pondo um default de volta, este teste cai.
+    """
+    fonte = (RAIZ / 'sincronizacao' / 'diligencias.py').read_text(encoding='utf-8')
+
+    # Um id de publicação do Google começa com 2PACX- e vem seguido de dezenas
+    # de caracteres; o gid da aba é o outro pedaço do endereço.
+    proibidos = [
+        (r'2PACX-[\w-]{10,}',                        'id de publicação'),
+        (r'[?&]gid=\d+',                              'gid da aba'),
+        (r'https://docs\.google\.com/spreadsheets/\S', 'endereço da planilha'),
+    ]
+    for padrao, o_que in proibidos:
+        assert not re.search(padrao, fonte), f'{o_que} escrito no código'
+
+    # E a variável é obrigatória: sem ela o script para, em vez de cair num
+    # endereço embutido.
+    anterior = os.environ.pop(diligencias.VARIAVEL, None)
+    try:
+        for valor in [None, '', '   ']:
+            if valor is not None:
+                os.environ[diligencias.VARIAVEL] = valor
+            try:
+                diligencias.fonte()
+            except diligencias.ErroPlanilha as e:
+                assert diligencias.VARIAVEL in str(e)
+                continue
+            raise AssertionError(f'aceitou {valor!r} como endereço')
+    finally:
+        os.environ.pop(diligencias.VARIAVEL, None)
+        if anterior is not None:
+            os.environ[diligencias.VARIAVEL] = anterior
+
+
+@teste
+def o_resumo_nao_imprime_o_endereco():
+    """O JSON vai para o log do Actions, que é legível no repositório público."""
+    resumo = diligencias.sincronizar(None, texto='COLUNA UNICA\nvalor\n')
+    assert 'fonte' not in resumo, resumo
+    assert '2PACX' not in json.dumps(resumo)
+    assert 'docs.google.com' not in json.dumps(resumo)
+
+
+@teste
+def endereco_fora_do_google_e_recusado():
+    for url in ['http://docs.google.com/x',            # sem https
+                'https://docs.google.com.br/x',        # host parecido
+                'https://exemplo.com/planilha.csv']:
+        try:
+            diligencias.baixar(url)
+        except diligencias.ErroPlanilha:
+            continue
+        raise AssertionError(f'aceitou {url}')
+
+    # O host do download muda a cada pedido, e por isso a allowlist tem sufixo.
+    assert diligencias._conferir_origem(
+        'https://doc-0o-9k-sheets.googleusercontent.com/pub/abc?output=csv')
+
+
+@teste
+def sincronizar_diligencias_substitui_a_tabela(cur):
+    cur.execute('delete from diligencias_creg')
+    cur.execute("""insert into public.diligencias_creg
+                   (num_processo, data_diligencia, linha)
+                   values ('202000029000001', date '2020-01-01', 1)""")
+    cur.connection.commit()
+
+    r = diligencias.sincronizar(cur.connection, texto=PLANILHA_DILIGENCIAS)
+
+    assert r['erros'] == [] and r['gravadas'] == 44
+    assert r['processos_distintos'] == 41
+    assert uma(cur, 'select count(*) from diligencias_creg') == 44
+    assert uma(cur, """select count(*) from diligencias_creg
+                        where num_processo = '202000029000001'""") == 0, (
+        'a planilha é a fonte: o que sai dela sai da tabela')
+
+    # As colunas de texto são guardadas como vieram, mesmo sem decidir nada.
+    assert uma(cur, """select julgados from diligencias_creg
+                        where num_processo = '202500052000003'""") == 'Retorno anotado 2'
+
+
+@teste
+def simular_diligencias_nao_grava(cur):
+    cur.execute('delete from diligencias_creg')
+    cur.connection.commit()
+
+    r = diligencias.sincronizar(cur.connection, texto=PLANILHA_DILIGENCIAS,
+                                simular=True)
+
+    assert r['simulacao'] is True and r['gravadas'] == 44
+    assert uma(cur, 'select count(*) from diligencias_creg') == 0
+
+
+@teste
+def planilha_fora_do_contrato_deixa_a_tabela_como_estava(cur):
+    """Erro de leitura não apaga nada: envelhecer é melhor do que esvaziar."""
+    cur.execute('delete from diligencias_creg')
+    cur.execute("""insert into public.diligencias_creg
+                   (num_processo, data_diligencia, linha)
+                   values ('202600029000044', date '2026-09-04', 1)""")
+    cur.connection.commit()
+
+    r = diligencias.sincronizar(cur.connection, texto='COLUNA UNICA\nvalor\n')
+
+    assert r['erros'] and 'ErroPlanilha' in r['erros'][0]
+    assert r['gravadas'] == 0
+    assert uma(cur, 'select count(*) from diligencias_creg') == 1
+
+
+@teste
+def diligencias_fechada_para_o_navegador(cur):
+    assert uma(cur, "select relrowsecurity from pg_class"
+                    " where oid = 'public.diligencias_creg'::regclass") is True
+    assert uma(cur, "select count(*) from pg_policies"
+                    " where tablename = 'diligencias_creg'") == 0
+
+
+@teste
+@exige_rede
+def a_planilha_de_diligencias_continua_no_formato_esperado():
+    """Avisa quando a AGR mexer na estrutura da planilha.
+
+    Sem DILIGENCIAS_CSV_URL não há o que consultar, e isso não é falha: o
+    endereço é segredo, então quem clona o repositório não o tem.
+    """
+    if not os.environ.get(diligencias.VARIAVEL):
+        print(f'      (sem {diligencias.VARIAVEL}: consulta à planilha pulada)')
+        return
+
+    lidas = diligencias.analisar(diligencias.baixar())
+    assert len(lidas) >= 40
+    assert all(len(d.num_processo) == 15 for d in lidas)
 
 
 def main(argv):
