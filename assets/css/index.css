@@ -1481,6 +1481,14 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 }
 
 .acervo-subtitle {
+  /* A medida é travada de propósito. Sem o teto, a largura desta linha é o que
+     sobra depois do chip de escopo — e o chip muda de 253px para 350px quando
+     o recorte troca ("6 processos em diligência" x "162 processos aguardando
+     julgamento"). O subtítulo refluía de uma linha para duas e o cabeçalho
+     inteiro saltava 25px a cada clique. Com o teto, a quebra é sempre a mesma,
+     independente do vizinho — e 52ch é medida de leitura, não um número
+     arbitrário. */
+  max-width: 52ch;
   margin: 6px 0 0;
   color: var(--on-accent-muted);
   font-size: var(--text-md);
@@ -1514,51 +1522,60 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Recorte do acervo: o primeiro filtro deste painel. Mora na barra verde do
-   cabeçalho, então as pills não podem usar o fundo claro que elas têm no
-   sorteio — aqui seguem o tratamento translúcido do .acervo-scope, que é o que
-   já vive sobre o verde. */
-.acervo-recorte {
-  margin: 0;
-  padding: 0 28px 16px;
-  border: 0;
-}
-
-.acervo-recorte legend {
-  padding: 0;
-  margin-bottom: 8px;
-  color: var(--on-accent-muted);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.acervo-recorte-opcoes {
-  display: flex;
-  flex-wrap: wrap;
+  /* À direita, e não centralizado: o chip muda de largura com o recorte, e com
+     as duas peças alinhadas pela borda direita é só a borda esquerda do chip
+     que anda. Centralizado, o controle escorregaria junto a cada clique. */
+  align-items: flex-end;
   gap: 10px;
 }
 
-.acervo-recorte .pill {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  border-color: rgba(255, 255, 255, 0.22);
+/* Recorte do acervo: duas vistas mutuamente exclusivas da mesma tabela.
+
+   Controle segmentado, e não duas pills soltas: pills independentes sugerem que
+   dá para ligar as duas, e aqui uma exclui a outra. Um trilho único com um
+   segmento preenchido diz isso sem depender da cor sozinha.
+
+   Não reusa .pill de propósito. Aquela é a pill de exclusão do sorteio — 44px
+   de altura e corpo de 1rem, dimensionada para uma grade de destinos. Aqui o
+   controle vive ao lado do chip de escopo, na barra verde, e precisa da altura
+   e do corpo DELE; herdar a outra e sobrescrever seis propriedades sairia mais
+   caro que estas linhas, e mexeria no sorteio sem necessidade. */
+.acervo-recorte {
+  display: flex;
+  margin: 0;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--radius-pill);
   background: rgba(0, 0, 0, 0.18);
-  color: var(--on-accent);
 }
 
-.acervo-recorte .pill:hover { background: rgba(0, 0, 0, 0.3); }
+.acervo-recorte-opcao {
+  position: relative;
+  /* Segmentos de mesma largura: o trilho não muda de tamanho quando a escolha
+     troca, e o rótulo mais curto não vira um alvo menor. */
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 16px;
+  border-radius: var(--radius-pill);
+  color: var(--on-accent);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background-color 160ms ease, color 160ms ease;
+}
 
-/* O radio continua no documento, recebendo o foco e as setas do teclado; só
-   não é desenhado. display:none o tiraria da ordem de foco e levaria junto a
+.acervo-recorte-opcao:hover:not(:has(input:checked)) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* O radio continua no documento, recebendo o foco e as setas do teclado; só não
+   é desenhado. display:none o tiraria da ordem de foco e levaria junto a
    navegação por teclado que é a razão de ele ser um radio. */
-.acervo-recorte .pill input {
+.acervo-recorte-opcao input {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1567,15 +1584,14 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   pointer-events: none;
 }
 
-.acervo-recorte .pill:has(input:checked) {
-  border-color: transparent;
+.acervo-recorte-opcao:has(input:checked) {
   background: var(--on-accent);
   color: var(--accent);
 }
 
-/* O anel de foco precisa ir para a pill: o radio que o receberia é invisível. */
-.acervo-recorte .pill:has(input:focus-visible) {
-  outline: 3px solid var(--on-accent);
+/* O anel de foco vai para o segmento: o radio que o receberia é invisível. */
+.acervo-recorte-opcao:has(input:focus-visible) {
+  outline: 2px solid var(--on-accent);
   outline-offset: 2px;
 }
 
@@ -2737,12 +2753,25 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     padding: 20px;
   }
 
-  .acervo-recorte { padding: 0 20px 16px; }
+  /* Empilhado, a coluna ocupa a largura toda e o controle acompanha: dois
+     segmentos de 50% dão alvos generosos no toque. */
+  .acervo-recorte { width: 100%; }
 
   #modeSelector .buttons-wrapper,
   #cardAdmin .buttons-wrapper { grid-template-columns: 1fr; }
   .acervo-header-summary { width: 100%; align-items: stretch; }
-  .acervo-scope { max-width: 100%; justify-content: flex-start; white-space: normal; }
+
+  /* Empilhado o chip ocupa a largura toda e o texto passa a quebrar, então a
+     altura dele vira função do rótulo: 41px em "6 processos em diligência" e
+     63px em "162 processos aguardando julgamento". Era o resto do salto do
+     cabeçalho, do lado do celular. O piso reserva as duas linhas de uma vez —
+     a caixa não muda de tamanho, só o texto dentro dela. */
+  .acervo-scope {
+    min-height: 63px;
+    max-width: 100%;
+    justify-content: flex-start;
+    white-space: normal;
+  }
 }
 
 @media screen and (max-width: 600px) {
@@ -2910,25 +2939,12 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     width: 100% !important;
   }
 
-  /* No papel o recorte não é controle, é rótulo: sai só o que está ativo, em
-     texto, para o PDF dizer qual acervo ele está mostrando. */
-  .acervo-recorte {
-    padding: 0 !important;
-    margin: 0 0 6px 0 !important;
-  }
-
-  .acervo-recorte legend { display: none !important; }
-  .acervo-recorte-opcoes { justify-content: center !important; }
-  .acervo-recorte .pill:not(:has(input:checked)) { display: none !important; }
-
-  .acervo-recorte .pill {
-    min-height: 0 !important;
-    padding: 0 !important;
-    border: 0 !important;
-    background: transparent !important;
-    color: #4a5568 !important;
-    font-size: 9.5pt !important;
-  }
+  /* O recorte sai inteiro do papel. Quem diz qual acervo o PDF mostra é o chip
+     de escopo, que muda de frase junto com o filtro ("6 processos em
+     diligência" x "162 processos aguardando julgamento") — imprimir o rótulo
+     do controle embaixo dele repetiria a mesma informação em duas linhas. No
+     papel não há o que clicar; o controle é só interface. */
+  .acervo-recorte { display: none !important; }
 
   .acervo-header-title-group h2 {
     color: #00534b !important;
@@ -2943,7 +2959,10 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .acervo-subtitle {
     color: #4a5568 !important;
     font-size: 9.5pt !important;
-    margin: 0 0 6px 0 !important;
+    /* `auto` nas laterais: com o teto de medida a caixa é mais estreita que a
+       coluna, e sem isto o texto centralizado ficava encostado à esquerda
+       enquanto o título e o escopo centralizavam. */
+    margin: 0 auto 6px !important;
     line-height: 1.35 !important;
     text-align: center !important;
   }
