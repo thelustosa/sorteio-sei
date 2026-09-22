@@ -1515,6 +1515,13 @@ function acervoPage(api, { imprimir = () => {}, colegiado = 'cj' } = {}) {
   document.body.append(loginOnlyCard);
   ['acervoPanel', 'acervoVazio', 'acervoTotal', 'acervoAtualizado']
     .forEach(id => document.add(id, 'div'));
+  // O vazio traz o texto da versão sem filtro, que acervo.js lê uma vez no
+  // carregamento e devolve quando o recorte sai.
+  const vazioTitulo = document.createElement('h3');
+  vazioTitulo.textContent = 'Acervo zerado';
+  const vazioTexto = document.createElement('p');
+  vazioTexto.textContent = 'Nenhum processo aguardando julgamento.';
+  document.getElementById('acervoVazio').append(vazioTitulo, vazioTexto);
   const erroDiv = document.add('acervoErro', 'div');
   erroDiv.appendChild(document.createElement('p'));
   document.add('acervoTable', 'table');
@@ -1563,10 +1570,27 @@ function acervoPage(api, { imprimir = () => {}, colegiado = 'cj' } = {}) {
   document.getElementById('acervoPanel').hidden = true;
   document.getElementById('btnAtualizar').hidden = true;  // como no acervo-cj.html
 
+  // O recorte só existe no acervo-creg.html: a Câmara não tem registro de
+  // diligências. O harness reproduz essa diferença em vez de escondê-la.
+  let recorteCampo = null;
+  if (colegiado === 'creg') {
+    recorteCampo = document.add('recorteAcervo', 'fieldset');
+    for (const valor of ['todos', 'diligencia']) {
+      const entrada = document.createElement('input');
+      entrada.type = 'radio';
+      entrada.value = valor;
+      recorteCampo.append(entrada);
+    }
+  }
+  // Trocar o recorte é o `change` que o <fieldset> recebe por borbulhamento.
+  const escolherRecorte = valor =>
+    recorteCampo.dispatch('change', { target: { value: valor } });
+
   const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador',
     `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, criarExcelDetalhe, dadosTabulares, abrirDetalhe, exportarDetalhe, tempoPorExtenso };`)(
     document, { print: imprimir }, api, criarIndicadorCarregamento, aguardarIndicador);
-  return { document, loginOnlyCard, dialog, painelCarregando, tabelaScroll, ...app };
+  return { document, loginOnlyCard, dialog, painelCarregando, tabelaScroll,
+           recorteCampo, escolherRecorte, ...app };
 }
 
 const celulas = linha => linha.children.map(c => c.textContent);
@@ -2255,6 +2279,148 @@ test('indicador que já cumpriu o mínimo sai assim que os dados chegam', async 
   await aguardarIndicador(Date.now() - 5000);
   assert.ok(Date.now() - inicio < 100,
     'consulta longa já mostrou o indicador por tempo de sobra');
+});
+
+// ── Painel do acervo · recorte por diligência ────────────────────────────────
+// Um processo em diligência está parado por decisão do colegiado, não por
+// atraso de quem o relata. O recorte separa os dois, e o contrato que estes
+// testes fixam é: o filtro chega igual às DUAS funções do banco, e a Câmara —
+// que não tem registro de diligências — nunca manda o parâmetro.
+
+const matrizCreg = [
+  { ordem: 1, faixa: 'Até 15 dias', unidade: 'CREG1', processos: 4 },
+  { ordem: 1, faixa: 'Até 15 dias', unidade: 'CREG3', processos: 2 }
+];
+
+function acervoCregComRecorte(resposta = () => matrizCreg) {
+  const pedidos = [];
+  const page = acervoPage(async (caminho, opcoes) => {
+    pedidos.push({ caminho, corpo: JSON.parse(opcoes.body) });
+    return caminho.includes('processos_acervo_creg') ? [] : resposta(pedidos.length);
+  }, { colegiado: 'creg' });
+  return { ...page, pedidos };
+}
+
+test('trocar o recorte refaz a consulta com p_diligencia', async () => {
+  const page = acervoCregComRecorte();
+  await page.inicializarAcervo();
+  await wait();
+
+  assert.deepEqual(page.pedidos[0].corpo, { p_diligencia: null },
+    'sem filtro o painel pede o acervo pendente inteiro');
+
+  page.escolherRecorte('diligencia');
+  await wait();
+  assert.deepEqual(page.pedidos[1].corpo, { p_diligencia: true });
+
+  // Limpar o filtro devolve a visão completa, e não um terceiro estado.
+  page.escolherRecorte('todos');
+  await wait();
+  assert.deepEqual(page.pedidos[2].corpo, { p_diligencia: null });
+});
+
+test('a Câmara não tem recorte e não manda o parâmetro', async () => {
+  const pedidos = [];
+  const page = acervoPage(async (caminho, opcoes) => {
+    pedidos.push(JSON.parse(opcoes.body));
+    return caminho.includes('processos_acervo_cj') ? processosFalsos : matriz;
+  });
+  await page.inicializarAcervo();
+  await wait();
+
+  assert.equal(page.recorteCampo, null, 'o controle não existe no acervo-cj.html');
+  assert.deepEqual(pedidos[0], {},
+    'resumo_acervo_cj não tem o parâmetro: mandá-lo seria erro do PostgREST');
+
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+  assert.equal('p_diligencia' in pedidos[1], false, pedidos[1]);
+});
+
+test('o card abre o mesmo recorte que a célula contava', async () => {
+  const page = acervoCregComRecorte();
+  await page.inicializarAcervo();
+  await wait();
+  page.escolherRecorte('diligencia');
+  await wait();
+
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  const detalhe = page.pedidos.at(-1);
+  assert.ok(detalhe.caminho.includes('processos_acervo_creg'));
+  assert.equal(detalhe.corpo.p_diligencia, true,
+    'o card listaria um recorte diferente do número que estava na tela');
+  // E os filtros antigos continuam viajando junto.
+  assert.equal(detalhe.corpo.p_ordem, 1);
+  assert.equal(detalhe.corpo.p_unidade, 'CREG1');
+});
+
+test('o total e o vazio mudam de frase sob o recorte, e voltam ao sair dele', async () => {
+  const page = acervoCregComRecorte(pedido => pedido === 1 ? matrizCreg : []);
+  await page.inicializarAcervo();
+  await wait();
+
+  const total = page.document.getElementById('acervoTotal');
+  const vazio = page.document.getElementById('acervoVazio');
+  assert.equal(total.textContent, '6 processos aguardando julgamento');
+
+  page.escolherRecorte('diligencia');
+  await wait();
+  assert.equal(total.textContent, '0 processos em diligência',
+    '"aguardando julgamento" contaria outra coisa');
+  assert.equal(vazio.hidden, false);
+  assert.equal(vazio.querySelector('h3').textContent, 'Nenhum processo em diligência',
+    '"Acervo zerado" é mentira sob o filtro: o acervo pode estar cheio');
+
+  page.escolherRecorte('todos');
+  await wait();
+  assert.equal(vazio.querySelector('h3').textContent, 'Acervo zerado',
+    'o texto da página precisa voltar quando o filtro sai');
+});
+
+test('"Em diligência desde" entra quando a lista tem a data, e só então', async () => {
+  const comDiligencia = [
+    { num_processo: '202600029002495', unidade: 'CREG3', assunto: 'Auto de Infração',
+      data_distribuicao: '2026-07-30', dias: 54, diligencia_desde: '2026-08-10' },
+    { num_processo: '202500029005367', unidade: 'CREG3', assunto: 'Auto de Infração',
+      data_distribuicao: '2026-06-03', dias: 111, diligencia_desde: null }
+  ];
+  const page = acervoPage(async caminho =>
+    caminho.includes('processos_acervo_creg') ? comDiligencia : matrizCreg,
+  { colegiado: 'creg' });
+  await page.inicializarAcervo();
+  await wait();
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  const [thead, tbody] = page.document.getElementById('detalheTable').children;
+  assert.deepEqual(celulas(thead.children[0]),
+    ['Nº do Processo', 'Unidade', 'Assunto', 'Distribuição', 'Dias passados',
+     'Tempo', 'Em diligência desde']);
+  assert.equal(celulas(tbody.children[0]).at(-1), '10/08/2026');
+  // Sem data a célula é travessão; a coluna não some por causa de uma linha.
+  assert.equal(celulas(tbody.children[1]).at(-1), '—');
+
+  // O Excel do card acompanha a mesma lista. As larguras, as mesclagens e a
+  // área de impressão saem da quantidade de colunas — antes eram um "F" fixo,
+  // escrito à mão em quatro lugares, e a coluna nova ficaria de fora.
+  const xml = new TextDecoder().decode(new Uint8Array(
+    await page.criarExcelDetalhe(comDiligencia, 'Até 15 dias · CREG3').arrayBuffer()));
+  assert.match(xml, /<t>Em diligência desde<\/t>/);
+  assert.match(xml, /<c r="G5"[^>]*><is><t>10\/08\/2026<\/t><\/is><\/c>/);
+  assert.match(xml, /<mergeCell ref="A1:G1"\/>/,
+    'a mesclagem do título tem de acompanhar a coluna nova');
+  assert.match(xml, /\$A\$1:\$G\$6/, 'a área de impressão também');
+
+  // E sem nenhuma diligência na lista a coluna não aparece.
+  const semDiligencia = comDiligencia.map(p => ({ ...p, diligencia_desde: null }));
+  const limpa = acervoPage(async caminho =>
+    caminho.includes('processos_acervo_creg') ? semDiligencia : matrizCreg,
+  { colegiado: 'creg' });
+  await limpa.inicializarAcervo();
+  await wait();
+  await limpa.abrirDetalhe(celulaDe(limpa, 0, 1));
+  assert.deepEqual(
+    celulas(limpa.document.getElementById('detalheTable').children[0].children[0]),
+    ['Nº do Processo', 'Unidade', 'Assunto', 'Distribuição', 'Dias passados', 'Tempo']);
 });
 
 // ── Histórico de sorteios ────────────────────────────────────────────────────

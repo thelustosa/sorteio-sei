@@ -125,6 +125,37 @@ def um_colegiado_nao_derruba_o_outro():
     assert 'falhou=1' in conteudo, 'a falha de um colegiado interrompe o laço'
 
 
+# ── Diligências do CREG ──────────────────────────────────────────────────────
+
+@teste
+def a_mesma_passagem_sincroniza_as_diligencias():
+    """A planilha do CREG entra na rodada das pautas, não num workflow à parte."""
+    donos = sorted(a.name for a in WORKFLOWS.glob('*.y*ml')
+                   if 'sincronizacao/diligencias.py' in a.read_text(encoding='utf-8'))
+    assert donos == [SINCRONIZACAO.name], f'diligências espalhadas em {donos}'
+
+    conteudo = texto()
+    assert '--simular' in conteudo, 'a simulação não chega às diligências'
+
+
+@teste
+def a_planilha_nao_depende_do_portal_da_agr():
+    """São fontes independentes: o portal fora do ar não pode pular a planilha.
+
+    Sem `if: always()`, o `exit "$falhou"` do passo anterior encerraria o job e
+    a tabela de diligências envelheceria junto com o site da AGR.
+    """
+    conteudo = texto()
+    passo = conteudo[conteudo.index('- name: Sincronizar diligências'):]
+    passo = passo[:passo.index('- name: Resumo')]
+
+    assert re.search(r'^\s*if:\s*always\(\)', passo, re.MULTILINE), \
+        'o passo das diligências não roda quando as pautas falham'
+    assert '::error' in passo, 'falha da planilha não vira anotação de erro'
+    assert re.search(r'^\s*exit "?\$estado"?', passo, re.MULTILINE), \
+        'o job não propaga a falha da planilha'
+
+
 def main():
     falhas = 0
     for fn in testes:

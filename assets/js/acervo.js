@@ -42,7 +42,12 @@ const COLEGIADOS = {
     arquivo: 'acervo-creg',
     sigla: 'CREG',
     destino: 'ao Conselho Regulador',
-    segundaColuna: { rotulo: 'Assunto', campo: 'assunto', naTela: true }
+    segundaColuna: { rotulo: 'Assunto', campo: 'assunto', naTela: true },
+    // Só o Conselho tem registro de diligências — a planilha que a AGR mantém,
+    // sincronizada para diligencias_creg. A Câmara não tem fonte equivalente, e
+    // por isso as funções dela nem recebem o parâmetro: mandá-lo de lá seria um
+    // erro do PostgREST, não um filtro ignorado.
+    diligencia: true
   }
 };
 
@@ -72,6 +77,18 @@ const detalheTabela = document.getElementById('detalheTable');
 const detalheErro = document.getElementById('detalheErro');
 const btnFecharDetalhe = document.getElementById('btnFecharDetalhe');
 const btnExportarDetalhe = document.getElementById('btnExportarDetalhe');
+const recorteCampo = COL.diligencia ? document.getElementById('recorteAcervo') : null;
+// O vazio tem duas leituras, e o HTML só traz uma: sem filtro é "não há
+// acervo"; sob o filtro é "não há acervo NESTE recorte", que é outra coisa. O
+// texto da página é a versão sem filtro, lido daqui uma vez para não existir
+// duas vezes.
+const vazioPadrao = [acervoVazio.querySelector('h3').textContent,
+                     acervoVazio.querySelector('p').textContent];
+// null = todo o acervo pendente, como sempre foi; true = só o que está em
+// diligência. O banco também entende `false`, e é o que deixa isto ser um
+// filtro de verdade em vez de um sinalizador — a tela só não expõe o terceiro
+// estado porque ninguém pediu a lista do que NÃO está em diligência.
+let recorte = null;
 let linhasAtuais = null;
 let detalheAtual = null;
 // Cada abertura invalida a anterior. Sem isso, fechar no Escape durante uma
@@ -80,6 +97,10 @@ let detalheAtual = null;
 // outro — sem nada na tela indicando a troca.
 let detalhePedido = 0;
 
+recorteCampo?.addEventListener('change', evento => {
+  recorte = evento.target.value === 'diligencia' ? true : null;
+  carregarAcervo();
+});
 btnAtualizar.addEventListener('click', () => carregarAcervo());
 btnExportar.addEventListener('click', alternarMenuExportacao);
 exportOptions.addEventListener('click', escolherExportacao);
@@ -349,6 +370,18 @@ function dadosTabulares(linhas) {
 
 const quantidadeProcessos = total => total === 1 ? '1 processo' : `${total} processos`;
 
+// A frase do total, que sai no cabeçalho do painel, no resumo do Excel e no
+// card. Sob o recorte ela precisa mudar junto: "12 processos aguardando
+// julgamento" e "12 processos em diligência" contam coisas diferentes, e um
+// arquivo exportado sem essa distinção não diz o que ele é.
+const frasePendentes = total =>
+  `${quantidadeProcessos(total)} ${recorte ? 'em diligência' : 'aguardando julgamento'}`;
+
+// O corpo que as duas RPCs do painel recebem. Na Câmara o parâmetro não existe
+// na função, então ele não pode sair daqui — e o `{}` de sempre é o que o
+// PostgREST continua vendo.
+const parametroDoRecorte = () => COL.diligencia ? { p_diligencia: recorte } : {};
+
 function planilhaXml(linhas) {
   const dados = dadosTabulares(linhas);
   const quantidadeRelatores = dados[0].length - 2;
@@ -360,7 +393,7 @@ function planilhaXml(linhas) {
   const linhaAtualizacao = linhaTotal + 1;
   const ordensPorFaixa = new Map(linhas.map(linha => [linha.faixa, Number(linha.ordem)]));
   const totalGeral = dados.at(-1).at(-1);
-  const resumo = `${quantidadeProcessos(totalGeral)} aguardando julgamento`;
+  const resumo = frasePendentes(totalGeral);
   const texto = (referencia, valor, estilo) => `<c r="${referencia}" t="inlineStr" s="${estilo}"><is><t>${escaparXml(valor)}</t></is></c>`;
   const numero = (referencia, valor, estilo, formula = '') => `<c r="${referencia}" s="${estilo}">${formula ? `<f>${formula}</f>` : ''}<v>${valor}</v></c>`;
 
@@ -482,8 +515,11 @@ function criarExcel(linhas) {
 // ── Detalhe de uma célula: a lista de processos daquele bloco ────────────────
 // Uma linha por processo, nas mesmas colunas que o card mostra na tela.
 function planilhaDetalheXml(processos, titulo) {
-  const colunas = ['Nº do Processo', COL.coluna, COL.segundaColuna.rotulo,
-                   'Distribuição', 'Dias passados', 'Tempo'];
+  // Mesma lista da tela (ver colunasDoDetalhe): as larguras, as mesclagens e a
+  // área de impressão saem da quantidade de colunas, e não de um "F" escrito à
+  // mão em quatro lugares.
+  const colunas = colunasDoDetalhe(processos);
+  const ultimaColuna = colunaExcel(colunas.length - 1);
   const texto = (col, linha, valor, estilo) =>
     `<c r="${colunaExcel(col)}${linha}" s="${estilo}" t="inlineStr"><is><t>${escaparXml(valor)}</t></is></c>`;
   const numero = (col, linha, valor, estilo) =>
@@ -491,39 +527,36 @@ function planilhaDetalheXml(processos, titulo) {
 
   const linhas = [
     `<row r="1" ht="34" customHeight="1">${texto(0, 1, titulo, 1)}</row>`,
-    `<row r="2" ht="20" customHeight="1">${texto(0, 2, `${quantidadeProcessos(processos.length)} aguardando julgamento — Atualizado em: ${dataHoraBR()}`, 2)}</row>`,
-    `<row r="4" ht="22" customHeight="1">${colunas.map((c, n) => texto(n, 4, c, n === 0 ? 13 : 4)).join('')}</row>`
+    `<row r="2" ht="20" customHeight="1">${texto(0, 2, `${frasePendentes(processos.length)} — Atualizado em: ${dataHoraBR()}`, 2)}</row>`,
+    `<row r="4" ht="22" customHeight="1">${colunas.map((c, n) => texto(n, 4, c.rotulo, n === 0 ? 13 : 4)).join('')}</row>`
   ];
 
   processos.forEach((p, n) => {
     const linha = 5 + n;
-    linhas.push(`<row r="${linha}" ht="18" customHeight="1">`
-      + texto(0, linha, p.num_processo, 5)
-      + texto(1, linha, p[COL.campo], 5)
-      + texto(2, linha, p[COL.segundaColuna.campo] || '', 5)
-      + texto(3, linha, dataBR(p.data_distribuicao), 5)
+    const celulas = colunas.map((coluna, col) => coluna.numero
       // Estilo 14, não 6: o formato do painel desenha zero como travessão, que
       // ali significa "nenhum processo". Aqui zero é o processo distribuído
       // hoje — a tela mostra 0 e o arquivo tem que mostrar o mesmo.
-      + numero(4, linha, Number(p.dias) || 0, 14)
-      + texto(5, linha, tempoPorExtenso(p.data_distribuicao, p.dias), 5)
-      + '</row>');
+      ? numero(col, linha, coluna.valor(p), 14)
+      : texto(col, linha, coluna.valor(p), 5)).join('');
+    linhas.push(`<row r="${linha}" ht="18" customHeight="1">${celulas}</row>`);
   });
+
+  const largura = colunas.map((c, n) =>
+    `<col min="${n + 1}" max="${n + 1}" width="${c.largura}" customWidth="1"/>`).join('');
 
   return '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
     + '<sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane ySplit="4" topLeftCell="A5" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
-    + '<cols><col min="1" max="1" width="22" customWidth="1"/><col min="2" max="2" width="10" customWidth="1"/>'
-    + '<col min="3" max="3" width="34" customWidth="1"/><col min="4" max="4" width="16" customWidth="1"/>'
-    + '<col min="5" max="5" width="14" customWidth="1"/>'
-    + '<col min="6" max="6" width="26" customWidth="1"/></cols>'
+    + `<cols>${largura}</cols>`
     + `<sheetData>${linhas.join('')}</sheetData>`
-    + '<mergeCells count="2"><mergeCell ref="A1:F1"/><mergeCell ref="A2:F2"/></mergeCells>'
+    + `<mergeCells count="2"><mergeCell ref="A1:${ultimaColuna}1"/><mergeCell ref="A2:${ultimaColuna}2"/></mergeCells>`
     + '</worksheet>';
 }
 
 function criarExcelDetalhe(processos, titulo) {
   const ultimaLinha = processos.length + 4;
-  const area = `<definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">'Detalhe'!$A$1:$F$${ultimaLinha}</definedName><definedName name="_xlnm.Print_Titles" localSheetId="0">'Detalhe'!$4:$4</definedName></definedNames>`;
+  const ultimaColuna = colunaExcel(colunasDoDetalhe(processos).length - 1);
+  const area = `<definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">'Detalhe'!$A$1:$${ultimaColuna}$${ultimaLinha}</definedName><definedName name="_xlnm.Print_Titles" localSheetId="0">'Detalhe'!$4:$4</definedName></definedNames>`;
   return pacoteExcel(planilhaDetalheXml(processos, titulo), 'Detalhe', area);
 }
 
@@ -647,6 +680,17 @@ function desenhar(linhas) {
   return total;
 }
 
+// "Acervo zerado" é verdade sem filtro e mentira com ele: sob o recorte, o
+// acervo pode estar cheio e só não ter nada em diligência.
+function ajustarVazio() {
+  const [titulo, texto] = recorte
+    ? ['Nenhum processo em diligência',
+       'Nenhum processo pendente está em diligência no momento. Volte a "Todo o acervo" para ver a lista completa.']
+    : vazioPadrao;
+  acervoVazio.querySelector('h3').textContent = titulo;
+  acervoVazio.querySelector('p').textContent = texto;
+}
+
 async function carregarAcervo({ carregamentoInicial = false } = {}) {
   acervoErro.hidden = true;
   acervoVazio.hidden = true;
@@ -658,7 +702,8 @@ async function carregarAcervo({ carregamentoInicial = false } = {}) {
 
   let linhas;
   try {
-    linhas = await api(COL.resumo, { paginar: true, method: 'POST', body: '{}' });
+    linhas = await api(COL.resumo, { paginar: true, method: 'POST',
+      body: JSON.stringify(parametroDoRecorte()) });
   } catch (err) {
     if (carregamentoInicial) {
       esconderMolduraDoPainel();
@@ -683,10 +728,9 @@ async function carregarAcervo({ carregamentoInicial = false } = {}) {
   const total = desenhar(linhas || []);
   linhasAtuais = linhas || [];
   btnExportar.disabled = false;
-  acervoTotal.textContent = total === 1
-    ? '1 processo aguardando julgamento'
-    : `${total} processos aguardando julgamento`;
+  acervoTotal.textContent = frasePendentes(total);
   acervoAtualizado.textContent = `Atualizado em: ${dataHoraBR()}`;
+  ajustarVazio();
   acervoVazio.hidden = total > 0;
   return true;
 }
@@ -726,7 +770,10 @@ async function abrirDetalhe(celulaEl) {
       method: 'POST',
       body: JSON.stringify({
         p_ordem: ordem ? Number(ordem) : null,
-        [COL.parametro]: unidade || null
+        [COL.parametro]: unidade || null,
+        // O card tem de abrir o mesmo recorte que a célula contava, senão o
+        // número que ele lista diverge do que estava na tela.
+        ...parametroDoRecorte()
       })
     });
   } catch (err) {
@@ -751,36 +798,71 @@ async function abrirDetalhe(celulaEl) {
   btnExportarDetalhe.disabled = detalheAtual.processos.length === 0;
 }
 
+// As colunas do card, numa lista só. A tela e o Excel do card liam duas listas
+// paralelas, e elas já divergiam: `naTela` marca a diferença que é de
+// propósito — na Câmara o conselheiro sai no arquivo e na tela fica no title da
+// célula, porque a coluna inteira repetiria o mesmo nome em toda linha.
+//
+// "Em diligência desde" entra quando a lista tem alguma: sob o recorte são
+// todas, e sem filtro ela aparece só se houver processo em diligência ali, que
+// é exatamente quando ela informa algo. Na Câmara nunca aparece — a função
+// dela não devolve o campo.
+function colunasDoDetalhe(processos) {
+  const colunas = [
+    { rotulo: 'Nº do Processo', largura: 22, naTela: true,
+      valor: p => p.num_processo },
+    { rotulo: COL.coluna, largura: 10, naTela: true,
+      valor: p => p[COL.campo],
+      // Mesmo par title/aria-label do painel: sem o rótulo, o leitor de tela
+      // soletra "CJ3" em cada linha e o nome do conselheiro só existe no mouse.
+      titulo: p => p.conselheiro && p.conselheiro !== p[COL.campo] ? p.conselheiro : '' },
+    { rotulo: COL.segundaColuna.rotulo, largura: 34, naTela: COL.segundaColuna.naTela,
+      valor: p => p[COL.segundaColuna.campo] || '' },
+    { rotulo: 'Distribuição', largura: 16, naTela: true,
+      valor: p => dataBR(p.data_distribuicao) },
+    { rotulo: 'Dias passados', largura: 14, naTela: true, numero: true,
+      valor: p => Number(p.dias) || 0 },
+    { rotulo: 'Tempo', largura: 26, naTela: true,
+      valor: p => tempoPorExtenso(p.data_distribuicao, p.dias) }
+  ];
+
+  if (processos.some(p => p.diligencia_desde)) {
+    colunas.push({ rotulo: 'Em diligência desde', largura: 20, naTela: true,
+      valor: p => p.diligencia_desde ? dataBR(p.diligencia_desde) : '' });
+  }
+  return colunas;
+}
+
 function desenharDetalhe(processos) {
-  const quantidade = processos.length === 1 ? '1 processo' : `${processos.length} processos`;
-  detalheResumo.textContent = `${quantidade} · Atualizado em: ${dataHoraBR()}`;
+  detalheResumo.textContent = `${quantidadeProcessos(processos.length)} · Atualizado em: ${dataHoraBR()}`;
+
+  // O Conselho ganha a coluna de assunto, que nele distingue de verdade: são 12
+  // tipos, contra o auto de infração único da Câmara.
+  const colunas = colunasDoDetalhe(processos).filter(c => c.naTela);
 
   const thead = document.createElement('thead');
   const cabecalho = document.createElement('tr');
-  // O Conselho ganha a coluna de assunto, que nele distingue de verdade: são 12
-  // tipos, contra o auto de infração único da Câmara.
-  ['Nº do Processo', COL.coluna,
-   ...(COL.segundaColuna.naTela ? [COL.segundaColuna.rotulo] : []),
-   'Distribuição', 'Dias passados', 'Tempo']
-    .forEach(rotulo => cabecalho.append(celula(rotulo, 'th')));
+  colunas.forEach(c => cabecalho.append(celula(c.rotulo, 'th')));
   thead.append(cabecalho);
 
   const tbody = document.createElement('tbody');
   processos.forEach(p => {
     const tr = document.createElement('tr');
-    tr.append(celula(p.num_processo, 'th', 'linha'));
-    const cadeira = celula(p[COL.campo]);
-    // Mesmo par title/aria-label do painel: sem o rótulo, o leitor de tela
-    // soletra "CJ3" em cada linha e o nome do conselheiro só existe no mouse.
-    if (p.conselheiro && p.conselheiro !== p[COL.campo]) {
-      cadeira.title = p.conselheiro;
-      cadeira.setAttribute('aria-label', `${p[COL.campo]} — ${p.conselheiro}`);
-    }
-    tr.append(cadeira);
-    if (COL.segundaColuna.naTela) tr.append(celula(p[COL.segundaColuna.campo] || '—'));
-    tr.append(celula(dataBR(p.data_distribuicao)));
-    tr.append(celula(p.dias));
-    tr.append(celula(tempoPorExtenso(p.data_distribuicao, p.dias)));
+    colunas.forEach((coluna, n) => {
+      const conteudo = coluna.valor(p);
+      // Só o vazio vira travessão. `Dias passados` é 0 no processo distribuído
+      // hoje, e 0 tem de aparecer como 0.
+      const el = n === 0
+        ? celula(conteudo, 'th', 'linha')
+        : celula(conteudo === '' ? '—' : conteudo);
+
+      const titulo = coluna.titulo ? coluna.titulo(p) : '';
+      if (titulo) {
+        el.title = titulo;
+        el.setAttribute('aria-label', `${coluna.valor(p)} — ${titulo}`);
+      }
+      tr.append(el);
+    });
     tbody.append(tr);
   });
 
