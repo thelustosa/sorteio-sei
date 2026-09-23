@@ -124,8 +124,7 @@ endereço não existe. Todo o resto está agrupado por natureza.
 │   ├── js/
 │   │   ├── bootstrap.js    carregamento sob demanda, verificação de sessão e controle de acesso
 │   │   ├── index.js        fonte da lógica do sorteio, validação e ata
-│   │   ├── julgados.js     fonte do registro de julgamentos da Câmara
-│   │   ├── julgados-creg.js  o mesmo, para o Conselho Regulador
+│   │   ├── julgados.js     fonte do registro de julgamentos (os dois colegiados)
 │   │   ├── acervo.js       fonte do painel do acervo dos dois colegiados
 │   │   ├── historico.js    fonte do histórico de sorteios dos dois colegiados
 │   │   ├── admin.js        fonte do painel administrativo dos dois colegiados
@@ -225,7 +224,6 @@ npx --yes esbuild@0.28.2 assets/js/supabase.js --minify-syntax --minify-whitespa
 npx --yes esbuild@0.28.2 assets/js/bootstrap.js --minify-syntax --minify-whitespace --outfile=assets/js/bootstrap.min.js
 npx --yes esbuild@0.28.2 assets/js/index.js --minify-syntax --minify-whitespace --outfile=assets/js/index.min.js
 npx --yes esbuild@0.28.2 assets/js/julgados.js --minify-syntax --minify-whitespace --outfile=assets/js/julgados.min.js
-npx --yes esbuild@0.28.2 assets/js/julgados-creg.js --minify-syntax --minify-whitespace --outfile=assets/js/julgados-creg.min.js
 npx --yes esbuild@0.28.2 assets/js/acervo.js --minify-syntax --minify-whitespace --outfile=assets/js/acervo.min.js
 npx --yes esbuild@0.28.2 assets/js/historico.js --minify-syntax --minify-whitespace --outfile=assets/js/historico.min.js
 npx --yes esbuild@0.28.2 assets/js/admin.js --minify-syntax --minify-whitespace --outfile=assets/js/admin.min.js

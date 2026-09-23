@@ -90,7 +90,7 @@ function inicializarSorteio() {
   avisarPendenciasDeJulgamento();
 }
 
-// Mesmo filtro que julgados.js/julgados-creg.js usam pra achar o que falta
+// Mesmo filtro que julgados.js usa pra achar o que falta
 // votar/status — aqui só a contagem importa, então pede só o id. Roda em
 // paralelo com o resto da tela, sem atrasar nada: se falhar, o card de
 // "Registrar dados faltantes" simplesmente fica sem o aviso.
