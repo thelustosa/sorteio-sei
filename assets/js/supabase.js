@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '8d163c286f';
+const ASSET_VERSION = 'a8d9f41caf';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -631,6 +631,101 @@ function mostrarErro(caixa, frase, detalheTecnico = '') {
   apoio.textContent = detalheTecnico ? `Detalhe técnico: ${detalheTecnico}` : '';
   apoio.hidden = !detalheTecnico;
   caixa.hidden = false;
+}
+
+// Espaço igual entre colunas nos cards de detalhe. Com o conteúdo centralizado,
+// o vão entre duas colunas vizinhas é a sobra de uma mais a sobra da outra — e
+// com largura fixa em porcentagem cada coluna sobrava diferente: o vão ia de
+// 11px a 130px num mesmo card, e no painel administrativo chegava a negativo,
+// com "Reformar parcialmente" entrando na coluna de Status.
+//
+// Aqui cada coluna fica com o próprio conteúdo mais a mesma folga. Primeiro o
+// layout automático decide o que quebra linha (só o texto longo, que o CSS
+// deixa quebrar); depois mede-se a extensão real do conteúdo de cada coluna —
+// linhas já quebradas, caixas de botão e de selo — e a sobra do contêiner é
+// repartida igualmente como `--folga`, somada ao respiro lateral de cada célula
+// (ver "Cards de detalhe" no CSS). A folga entra no respiro, e não na caixa do
+// texto: por isso o texto quebrado conserva as mesmas linhas, e o vão sai igual
+// dos dois lados de toda coluna. Sem sobra, nada muda e a tabela rola.
+//
+// O ResizeObserver cobre o que a chamada direta não alcança: o card que ainda
+// estava escondido quando a tabela foi desenhada, e a janela redimensionada.
+function equalizarColunas(tabela) {
+  if (!tabela?.isConnected) return;
+  const conteiner = tabela.parentElement;
+  if (typeof ResizeObserver === 'function' && !tabela.dataset.equalizada) {
+    tabela.dataset.equalizada = '1';
+    let ultimaLargura = -1;
+    new ResizeObserver(() => requestAnimationFrame(() => {
+      // Só a largura muda a conta; a altura muda a cada linha quebrada.
+      if (conteiner.clientWidth === ultimaLargura) return;
+      ultimaLargura = conteiner.clientWidth;
+      equalizarColunas(tabela);
+    })).observe(conteiner);
+  }
+  const cabecalho = tabela.rows[0] ? [...tabela.rows[0].cells] : [];
+  tabela.style.removeProperty('--folga');
+  tabela.style.tableLayout = '';
+  cabecalho.forEach(celula => { celula.style.width = ''; });
+
+  const estilo = getComputedStyle(conteiner);
+  // No celular o card rola de lado com uma largura mínima (520px): a conta
+  // reparte a sobra dessa largura, e não da tela, que é menor que ela.
+  const disponivel = Math.max(
+    conteiner.clientWidth - parseFloat(estilo.paddingLeft) - parseFloat(estilo.paddingRight),
+    parseFloat(getComputedStyle(tabela).minWidth) || 0);
+  // Escondida, ou virada ficha no celular (display deixa de ser table): não há
+  // coluna para igualar.
+  if (!cabecalho.length || disponivel <= 0 || getComputedStyle(tabela).display !== 'table') return;
+
+  const linhas = [...tabela.rows];
+  const extensao = cabecalho.map((_, i) =>
+    Math.max(...linhas.map(linha => (linha.cells[i] ? extensaoDoConteudo(linha.cells[i]) : 0))));
+  const respiro = cabecalho.map(celula => {
+    const e = getComputedStyle(celula);
+    return parseFloat(e.paddingLeft) + parseFloat(e.paddingRight);
+  });
+  const soma = lista => lista.reduce((total, valor) => total + valor, 0);
+  const sobra = disponivel - soma(extensao) - soma(respiro);
+  if (sobra <= 0) return;
+
+  // Arredonda para baixo: um décimo de pixel a mais por coluna já faria a soma
+  // passar do contêiner e acender a barra de rolagem.
+  const folga = Math.floor((sobra / (2 * cabecalho.length)) * 10) / 10;
+  tabela.style.setProperty('--folga', `${folga}px`);
+  tabela.style.tableLayout = 'fixed';
+  cabecalho.forEach((celula, i) => {
+    celula.style.width = `${Math.ceil((extensao[i] + respiro[i] + 2 * folga) * 10) / 10}px`;
+  });
+}
+
+// Largura ocupada pelo conteúdo de uma célula: o texto (linha a linha, já
+// quebrado) e as caixas que desenham borda ou fundo — botão, selo, campo. Um
+// bloco que só agrupa (a grade de ações, a autoria em duas linhas) não conta
+// pela própria largura, que é a da célula; conta pelo que tem dentro.
+const CAIXAS_DE_CONTEUDO = 'button, input, select, img, svg, .admin-badge';
+function extensaoDoConteudo(celula) {
+  let esquerda = Infinity;
+  let direita = -Infinity;
+  const incluir = retangulo => {
+    if (!retangulo.width) return;
+    esquerda = Math.min(esquerda, retangulo.left);
+    direita = Math.max(direita, retangulo.right);
+  };
+  const percorrer = no => {
+    for (const filho of no.childNodes) {
+      if (filho.nodeType === 3) {
+        const intervalo = document.createRange();
+        intervalo.selectNodeContents(filho);
+        [...intervalo.getClientRects()].forEach(incluir);
+      } else if (filho.nodeType === 1) {
+        if (filho.matches(CAIXAS_DE_CONTEUDO)) incluir(filho.getBoundingClientRect());
+        else percorrer(filho);
+      }
+    }
+  };
+  percorrer(celula);
+  return direita > esquerda ? direita - esquerda : 0;
 }
 
 function aviso(texto, tipo = 'sucesso', detalheTecnico = '') {
