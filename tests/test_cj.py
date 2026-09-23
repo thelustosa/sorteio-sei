@@ -1472,9 +1472,10 @@ def rotulos_da_pagina_batem_com_os_do_banco(cur):
         assert achado, padrao
         return re.findall(r"'([^']+)'", achado.group(1))
 
-    assert rotulos(pagina, r'const VOTOS = \[([^\]]+)\]') == \
+    # julgados.js serve os dois colegiados: a lista da Câmara é a do bloco cj.
+    assert rotulos(pagina, r'\bcj: \{.*?votos: \[([^\]]+)\]') == \
            rotulos(corpo, r"'voto', ''\)\s*not in \(([^)]+)\)")
-    assert rotulos(pagina, r'const STATUS = \[([^\]]+)\]') == \
+    assert rotulos(pagina, r'\bcj: \{.*?status: \[([^\]]+)\]') == \
            rotulos(corpo, r"'status', ''\)\s*not in \(([^)]+)\)")
 
 

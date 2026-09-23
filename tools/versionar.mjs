@@ -16,7 +16,6 @@ export const FONTES = [
   'assets/js/bootstrap.js',
   'assets/js/index.js',
   'assets/js/julgados.js',
-  'assets/js/julgados-creg.js',
   'assets/js/acervo.js',
   'assets/js/historico.js',
   'assets/js/admin.js'
