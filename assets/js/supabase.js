@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '2c8d623916';
+const ASSET_VERSION = '589ce625e4';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -348,32 +348,46 @@ async function api(caminho, opcoes = {}) {
   // Só consultas podem ser repetidas. RPCs de leitura optam explicitamente;
   // um POST que grava dados nunca é paginado por causa do formato da resposta.
   const { paginar = !opcoes.method || opcoes.method === 'GET', ...pedido } = opcoes;
-  const linhas = [];
-  let offset = 0;
   const separador = caminho.includes('?') ? '&' : '?';
-  do {
-    const pagina = await apiPagina(
-      offset ? `${caminho}${separador}offset=${offset}` : caminho,
-      { ...pedido, headers: {
-        ...pedido.headers,
-        ...(paginar ? { Prefer: [pedido.headers?.Prefer, 'count=exact'].filter(Boolean).join(',') } : {})
-      } });
-    if (!paginar || !Array.isArray(pagina.dados)) return pagina.dados;
-    linhas.push(...pagina.dados);
+  const buscar = offset => apiPagina(
+    offset ? `${caminho}${separador}offset=${offset}` : caminho,
+    { ...pedido, headers: {
+      ...pedido.headers,
+      ...(paginar ? { Prefer: [pedido.headers?.Prefer, 'count=exact'].filter(Boolean).join(',') } : {})
+    } });
+  const inconsistente = () => new Error('A paginação retornou dados inconsistentes. Atualize a consulta.');
+  // Confere uma página contra o offset pedido e devolve o total que ela declara.
+  const conferir = (pagina, offset) => {
     const intervalo = /^(\d+)-(\d+)\/(\d+)$/.exec(pagina.intervalo || '');
-    if (!intervalo) {
-      if (pagina.intervalo && pagina.intervalo !== '*/0') {
-        throw new Error('Não foi possível confirmar o total de registros. Atualize a consulta.');
-      }
-      return linhas;
+    if (!intervalo) throw new Error('Não foi possível confirmar o total de registros. Atualize a consulta.');
+    const inicio = Number(intervalo[1]), fim = Number(intervalo[2]);
+    if (!Array.isArray(pagina.dados) || inicio !== offset || fim - inicio + 1 !== pagina.dados.length) {
+      throw inconsistente();
     }
-    const inicio = Number(intervalo[1]), fim = Number(intervalo[2]), total = Number(intervalo[3]);
-    if (inicio !== offset || fim - inicio + 1 !== pagina.dados.length) {
-      throw new Error('A paginação retornou dados inconsistentes. Atualize a consulta.');
-    }
-    if (fim + 1 >= total) return linhas;
-    offset = fim + 1;
-  } while (true);
+    return Number(intervalo[3]);
+  };
+
+  const primeira = await buscar(0);
+  if (!paginar || !Array.isArray(primeira.dados)) return primeira.dados;
+  // Sem cabeçalho, ou lista vazia (`*/0`): não há outra página a pedir.
+  if (!primeira.intervalo || primeira.intervalo === '*/0') return primeira.dados;
+  const total = conferir(primeira, 0);
+  const tamanho = primeira.dados.length;
+  if (tamanho >= total) return primeira.dados;
+
+  // A primeira página diz o tamanho que o servidor serve e o total: as demais
+  // saem todas juntas, em vez de uma por ida à rede. Cada uma tem de declarar o
+  // mesmo total — se a lista mudou no meio, é recusa, não um retrato torto.
+  // ponytail: sem teto de concorrência — as tabelas têm milhares de linhas, não
+  // milhões; com mais de ~10 páginas, limitar os pedidos simultâneos.
+  const offsets = [];
+  for (let offset = tamanho; offset < total; offset += tamanho) offsets.push(offset);
+  const demais = await Promise.all(offsets.map(async offset => {
+    const pagina = await buscar(offset);
+    if (conferir(pagina, offset) !== total) throw inconsistente();
+    return pagina.dados;
+  }));
+  return primeira.dados.concat(...demais);
 }
 
 async function apiPagina(caminho, opcoes) {
