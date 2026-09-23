@@ -108,8 +108,28 @@ async function carregarPaginaAutenticada() {
   // página ficava literalmente vazia (`main.innerText === ''`), que é o quadro
   // em que a transição entre páginas aterrissava.
   mostrarAndamento();
+  const inicioDoAndamento = Date.now();
   const src = `assets/js/${paginaAtual.arquivo}?v=${ASSET_VERSION}`;
   anteciparScript(src);
+
+  // Fora do painel, a consulta de papel decide UMA coisa: se o atalho para o
+  // painel aparece na tela inicial. Sem o catch, uma falha nela — RPC
+  // indisponível, ambiente sem a migração aplicada — trocava a tela inicial
+  // inteira pelo erro de carregamento; sem resposta, o atalho fica escondido,
+  // que é o mesmo estado de quem não administra nada.
+  //
+  // Ela nunca é aguardada: esperá-la segurava "Preparando o sorteio…" no ar
+  // até a resposta, e com a rede lenta isso é o tempo-limite inteiro só para
+  // decidir se um cartão aparece. Mas ela sai JÁ, junto com a de permissão, e
+  // não depois dela: disparada tarde, a resposta chegava com a tela já de pé e
+  // o cartão entrava sozinho, acima da caixa, empurrando a tela para baixo.
+  // Saindo junto, ela quase sempre volta antes de a tela montar, e o cartão
+  // entra com os outros (o CSS o mantém fora enquanto o seletor não aparece).
+  if (!paginaAtual.exigeAdmin && document.querySelector('[data-admin]')) {
+    buscarOrgaosAdministrados()
+      .catch(() => new Set())
+      .then(orgaos => aplicarVisibilidadeAdmin(orgaos));
+  }
 
   try {
     const orgaos = await buscarOrgaosAutorizados();
@@ -134,24 +154,16 @@ async function carregarPaginaAutenticada() {
       orgaosAdmin = await buscarOrgaosAdministrados();
       if (orgaosAdmin.size === 0) throw erroSemPermissao();
       aplicarVisibilidadeAdmin(orgaosAdmin);
-    } else if (document.querySelector('[data-admin]')) {
-      // Fora do painel a consulta decide UMA coisa: se um atalho opcional
-      // aparece. Sem o catch, uma falha nela — RPC indisponível, ambiente sem a
-      // migração aplicada — trocava a tela inicial inteira pelo erro de
-      // carregamento. Sem resposta, o atalho fica escondido, que é o mesmo
-      // estado de quem não administra nada.
-      //
-      // E como nada na tela inicial depende dela, aqui ela só é DISPARADA, nunca
-      // aguardada. Esperá-la — antes do download ou logo depois dele — segurava
-      // "Preparando o sorteio…" no ar até a resposta chegar, e com a rede lenta
-      // isso é o tempo-limite inteiro, só para decidir se um cartão aparece. O
-      // atalho surge quando a resposta vier, com a tela já de pé.
-      buscarOrgaosAdministrados()
-        .catch(() => new Set())
-        .then(orgaos => aplicarVisibilidadeAdmin(orgaos));
     }
 
     await carregarScript(src);
+    // O card "Preparando…" segue a regra de todo indicador: ou não aparece,
+    // ou fica tempo de ser lido. Sem isto, voltar do acervo à tela inicial com
+    // a permissão em ~400ms mostrava o indicador pleno por ~80ms e o tirava —
+    // um lampejo. A espera vem ANTES de a tela montar, para os dois não
+    // dividirem a tela. No painel com moldura não há espera: o indicador segue
+    // dentro da tela, que o assume sem recriá-lo.
+    if (!molduraDaPagina || !indicadorDaMoldura) await aguardarIndicador(inicioDoAndamento);
     // Toda tela monta a própria moldura de forma síncrona antes de buscar dado
     // algum — a lista de pautas, o painel do acervo/histórico, o seletor de
     // modalidade — e põe o próprio indicador dentro dela. Então o indicador

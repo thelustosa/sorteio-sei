@@ -1272,7 +1272,7 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
   const app = new Function('document', 'window', 'location', 'ASSET_VERSION', 'carregarScript',
     'criarIndicadorCarregamento', 'ligarLogin', 'buscarOrgaosAutorizados',
     'aplicarVisibilidadePorOrgao', 'erroSemPermissao', 'sair', 'redirecionarSemTransicao',
-    'buscarOrgaosAdministrados', 'aplicarVisibilidadeAdmin', 'mostrarIndicador',
+    'buscarOrgaosAdministrados', 'aplicarVisibilidadeAdmin', 'mostrarIndicador', 'aguardarIndicador',
     `${source('bootstrap.js')}\nreturn {
       resolverDestinoPermitido: typeof resolverDestinoPermitido === 'function' ? resolverDestinoPermitido : undefined,
       carregarPaginaAutenticada
@@ -1281,7 +1281,7 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
     texto => { const estado = document.createElement('div'); estado.textContent = texto; return estado; },
     callback => { aoEntrar = callback; }, buscarOrgaos, aplicarVisibilidade, erroPermissao,
     encerrarSessaoNoServidor, destino => location.replace(destino),
-    buscarAdmin, aplicarVisibilidadeAdmin, mostrarIndicador);
+    buscarAdmin, aplicarVisibilidadeAdmin, mostrarIndicador, aguardarIndicador);
 
   return { ...app, document, sessionLoading, moldura, loginScreen, loginErro, btnSair, iniciar: () => aoEntrar() };
 }
@@ -4813,6 +4813,35 @@ test('a consulta do atalho administrativo nao segura a tela inicial', async () =
   responder(new Set(['CJ']));
   await wait();
   assert.deepEqual(aplicados, [['CJ']], 'o atalho aparece quando a resposta chega');
+});
+
+// Disparada depois da permissão, a resposta chegava com a tela já de pé, e o
+// cartão entrava sozinho acima da caixa, empurrando a tela para baixo.
+test('a consulta do atalho administrativo sai junto com a de permissao', async () => {
+  let responderPermissao;
+  let consultouPapel = false;
+  const page = telaInicialComAtalhoAdmin(async () => {}, {
+    buscarOrgaos: () => new Promise(resolve => { responderPermissao = resolve; }),
+    buscarAdmin: async () => { consultouPapel = true; return new Set(); }
+  });
+  const carregamento = page.iniciar();
+  await wait();
+  assert.equal(consultouPapel, true, 'o papel é consultado antes de a permissão responder');
+  responderPermissao(new Set(['CJ']));
+  await carregamento;
+});
+
+// Voltar do acervo à tela inicial com a permissão em ~400ms mostrava
+// "Preparando o sorteio…" pleno por ~80ms e o tirava: um lampejo.
+test('o indicador geral que chegou a aparecer fica o tempo minimo antes da tela', async () => {
+  const inicio = Date.now();
+  let montouEm = null;
+  const page = bootstrapPage(async () => { montouEm = Date.now(); }, 'sorteio', {
+    buscarOrgaos: () => new Promise(resolve => setTimeout(() => resolve(new Set(['CJ'])), 200))
+  });
+  await page.iniciar();
+  assert.ok(montouEm - inicio >= 590,
+    `a tela montou ${montouEm - inicio}ms depois: o indicador saiu antes de ser lido`);
 });
 
 // Fora do painel a consulta decide só se um atalho aparece: uma falha ali não
