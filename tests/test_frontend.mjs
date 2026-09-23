@@ -179,7 +179,7 @@ function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null, local = ne
       aplicarVisibilidadePorOrgao: typeof aplicarVisibilidadePorOrgao === 'function' ? aplicarVisibilidadePorOrgao : undefined,
       erroSemPermissao: typeof erroSemPermissao === 'function' ? erroSemPermissao : undefined,
       CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicador,
-      alternarBotaoCarregando, redirecionarSemTransicao,
+      alternarBotaoCarregando, redirecionarSemTransicao, mostrarErro,
       estadoSessao: () => ({ accessToken, refreshToken })
     };`)(document, window, navigator, location, sessionStorage, localStorage, fetch, apiSubstituta);
   return { ...app, document, navegacoes, storage, local,
@@ -232,7 +232,7 @@ function paginaServidaComBundles(fetch) {
 // seu próprio script. As telas o enxergam como global; aqui ele é injetado, e
 // vem do arquivo de verdade para que uma divergência apareça como falha.
 const { CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicador,
-        alternarBotaoCarregando } = supabaseApp(async () => {});
+        alternarBotaoCarregando, mostrarErro } = supabaseApp(async () => {});
 
 function indexPage({ api = async () => null, aviso = () => {},
   supabaseUrl = 'url', supabaseKey = 'key', token = 'token' } = {}) {
@@ -1631,9 +1631,9 @@ function acervoPage(api, { imprimir = () => {}, colegiado = 'cj' } = {}) {
   const escolherRecorte = valor =>
     recorteCampo.dispatch('change', { target: { value: valor } });
 
-  const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador',
+  const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador', 'mostrarErro',
     `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, criarExcelDetalhe, dadosTabulares, abrirDetalhe, exportarDetalhe, tempoPorExtenso };`)(
-    document, { print: imprimir }, api, criarIndicadorCarregamento, aguardarIndicador);
+    document, { print: imprimir }, api, criarIndicadorCarregamento, aguardarIndicador, mostrarErro);
   return { document, loginOnlyCard, dialog, painelCarregando, tabelaScroll,
            recorteCampo, escolherRecorte, ...app };
 }
@@ -1932,7 +1932,9 @@ test('falha de exportação mostra uma mensagem clara e libera o botão', async 
   await page.exportar('pdf');
 
   const feedback = page.document.getElementById('exportFeedback');
-  assert.match(feedback.textContent, /Não foi possível gerar o arquivo.*impressão bloqueada/);
+  assert.match(feedback.textContent, /Não foi possível gerar o arquivo/);
+  assert.match(feedback.children[0].textContent, /Detalhe técnico: impressão bloqueada/,
+    'a mensagem da exceção desce para a linha de apoio, fora da frase principal');
   assert.equal(feedback.dataset.state, 'error');
   assert.equal(feedback.role, 'alert');
   assert.equal(feedback['aria-live'], 'assertive');
@@ -2191,7 +2193,7 @@ test('o card fecha e a falha aparece dentro dele', async () => {
   assert.equal(page.dialog.open, true, 'fechar o card esconderia a mensagem de erro');
   const erro = page.document.getElementById('detalheErro');
   assert.equal(erro.hidden, false);
-  assert.match(erro.children[0].textContent, /rede fora/);
+  assert.match(erro.querySelector('.load-error-detalhe').textContent, /rede fora/);
   assert.equal(page.document.getElementById('btnExportarDetalhe').disabled, true,
     'não há o que exportar quando a lista não chegou');
 });
@@ -2204,7 +2206,7 @@ test('falha de sessão mantém o card e mostra o erro sem deslogar', async () =>
 
   assert.equal(page.dialog.open, true);
   assert.equal(page.document.getElementById('detalheErro').hidden, false);
-  assert.match(page.document.getElementById('detalheErro').children[0].textContent, /sessão expirada/);
+  assert.match(page.document.getElementById('detalheErro').children[1].textContent, /sessão expirada/);
 });
 
 test('o Excel do card é um .xlsx válido com os processos', async () => {
@@ -2252,7 +2254,8 @@ test('falha ao exportar o card avisa dentro do próprio card', async () => {
   const erro = page.document.getElementById('detalheErro');
   assert.equal(erro.hidden, false,
     'falha silenciosa é indistinguível de um download que o navegador engoliu');
-  assert.match(erro.children[0].textContent, /Não foi possível gerar o arquivo.*download bloqueado/);
+  assert.match(erro.children[0].textContent, /Não foi possível gerar o arquivo/);
+  assert.match(erro.children[1].textContent, /Detalhe técnico: download bloqueado/);
 });
 
 test('zero dias passados sai como 0 no Excel, não como o travessão do painel', async () => {
@@ -2596,10 +2599,10 @@ function historicoPage(api, colegiado = 'creg') {
   document.getElementById('historicoPanel').hidden = true;
   document.getElementById('btnAtualizar').hidden = true;  // como nas páginas
 
-  const app = new Function('document', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador',
+  const app = new Function('document', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador', 'mostrarErro',
     `${source('historico.js')}\nreturn { inicializarHistorico, carregarHistorico, abrirDetalhe,
       criarDocxDetalhe, exportarDetalheDocx };`)(
-    document, api, criarIndicadorCarregamento, aguardarIndicador);
+    document, api, criarIndicadorCarregamento, aguardarIndicador, mostrarErro);
   return { document, loginOnlyCard, dialog, painelCarregando, tabelaScroll, ...app };
 }
 
@@ -2841,7 +2844,7 @@ test('falha ao atualizar não deixa o total anunciando uma tabela vazia', async 
   assert.equal(page.document.getElementById('historicoTable').children.length, 0);
   assert.equal(page.document.getElementById('historicoTotal').textContent, '');
   assert.equal(page.document.getElementById('historicoErro').hidden, false);
-  assert.match(page.document.getElementById('historicoErro').children[0].textContent,
+  assert.match(page.document.getElementById('historicoErro').querySelector('.load-error-detalhe').textContent,
     /indisponível/);
   assert.equal(page.document.getElementById('btnAtualizar').disabled, false,
     'o botão precisa voltar para permitir nova tentativa');
@@ -2960,7 +2963,7 @@ test('falha ao abrir a rodada aparece dentro do card, sem deslogar', async () =>
 
   assert.equal(page.dialog.open, true, 'o card permanece aberto para mostrar o erro');
   assert.equal(page.document.getElementById('detalheErro').hidden, false);
-  assert.match(page.document.getElementById('detalheErro').children[0].textContent,
+  assert.match(page.document.getElementById('detalheErro').querySelector('.load-error-detalhe').textContent,
     /sessão expirada/);
   assert.equal(page.document.getElementById('historicoPanel').hidden, false,
     'a lista já carregada não pode sumir por causa do card');
@@ -3184,7 +3187,8 @@ test('falha ao exportar a ata avisa dentro do próprio card', async () => {
 
   const erro = page.document.getElementById('detalheErro');
   assert.equal(erro.hidden, false);
-  assert.match(erro.children[0].textContent, /Não foi possível gerar o arquivo.*download bloqueado/);
+  assert.match(erro.children[0].textContent, /Não foi possível gerar o arquivo/);
+  assert.match(erro.children[1].textContent, /Detalhe técnico: download bloqueado/);
 });
 
 // ── Painel administrativo ────────────────────────────────────────────────────
@@ -3259,9 +3263,9 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
   document.body.append(seletor, abas, document.getElementById('edicaoCampos'));
 
   const app = new Function('document', 'api', 'aviso', 'criarIndicadorCarregamento',
-    'alternarBotaoCarregando', 'rotularCadeira',
+    'alternarBotaoCarregando', 'rotularCadeira', 'mostrarErro',
     `${source('admin.js')}\nreturn { inicializarAdmin, VOCABULARIO };`)(
-    document, api, registrarAviso, () => document.createElement('div'), botaoCarregando, rotularCadeira);
+    document, api, registrarAviso, () => document.createElement('div'), botaoCarregando, rotularCadeira, mostrarErro);
 
   const botaoDeOrgao = orgao => seletor.children.find(b => b.dataset.orgaoAdmin === orgao);
   const botaoDeAba = nome => abas.children.find(b => b.dataset.aba === nome);

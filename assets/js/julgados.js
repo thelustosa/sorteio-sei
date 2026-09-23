@@ -48,6 +48,7 @@ const COLEGIADOS = {
 
 const COL = COLEGIADOS[document.body.dataset.colegiado] || COLEGIADOS.cj;
 const VOTOS = COL.votos;
+const ROTULOS_DAS_COLUNAS = ['Nº Processo', COL.destino === 'relator' ? 'Relator' : 'Unidade', 'Voto', 'Status'];
 const STATUS = COL.status;
 
 const listaPautas = document.getElementById('listaPautas');
@@ -142,7 +143,7 @@ async function carregarPautas(moverFoco = false) {
       + '&order=data_sessao.desc,num_processo.asc,id.asc');
   } catch (err) {
     mostrarErroDeCarregamento();
-    aviso(`Não foi possível carregar os julgados (${err.message}).`, 'erro');
+    aviso('Não foi possível carregar os julgados. Verifique sua conexão e tente novamente.', 'erro', err.message);
     return;
   }
 
@@ -294,6 +295,9 @@ function abrirPauta(chave) {
     tdStatus.appendChild(status);
 
     tr.append(proc, destino, tdVoto, tdStatus);
+    // No celular a linha vira ficha e o cabeçalho sai de vista: cada campo
+    // leva o próprio rótulo (ver "Tabelas no celular" no CSS).
+    ROTULOS_DAS_COLUNAS.forEach((rotulo, i) => { tr.children[i].dataset.label = rotulo; });
     fragmento.appendChild(tr);
   });
   tbody.replaceChildren(fragmento);
@@ -371,7 +375,7 @@ async function salvar() {
     }
     await carregarPautas(true);
   } catch (err) {
-    aviso(`Falha ao gravar (${err.message}). Nada foi salvo — tente novamente.`, 'erro');
+    aviso('Nada foi salvo. Tente novamente.', 'erro', err.message);
   } finally {
     alternarBotaoCarregando(btnSalvar, false);
   }

@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '589ce625e4';
+const ASSET_VERSION = '8d163c286f';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -615,7 +615,25 @@ function posicionarRegiaoDeAvisos(regiao) {
   regiao.style.bottom = 'auto';
 }
 
-function aviso(texto, tipo = 'sucesso') {
+// A frase principal diz o que houve e o que fazer. A mensagem da exceção vem à
+// parte: dentro de parênteses ela costumava repetir o começo da própria frase
+// ("não foi possível carregar… (não foi possível consultar o serviço)") e
+// empurrava a instrução para o fim. Ela ainda ajuda quem for investigar, então
+// desce para uma linha de apoio em texto secundário — ver o Don't no DESIGN.md.
+function mostrarErro(caixa, frase, detalheTecnico = '') {
+  caixa.querySelector('p').textContent = frase;
+  let apoio = caixa.querySelector('.load-error-detalhe');
+  if (!apoio) {
+    apoio = document.createElement('p');
+    apoio.className = 'load-error-detalhe';
+    caixa.appendChild(apoio);
+  }
+  apoio.textContent = detalheTecnico ? `Detalhe técnico: ${detalheTecnico}` : '';
+  apoio.hidden = !detalheTecnico;
+  caixa.hidden = false;
+}
+
+function aviso(texto, tipo = 'sucesso', detalheTecnico = '') {
   const { titulo: rotulo, classe, assertivo } = TIPOS_AVISO[tipo] || TIPOS_AVISO.sucesso;
 
   let regiao = document.getElementById('toastRegion');
@@ -670,6 +688,12 @@ function aviso(texto, tipo = 'sucesso') {
   detalhe.className = 'toast-detail';
   detalhe.textContent = texto;
   conteudo.append(titulo, detalhe);
+  if (detalheTecnico) {
+    const tecnico = document.createElement('span');
+    tecnico.className = 'toast-tecnico';
+    tecnico.textContent = `Detalhe técnico: ${detalheTecnico}`;
+    conteudo.append(tecnico);
+  }
 
   const fechar = document.createElement('button');
   fechar.type = 'button';
