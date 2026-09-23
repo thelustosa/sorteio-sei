@@ -51,7 +51,7 @@ Três entradas de dados, e cada uma escreve em um lugar só:
 
 ## 1. Sorteio: o processo entra no acervo
 
-A secretária abre [`index.html`](index.html), escolhe **Câmara de Julgamento** e
+A secretária abre [`index.html`](../index.html), escolhe **Câmara de Julgamento** e
 preenche uma linha por processo:
 
 | campo na tela | vira em `acervo_cj` |
@@ -345,7 +345,7 @@ distribuição que faltava **não toca** no julgado órfão, então nada reexecu
 continua com `acervo_id` nulo por mais que o processo já esteja no acervo. Vale
 para o sorteio feito depois da sessão e para qualquer correção manual do acervo.
 
-Quem fecha o ciclo é [`rederivar_cj.sql`](sql/rederivar_cj.sql), rodado no SQL Editor
+Quem fecha o ciclo é [`rederivar_cj.sql`](../sql/rederivar_cj.sql), rodado no SQL Editor
 do Supabase. Uma atribuição do campo a ele mesmo basta para disparar o gatilho,
 que procura o processo outra vez e vincula o acervo que agora existe. Os valores
 já revisados manualmente continuam vencendo os derivados:
@@ -371,7 +371,7 @@ continua lá.
 
 A pauta é **convocação**: chega sem voto e sem status, porque as duas coisas são
 decisão da sessão e só existem depois dela. Quem preenche é a secretaria, em
-[`julgados-cj.html`](julgados-cj.html).
+[`julgados-cj.html`](../julgados-cj.html).
 
 ```mermaid
 flowchart LR
@@ -534,7 +534,7 @@ período ainda não existia.
 
 Só inserir não conserta isso — o `on conflict do nothing` pula essas linhas e
 elas ficariam órfãs para sempre. É exatamente o caso da seção 3, e a carga
-resolveu com o mesmo `update` de [`rederivar_cj.sql`](sql/rederivar_cj.sql),
+resolveu com o mesmo `update` de [`rederivar_cj.sql`](../sql/rederivar_cj.sql),
 restrito às sessões do período. Pela mesma razão, `processos_importados` e
 `processos_sem_acervo` de `pautas_cj` foram recalculados a partir do estado real
 da tabela: o documento da 30ª tinha 17 processos "fora do acervo" congelados, e
@@ -593,7 +593,7 @@ A carga foi feita pelas mesmas regras da de 21/08, direto no banco, num bloco s�
   só aparece no bloco do Paulo Otoni Ribeiro. Nenhuma exceção desta vez.
 - **Nenhum processo das duas atas** já estava no acervo — não há
   redistribuição nesta carga.
-- **Depois do insert**, o `update` de [`rederivar_cj.sql`](sql/rederivar_cj.sql)
+- **Depois do insert**, o `update` de [`rederivar_cj.sql`](../sql/rederivar_cj.sql)
   religou os 35 órfãos, e `processos_sem_acervo` das duas pautas foi recalculado
   a partir de `julgados_cj`: as duas ficaram vazias.
 
@@ -610,7 +610,7 @@ conferem com as atas 014 e 015.
 | distribuições sem julgamento | — | **41** (CJ1 20, CJ3 6, CJ5 6, CJ2 5, CJ4 4) |
 
 Os 23 da 34ª são a fila de voto e status da secretaria. As conferências de
-[`verificacao_cj.sql`](sql/verificacao_cj.sql) fecham sem `ERRO`, com os mesmos
+[`verificacao_cj.sql`](../sql/verificacao_cj.sql) fecham sem `ERRO`, com os mesmos
 dois avisos de antes (o `1283` e o `2208`).
 
 ### A mesclagem do histórico (18/09/2026)
@@ -750,7 +750,7 @@ Postgres, e as regras moram no banco.
 | gravar voto e status | `POST /rest/v1/rpc/registrar_votos` | `julgados-cj.html` |
 | importar pautas | conexão direta ao Postgres | GitHub Actions |
 
-Toda chamada do navegador passa por `api()` em [`supabase.js`](assets/js/supabase.js), que
+Toda chamada do navegador passa por `api()` em [`supabase.js`](../assets/js/supabase.js), que
 centraliza autenticação, renovação da sessão e tratamento de erro.
 
 ### Sessão
@@ -867,22 +867,22 @@ Chaves e índices que sustentam as regras:
 
 | arquivo | papel |
 |---|---|
-| [`sql/schema.sql`](sql/schema.sql) | tabelas, gatilho, função de registro, RLS — estado final do banco |
-| [`sql/verificacao_cj.sql`](sql/verificacao_cj.sql) | conferências de consistência, só leitura |
-| [`sql/rederivar_cj.sql`](sql/rederivar_cj.sql) | religa ao acervo os julgados que entraram sem ele |
-| [`sql/backup_cj.sql`](sql/backup_cj.sql) | copia as três tabelas para o schema backup_cj |
-| [`sql/restaurar_cj.sql`](sql/restaurar_cj.sql) | devolve o backup às tabelas de produção |
-| [`dados/importar_planilha.py`](dados/importar_planilha.py) | converte a planilha histórica em SQL de importação |
-| [`sincronizacao/agr.py`](sincronizacao/agr.py) | listagem e download, só do portal do Estado de Goiás |
-| [`sincronizacao/pauta.py`](sincronizacao/pauta.py) | texto do PDF, data, processos, exclusão da Referência |
-| [`sincronizacao/sincronizar.py`](sincronizacao/sincronizar.py) | orquestra, CLI, resumo JSON |
-| [`index.html`](index.html) / [`assets/js/index.js`](assets/js/index.js) | sorteio |
-| [`julgados-cj.html`](julgados-cj.html) / [`assets/js/julgados.js`](assets/js/julgados.js) | registro de voto e status |
-| [`acervo-cj.html`](acervo-cj.html) / [`assets/js/acervo.js`](assets/js/acervo.js) | painel do acervo da Câmara |
-| [`assets/js/supabase.js`](assets/js/supabase.js) | configuração, login e chamadas, compartilhados |
-| [`assets/css/index.css`](assets/css/index.css) | o design das três páginas |
+| [`sql/schema.sql`](../sql/schema.sql) | tabelas, gatilho, função de registro, RLS — estado final do banco |
+| [`sql/verificacao_cj.sql`](../sql/verificacao_cj.sql) | conferências de consistência, só leitura |
+| [`sql/rederivar_cj.sql`](../sql/rederivar_cj.sql) | religa ao acervo os julgados que entraram sem ele |
+| [`sql/backup_cj.sql`](../sql/backup_cj.sql) | copia as três tabelas para o schema backup_cj |
+| [`sql/restaurar_cj.sql`](../sql/restaurar_cj.sql) | devolve o backup às tabelas de produção |
+| [`dados/importar_planilha.py`](../dados/importar_planilha.py) | converte a planilha histórica em SQL de importação |
+| [`sincronizacao/agr.py`](../sincronizacao/agr.py) | listagem e download, só do portal do Estado de Goiás |
+| [`sincronizacao/pauta.py`](../sincronizacao/pauta.py) | texto do PDF, data, processos, exclusão da Referência |
+| [`sincronizacao/sincronizar.py`](../sincronizacao/sincronizar.py) | orquestra, CLI, resumo JSON |
+| [`index.html`](../index.html) / [`assets/js/index.js`](../assets/js/index.js) | sorteio |
+| [`julgados-cj.html`](../julgados-cj.html) / [`assets/js/julgados.js`](../assets/js/julgados.js) | registro de voto e status |
+| [`acervo-cj.html`](../acervo-cj.html) / [`assets/js/acervo.js`](../assets/js/acervo.js) | painel do acervo da Câmara |
+| [`assets/js/supabase.js`](../assets/js/supabase.js) | configuração, login e chamadas, compartilhados |
+| [`assets/css/index.css`](../assets/css/index.css) | o design das três páginas |
 | `.github/workflows/sincronizar-julgados-cj.yml` | o agendamento |
-| [`tests/`](tests/) | as três suítes: banco em container, parser da AGR e sorteio |
+| [`tests/`](../tests/) | as três suítes: banco em container, parser da AGR e sorteio |
 
 ---
 
@@ -922,13 +922,13 @@ Revisto depois da carga das atas 015 e 016, em 17/09/2026.
   diz de quem é, mas `acervo_id` e `data_distribuicao` ficam nulos e o número
   segue listado em `pautas_cj.processos_sem_acervo` da 25ª reunião. Aparecendo o
   documento que registra a distribuição, basta inseri-la no acervo e rodar o
-  [`rederivar_cj.sql`](sql/rederivar_cj.sql).
+  [`rederivar_cj.sql`](../sql/rederivar_cj.sql).
 - **Um processo relatado por quem não o sorteou.** O `202600029002208`: ata 013
   para Paulo Henrique, 28ª reunião pela Lorena. Está registrado assim de
   propósito — ver *A pauta confere o acervo* — mas se a troca teve um documento,
   ela vira uma redistribuição no acervo e o caso fecha.
 - **Cadeira × conselheiro — resolvido.** `acervo_cj.relator` guarda a **cadeira**
-  (`CJ1`..`CJ5`), e quem ocupa cada uma sai de [`cadeiras_cj`](sql/schema.sql),
+  (`CJ1`..`CJ5`), e quem ocupa cada uma sai de [`cadeiras_cj`](../sql/schema.sql),
   uma tabela por período. As 345 linhas que traziam nome foram convertidas pela
   migração `20260824180000`.
 
