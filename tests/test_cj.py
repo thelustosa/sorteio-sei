@@ -1550,56 +1550,6 @@ def backup_e_restauracao_fecham_o_ciclo(cur):
     PG.executar('drop schema backup_cj cascade')
 
 
-@teste
-@exige_planilha
-def mesclagem_do_historico_vai_e_volta(cur):
-    """O caminho de 18/09/2026: limpeza, nova série, mesclagem e desfazer.
-
-    A mesclagem tem de somar o histórico sem tocar na nova série, e o desfazer
-    tem de tirar só o que ela trouxe — a linha da nova série fica.
-    """
-    def conta():
-        cur.connection.commit()
-        with PG.conectar() as c, c.cursor() as k:
-            return (uma(k, 'select count(*) from acervo_cj'),
-                    uma(k, 'select count(*) from julgados_cj'))
-
-    def valor(sql):
-        with PG.conectar() as c, c.cursor() as k:
-            return uma(k, sql)
-
-    original = conta()
-    PG.rodar_arquivo(RAIZ / 'sql' / 'backup_cj.sql')
-    PG.executar("""
-        delete from public.julgados_cj;
-        delete from public.acervo_cj a
-         where exists (select 1 from backup_cj.julgados_cj j
-                        where j.num_processo = a.num_processo);
-        insert into public.acervo_cj (num_processo, relator, data_distribuicao, defesa, origem)
-        values ('202600029099001', 'CJ2', date '2026-09-01', true, 'ata');
-        insert into public.julgados_cj (num_processo, data_sessao, pauta, voto, status)
-        values ('202600029099001', date '2026-09-10', 33, 'Manter', 'Julgado');
-    """)
-    pre = conta()
-
-    PG.rodar_arquivo(RAIZ / 'sql' / 'backup_pre_mesclagem_cj.sql')
-    PG.rodar_arquivo(RAIZ / 'sql' / 'mesclar_historico_cj.sql')
-
-    assert conta() == (original[0] + 1, original[1] + 1), conta()
-    assert valor("""select count(*) from acervo_cj
-                     where data_distribuicao >= date '2026-01-01'
-                       and relator !~ '^CJ[0-9]+$'""") == 0
-    assert valor("""select acervo_id is not null from julgados_cj
-                     where num_processo = '202600029099001'""")
-
-    PG.rodar_arquivo(RAIZ / 'sql' / 'desfazer_mesclagem_cj.sql')
-    assert conta() == pre, 'o desfazer não devolveu o estado pré-mesclagem'
-
-    PG.rodar_arquivo(RAIZ / 'sql' / 'restaurar_cj.sql')
-    PG.executar('drop schema backup_cj_pre_mesclagem cascade; drop schema backup_cj cascade')
-    assert conta() == original
-
-
 # ── Histórico de sorteios ────────────────────────────────────────────────────
 # As duas funções que alimentam historico-cj.html e historico-creg.html. Elas
 # leem os acervos, que são fechados ao navegador, e por isso são SECURITY

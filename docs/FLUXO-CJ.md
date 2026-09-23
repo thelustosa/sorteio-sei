@@ -628,11 +628,11 @@ julgado repetia processo e sessão, porque o backup termina em 18/06 e a nova
 série começa em 25/06; as sequências já estavam acima dos ids do backup. A
 numeração das pautas emenda sem salto: 20ª em 18/06, 21ª em 25/06.
 
-| script | papel |
-|---|---|
-| [`backup_pre_mesclagem_cj.sql`](sql/backup_pre_mesclagem_cj.sql) | copia as quatro tabelas da CJ e a definição de `resumo_acervo_cj` para `backup_cj_pre_mesclagem` |
-| [`mesclar_historico_cj.sql`](sql/mesclar_historico_cj.sql) | insere o histórico com os ids originais, gatilho desligado |
-| [`desfazer_mesclagem_cj.sql`](sql/desfazer_mesclagem_cj.sql) | tira só o que a mesclagem trouxe e devolve a função; a nova série fica |
+Foram três scripts, rodados uma vez e removidos do repositório depois
+(continuam no histórico do git): `backup_pre_mesclagem_cj.sql` copiou as quatro
+tabelas da CJ e a definição de `resumo_acervo_cj` para
+`backup_cj_pre_mesclagem`; `mesclar_historico_cj.sql` inseriu o histórico com os
+ids originais, gatilho desligado; e `desfazer_mesclagem_cj.sql` era a volta.
 
 - **Relator de 2026 virou cadeira** pelo de-para de `cadeiras_cj`, como na
   migração `20260824180000`: a distribuição pela data dela, o julgado pela data
