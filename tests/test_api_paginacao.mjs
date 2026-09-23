@@ -99,3 +99,29 @@ test('resposta JSON inválida é erro, não sucesso sem dados', async () => {
   const api = cliente(async () => ({ ok: true, status: 200, json: async () => { throw new Error('JSON inválido'); } }));
   await assert.rejects(api('julgados_cj'), /JSON inválido/);
 });
+
+test('páginas depois da primeira saem juntas, sem esperar uma pela outra', async () => {
+  const pendentes = [];
+  const api = cliente(url => {
+    const offset = Number(new URL(url).searchParams.get('offset') || 0);
+    const itens = Array.from({ length: Math.min(1000, 3447 - offset) }, (_, i) => ({ id: offset + i }));
+    const pronta = resposta(itens, `${offset}-${offset + itens.length - 1}/3447`);
+    if (!offset) return Promise.resolve(pronta);
+    return new Promise(resolve => pendentes.push(() => resolve(pronta)));
+  });
+  const resultado = api('acervo_cj?select=id');
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(pendentes.length, 3, 'as três páginas restantes são pedidas antes de qualquer uma voltar');
+  pendentes.reverse().forEach(liberar => liberar());
+  const itens = await resultado;
+  assert.deepEqual(itens.map(i => i.id), Array.from({ length: 3447 }, (_, i) => i),
+    'a ordem é a dos offsets, não a de chegada');
+});
+
+test('lista que muda de tamanho no meio da paginação é recusada', async () => {
+  const api = cliente(async url => {
+    const offset = Number(new URL(url).searchParams.get('offset') || 0);
+    return offset ? resposta([{ id: 2 }], '1-1/3') : resposta([{ id: 1 }], '0-0/2');
+  });
+  await assert.rejects(api('julgados_cj'), /inconsistentes/);
+});

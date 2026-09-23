@@ -738,7 +738,10 @@ test('HTML servido executa os bundles minificados de autorização por órgão',
   await page.app.carregarPaginaAutenticada();
 
   assert.deepEqual(page.navegacoes, ['./acervo-creg.html']);
-  assert.equal(page.document.head.children.length, 0, 'o bundle proibido não pode ser carregado');
+  // O preload do módulo sai junto com a consulta (ver anteciparScript) e só
+  // baixa; o que não pode acontecer é o módulo EXECUTAR antes do redirecionamento.
+  assert.equal(page.document.head.children.filter(el => el.tagName === 'SCRIPT').length, 0,
+    'o bundle proibido não pode ser executado');
 });
 
 test('401 renova a sessão, conserva a tela e repete a chamada', async () => {
@@ -1330,6 +1333,40 @@ test('redireciona páginas de órgão para o equivalente permitido', () => {
   assert.equal(page.resolverDestinoPermitido('historico-cj', new Set(['CREG'])), './historico-creg.html');
   assert.equal(page.resolverDestinoPermitido('acervo-cj', new Set(['CJ', 'CREG'])), null);
   assert.equal(page.resolverDestinoPermitido('sorteio', new Set(['CJ'])), null);
+});
+
+// A consulta de permissões e o download do módulo eram duas idas à rede em
+// fila. O preload só baixa: executar continua sendo depois do porteiro.
+test('o módulo da página começa a descer junto com a consulta de permissões', async () => {
+  let responder;
+  let scriptsCarregados = 0;
+  const page = bootstrapPage(async () => {}, 'acervo-cj', {
+    buscarOrgaos: () => new Promise(resolve => { responder = resolve; }),
+    carregar: async () => { scriptsCarregados++; }
+  });
+
+  const pendente = page.iniciar();
+  const preloads = page.document.head.children.filter(el => el.rel === 'preload');
+  assert.equal(preloads.length, 1, 'o download sai antes de a permissão voltar');
+  assert.equal(preloads[0].as, 'script');
+  assert.equal(preloads[0].href, 'assets/js/acervo.min.js?v=teste');
+  assert.equal(scriptsCarregados, 0, 'executar o módulo ainda espera a permissão');
+
+  responder(new Set(['CJ']));
+  await pendente;
+  assert.equal(scriptsCarregados, 1);
+
+  const repeticao = page.carregarPaginaAutenticada();
+  responder(new Set(['CJ']));
+  await repeticao;
+  assert.equal(page.document.head.children.filter(el => el.rel === 'preload').length, 1,
+    '"Tentar novamente" não duplica o preload');
+});
+
+test('o painel administrativo não antecipa o módulo de quem pode não entrar', async () => {
+  const page = bootstrapPage(async () => {}, 'admin', { buscarAdmin: async () => new Set() });
+  await page.iniciar();
+  assert.equal(page.document.head.children.filter(el => el.rel === 'preload').length, 0);
 });
 
 test('autoriza antes de carregar o módulo da página', async () => {

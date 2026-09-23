@@ -148,6 +148,14 @@ for (const chave of chavesBootstrap) {
   assert.ok(paginasDoHtml.includes(chave), `PAGINAS["${chave}"] no bootstrap.js não corresponde a página nenhuma`);
 }
 
+// Toda página que entra pelo bootstrap consulta o banco antes de existir. Sem o
+// preconnect, o aperto de mão TLS com o Supabase só começa depois dos scripts —
+// as telas de acervo e histórico nasceram sem ele.
+for (const pagina of PAGINAS.filter(p => /data-page="/.test(ler(p)))) {
+  assert.match(ler(pagina), /<link rel="preconnect" href="https:\/\/[\w-]+\.supabase\.co" crossorigin/,
+    `${pagina} não abre a conexão com o Supabase antecipadamente`);
+}
+
 // O rótulo da barra verde nasce no HTML e é reescrito pelo script da página —
 // mas só depois de os dados chegarem. Se os dois discordarem, a barra mostra a
 // palavra errada até lá, e com a transição entre páginas isso virou meio segundo
