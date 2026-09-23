@@ -7,15 +7,18 @@ const PAGINAS = {
   // Mesmo script para os dois colegiados: quem escolhe a tabela, a função do
   // banco e o vocabulário é o data-colegiado do <body> (ver COLEGIADOS em julgados.js).
   'julgados-creg': { orgao: 'CREG', familia: 'julgados', arquivo: 'julgados.min.js', iniciar: 'inicializarJulgados', texto: 'Preparando as sessões…' },
-  'acervo-cj': { orgao: 'CJ', familia: 'acervo', arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' },
+  // `moldura`: a tela é um painel cuja moldura é HTML estático. O andamento
+  // nasce dentro dela, no lugar da tabela, e não num card à parte — ver
+  // mostrarAndamento abaixo.
+  'acervo-cj': { orgao: 'CJ', familia: 'acervo', arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Carregando o acervo…', moldura: 'acervoPanel' },
   // Mesmo script para os dois colegiados: quem escolhe o par de funções do
   // banco é o data-colegiado do <body> (ver COLEGIADOS em acervo.js).
-  'acervo-creg': { orgao: 'CREG', familia: 'acervo', arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' },
-  'historico-cj': { orgao: 'CJ', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Preparando o histórico…' },
+  'acervo-creg': { orgao: 'CREG', familia: 'acervo', arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Carregando o acervo…', moldura: 'acervoPanel' },
+  'historico-cj': { orgao: 'CJ', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Carregando o histórico…', moldura: 'historicoPanel' },
   // Mesmo script para os dois colegiados, como o painel do acervo: quem escolhe
   // o vocabulário e a sigla que vai ao banco é o data-colegiado do <body>
   // (ver COLEGIADOS em historico.js).
-  'historico-creg': { orgao: 'CREG', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Preparando o histórico…' },
+  'historico-creg': { orgao: 'CREG', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Carregando o histórico…', moldura: 'historicoPanel' },
   // A primeira página sem órgão fixo: o painel administrativo atende os dois
   // colegiados e traz o seletor dentro dele. Por isso não entra por `orgao`,
   // que é o que redireciona quem abre a URL do colegiado errado, e sim por
@@ -31,6 +34,45 @@ const DESTINOS = {
 const paginaAtual = PAGINAS[document.body.dataset.page];
 const sessionLoading = document.getElementById('sessionLoading');
 let scriptAntecipado = false;
+
+// No acervo e no histórico eram dois indicadores em fila: "Preparando…" num
+// card no meio da página, ~165ms de nada, e "Carregando…" 48px abaixo, já
+// dentro do painel. Não se sobrepunham, mas liam como dois carregamentos. Com
+// a moldura estática na página, o andamento nasce dentro dela, no lugar da
+// tabela, e a tela o assume sem recriá-lo (mostrarIndicador só troca o texto):
+// um indicador só, num lugar só, do clique até a tabela. Sem a moldura no
+// documento, fica o card de sempre. O nome é longo de propósito: os scripts
+// clássicos dividem o escopo global, e admin.js já tem uma `function moldura`
+// — um `const moldura` aqui derrubava o painel inteiro (ver test_assets.mjs).
+const molduraDaPagina = paginaAtual?.moldura ? document.getElementById(paginaAtual.moldura) : null;
+const indicadorDaMoldura = molduraDaPagina ? document.getElementById('painelCarregando') : null;
+
+function mostrarAndamento() {
+  if (!molduraDaPagina || !indicadorDaMoldura) {
+    sessionLoading.hidden = false;
+    sessionLoading.replaceChildren(criarIndicadorCarregamento(paginaAtual.texto));
+    return;
+  }
+  document.querySelector('[data-login-only]').hidden = true;
+  molduraDaPagina.hidden = false;
+  // O ponto de status do rodapé lê aria-busy: sem ele, "Carregando…" saía ao
+  // lado do verde de "atualizado" enquanto a permissão era consultada.
+  molduraDaPagina.setAttribute('aria-busy', 'true');
+  const tabela = molduraDaPagina.querySelector('.table-scroll');
+  if (tabela) tabela.hidden = true;
+  mostrarIndicador(indicadorDaMoldura, paginaAtual.texto);
+}
+
+// Falha antes de a tela assumir: a mensagem (ou o login) mora no card de
+// sessão, que só aparece com o painel fora da tela.
+function recolherMoldura() {
+  if (!molduraDaPagina || !indicadorDaMoldura) return;
+  molduraDaPagina.hidden = true;
+  molduraDaPagina.removeAttribute('aria-busy');
+  indicadorDaMoldura.hidden = true;
+  indicadorDaMoldura.replaceChildren();
+  document.querySelector('[data-login-only]').hidden = false;
+}
 
 // O script da página desce junto com a consulta de permissões, e não depois
 // dela: eram duas idas à rede em fila antes de a tela existir. `preload` só
@@ -65,8 +107,7 @@ async function carregarPaginaAutenticada() {
   // essa lista só é montada DEPOIS da consulta de permissões, e no intervalo a
   // página ficava literalmente vazia (`main.innerText === ''`), que é o quadro
   // em que a transição entre páginas aterrissava.
-  sessionLoading.hidden = false;
-  sessionLoading.replaceChildren(criarIndicadorCarregamento(paginaAtual.texto));
+  mostrarAndamento();
   const src = `assets/js/${paginaAtual.arquivo}?v=${ASSET_VERSION}`;
   anteciparScript(src);
 
@@ -124,6 +165,7 @@ async function carregarPaginaAutenticada() {
     await inicializacao;
   } catch (err) {
     console.error(err);
+    recolherMoldura();
     if (err.semPermissao) {
       // sair() revoga o refresh token no servidor antes de limpar a aba; com
       // encerrarSessao() sozinho, o token recém-emitido no login seguiria
@@ -157,8 +199,13 @@ async function carregarPaginaAutenticada() {
     estado.className = 'load-error';
     estado.setAttribute('role', 'alert');
 
+    // A frase diz o que fazer; a mensagem da exceção desce para a linha de
+    // apoio, como em mostrarErro (supabase.js).
     const texto = document.createElement('p');
-    texto.textContent = `Não foi possível preparar esta página (${err.message}). Verifique sua conexão e tente novamente.`;
+    texto.textContent = 'Não foi possível preparar esta página. Verifique sua conexão e tente novamente.';
+    const detalhe = document.createElement('p');
+    detalhe.className = 'load-error-detalhe';
+    detalhe.textContent = `Detalhe técnico: ${err.message}`;
 
     const tentarNovamente = document.createElement('button');
     tentarNovamente.type = 'button';
@@ -166,7 +213,7 @@ async function carregarPaginaAutenticada() {
     tentarNovamente.textContent = 'Tentar novamente';
     tentarNovamente.addEventListener('click', carregarPaginaAutenticada, { once: true });
 
-    estado.append(texto, tentarNovamente);
+    estado.append(texto, detalhe, tentarNovamente);
     sessionLoading.replaceChildren(estado);
   }
 }

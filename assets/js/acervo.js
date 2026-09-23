@@ -149,8 +149,7 @@ function mostrarMolduraDoPainel() {
 
 function mostrarCarregamentoDaTabela(texto) {
   if (tabelaScroll) tabelaScroll.hidden = true;
-  painelCarregando.replaceChildren(criarIndicadorCarregamento(texto));
-  painelCarregando.hidden = false;
+  mostrarIndicador(painelCarregando, texto);
 }
 
 // O erro do carregamento inicial quem mostra é o bootstrap, dentro do card de
@@ -292,8 +291,14 @@ function navegarMenuExportacao(evento) {
   itens[destino]?.focus();
 }
 
-function informarExportacao(mensagem = '', estado = '') {
+function informarExportacao(mensagem = '', estado = '', detalheTecnico = '') {
   exportFeedback.textContent = mensagem;
+  if (detalheTecnico) {
+    const tecnico = document.createElement('span');
+    tecnico.className = 'export-feedback-tecnico';
+    tecnico.textContent = `Detalhe técnico: ${detalheTecnico}`;
+    exportFeedback.append(tecnico);
+  }
   if (estado) {
     exportFeedback.dataset.state = estado;
     exportFeedback.setAttribute('role', 'alert');
@@ -336,7 +341,7 @@ async function exportar(formato) {
     else if (formato === 'excel') baixarArquivo(criarExcel(linhasAtuais), `${COL.arquivo}-${dataArquivo()}.xlsx`);
     else throw new Error('formato não reconhecido');
   } catch (erro) {
-    informarExportacao(`Não foi possível gerar o arquivo. Tente novamente (${erro.message}).`, 'error');
+    informarExportacao('Não foi possível gerar o arquivo. Tente novamente.', 'error', erro.message);
   } finally {
     definirExportacaoOcupada(false);
   }
@@ -760,10 +765,9 @@ async function carregarAcervo({ carregamentoInicial = false } = {}) {
     // processos acima de uma tabela vazia.
     acervoTotal.textContent = '';
     acervoAtualizado.textContent = 'Atualização indisponível';
-    acervoErro.querySelector('p').textContent = `Não foi possível carregar o acervo (${err.message}).`;
+    mostrarErro(acervoErro, 'Não foi possível carregar o acervo. Verifique sua conexão e tente novamente.', err.message);
     painelCarregando.hidden = true;
     painelCarregando.replaceChildren();
-    acervoErro.hidden = false;
     return false;
   } finally {
     // A resposta antiga também não encerra o loading da consulta que continua.
@@ -846,8 +850,7 @@ async function abrirDetalhe(celulaEl) {
     detalheLoading.replaceChildren();
     detalheCorpo.hidden = true;
     detalheResumo.textContent = '';
-    detalheErro.querySelector('p').textContent = `Não foi possível carregar os processos (${err.message}).`;
-    detalheErro.hidden = false;
+    mostrarErro(detalheErro, 'Não foi possível carregar os processos. Feche e abra a lista de novo.', err.message);
     return;
   }
 
@@ -915,9 +918,12 @@ function desenharDetalhe(processos) {
       const conteudo = coluna.valor(p);
       // Só o vazio vira travessão. `Dias passados` é 0 no processo distribuído
       // hoje, e 0 tem de aparecer como 0.
+      // O assunto do Conselho é texto corrido ("Revisão tarifária
+      // extraordinária"): quebra linha, em vez de empurrar a tabela para
+      // fora do card.
       const el = n === 0
         ? celula(conteudo, 'th', 'linha')
-        : celula(conteudo === '' ? '—' : conteudo);
+        : celula(conteudo === '' ? '—' : conteudo, 'td', coluna.rotulo === 'Assunto' ? 'historico-livre' : '');
 
       const titulo = coluna.titulo ? coluna.titulo(p) : '';
       if (titulo) {
@@ -930,6 +936,7 @@ function desenharDetalhe(processos) {
   });
 
   detalheTabela.replaceChildren(thead, tbody);
+  equalizarColunas(detalheTabela);
 }
 
 function exportarDetalhe() {
@@ -942,7 +949,6 @@ function exportarDetalhe() {
     baixarArquivo(criarExcelDetalhe(detalheAtual.processos, detalheAtual.rotulo),
       `${COL.arquivo}-${nome}-${dataArquivo()}.xlsx`);
   } catch (erro) {
-    detalheErro.querySelector('p').textContent = `Não foi possível gerar o arquivo (${erro.message}).`;
-    detalheErro.hidden = false;
+    mostrarErro(detalheErro, 'Não foi possível gerar o arquivo. Tente exportar de novo.', erro.message);
   }
 }

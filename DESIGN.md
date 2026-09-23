@@ -168,15 +168,17 @@ A paleta é quase monocromática: um verde institucional para ação e identidad
 **Character:** Montserrat em peso 700 marca os poucos pontos de identidade (título de card, cabeçalho de página); todo o resto — corpo, rótulo, botão, tabela — fica na pilha de sistema, o que mantém a leitura densa da tela rápida em qualquer dispositivo sem carregar mais de um arquivo de fonte.
 
 ### Hierarchy
-- **Display** (700, `clamp(1.45rem, 2.6vw, 1.85rem)`, 1.2): o título do painel do Acervo/Histórico (`.acervo-header-title-group h2`), branco sobre a barra verde — é o maior e mais bold texto do sistema inteiro, reservado às duas telas de dashboard.
-- **Headline** (700, `clamp(1.125rem, 1.6vw, 1.375rem)`, 1.25): o título dentro de cada card de conteúdo (`.card h2`/`h3`) — maior que o próprio `<h1>` da página, porque é o que a pessoa vai fazer agora.
+- **Display** (700, `clamp(1.45rem, 2.6vw, 1.85rem)`, 1.2): o título do painel do Acervo/Histórico (`.acervo-header-title-group h2`), branco sobre a barra verde — é o maior e mais bold texto do sistema inteiro, reservado às duas telas de dashboard. A arte do login (`.app-login-intro h2`) usa o mesmo degrau: é a porta de entrada dessas telas e da inicial, e antes ocupava dois tamanhos soltos (`clamp(1.5rem, 2.6vw, 2rem)` e `1.6rem` na variante do histórico do CREG).
+- **Headline** (700, `clamp(1.125rem, 1.6vw, 1.375rem)`, 1.25): o título dentro de cada card de conteúdo (`.card h2`/`h3`) — maior que o próprio `<h1>` da página, porque é o que a pessoa vai fazer agora. Inclui o título do painel administrativo (`.admin-panel-heading h2`), que chegou a usar `clamp(1.2rem, 2vw, 1.55rem)`, fora da escala.
 - **Title** (700, 1.125rem, 1.25): o `<h1>` do cabeçalho institucional — a identidade da página, deliberadamente mais discreta que o Headline abaixo dela.
 - **Body** (400, 1rem, 1.5): texto corrido padrão do `<body>`.
 - **Label** (700, 0.8125rem–0.875rem, 1.2–1.3): a família de texto estrutural pequeno e sempre em negrito — rótulo de botão, badge, campo de formulário (0,8125rem) e os rótulos de navegação como `#txtModo`/`.institution-name` (0,875rem, um degrau acima, mesma função).
 - **Numeral** (monoespaçada de sistema, 700, 0.875rem): o número de processo SEI nas tabelas. Quinze dígitos que a pessoa compara linha a linha só se leem rápido com avanço fixo, e é o único lugar do projeto onde uma quarta família de fonte se justifica.
 
 ### Named Rules
-**The Dashboard Outranks Everything Rule.** Só duas telas (Acervo e Histórico) usam o Display — o maior heading do sistema não é o `<h1>` de página nem o título do card, é o cabeçalho do próprio painel de dados. Se uma tela nova não for um dashboard, ela não herda esse tamanho.
+**The Dashboard Outranks Everything Rule.** Só duas telas (Acervo e Histórico) usam o Display — o maior heading do sistema não é o `<h1>` de página nem o título do card, é o cabeçalho do próprio painel de dados. A única outra superfície nesse degrau é a arte do login, que é a entrada dessas mesmas telas. Se uma tela nova não for um dashboard, ela não herda esse tamanho.
+
+**The Named Step Rule.** Todo `font-size` cai num degrau da hierarquia acima — um token `--text-*` ou o `clamp` do Display. Um tamanho entre dois degraus não vira um degrau novo: vira ruído que só o detector enxerga. Foi o que aconteceu com o login e com o título do painel administrativo, cada um com um `clamp` próprio a poucos décimos do degrau mais próximo.
 
 **The Content Outranks the Masthead Rule.** Fora das duas telas de dashboard, o título dentro do card de conteúdo (Headline, `--text-xl`) é visualmente maior que o `<h1>` do cabeçalho da página (Title, `--text-lg`). A hierarquia grita o que a pessoa vai fazer agora, não o nome do sistema.
 
@@ -184,7 +186,7 @@ A paleta é quase monocromática: um verde institucional para ação e identidad
 
 **The Two-Weight Rule.** O sistema inteiro vive em dois pesos: 400 para corpo e 700 para tudo que é estrutural. Pesos intermediários da pilha de sistema — 750 e 800 especialmente — são sintéticos, ficam indistinguíveis do 700 ao lado dele e viram ruído em vez de hierarquia. Se um texto precisa de mais presença, o degrau é tamanho, caixa ou cor, nunca meio peso a mais.
 
-**The Numeral Exception Rule.** A monoespaçada é só para o número de processo. Data, hora e contagem ficam na pilha de sistema com `font-variant-numeric: tabular-nums`, que já alinha a coluna sem trocar de família.
+**The Numeral Exception Rule.** A monoespaçada é só para o número de processo. Data, hora e contagem ficam na pilha de sistema com `font-variant-numeric: tabular-nums`, que já alinha a coluna sem trocar de família. Vale para todo card de detalhe (`.detalhe-table tbody th`, em peso 700): o do acervo e o do histórico mostravam o número na pilha de sistema e em peso 600, enquanto o painel administrativo já usava a monoespaçada.
 
 ## Layout
 
@@ -194,15 +196,26 @@ Breakpoints observados no CSS: 480px, 600px, 620px, 768px, 880/881px e 980/981px
 
 Não existe uma escala de espaçamento em tokens (`--space-*`): o padding e o gap são valores em pixel escolhidos por componente (8, 10, 12, 14, 16, 18, 20, 24, 28px aparecem, sem uma progressão declarada). Trabalho novo deve casar com o valor mais próximo já usado no contexto, não inventar uma escala.
 
+### Named Rules
+**The Frame Shares One Edge Rule.** Cabeçalho, conteúdo e rodapé de uma tela alinham pela mesma borda. O rodapé usa `.footer-container`, não `.container`, então uma tela que alarga o `.container` precisa alargar o rodapé junto: o painel administrativo abriu o conteúdo para 1280px e deixou o rodapé em 1100px, e o brasão do rodapé ficou 88px à direita do brasão do cabeçalho numa tela de 1366px.
+
+**The Hidden Column Rule.** No celular, rolagem lateral só serve a uma matriz — uma tabela em que comparar colunas é o propósito. Uma lista cuja linha termina num campo ou numa ação vira ficha abaixo de 600px, no molde de `#processTable`: cabeçalho fora de vista, cada campo com o próprio rótulo vindo de `data-label` (preenchido pelo JS a partir dos nomes das colunas). A 390px, o registro de julgamentos escondia os `<select>` de Voto e Status e o histórico escondia o "Ver processos" atrás de uma rolagem sem aviso — justamente o que cada tela existe para oferecer. A matriz do acervo continua rolando, mas com a coluna Período fixa à esquerda (`position: sticky`) e estreita, para que cada rolagem mostre o rótulo da linha. O sticky só funciona se a própria tabela não recortar: a regra global de `table` tem `overflow: hidden`, que faz da tabela o contêiner do sticky, e ali ela precisa de `overflow: visible`.
+
 ## Elevation & Depth
 
-O sistema é estruturalmente plano: a separação entre superfícies vem quase sempre de borda de 1px, não de sombra. As três sombras que existem aparecem só em elementos que flutuam por cima de outro conteúdo — nunca em um card, botão ou linha de tabela em repouso.
+O sistema é estruturalmente plano: a separação entre superfícies vem quase sempre de borda de 1px, não de sombra. As sombras que existem aparecem em elementos que flutuam por cima de outro conteúdo — nunca em um card, botão ou linha de tabela em repouso.
 
-Esta é a seção que o projeto mais já derivou. O painel administrativo chegou a renderizar seis sombras distintas numa única tela, todas em elemento no fluxo — card de login, painel de dados, barra de contexto, aba selecionada, botão de órgão e cartão de linha no celular —, nenhuma delas declarada aqui. Todas foram removidas: a hierarquia daquelas superfícies vem da borda tingida e do fundo, que é o que este sistema usa.
+Esta é a seção que o projeto mais já derivou. O painel administrativo chegou a renderizar seis sombras distintas numa única tela, todas em elemento no fluxo — card de login, painel de dados, barra de contexto, aba selecionada, botão de órgão e cartão de linha no celular —, nenhuma delas declarada aqui. Todas foram removidas: a hierarquia daquelas superfícies vem da borda tingida e do fundo, que é o que este sistema usa. A auditoria de 23/09/2026 ainda achou três no fluxo — um brilho verde (`0 2px 6px rgba(0, 83, 75, 0.16)`) no botão "Ver processos" do histórico, que o detector apontou como *glow*, e sombra nos dois spinners de carregamento — e uma no diálogo em preto puro (`rgb(0 0 0 / 28%)`), fora da família tingida. As três primeiras saíram; a do diálogo passou para o tom do texto.
 
 ### Shadow Vocabulary
 - **Toast** (`box-shadow: 0 12px 28px rgba(17, 39, 32, 0.18)`): notificação flutuante fixa no canto da tela.
-- **Panel** (`box-shadow: 0 12px 32px rgba(17, 39, 32, 0.09)`): painel/diálogo sobreposto do acervo — mais suave que o toast porque cobre mais área da tela.
+- **Panel** (`box-shadow: 0 12px 32px rgba(17, 39, 32, 0.09)`, `--shadow-panel`): painel/diálogo sobreposto do acervo — mais suave que o toast porque cobre mais área da tela. Hoje também está no próprio `.acervo-panel` do acervo e do histórico, que fica no fluxo: é uma exceção herdada, não um precedente para outro card.
+- **Dialog** (`box-shadow: 0 24px 60px rgba(17, 39, 32, 0.28)`): o `<dialog>` de detalhe, a camada mais alta da tela — por isso a sombra mais longa e mais densa.
+- **Menu** (`box-shadow: 0 10px 28px rgba(17, 39, 32, 0.18)`): o menu de exportação aberto sob o botão.
+- **Popover** (`box-shadow: 0 8px 22px rgba(17, 39, 32, 0.16)`): o recado de exportação que aparece sob o menu.
+- **Badge** (`box-shadow: 0 2px 6px rgba(17, 39, 32, 0.22)`, `--shadow-badge`): o selo de pendências, que flutua sobre a borda do card.
+
+Toda sombra nasce do Texto Principal (`rgb(17, 39, 32)`) em opacidade — nunca de preto puro, nunca do verde institucional.
 
 ### Named Rules
 **The Overlay-Only Shadow Rule.** Box-shadow é exclusivo de elementos que flutuam por cima de outro conteúdo — toast e painel/diálogo do acervo. Se o elemento não sai do fluxo normal, ele não recebe sombra. Um card, uma barra, uma aba ou uma linha de tabela em repouso se separam por borda de 1px.
@@ -281,12 +294,27 @@ própria moldura de forma síncrona e põe o indicador dentro dela —
 `.painel-carregando` no lugar da tabela do acervo/histórico, `#pautasContainer`
 na lista de julgados, `.detalhe-loading` no card de processos.
 
+No acervo e no histórico a moldura é HTML estático, e por isso o bootstrap já a
+mostra na consulta de permissão, com o indicador no lugar da tabela
+(`moldura` em `PAGINAS`, `bootstrap.js`); o card `.session-loading` fica para
+as telas sem moldura estática e para a mensagem de erro. Antes eram dois
+indicadores em fila — "Preparando…" num card no meio da página, ~165ms de
+nada, e "Carregando…" 48px abaixo, dentro do painel. O Atualizar do histórico,
+que mantinha a lista antiga sem sinal nenhum de consulta, passou a mostrar o
+andamento no lugar da tabela, como o acervo.
+
 ### Movimento reduzido
 
 `prefers-reduced-motion: reduce` desliga tudo: spinner, toast, pulso de
 pendência, `backdrop-filter` do diálogo, `transform` de `:active`, as trocas de
 vista — e a transição entre páginas, que é a única que `animation: none` não
 alcança e precisa de `@view-transition { navigation: none }`.
+
+A lista é explícita, seletor por seletor, e por isso **toda animação ou
+transição nova precisa ser acrescentada a ela**. A auditoria de 23/09/2026
+achou duas que tinham ficado de fora: o `view-fade-in` do `#cardAdmin` (que
+estava na regra de entrada mas não na de movimento reduzido) e a rotação da
+seta do menu Exportar.
 
 ### Named Rules
 
@@ -299,6 +327,13 @@ regra, com nome próprio e a cor de fundo no `::view-transition-group`.
 por `aguardarIndicador`: ou não aparece, ou fica tempo de ser lido. Meio termo —
 acender e apagar dentro da própria animação de entrada — é pior que animação
 nenhuma.
+
+**The One Indicator Rule.** Uma espera tem um indicador só, num lugar só. Quem
+põe o indicador é `mostrarIndicador(conteiner, texto)` (`supabase.js`): se o
+contêiner já mostra um, ele só troca o texto. Recriar o nó reiniciava a entrada
+(o atraso de 150ms e o fade) — trocar o recorte do acervo duas vezes seguidas
+fazia o indicador sumir e voltar no meio de uma espera que continuava a mesma.
+Passar a vez de um indicador para outro em outro lugar da tela conta como dois.
 
 **The Arrival Has a Name Rule.** Uma transição de página precisa aterrissar num
 lugar identificável. Tela que busca dados mostra a própria moldura com o título
@@ -337,10 +372,18 @@ Três raios cobrem o sistema inteiro: `8px` (controles — botão, input, select
 
 ### Tables
 - **Style:** cabeçalho com fundo levemente tingido (`--table-heading`), linha de dado com fundo branco e hover em tingido de verde bem sutil (`--table-row-hover`); borda inferior de 1px entre linhas, sem borda vertical entre colunas.
-- **Layout:** as tabelas administrativas usam `table-layout: fixed` e proporções declaradas por visão. Listas de sessão e distribuição usam trilhos iguais para criar ritmo regular; detalhes reservam mais espaço para Ações e campos de leitura longa. Ações vem imediatamente depois do identificador da linha (`Data` ou `Processo`), nunca isolada na borda direita.
-- **Larguras por contexto:** cada visão (`sessao`, `sorteio`, detalhe de sessão, detalhe CJ, detalhe CREG e auditoria) tem uma distribuição proporcional própria. Isso impede que o conteúdo de uma linha redimensione as colunas seguintes e mantém cabeçalho, dados e botões no mesmo eixo. `white-space: nowrap` fica restrito a valores curtos que realmente não devem partir, como data/hora e identificador.
-- **Alinhamento — eixos consistentes:** nas listas-resumo, cabeçalhos e valores são centralizados para reforçar os trilhos equidistantes. Nos detalhes, texto de leitura longa alinha à esquerda; número, código e estado curtos podem centralizar com `font-variant-numeric: tabular-nums`. A coluna de Ações e seus botões centralizam no espaço reservado. O eixo sempre vale para o `th` e o `td` juntos.
+- **Cabeçalho:** um só rótulo estrutural em todas as tabelas — caixa alta, `--text-xs`, `letter-spacing: 0.04em`, Texto Secundário Forte. O sorteador e o registro de julgamentos usavam a regra global `thead th` em caixa normal e na cor do corpo, e liam como outro sistema ao lado do acervo, do histórico e do painel administrativo. A correção foi na regra global, não em cada tabela.
+- **Celular:** abaixo de 600px, `#julgadosTable` e `.historico-table` viram ficha (ver The Hidden Column Rule em Layout); a ficha do histórico usa `grid-template-areas` para pôr data e horário no topo, as cadeiras no meio e a contagem ao lado do "Ver processos". Na ficha, o fundo é da linha inteira: o realce pintado em cada `<td>`, com o vão da grade entre eles, virava uma colcha de retalhos.
+- **Layout das listas:** as listas administrativas (sessões, distribuições, auditoria) usam `table-layout: fixed` e trilhos declarados por visão, para as datas caírem num ritmo regular. Ações vem imediatamente depois do identificador da linha (`Data` ou `Processo`), nunca isolada na borda direita.
+- **Cards de detalhe:** o card do acervo, o do histórico, o da Meta 45 e os detalhes "Abrir sessão" e "Abrir distribuição" do painel administrativo seguem The Equal Gutter Rule, abaixo: layout automático, tudo centralizado — cabeçalho e dado no mesmo eixo, inclusive Assunto e Interessado —, e cada coluna com o próprio conteúdo mais a mesma folga. Valor curto não quebra linha ("Auto de Infração", "Sem recurso"); quebra só o texto corrido (Interessado, o assunto por extenso do Conselho), o rótulo do cabeçalho, e — entre 961px e ~1250px, antes de a tabela rolar — o selo mais longo e o e-mail da autoria, este antes do "@" (`<wbr>`), nunca no meio da palavra. As quatro ações do painel formam uma grade 2 × 2, igual em toda linha.
+- **Largura dos cards:** fixa por tipo, nunca pelo conteúdo — um card que crescesse quando os dados chegam saltaria de lado logo depois do indicador. 46rem para o histórico da Câmara e para a Meta 45; 60rem para o acervo; 64rem para o histórico do Conselho, que traz a razão social. No celular o card rola de lado com um piso (520px; 680px no acervo e 720px no histórico do Conselho), e a folga é repartida sobre esse piso.
+- **Alinhamento — eixos consistentes:** nas listas-resumo, cabeçalhos e valores são centralizados para reforçar os trilhos equidistantes. O eixo sempre vale para o `th` e o `td` juntos. `white-space: nowrap` fica restrito a valores curtos que realmente não devem partir, como data/hora e identificador.
 - **Density:** cada família de tabela (`#processTable`, `#julgadosTable`, `.acervo-table`, `.historico-table`, `.detalhe-table`) ajusta sua própria largura mínima e comportamento de coluna — não há uma tabela genérica única.
+
+#### Named Rules
+**The Equal Gutter Rule.** Num card de detalhe, o vão entre o conteúdo de duas colunas vizinhas é o mesmo em todo o card. Com o conteúdo centralizado, esse vão é a sobra de uma coluna mais a sobra da outra, e largura fixa em porcentagem dava a cada coluna uma sobra diferente: a auditoria de 23/09/2026 mediu vãos de 11px a 130px num mesmo card, um vão negativo no detalhe da sessão ("Reformar parcialmente" entrando em Status), e-mail e "Ordem" cortados, e os quatro detalhes do painel rolando de lado a 1366px por causa de pisos de 1320px e 1360px. A regra mora numa função só, `equalizarColunas(tabela)` em `supabase.js`: o layout automático decide o que quebra, mede-se a extensão real do conteúdo de cada coluna (linhas já quebradas, caixas de botão e de selo) e a sobra do contêiner é repartida igualmente como `--folga`, somada ao respiro lateral de cada célula (`padding-inline: calc(12px + var(--folga, 0px))`). A folga entra no respiro, não na caixa do texto — por isso o texto quebrado conserva as mesmas linhas. Um `ResizeObserver` refaz a conta quando o card aparece ou a janela muda de largura. Tabela nova de detalhe chama a mesma função; nunca uma largura por coluna.
+
+**The Row Owns Its Highlight Rule.** O realce de linha pinta a linha inteira, inclusive o `<th>` que a identifica (o número do processo nos cards). A regra global pintava só `td`, e a linha ficava com um retalho branco no meio.
 
 ### Inputs / Fields
 - **Style:** borda 1px Borda Institucional, raio de controle (8px), fundo Superfície Branca, `width: 100%` por padrão.
@@ -349,6 +392,7 @@ Três raios cobrem o sistema inteiro: `8px` (controles — botão, input, select
 
 ### Navigation
 - Barra verde de 48px de altura fixa no topo do conteúdo (`.green-bar`), com o nome do modo à esquerda e ações (Voltar/Sair) à direita como botões ghost. Tipografia sempre em Label (700, pequena), nunca Body.
+- **Celular (dashboards, abaixo de 480px):** as ações viram uma grade de duas colunas. Quando o número de ações visíveis é ímpar — três com sessão no histórico (Atualizar, Voltar, Sair) ou uma só antes do login (Voltar) —, a última ocupa a linha inteira (`:nth-last-child(1 of :not([hidden])):nth-child(odd of :not([hidden]))`). Antes ela ficava presa à metade esquerda, com um vão ao lado.
 
 ## Do's and Don'ts
 
@@ -358,6 +402,8 @@ Três raios cobrem o sistema inteiro: `8px` (controles — botão, input, select
 - **Do** reservar `box-shadow` só para elementos que flutuam por cima de outro conteúdo (toast e painel/diálogo) — nunca num card, botão, aba ou linha de tabela em repouso.
 - **Do** acrescentar cada novo tipo de `input` à lista de seletores que estiliza os campos — ver The Field Is a Field Rule em Shapes.
 - **Do** mover o foco quando um bloco que o continha é escondido. O diálogo de duas etapas do painel administrativo trocava o formulário pela revisão e deixava o foco cair no `<body>`: quem usa teclado ou leitor de tela não era avisado da etapa que existe justamente para ser lida antes de gravar.
+- **Do** levar o foco ao título do painel quando uma ação troca a vista inteira. No painel administrativo, "Abrir sessão", "Abrir distribuição", "Voltar" e "Tentar novamente" somem com a própria troca, e o foco caía no `<body>`. `abrirComFoco()` chama `carregar()` e foca `#painelTitulo`, que já tinha `tabindex="-1"` para isso — as outras telas já faziam o mesmo com os seus títulos.
+- **Do** escrever o subtítulo do cabeçalho (`p.lead`) de modo que ele continue verdadeiro em todos os estados da página. O da inicial dizia "Preencha os campos solicitados, defina a quantidade de processos e sorteie" também no login e na escolha de colegiado, onde não há campo nenhum.
 - **Do** deixar visível, nas duas etapas de uma confirmação, todo campo cujo valor vai ser gravado. Esconder o motivo da alteração na hora de confirmar tirava da vista o texto que a própria tela promete mandar para a auditoria.
 - **Do** traduzir nome de tabela e chave de coluna do banco antes de mostrá-los. `julgados_cj #41` e `voto:` são estrutura interna; quem lê a auditoria é a secretária executiva.
 - **Do** escolher o plural com uma condição (`${n} ${n === 1 ? 'sessão' : 'sessões'}`). "5 sessão(ões) registrada(s)" pede que a pessoa monte a frase de cabeça com a contagem ali do lado.
@@ -372,8 +418,11 @@ Três raios cobrem o sistema inteiro: `8px` (controles — botão, input, select
 - **Don't** gastar o Teal dos Pendentes em sobrancelha, rótulo estrutural ou borda lateral decorativa. Borda colorida de 3px num item de lista é, além disso, o padrão que o detector do projeto sinaliza como tique de interface gerada.
 - **Don't** usar peso 750 ou 800 — o sistema tem dois pesos, 400 e 700 (ver The Two-Weight Rule em Typography).
 - **Don't** desenhar um valor ausente como selo. Travessão em texto simples; um selo diz que existe um estado registrado.
-- **Don't** ecoar a mensagem da exceção dentro da própria frase de erro. `Não foi possível carregar os dados (${err.message})` produzia "não foi possível carregar os dados (não foi possível consultar o serviço)". A frase principal diz o que fazer; o texto técnico desce para uma linha de apoio, em Texto Secundário e peso normal.
-- **Don't** deixar o ponto de status numa cor fixa. Verde ao lado de "não foi possível carregar" faz a cor contradizer o texto justamente nos dois estados em que ela teria algo a dizer.
+- **Don't** ecoar a mensagem da exceção dentro da própria frase de erro. `Não foi possível carregar os dados (${err.message})` produzia "não foi possível carregar os dados (não foi possível consultar o serviço)". A frase principal diz o que fazer; o texto técnico desce para uma linha de apoio, em Texto Secundário e peso normal. O caminho é um só: `mostrarErro(caixa, frase, err.message)` para as caixas `.load-error` e `aviso(frase, 'erro', err.message)` para o aviso flutuante, os dois em `supabase.js`. A auditoria de 23/09/2026 achou o molde antigo em doze lugares de cinco arquivos, mesmo depois de o painel administrativo ter sido corrigido — por isso a regra vale para a função, não para a tela.
+- **Don't** deixar o ponto de status numa cor fixa. Verde ao lado de "não foi possível carregar" faz a cor contradizer o texto justamente nos dois estados em que ela teria algo a dizer. O painel administrativo resolveu com `data-estado`; o acervo e o histórico ficaram com o verde ao lado de "Atualização indisponível" até a auditoria de 23/09/2026. Hoje o ponto lê o estado que a tela já expõe — vermelho quando a `.load-error` do painel está visível, cinza enquanto o painel está `aria-busy` —, sem um segundo dono no JS.
+- **Don't** deixar uma cápsula ou um selo sem texto. Quando a carga do acervo falhava, o total era apagado e a cápsula do cabeçalho ficava só com o ícone; agora ela some (`.acervo-scope:has(> span:empty)`).
+- **Don't** esconder atrás de rolagem lateral o campo ou a ação que encerra a linha de uma lista — ver The Hidden Column Rule em Layout.
+- **Don't** relaxar as regras na folha de impressão. O `@media print` do acervo usava os cinzas `#4a5568` e `#718096` de outra paleta e peso 800; o papel também segue The Tinted Neutral Rule e The Two-Weight Rule.
 - **Don't** convidar para uma ação que a tela acabou de dizer ser impossível — "Abra uma sessão para consultar seus processos" não pode continuar no rodapé de uma lista vazia ou de um erro de carregamento.
 - **Don't** dar mais de um nome ao mesmo registro. Aba, título, botão e rodapé precisam usar a mesma palavra; o painel administrativo chegou a dizer sorteio, distribuição e rodada para a mesma linha, numa tela só.
 - **Don't** localizar ou dimensionar Ações por `:last-child`. Use `.col-acoes`, posicione-a logo depois do identificador e reserve uma proporção explícita para a visão; assim ela não deriva para a borda direita quando a tabela ganha outra coluna.

@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '589ce625e4';
+const ASSET_VERSION = 'f6171e71e9';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -302,6 +302,18 @@ function criarIndicadorCarregamento(texto) {
 // lampejo lê pior do que animação nenhuma, e era o que separava o card do
 // histórico (uma rodada, resposta imediata) do card do acervo (o acervo
 // inteiro, resposta lenta o bastante para o spinner se firmar).
+// Põe o indicador no contêiner — ou, se ele já está lá, só troca o texto.
+// Criar outro reiniciava a entrada (150ms de atraso e o fade): trocar o recorte
+// do acervo duas vezes seguidas fazia o indicador sumir e voltar no meio de uma
+// espera que continuava a mesma, e a passagem do bootstrap para a tela piscava
+// do mesmo jeito. Continuidade é o mesmo nó na tela.
+function mostrarIndicador(conteiner, texto) {
+  const atual = conteiner.hidden ? null : conteiner.querySelector('.loading-state');
+  if (atual) atual.children[1].textContent = texto;
+  else conteiner.replaceChildren(criarIndicadorCarregamento(texto));
+  conteiner.hidden = false;
+}
+
 const ATRASO_DO_INDICADOR = 150;
 const TEMPO_MINIMO_DO_INDICADOR = 600;
 
@@ -615,7 +627,120 @@ function posicionarRegiaoDeAvisos(regiao) {
   regiao.style.bottom = 'auto';
 }
 
-function aviso(texto, tipo = 'sucesso') {
+// A frase principal diz o que houve e o que fazer. A mensagem da exceção vem à
+// parte: dentro de parênteses ela costumava repetir o começo da própria frase
+// ("não foi possível carregar… (não foi possível consultar o serviço)") e
+// empurrava a instrução para o fim. Ela ainda ajuda quem for investigar, então
+// desce para uma linha de apoio em texto secundário — ver o Don't no DESIGN.md.
+function mostrarErro(caixa, frase, detalheTecnico = '') {
+  caixa.querySelector('p').textContent = frase;
+  let apoio = caixa.querySelector('.load-error-detalhe');
+  if (!apoio) {
+    apoio = document.createElement('p');
+    apoio.className = 'load-error-detalhe';
+    caixa.appendChild(apoio);
+  }
+  apoio.textContent = detalheTecnico ? `Detalhe técnico: ${detalheTecnico}` : '';
+  apoio.hidden = !detalheTecnico;
+  caixa.hidden = false;
+}
+
+// Espaço igual entre colunas nos cards de detalhe. Com o conteúdo centralizado,
+// o vão entre duas colunas vizinhas é a sobra de uma mais a sobra da outra — e
+// com largura fixa em porcentagem cada coluna sobrava diferente: o vão ia de
+// 11px a 130px num mesmo card, e no painel administrativo chegava a negativo,
+// com "Reformar parcialmente" entrando na coluna de Status.
+//
+// Aqui cada coluna fica com o próprio conteúdo mais a mesma folga. Primeiro o
+// layout automático decide o que quebra linha (só o texto longo, que o CSS
+// deixa quebrar); depois mede-se a extensão real do conteúdo de cada coluna —
+// linhas já quebradas, caixas de botão e de selo — e a sobra do contêiner é
+// repartida igualmente como `--folga`, somada ao respiro lateral de cada célula
+// (ver "Cards de detalhe" no CSS). A folga entra no respiro, e não na caixa do
+// texto: por isso o texto quebrado conserva as mesmas linhas, e o vão sai igual
+// dos dois lados de toda coluna. Sem sobra, nada muda e a tabela rola.
+//
+// O ResizeObserver cobre o que a chamada direta não alcança: o card que ainda
+// estava escondido quando a tabela foi desenhada, e a janela redimensionada.
+function equalizarColunas(tabela) {
+  if (!tabela?.isConnected) return;
+  const conteiner = tabela.parentElement;
+  if (typeof ResizeObserver === 'function' && !tabela.dataset.equalizada) {
+    tabela.dataset.equalizada = '1';
+    let ultimaLargura = -1;
+    new ResizeObserver(() => requestAnimationFrame(() => {
+      // Só a largura muda a conta; a altura muda a cada linha quebrada.
+      if (conteiner.clientWidth === ultimaLargura) return;
+      ultimaLargura = conteiner.clientWidth;
+      equalizarColunas(tabela);
+    })).observe(conteiner);
+  }
+  const cabecalho = tabela.rows[0] ? [...tabela.rows[0].cells] : [];
+  tabela.style.removeProperty('--folga');
+  tabela.style.tableLayout = '';
+  cabecalho.forEach(celula => { celula.style.width = ''; });
+
+  const estilo = getComputedStyle(conteiner);
+  // No celular o card rola de lado com uma largura mínima (520px): a conta
+  // reparte a sobra dessa largura, e não da tela, que é menor que ela.
+  const disponivel = Math.max(
+    conteiner.clientWidth - parseFloat(estilo.paddingLeft) - parseFloat(estilo.paddingRight),
+    parseFloat(getComputedStyle(tabela).minWidth) || 0);
+  // Escondida, ou virada ficha no celular (display deixa de ser table): não há
+  // coluna para igualar.
+  if (!cabecalho.length || disponivel <= 0 || getComputedStyle(tabela).display !== 'table') return;
+
+  const linhas = [...tabela.rows];
+  const extensao = cabecalho.map((_, i) =>
+    Math.max(...linhas.map(linha => (linha.cells[i] ? extensaoDoConteudo(linha.cells[i]) : 0))));
+  const respiro = cabecalho.map(celula => {
+    const e = getComputedStyle(celula);
+    return parseFloat(e.paddingLeft) + parseFloat(e.paddingRight);
+  });
+  const soma = lista => lista.reduce((total, valor) => total + valor, 0);
+  const sobra = disponivel - soma(extensao) - soma(respiro);
+  if (sobra <= 0) return;
+
+  // Arredonda para baixo: um décimo de pixel a mais por coluna já faria a soma
+  // passar do contêiner e acender a barra de rolagem.
+  const folga = Math.floor((sobra / (2 * cabecalho.length)) * 10) / 10;
+  tabela.style.setProperty('--folga', `${folga}px`);
+  tabela.style.tableLayout = 'fixed';
+  cabecalho.forEach((celula, i) => {
+    celula.style.width = `${Math.ceil((extensao[i] + respiro[i] + 2 * folga) * 10) / 10}px`;
+  });
+}
+
+// Largura ocupada pelo conteúdo de uma célula: o texto (linha a linha, já
+// quebrado) e as caixas que desenham borda ou fundo — botão, selo, campo. Um
+// bloco que só agrupa (a grade de ações, a autoria em duas linhas) não conta
+// pela própria largura, que é a da célula; conta pelo que tem dentro.
+const CAIXAS_DE_CONTEUDO = 'button, input, select, img, svg, .admin-badge';
+function extensaoDoConteudo(celula) {
+  let esquerda = Infinity;
+  let direita = -Infinity;
+  const incluir = retangulo => {
+    if (!retangulo.width) return;
+    esquerda = Math.min(esquerda, retangulo.left);
+    direita = Math.max(direita, retangulo.right);
+  };
+  const percorrer = no => {
+    for (const filho of no.childNodes) {
+      if (filho.nodeType === 3) {
+        const intervalo = document.createRange();
+        intervalo.selectNodeContents(filho);
+        [...intervalo.getClientRects()].forEach(incluir);
+      } else if (filho.nodeType === 1) {
+        if (filho.matches(CAIXAS_DE_CONTEUDO)) incluir(filho.getBoundingClientRect());
+        else percorrer(filho);
+      }
+    }
+  };
+  percorrer(celula);
+  return direita > esquerda ? direita - esquerda : 0;
+}
+
+function aviso(texto, tipo = 'sucesso', detalheTecnico = '') {
   const { titulo: rotulo, classe, assertivo } = TIPOS_AVISO[tipo] || TIPOS_AVISO.sucesso;
 
   let regiao = document.getElementById('toastRegion');
@@ -670,6 +795,12 @@ function aviso(texto, tipo = 'sucesso') {
   detalhe.className = 'toast-detail';
   detalhe.textContent = texto;
   conteudo.append(titulo, detalhe);
+  if (detalheTecnico) {
+    const tecnico = document.createElement('span');
+    tecnico.className = 'toast-tecnico';
+    tecnico.textContent = `Detalhe técnico: ${detalheTecnico}`;
+    conteudo.append(tecnico);
+  }
 
   const fechar = document.createElement('button');
   fechar.type = 'button';
