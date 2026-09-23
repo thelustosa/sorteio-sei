@@ -63,7 +63,9 @@ def comando_da_migracao(tabela):
     em vez de uma cópia que continuaria verde depois de a migração quebrar.
     """
     fonte = MIGRACAO_CADEIRAS.read_text(encoding='utf-8')
-    return re.search(rf'update public\.{tabela}\b.*?;', fonte, re.S).group(0)
+    achado = re.search(rf'update public\.{tabela}\b.*?;', fonte, re.S)
+    assert achado, f'UPDATE de {tabela} não encontrado em {MIGRACAO_CADEIRAS.name}'
+    return achado.group(0)
 
 
 # ── Planilha ─────────────────────────────────────────────────────────────────
@@ -112,7 +114,8 @@ class Planilha:
         wb.close()
 
 
-PLANILHA = None
+# Só é lida por testes @exige_planilha, que o main pula quando ela não existe.
+PLANILHA: Planilha = None  # type: ignore[assignment]
 
 
 def exige_planilha(fn):
@@ -1472,9 +1475,10 @@ def rotulos_da_pagina_batem_com_os_do_banco(cur):
         assert achado, padrao
         return re.findall(r"'([^']+)'", achado.group(1))
 
-    assert rotulos(pagina, r'const VOTOS = \[([^\]]+)\]') == \
+    # julgados.js serve os dois colegiados: a lista da Câmara é a do bloco cj.
+    assert rotulos(pagina, r'\bcj: \{.*?votos: \[([^\]]+)\]') == \
            rotulos(corpo, r"'voto', ''\)\s*not in \(([^)]+)\)")
-    assert rotulos(pagina, r'const STATUS = \[([^\]]+)\]') == \
+    assert rotulos(pagina, r'\bcj: \{.*?status: \[([^\]]+)\]') == \
            rotulos(corpo, r"'status', ''\)\s*not in \(([^)]+)\)")
 
 
@@ -1548,56 +1552,6 @@ def backup_e_restauracao_fecham_o_ciclo(cur):
                        and not exists (select 1 from acervo_cj a where a.id = j.acervo_id)""") == 0
 
     PG.executar('drop schema backup_cj cascade')
-
-
-@teste
-@exige_planilha
-def mesclagem_do_historico_vai_e_volta(cur):
-    """O caminho de 18/09/2026: limpeza, nova série, mesclagem e desfazer.
-
-    A mesclagem tem de somar o histórico sem tocar na nova série, e o desfazer
-    tem de tirar só o que ela trouxe — a linha da nova série fica.
-    """
-    def conta():
-        cur.connection.commit()
-        with PG.conectar() as c, c.cursor() as k:
-            return (uma(k, 'select count(*) from acervo_cj'),
-                    uma(k, 'select count(*) from julgados_cj'))
-
-    def valor(sql):
-        with PG.conectar() as c, c.cursor() as k:
-            return uma(k, sql)
-
-    original = conta()
-    PG.rodar_arquivo(RAIZ / 'sql' / 'backup_cj.sql')
-    PG.executar("""
-        delete from public.julgados_cj;
-        delete from public.acervo_cj a
-         where exists (select 1 from backup_cj.julgados_cj j
-                        where j.num_processo = a.num_processo);
-        insert into public.acervo_cj (num_processo, relator, data_distribuicao, defesa, origem)
-        values ('202600029099001', 'CJ2', date '2026-09-01', true, 'ata');
-        insert into public.julgados_cj (num_processo, data_sessao, pauta, voto, status)
-        values ('202600029099001', date '2026-09-10', 33, 'Manter', 'Julgado');
-    """)
-    pre = conta()
-
-    PG.rodar_arquivo(RAIZ / 'sql' / 'backup_pre_mesclagem_cj.sql')
-    PG.rodar_arquivo(RAIZ / 'sql' / 'mesclar_historico_cj.sql')
-
-    assert conta() == (original[0] + 1, original[1] + 1), conta()
-    assert valor("""select count(*) from acervo_cj
-                     where data_distribuicao >= date '2026-01-01'
-                       and relator !~ '^CJ[0-9]+$'""") == 0
-    assert valor("""select acervo_id is not null from julgados_cj
-                     where num_processo = '202600029099001'""")
-
-    PG.rodar_arquivo(RAIZ / 'sql' / 'desfazer_mesclagem_cj.sql')
-    assert conta() == pre, 'o desfazer não devolveu o estado pré-mesclagem'
-
-    PG.rodar_arquivo(RAIZ / 'sql' / 'restaurar_cj.sql')
-    PG.executar('drop schema backup_cj_pre_mesclagem cascade; drop schema backup_cj cascade')
-    assert conta() == original
 
 
 # ── Histórico de sorteios ────────────────────────────────────────────────────

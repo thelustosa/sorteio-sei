@@ -11,6 +11,7 @@ correção, e se toda alteração deixou rastro.
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import psycopg2
 from psycopg2.errors import InsufficientPrivilege
@@ -49,7 +50,7 @@ def autenticar(cur, nome):
     cur.execute('set local role authenticated')
 
 
-def como_dono(cur, sql, args=None):
+def como_dono(cur, sql, args=None) -> Any:
     """Escreve sem passar pela RLS, para montar o cenário de um teste."""
     cur.execute('reset role')
     cur.execute(sql, args)
@@ -91,7 +92,8 @@ def numero():
 
 
 def cenario_cj(cur, *, relator='CJ3', data_dist='2026-06-18', data_sessao='2026-07-09',
-               defesa=True, voto='Manter', status='Julgado', pauta=24):
+               defesa=True, voto: str | None = 'Manter', status: str | None = 'Julgado',
+               pauta: int | None = 24):
     """Uma distribuição na Câmara e um julgado que a copiou."""
     num = numero()
     acervo_id = como_dono(cur, """

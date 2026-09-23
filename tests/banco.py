@@ -7,6 +7,7 @@ que as políticas de RLS do schema.sql esperam encontrar.
 import subprocess
 import time
 from pathlib import Path
+from typing import Any
 
 import psycopg2
 
@@ -17,7 +18,7 @@ def docker(*args):
     return subprocess.run(['docker', *args], capture_output=True, text=True)
 
 
-def uma(cur, sql, args=None):
+def uma(cur, sql, args=None) -> Any:
     """Executa e devolve o valor único (ou a linha, se houver mais colunas)."""
     cur.execute(sql, args)
     linha = cur.fetchone()

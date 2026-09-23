@@ -124,8 +124,7 @@ endereço não existe. Todo o resto está agrupado por natureza.
 │   ├── js/
 │   │   ├── bootstrap.js    carregamento sob demanda, verificação de sessão e controle de acesso
 │   │   ├── index.js        fonte da lógica do sorteio, validação e ata
-│   │   ├── julgados.js     fonte do registro de julgamentos da Câmara
-│   │   ├── julgados-creg.js  o mesmo, para o Conselho Regulador
+│   │   ├── julgados.js     fonte do registro de julgamentos (os dois colegiados)
 │   │   ├── acervo.js       fonte do painel do acervo dos dois colegiados
 │   │   ├── historico.js    fonte do histórico de sorteios dos dois colegiados
 │   │   ├── admin.js        fonte do painel administrativo dos dois colegiados
@@ -148,10 +147,7 @@ endereço não existe. Todo o resto está agrupado por natureza.
 │   ├── rederivar_cj.sql      religa ao acervo os julgados que entraram sem ele
 │   ├── rederivar_creg.sql    o mesmo, para o Conselho Regulador
 │   ├── backup_cj.sql         copia as tabelas da CJ para o schema backup_cj
-│   ├── restaurar_cj.sql      a volta do backup
-│   ├── backup_pre_mesclagem_cj.sql  foto da CJ antes de trazer o histórico de volta
-│   ├── mesclar_historico_cj.sql     soma o histórico de backup_cj à nova série
-│   └── desfazer_mesclagem_cj.sql    tira só o que a mesclagem trouxe
+│   └── restaurar_cj.sql      a volta do backup
 │
 ├── supabase/migrations/    histórico aplicado ao projeto hospedado
 ├── sincronizacao/          job que lê as pautas da AGR (roda no GitHub Actions)
@@ -209,9 +205,9 @@ select p.proname
 ```
 
 Documentação: este README, mais um documento por colegiado —
-[`FLUXO-CJ.md`](FLUXO-CJ.md), o fluxo completo da Câmara de Julgamento, do
+[`FLUXO-CJ.md`](docs/FLUXO-CJ.md), o fluxo completo da Câmara de Julgamento, do
 sorteio ao julgamento registrado, com as regras, as tabelas, a API e o
-tratamento de falhas; e [`FLUXO-CREG.md`](FLUXO-CREG.md), o do Conselho
+tratamento de falhas; e [`FLUXO-CREG.md`](docs/FLUXO-CREG.md), o do Conselho
 Regulador, que cobre só o que difere e aponta para o primeiro no resto.
 
 O GitHub Pages define um cache curto para os arquivos publicados e não permite
@@ -228,7 +224,6 @@ npx --yes esbuild@0.28.2 assets/js/supabase.js --minify-syntax --minify-whitespa
 npx --yes esbuild@0.28.2 assets/js/bootstrap.js --minify-syntax --minify-whitespace --outfile=assets/js/bootstrap.min.js
 npx --yes esbuild@0.28.2 assets/js/index.js --minify-syntax --minify-whitespace --outfile=assets/js/index.min.js
 npx --yes esbuild@0.28.2 assets/js/julgados.js --minify-syntax --minify-whitespace --outfile=assets/js/julgados.min.js
-npx --yes esbuild@0.28.2 assets/js/julgados-creg.js --minify-syntax --minify-whitespace --outfile=assets/js/julgados-creg.min.js
 npx --yes esbuild@0.28.2 assets/js/acervo.js --minify-syntax --minify-whitespace --outfile=assets/js/acervo.min.js
 npx --yes esbuild@0.28.2 assets/js/historico.js --minify-syntax --minify-whitespace --outfile=assets/js/historico.min.js
 npx --yes esbuild@0.28.2 assets/js/admin.js --minify-syntax --minify-whitespace --outfile=assets/js/admin.min.js
@@ -292,7 +287,7 @@ A chave publicável é pública por natureza e pode ficar no código: ela identi
 
 ## Câmara de Julgamento: acervo e julgados
 
-> O passo a passo completo, com diagramas, está em **[FLUXO-CJ.md](FLUXO-CJ.md)**.
+> O passo a passo completo, com diagramas, está em **[FLUXO-CJ.md](docs/FLUXO-CJ.md)**.
 
 A CJ deixou de compartilhar uma tabela única de sorteio com o Conselho Regulador e passou a ter as duas tabelas que a secretaria já usava na planilha:
 
@@ -400,7 +395,7 @@ Rodar duas vezes não duplica nada: `pautas_cj.url` barra o documento repetido e
 ## Conselho Regulador: acervo e julgados
 
 > O que difere da Câmara, com as fórmulas traduzidas uma a uma, está em
-> **[FLUXO-CREG.md](FLUXO-CREG.md)**.
+> **[FLUXO-CREG.md](docs/FLUXO-CREG.md)**.
 
 Até 27/08/2026 o sorteio do CREG gravava numa tabela solta, sem acervo e sem
 julgados, medida provisória enquanto o Conselho não tinha o desenho da Câmara.
@@ -474,7 +469,7 @@ Dois dias depois, uma carga de recuperação repôs o período que a planilha n�
 alcançava — de 25/06 a 20/08/2026 — lendo as atas de sorteio publicadas no SEI e
 as pautas publicadas pela AGR: 157 distribuições e 151 julgados. O script era de
 execução única e não ficou no repositório; o que ele decidiu, e onde deixou o
-banco, está em [`FLUXO-CJ.md`](FLUXO-CJ.md).
+banco, está em [`FLUXO-CJ.md`](docs/FLUXO-CJ.md).
 
 - [`backup_cj.sql`](sql/backup_cj.sql) copia `acervo_cj`, `julgados_cj` e
   `pautas_cj` para o schema `backup_cj`. Rode antes de qualquer alteração de
@@ -483,11 +478,9 @@ banco, está em [`FLUXO-CJ.md`](FLUXO-CJ.md).
   estado do backup.
 
 Em 18/09/2026 o histórico voltou à produção, somado à nova série, para a CJ
-ter a mesma profundidade do CREG. O estado anterior ficou em
-`backup_cj_pre_mesclagem` ([`backup_pre_mesclagem_cj.sql`](sql/backup_pre_mesclagem_cj.sql)),
-e [`desfazer_mesclagem_cj.sql`](sql/desfazer_mesclagem_cj.sql) é a volta — tira
-só o que a mesclagem trouxe. Ver *A mesclagem do histórico* em
-[`FLUXO-CJ.md`](FLUXO-CJ.md).
+ter a mesma profundidade do CREG. Os scripts dessa operação única saíram do
+repositório depois dela e ficam no histórico do git. Ver *A mesclagem do
+histórico* em [`FLUXO-CJ.md`](docs/FLUXO-CJ.md).
 
 Cada um é **um único comando** — um bloco `do $$ … $$`. No SQL Editor do
 Supabase os comandos passam por um pooler em modo transação e podem cair em

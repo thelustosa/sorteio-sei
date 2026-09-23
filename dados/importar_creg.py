@@ -165,7 +165,7 @@ def unificar(linhas, campo):
 
 
 def booleano(v):
-    return {'sim': True, 'nao': False}.get(chave(v))
+    return {'sim': True, 'nao': False}.get(chave(v) or '')
 
 
 def processo(v):
