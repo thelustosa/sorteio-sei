@@ -30,6 +30,21 @@ const DESTINOS = {
 
 const paginaAtual = PAGINAS[document.body.dataset.page];
 const sessionLoading = document.getElementById('sessionLoading');
+let scriptAntecipado = false;
+
+// O script da página desce junto com a consulta de permissões, e não depois
+// dela: eram duas idas à rede em fila antes de a tela existir. `preload` só
+// baixa — quem executa continua sendo o carregarScript, depois do porteiro. O
+// painel fica de fora: lá a consulta decide se o módulo é baixado.
+function anteciparScript(src) {
+  if (scriptAntecipado || paginaAtual.exigeAdmin) return;
+  scriptAntecipado = true;
+  const link = document.createElement('link');
+  link.rel = 'preload';
+  link.as = 'script';
+  link.href = src;
+  document.head.append(link);
+}
 
 function resolverDestinoPermitido(paginaId, orgaos) {
   const pagina = PAGINAS[paginaId];
@@ -52,6 +67,8 @@ async function carregarPaginaAutenticada() {
   // em que a transição entre páginas aterrissava.
   sessionLoading.hidden = false;
   sessionLoading.replaceChildren(criarIndicadorCarregamento(paginaAtual.texto));
+  const src = `assets/js/${paginaAtual.arquivo}?v=${ASSET_VERSION}`;
+  anteciparScript(src);
 
   try {
     const orgaos = await buscarOrgaosAutorizados();
@@ -93,7 +110,7 @@ async function carregarPaginaAutenticada() {
         .then(orgaos => aplicarVisibilidadeAdmin(orgaos));
     }
 
-    await carregarScript(`assets/js/${paginaAtual.arquivo}?v=${ASSET_VERSION}`);
+    await carregarScript(src);
     // Toda tela monta a própria moldura de forma síncrona antes de buscar dado
     // algum — a lista de pautas, o painel do acervo/histórico, o seletor de
     // modalidade — e põe o próprio indicador dentro dela. Então o indicador
