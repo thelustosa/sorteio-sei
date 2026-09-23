@@ -209,9 +209,9 @@ select p.proname
 ```
 
 Documentação: este README, mais um documento por colegiado —
-[`FLUXO-CJ.md`](FLUXO-CJ.md), o fluxo completo da Câmara de Julgamento, do
+[`FLUXO-CJ.md`](docs/FLUXO-CJ.md), o fluxo completo da Câmara de Julgamento, do
 sorteio ao julgamento registrado, com as regras, as tabelas, a API e o
-tratamento de falhas; e [`FLUXO-CREG.md`](FLUXO-CREG.md), o do Conselho
+tratamento de falhas; e [`FLUXO-CREG.md`](docs/FLUXO-CREG.md), o do Conselho
 Regulador, que cobre só o que difere e aponta para o primeiro no resto.
 
 O GitHub Pages define um cache curto para os arquivos publicados e não permite
@@ -292,7 +292,7 @@ A chave publicável é pública por natureza e pode ficar no código: ela identi
 
 ## Câmara de Julgamento: acervo e julgados
 
-> O passo a passo completo, com diagramas, está em **[FLUXO-CJ.md](FLUXO-CJ.md)**.
+> O passo a passo completo, com diagramas, está em **[FLUXO-CJ.md](docs/FLUXO-CJ.md)**.
 
 A CJ deixou de compartilhar uma tabela única de sorteio com o Conselho Regulador e passou a ter as duas tabelas que a secretaria já usava na planilha:
 
@@ -400,7 +400,7 @@ Rodar duas vezes não duplica nada: `pautas_cj.url` barra o documento repetido e
 ## Conselho Regulador: acervo e julgados
 
 > O que difere da Câmara, com as fórmulas traduzidas uma a uma, está em
-> **[FLUXO-CREG.md](FLUXO-CREG.md)**.
+> **[FLUXO-CREG.md](docs/FLUXO-CREG.md)**.
 
 Até 27/08/2026 o sorteio do CREG gravava numa tabela solta, sem acervo e sem
 julgados, medida provisória enquanto o Conselho não tinha o desenho da Câmara.
@@ -474,7 +474,7 @@ Dois dias depois, uma carga de recuperação repôs o período que a planilha n�
 alcançava — de 25/06 a 20/08/2026 — lendo as atas de sorteio publicadas no SEI e
 as pautas publicadas pela AGR: 157 distribuições e 151 julgados. O script era de
 execução única e não ficou no repositório; o que ele decidiu, e onde deixou o
-banco, está em [`FLUXO-CJ.md`](FLUXO-CJ.md).
+banco, está em [`FLUXO-CJ.md`](docs/FLUXO-CJ.md).
 
 - [`backup_cj.sql`](sql/backup_cj.sql) copia `acervo_cj`, `julgados_cj` e
   `pautas_cj` para o schema `backup_cj`. Rode antes de qualquer alteração de
@@ -487,7 +487,7 @@ ter a mesma profundidade do CREG. O estado anterior ficou em
 `backup_cj_pre_mesclagem` ([`backup_pre_mesclagem_cj.sql`](sql/backup_pre_mesclagem_cj.sql)),
 e [`desfazer_mesclagem_cj.sql`](sql/desfazer_mesclagem_cj.sql) é a volta — tira
 só o que a mesclagem trouxe. Ver *A mesclagem do histórico* em
-[`FLUXO-CJ.md`](FLUXO-CJ.md).
+[`FLUXO-CJ.md`](docs/FLUXO-CJ.md).
 
 Cada um é **um único comando** — um bloco `do $$ … $$`. No SQL Editor do
 Supabase os comandos passam por um pooler em modo transação e podem cair em

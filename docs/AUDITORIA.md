@@ -7,7 +7,7 @@
 **Base da revisão:**
 - Código: `main` em `9712d04`.
 - Banco: projeto Supabase `sorteio-sei` (PostgreSQL 17.6), consultado via MCP: constraints, RLS, grants, corpo das funções, ledger de migrações e advisors.
-- Testes: a mesma sequência do [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+- Testes: a mesma sequência do [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 
 > O relatório original apontava 5 problemas e 2 recomendações. Na validação, 1 problema se confirmou em parte, 1 é válido mas cosmético e 3 eram falsos positivos no deploy real (GitHub Pages em `/sorteio-sei/`). As 2 recomendações já estavam cobertas ou não compensam. A revisão encontrou 3 pontos que o relatório não viu.
 
@@ -38,23 +38,23 @@
 
 **Confirmado em produção.** `acervo_cj` e `julgados_cj` só tinham o check de `origem`, enquanto `acervo_creg` e `julgados_creg` já exigiam `num_processo ~ '^[0-9]{15}$'`.
 
-**Risco real.** O papel `authenticated` tem `INSERT` direto em `acervo_cj`, e a policy só confere `tem_acesso_orgao('CJ')`. Os 15 dígitos eram validados apenas no navegador ([`assets/js/index.js`](assets/js/index.js)), então um operador da CJ conseguia gravar `'ABC'` com um POST na API REST.
+**Risco real.** O papel `authenticated` tem `INSERT` direto em `acervo_cj`, e a policy só confere `tem_acesso_orgao('CJ')`. Os 15 dígitos eram validados apenas no navegador ([`assets/js/index.js`](../assets/js/index.js)), então um operador da CJ conseguia gravar `'ABC'` com um POST na API REST.
 
 **Severidade revisada: média.** Exige usuário autenticado com acesso à CJ agindo fora da tela, e nenhum dado fora do padrão existia.
 
 **Correção:**
-- `acervo_cj_num_processo_check` e `julgados_cj_num_processo_check` em [`sql/schema.sql`](sql/schema.sql) e na migração [`20260915125055_numero_de_processo_da_cj.sql`](supabase/migrations/20260915125055_numero_de_processo_da_cj.sql), já aplicada em produção.
+- `acervo_cj_num_processo_check` e `julgados_cj_num_processo_check` em [`sql/schema.sql`](../sql/schema.sql) e na migração [`20260915125055_numero_de_processo_da_cj.sql`](../supabase/migrations/20260915125055_numero_de_processo_da_cj.sql), já aplicada em produção.
 - Validação imediata, sem `NOT VALID`: nenhuma linha fora do padrão em `acervo_cj` (194), `julgados_cj` (223) e `backup_cj` (3.199 e 3.144).
 - `admin_corrigir_processo_cj` foi recriada só para atualizar o comentário que dizia que a Câmara não tinha o check. A lógica não mudou.
-- Novo teste `cj_exige_numero_de_processo_com_15_digitos` em [`tests/test_cj.py`](tests/test_cj.py). `preparar_upgrade_da_migracao` remove as duas constraints antes de aplicar as migrações, para o CI provar que é a migração que as devolve.
-- [`README.md`](README.md) e [`FLUXO-CJ.md`](FLUXO-CJ.md) atualizados.
+- Novo teste `cj_exige_numero_de_processo_com_15_digitos` em [`tests/test_cj.py`](../tests/test_cj.py). `preparar_upgrade_da_migracao` remove as duas constraints antes de aplicar as migrações, para o CI provar que é a migração que as devolve.
+- [`README.md`](../README.md) e [`FLUXO-CJ.md`](FLUXO-CJ.md) atualizados.
 
 **Não foi feito, de propósito:** a restrição de cadeira (`relator ~ '^CJ[1-9][0-9]*$'`) sugerida no texto do relatório.
 - Todos os relatores do `backup_cj` estão gravados pelo nome.
-- [`dados/importar_planilha.py`](dados/importar_planilha.py) mantém como nome quem não está em `cadeiras_cj`.
+- [`dados/importar_planilha.py`](../dados/importar_planilha.py) mantém como nome quem não está em `cadeiras_cj`.
 - O [`FLUXO-CJ.md`](FLUXO-CJ.md) documenta essa fronteira ("Fronteira conhecida"), e `tests/test_cj.py` depende dela.
 
-Essa restrição quebraria o [`sql/restaurar_cj.sql`](sql/restaurar_cj.sql) e a importação da planilha.
+Essa restrição quebraria o [`sql/restaurar_cj.sql`](../sql/restaurar_cj.sql) e a importação da planilha.
 
 **Efeito colateral esperado:** `processo()` no importador não exige 15 dígitos. Agora uma linha errada na planilha aborta o lote, em vez de entrar no banco.
 
@@ -62,7 +62,7 @@ Essa restrição quebraria o [`sql/restaurar_cj.sql`](sql/restaurar_cj.sql) e a 
 
 O ledger de produção (`supabase_migrations.schema_migrations`) registrou `20260914102247_ajustes_painel_admin`, mas o arquivo se chamava `20260911120000_ajustes_painel_admin.sql`. Pela regra do README (seção sobre `supabase/migrations/`), o `supabase db push` tentaria reaplicar esse arquivo.
 
-O arquivo foi renomeado para [`20260914102247_ajustes_painel_admin.sql`](supabase/migrations/20260914102247_ajustes_painel_admin.sql). Nenhum arquivo referenciava o nome antigo, e a ordem das migrações não muda.
+O arquivo foi renomeado para [`20260914102247_ajustes_painel_admin.sql`](../supabase/migrations/20260914102247_ajustes_painel_admin.sql). Nenhum arquivo referenciava o nome antigo, e a ordem das migrações não muda.
 
 ---
 
@@ -71,8 +71,8 @@ O arquivo foi renomeado para [`20260914102247_ajustes_painel_admin.sql`](supabas
 ### P-MED-01 — `<base href="/sorteio-sei/">` no `404.html`
 
 O site é publicado no GitHub Pages em `https://thelustosa.github.io/sorteio-sei/`, sem domínio próprio.
-- O `<base>` foi colocado de propósito ([`docs/ALTERACOES-PRE-PRODUCAO-2026-08-23.md`](docs/ALTERACOES-PRE-PRODUCAO-2026-08-23.md), seção 4.5).
-- [`tests/test_assets.mjs`](tests/test_assets.mjs) garante que uma 404 numa URL aninhada (`/sorteio-sei/inexistente/aninhado`) ainda carregue CSS, favicon e o link de volta.
+- O `<base>` foi colocado de propósito (`ALTERACOES-PRE-PRODUCAO-2026-08-23.md`, seção 4.5 — removido do repositório, disponível no histórico do git).
+- [`tests/test_assets.mjs`](../tests/test_assets.mjs) garante que uma 404 numa URL aninhada (`/sorteio-sei/inexistente/aninhado`) ainda carregue CSS, favicon e o link de volta.
 
 A reprodução do relatório servia o site na raiz, cenário que não existe aqui. Remover o `<base>` quebraria justamente o caso que o teste protege. Só precisa mudar se o site migrar para um domínio próprio.
 
@@ -92,7 +92,7 @@ As demais páginas têm cabeçalho e navegação antes do conteúdo. No `404.htm
 
 ### P-BAIXO-01 — `console.error` em recusa prevista de login
 
-Confirmado: [`assets/js/bootstrap.js`](assets/js/bootstrap.js) loga o erro antes do `if (err.semPermissao)`. O ajuste é de uma linha, mas exige regerar o `bootstrap.min.js`, rodar `tools/versionar.mjs` e publicar uma nova versão dos assets. Fica para o próximo release.
+Confirmado: [`assets/js/bootstrap.js`](../assets/js/bootstrap.js) loga o erro antes do `if (err.semPermissao)`. O ajuste é de uma linha, mas exige regerar o `bootstrap.min.js`, rodar `tools/versionar.mjs` e publicar uma nova versão dos assets. Fica para o próximo release.
 
 ### N-03 — proteção contra senhas vazadas desligada
 
@@ -111,7 +111,7 @@ O advisor de segurança do Supabase acusa *Leaked Password Protection* desligada
   - `cadeiras_cj` é fechada ao navegador de propósito (RLS sem policy, privilégios revogados), então exigiria uma RPC nova.
   - O painel do acervo já recebe os nomes pela `resumo_acervo_cj`.
   - `tests/test_cj.py` falha se a constante divergir da tabela, e a composição muda raramente. Em produção, as 5 cadeiras batem.
-- **R-02 — monitorar o sincronizador.** Já existe: [`.github/workflows/sincronizar-julgados.yml`](.github/workflows/sincronizar-julgados.yml) roda quatro vezes por dia e fica vermelho com anotação por colegiado. Além disso, `sincronizar.py` avisa quando encontra número de 15 dígitos sem o rótulo, sinal de que o layout da pauta mudou.
+- **R-02 — monitorar o sincronizador.** Já existe: [`.github/workflows/sincronizar-julgados.yml`](../.github/workflows/sincronizar-julgados.yml) roda quatro vezes por dia e fica vermelho com anotação por colegiado. Além disso, `sincronizar.py` avisa quando encontra número de 15 dígitos sem o rótulo, sinal de que o layout da pauta mudou.
 
 ---
 
