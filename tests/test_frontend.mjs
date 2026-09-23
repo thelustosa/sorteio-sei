@@ -179,7 +179,7 @@ function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null, local = ne
       aplicarVisibilidadePorOrgao: typeof aplicarVisibilidadePorOrgao === 'function' ? aplicarVisibilidadePorOrgao : undefined,
       erroSemPermissao: typeof erroSemPermissao === 'function' ? erroSemPermissao : undefined,
       CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicador,
-      alternarBotaoCarregando, redirecionarSemTransicao, mostrarErro,
+      alternarBotaoCarregando, redirecionarSemTransicao, mostrarErro, equalizarColunas,
       estadoSessao: () => ({ accessToken, refreshToken })
     };`)(document, window, navigator, location, sessionStorage, localStorage, fetch, apiSubstituta);
   return { ...app, document, navegacoes, storage, local,
@@ -232,7 +232,7 @@ function paginaServidaComBundles(fetch) {
 // seu próprio script. As telas o enxergam como global; aqui ele é injetado, e
 // vem do arquivo de verdade para que uma divergência apareça como falha.
 const { CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicador,
-        alternarBotaoCarregando, mostrarErro } = supabaseApp(async () => {});
+        alternarBotaoCarregando, mostrarErro, equalizarColunas } = supabaseApp(async () => {});
 
 function indexPage({ api = async () => null, aviso = () => {},
   supabaseUrl = 'url', supabaseKey = 'key', token = 'token' } = {}) {
@@ -1631,9 +1631,9 @@ function acervoPage(api, { imprimir = () => {}, colegiado = 'cj' } = {}) {
   const escolherRecorte = valor =>
     recorteCampo.dispatch('change', { target: { value: valor } });
 
-  const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador', 'mostrarErro',
+  const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador', 'mostrarErro', 'equalizarColunas',
     `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, criarExcelDetalhe, dadosTabulares, abrirDetalhe, exportarDetalhe, tempoPorExtenso };`)(
-    document, { print: imprimir }, api, criarIndicadorCarregamento, aguardarIndicador, mostrarErro);
+    document, { print: imprimir }, api, criarIndicadorCarregamento, aguardarIndicador, mostrarErro, equalizarColunas);
   return { document, loginOnlyCard, dialog, painelCarregando, tabelaScroll,
            recorteCampo, escolherRecorte, ...app };
 }
@@ -2599,10 +2599,10 @@ function historicoPage(api, colegiado = 'creg') {
   document.getElementById('historicoPanel').hidden = true;
   document.getElementById('btnAtualizar').hidden = true;  // como nas páginas
 
-  const app = new Function('document', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador', 'mostrarErro',
+  const app = new Function('document', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador', 'mostrarErro', 'equalizarColunas',
     `${source('historico.js')}\nreturn { inicializarHistorico, carregarHistorico, abrirDetalhe,
       criarDocxDetalhe, exportarDetalheDocx };`)(
-    document, api, criarIndicadorCarregamento, aguardarIndicador, mostrarErro);
+    document, api, criarIndicadorCarregamento, aguardarIndicador, mostrarErro, equalizarColunas);
   return { document, loginOnlyCard, dialog, painelCarregando, tabelaScroll, ...app };
 }
 
@@ -3263,9 +3263,9 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
   document.body.append(seletor, abas, document.getElementById('edicaoCampos'));
 
   const app = new Function('document', 'api', 'aviso', 'criarIndicadorCarregamento',
-    'alternarBotaoCarregando', 'rotularCadeira', 'mostrarErro',
+    'alternarBotaoCarregando', 'rotularCadeira', 'mostrarErro', 'equalizarColunas',
     `${source('admin.js')}\nreturn { inicializarAdmin, VOCABULARIO };`)(
-    document, api, registrarAviso, () => document.createElement('div'), botaoCarregando, rotularCadeira, mostrarErro);
+    document, api, registrarAviso, () => document.createElement('div'), botaoCarregando, rotularCadeira, mostrarErro, equalizarColunas);
 
   const botaoDeOrgao = orgao => seletor.children.find(b => b.dataset.orgaoAdmin === orgao);
   const botaoDeAba = nome => abas.children.find(b => b.dataset.aba === nome);
@@ -3538,21 +3538,26 @@ test('tabela administrativa explica a rolagem e mantem as acoes acessiveis', () 
   assert.match(html, /id="tabelaInstrucao"[^>]*hidden[^>]*>[^<]*Deslize horizontalmente/i);
   assert.match(css, /\.admin-table-wrap:focus-visible\s*\{[^}]*outline:/s);
   assert.match(css, /\.admin-table\s*\{[^}]*table-layout:\s*fixed/s,
-    'larguras previsíveis impedem que o conteúdo abra vãos diferentes entre colunas');
-  const larguraMinimaSessao = Number(css.match(
-    /\.admin-table\[data-visao='processos-sessao'\]\s*\{[^}]*min-width:\s*(\d+)px/
-  )?.[1]);
-  const percentualVinculo = Number(css.match(
-    /\.admin-table\[data-visao='processos-sessao'\] thead th:nth-child\(6\)\s*\{[^}]*width:\s*([\d.]+)%/
-  )?.[1]);
-  assert.ok(larguraMinimaSessao * percentualVinculo / 100 >= 212,
-    'a coluna Vínculo precisa conter o selo completo sem invadir Atualizado por');
+    'as listas mantêm trilhos iguais para o ritmo das datas');
+  // Os detalhes não: largura fixa em porcentagem dava a cada coluna uma sobra
+  // diferente, e o vão entre colunas ia de 38px a 168px — Voto chegava a
+  // invadir Status. Lá cada coluna é o próprio conteúdo mais a mesma folga.
+  assert.doesNotMatch(css, /data-visao='processos-(sessao|sorteio)'\][^{]*thead th:nth-child\(\d\)\s*\{[^}]*width:/,
+    'detalhe sem largura por coluna');
+  assert.doesNotMatch(css, /\.admin-table\[data-visao='processos-(sessao|sorteio)'\]\s*\{[^}]*min-width:\s*1\d{3}px/,
+    'sem piso de 1320/1360px: em 1366px a tabela só cabia com rolagem lateral');
+  assert.match(css, /\.admin-table\[data-visao\^='processos-'\]\s*\{[^}]*table-layout:\s*auto/s);
+  assert.match(css,
+    /\.admin-table\[data-visao\^='processos-'\] tbody td\s*\{[^}]*padding-inline:\s*calc\(12px \+ var\(--folga, 0px\)\)[^}]*text-align:\s*center/s,
+    'mesmo respiro em toda célula, com a folga repartida, e tudo centralizado');
+  assert.match(readFileSync(new URL('../assets/js/admin.js', import.meta.url), 'utf8'),
+    /if \(detalhe\) equalizarColunas\(painelTabela\)/);
   assert.match(css,
     /\.admin-table th\.col-acoes,\s*\.admin-table td\.col-acoes\s*\{[^}]*text-align:\s*center/s,
     'cabeçalho e botões devem compartilhar o centro da coluna');
   assert.match(css,
-    /\.admin-table\[data-visao='processos-sorteio'\]\[data-orgao='CREG'\][^}]+nth-child\(7\)[^{]*\{[^}]*width:/s,
-    'o interessado do CREG precisa de uma faixa própria, sem comprimir os cabeçalhos finais');
+    /tbody td\[data-label='Interessado'\]\s*\{[^}]*white-space:\s*normal/s,
+    'só o Interessado, texto corrido, absorve a quebra de linha quando a tela aperta');
   assert.match(css,
     /@media screen and \(max-width: 960px\)[\s\S]*?\.admin-table\[data-visao[^}]+tbody tr\s*\{[^}]*display:\s*grid/s);
   assert.match(css,
@@ -5100,13 +5105,9 @@ test('excluir so fica vermelho sob o ponteiro ou o foco, e a confirmacao usa os 
   assert.match(css, /\.admin-impacto\[data-tom='perigo'\]\s*\{[^}]*background:\s*var\(--danger-panel\)/s);
   assert.match(css, /\.admin-dialog\[data-tom='perigo'\] \.admin-review-icon\s*\{[^}]*color:\s*var\(--danger\)/s);
 
-  const largura = (visao, filho) => Number(css.match(new RegExp(
-    `\\.admin-table\\[data-visao='${visao}'\\] thead th:nth-child\\(${filho}\\)\\s*\\{[^}]*width:\\s*([\\d.]+)%`))?.[1]);
-  const minimo = visao => Number(css.match(new RegExp(
-    `\\.admin-table\\[data-visao='${visao}'\\]\\s*\\{[^}]*min-width:\\s*(\\d+)px`))?.[1]);
-  // 440px de botões medidos no Chrome, mais os 26px de padding da célula.
-  assert.ok(minimo('processos-sessao') * largura('processos-sessao', 2) / 100 >= 466,
-    'quatro botões cabem na coluna de Ações da sessão');
-  assert.ok(minimo('processos-sorteio') * largura('processos-sorteio', 3) / 100 >= 466,
-    'quatro botões cabem na coluna de Ações da distribuição');
+  // Quatro botões numa linha passavam de 440px e levavam a tabela à rolagem;
+  // na grade 2 × 2 toda linha tem o mesmo desenho.
+  assert.match(css,
+    /\.admin-table\[data-visao\^='processos-'\] \.admin-acoes\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(2, auto\)/s,
+    'os quatro botões de Ações ficam numa grade 2 × 2');
 });

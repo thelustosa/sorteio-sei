@@ -329,6 +329,21 @@ function botaoDeLinha(rotulo, aoClicar, { tom = 'secundario' } = {}) {
   return botao;
 }
 
+function autoria(quem, quando) {
+  const bloco = document.createElement('span');
+  bloco.className = 'admin-autoria';
+  // O endereço não tem espaço onde quebrar. Se a tela apertar, ele quebra
+  // antes do "@", e nunca no meio de uma palavra.
+  const email = document.createElement('span');
+  const arroba = String(quem).indexOf('@');
+  if (arroba > 0) email.append(quem.slice(0, arroba), document.createElement('wbr'), quem.slice(arroba));
+  else email.textContent = quem;
+  const instante = document.createElement('span');
+  instante.textContent = dataHoraBR(quando);
+  bloco.append(email, instante);
+  return bloco;
+}
+
 function celulaDeAcoes(botoes) {
   const grupo = document.createElement('div');
   grupo.className = 'admin-acoes';
@@ -416,6 +431,9 @@ function desenhar(colunas, linhas) {
     tbody.appendChild(tr);
   });
   painelTabela.replaceChildren(cabecalho(colunas), tbody);
+  // Só os detalhes (processos de uma sessão ou distribuição) igualam o vão: as
+  // listas mantêm trilhos iguais de propósito, para o ritmo das datas.
+  if (detalhe) equalizarColunas(painelTabela);
   medirRolagem();
 }
 
@@ -830,8 +848,9 @@ function pintarProcessosDaSessao(linhas) {
       celula(linha.acervo_id
         ? badge(`Distribuição de ${dataBR(linha.data_distribuicao)}`, 'neutro')
         : badge('Sem distribuição', 'alerta')),
-      celula(linha.atualizado_por ? `${linha.atualizado_por} · ${dataHoraBR(linha.atualizado_em)}` : '—',
-        'td', 'small')
+      // Endereço e instante em duas linhas: numa só, o e-mail — que não tem onde
+      // quebrar — era cortado pela largura da coluna.
+      celula(linha.atualizado_por ? autoria(linha.atualizado_por, linha.atualizado_em) : '—', 'td', 'small')
     ];
   }));
   painelStatus.textContent = `${plural(filtradas.length, 'processo', 'processos')} nesta sessão.`;
@@ -862,10 +881,10 @@ function pintarProcessosDoSorteio(linhas) {
     { rotulo: 'Processo', eixo: 'centro' },
     { rotulo: 'Ações', eixo: 'acoes' },
     { rotulo: v.destino, eixo: 'centro' },
-    'Assunto',
+    { rotulo: 'Assunto', eixo: 'centro' },
     { rotulo: v.decisao, eixo: 'centro' }
   ];
-  if (v.temInteressado) colunas.push('Interessado');
+  if (v.temInteressado) colunas.push({ rotulo: 'Interessado', eixo: 'centro' });
   colunas.push({ rotulo: 'Julgados', eixo: 'centro' });
 
   desenhar(colunas, filtradas.map(linha => {
@@ -1070,6 +1089,7 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
     tbody.appendChild(tr);
   });
   detalheTabela.replaceChildren(cabecalho(colunas), tbody);
+  equalizarColunas(detalheTabela);
 }
 
 function pintarMeta(linhas) {

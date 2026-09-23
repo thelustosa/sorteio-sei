@@ -919,9 +919,12 @@ function desenharDetalhe(processos) {
       const conteudo = coluna.valor(p);
       // Só o vazio vira travessão. `Dias passados` é 0 no processo distribuído
       // hoje, e 0 tem de aparecer como 0.
+      // O assunto do Conselho é texto corrido ("Revisão tarifária
+      // extraordinária"): quebra linha, em vez de empurrar a tabela para
+      // fora do card.
       const el = n === 0
         ? celula(conteudo, 'th', 'linha')
-        : celula(conteudo === '' ? '—' : conteudo);
+        : celula(conteudo === '' ? '—' : conteudo, 'td', coluna.rotulo === 'Assunto' ? 'historico-livre' : '');
 
       const titulo = coluna.titulo ? coluna.titulo(p) : '';
       if (titulo) {
@@ -934,6 +937,7 @@ function desenharDetalhe(processos) {
   });
 
   detalheTabela.replaceChildren(thead, tbody);
+  equalizarColunas(detalheTabela);
 }
 
 function exportarDetalhe() {

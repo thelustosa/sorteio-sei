@@ -789,6 +789,9 @@ tbody td {
 }
 
 tbody tr:last-child td { border-bottom: 0; }
+/* O <th> da linha (o número do processo nos cards) acompanha o realce: sem ele
+   a linha ficava pintada com um retalho branco no meio. */
+tbody tr:hover th,
 tbody tr:hover td { background: var(--table-row-hover); }
 #processTable td.num { text-align: center; }
 .small { color: var(--muted); font-size: var(--text-sm); }
@@ -1916,11 +1919,16 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 .detalhe-dialog[open] { display: flex; flex-direction: column; min-height: 0; }
 
-/* O card do acervo passou a ter seis colunas no Conselho — cinco na Câmara —
-   e a última é texto por extenso. Em 46rem os rótulos do cabeçalho eram
-   cortados no meio ("Nº DO PROCESS"). 52rem é o que acomoda a linha inteira,
-   inclusive o maior tempo que a coluna pode escrever. */
-.detalhe-dialog:has(.acervo-processos) { width: min(52rem, calc(100vw - 2rem)); }
+/* Largura fixa por tipo de card, e não pelo conteúdo: um card que crescesse
+   quando os dados chegam daria um salto de lado logo depois do indicador.
+   Cada largura é a que acomoda o conteúdo real numa linha só. O acervo tem sete
+   colunas no Conselho, com assunto por extenso ("Revisão tarifária
+   extraordinária"), e a 52rem ele quebrava o assunto em três linhas e os
+   rótulos do cabeçalho também. O histórico do Conselho traz o Interessado —
+   razão social com CNPJ —, que em 46rem ocupava três linhas por processo. A
+   sobra, onde houver, vira vão igual entre as colunas (equalizarColunas). */
+.detalhe-dialog:has(.acervo-processos) { width: min(60rem, calc(100vw - 2rem)); }
+[data-colegiado='creg'] .detalhe-dialog:has(.historico-detalhe) { width: min(64rem, calc(100vw - 2rem)); }
 
 .detalhe-dialog::backdrop {
   background: rgb(17 39 32 / 45%);
@@ -1973,9 +1981,11 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 .detalhe-table {
   width: 100%;
   min-width: 0;
-  /* As quatro informações têm o mesmo peso de leitura no detalhe. Colunas
-     estáveis evitam que o conteúdo mais longo desloque os eixos visuais. */
-  table-layout: fixed;
+  /* Automático, e não fixo: cada coluna ocupa o próprio conteúdo mais a mesma
+     folga (`--folga`, calculada por equalizarColunas em supabase.js). Com
+     larguras fixas, a sobra de cada coluna dependia do quanto de texto ela
+     tinha, e o vão entre colunas variava de 11px a 130px num mesmo card. */
+  table-layout: auto;
   margin-top: 0;
   border: none;
   border-radius: 0;
@@ -1988,7 +1998,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 .detalhe-table th,
 .detalhe-table td {
-  padding: 10px 12px;
+  padding: 10px calc(12px + var(--folga, 0px));
   text-align: center;
   border: none;
   border-bottom: 1px solid var(--border-subtle);
@@ -2007,14 +2017,19 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted-strong);
+  /* Rótulo longo ("Em diligência desde") quebra antes de empurrar a tabela
+     para fora do card, que não rola de lado. */
+  white-space: normal;
 }
 
 .detalhe-table tbody tr:last-child th,
 .detalhe-table tbody tr:last-child td { border-bottom: none; }
 
 .detalhe-table tbody th {
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: .015em;
 }
 
 .detalhe-table tbody td:last-child { font-variant-numeric: tabular-nums; }
@@ -2104,14 +2119,18 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   /* Quatro colunas com rótulo por extenso não cabem em 375px, e a tabela
      voltava a exigir arrasto lateral. Os títulos quebram em duas linhas — custa
      uma linha de altura e devolve a largura inteira ao conteúdo. */
-  /* 4px de respiro lateral por célula: com oito bordas de célula, é o que
-     devolve os últimos pixels e faz as quatro colunas caberem sem arrasto. */
+  /* 8px de respiro lateral, mais a folga igual. Com 4px as colunas cabiam sem
+     arrasto quando eram quatro; hoje os cards têm de cinco a sete, rolam de
+     lado abaixo de 620px de qualquer jeito (largura mínima de 520px, abaixo),
+     e 4px só deixava 8px entre um valor e o seguinte. */
   .detalhe-table th,
-  .detalhe-table td { padding: 10px 4px; }
+  .detalhe-table td { padding: 10px calc(8px + var(--folga, 0px)); }
+  /* Na borda, só a folga: sem ela a primeira e a última coluna ficavam com
+     sobra a mais e o vão até a vizinha saía maior que os outros. */
   .detalhe-table th:first-child,
-  .detalhe-table td:first-child { padding-left: 0; }
+  .detalhe-table td:first-child { padding-left: var(--folga, 0px); }
   .detalhe-table th:last-child,
-  .detalhe-table td:last-child { padding-right: 0; }
+  .detalhe-table td:last-child { padding-right: var(--folga, 0px); }
 
   .detalhe-table thead th {
     white-space: normal;
@@ -2136,6 +2155,12 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .detalhe-table.historico-detalhe,
   .detalhe-table.admin-meta-detalhe,
   .detalhe-table.acervo-processos { min-width: 520px; }
+  /* No Conselho os dois cards têm texto por extenso (Interessado, Assunto) e
+     seis ou sete colunas: em 520px o Interessado ficava com ~90px e cada razão
+     social ocupava cinco linhas. Já que o card rola de lado, ele rola um pouco
+     mais e o texto volta a duas linhas. */
+  [data-colegiado='creg'] .detalhe-table.historico-detalhe { min-width: 720px; }
+  [data-colegiado='creg'] .detalhe-table.acervo-processos { min-width: 680px; }
 }
 
 .acervo-table tbody td.acervo-zero {
@@ -3688,36 +3713,11 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-table[data-visao='sessoes'] thead th { width: 20%; }
 .admin-table[data-visao='sorteios'] thead th { width: 16.6667%; }
 
-/* Sete colunas desde que "Vínculo" entrou entre o status e a autoria: sem ela, o
-   julgado sem distribuição vinculada — o caso que "Religar ao acervo" existe
-   para resolver — era desenhado igual ao que está no lugar. A coluna de Ações
-   cresceu com Excluir; o mínimo da tabela subiu (1360px na sessão, 1320px na
-   distribuição) para os quatro botões caberem sem apertar Vínculo. */
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(1) { width: 13%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(2) { width: 35%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(3) { width: 6%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(4) { width: 7%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(5) { width: 9%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(6) { width: 17%; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(7) { width: 13%; }
-
-.admin-table[data-visao='processos-sorteio'] thead th:nth-child(1) { width: 6%; }
-.admin-table[data-visao='processos-sorteio'] thead th:nth-child(2) { width: 14%; }
-.admin-table[data-visao='processos-sorteio'] thead th:nth-child(3) { width: 36%; }
-.admin-table[data-visao='processos-sorteio'] thead th:nth-child(4) { width: 8%; }
-.admin-table[data-visao='processos-sorteio'] thead th:nth-child(5) { width: 18%; }
-.admin-table[data-visao='processos-sorteio'] thead th:nth-child(6) { width: 9%; }
-
-/* O Conselho acrescenta "Interessado" antes de "Julgados". Sem a variante,
-   os 9% restantes eram divididos entre as duas e cortavam ambos os rótulos. */
-.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(1) { width: 5%; }
-.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(2) { width: 13%; }
-.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(3) { width: 34%; }
-.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(4) { width: 7%; }
-.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(5) { width: 12%; }
-.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(6) { width: 9%; }
-.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(7) { width: 14%; }
-.admin-table[data-visao='processos-sorteio'][data-orgao='CREG'] thead th:nth-child(8) { width: 6%; }
+/* Os dois detalhes (processos de uma sessão e de uma distribuição) não têm
+   largura por coluna: como nos cards de detalhe, cada coluna é o próprio
+   conteúdo mais a mesma folga — ver "Cards de detalhe" mais abaixo. As
+   proporções fixas davam 36% a Ações e 6% a Relator, e o vão entre colunas ia
+   de 38px a 168px, com Voto invadindo Status. */
 
 .admin-table[data-visao='auditoria'] thead th:nth-child(1) { width: 15%; }
 .admin-table[data-visao='auditoria'] thead th:nth-child(2) { width: 14%; }
@@ -3730,8 +3730,6 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
    texto longo pode espremer a vizinha até ela quebrar linha. O piso em `ch` diz
    quanto cada uma precisa para não quebrar, sem congelar a distribuição das
    demais — é uma garantia mínima, não uma largura fixa. */
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(6) { min-width: 16ch; }
-.admin-table[data-visao='processos-sessao'] thead th:nth-child(7) { min-width: 22ch; }
 .admin-table[data-visao='sorteios'] thead th:nth-child(6) { min-width: 18ch; }
 .admin-table[data-visao='auditoria'] thead th:nth-child(4) { min-width: 22ch; }
 .admin-table[data-visao='auditoria'] thead th:last-child { min-width: 20ch; }
@@ -3752,8 +3750,6 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 }
 .admin-table[data-visao='sessoes'] { min-width: 660px; }
 .admin-table[data-visao='sorteios'] { min-width: 780px; }
-.admin-table[data-visao='processos-sessao'] { min-width: 1360px; }
-.admin-table[data-visao='processos-sorteio'] { min-width: 1320px; }
 .admin-table[data-visao='auditoria'] { min-width: 1080px; }
 
 /* Meta de 45 dias. Os filtros moram no cabeçalho, ao lado do título que eles
@@ -3904,6 +3900,53 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-table .sem-valor { color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .admin-acoes { display: flex; flex-wrap: nowrap; justify-content: center; gap: 6px; }
+
+/* ── Cards de detalhe do painel ────────────────────────────────────────────
+   Mesma regra dos cards de detalhe do acervo e do histórico: layout
+   automático, tudo centralizado — cabeçalho e dado no mesmo eixo — e o mesmo
+   respiro lateral em toda célula, somado à folga que equalizarColunas reparte.
+   Abaixo de 961px a tabela vira cartão e nada disso se aplica. */
+@media screen and (min-width: 961px) {
+  .admin-table[data-visao^='processos-'] {
+    min-width: 0;
+    table-layout: auto;
+  }
+  .admin-table[data-visao^='processos-'] thead th,
+  .admin-table[data-visao^='processos-'] tbody td {
+    padding-inline: calc(12px + var(--folga, 0px));
+    text-align: center;
+  }
+  /* A borda da tabela mantém o respiro maior de antes (24px à esquerda, 20px
+     à direita): a folga iguala o vão ENTRE colunas, não encosta a primeira e
+     a última na borda do painel. */
+  .admin-table[data-visao^='processos-'] thead th:first-child,
+  .admin-table[data-visao^='processos-'] tbody td:first-child { padding-left: calc(24px + var(--folga, 0px)); }
+  .admin-table[data-visao^='processos-'] thead th:last-child,
+  .admin-table[data-visao^='processos-'] tbody td:last-child { padding-right: calc(20px + var(--folga, 0px)); }
+  .admin-table[data-visao^='processos-'] thead th { white-space: normal; }
+  /* Valor curto não quebra: "Auto de Infração" e "Sem recurso" em duas linhas
+     liam como dois valores. Só o Interessado, texto corrido e longo, absorve a
+     quebra quando a tela aperta. */
+  .admin-table[data-visao^='processos-'] tbody td { white-space: nowrap; }
+  .admin-table[data-visao^='processos-'] tbody td[data-label='Interessado'] { min-width: 16ch; white-space: normal; }
+  /* Entre 961px e ~1250px a sessão não cabe numa linha só. Antes de a tabela
+     rolar, quebram o selo mais longo ("Distribuição de 10/05/2026",
+     "Reformar parcialmente") no espaço e o e-mail antes do "@" (<wbr>). Com
+     largura sobrando, nada disso acontece. */
+  .admin-table[data-visao^='processos-'] .admin-badge { white-space: normal; text-align: center; }
+  .admin-table[data-visao^='processos-'] .admin-autoria { white-space: normal; }
+  /* Quatro botões numa linha passam de 440px. Na grade de 2 × 2 toda linha tem
+     o mesmo desenho, e os botões da mesma coluna ficam da mesma largura — com
+     quebra livre, cada linha quebrava num ponto. */
+  .admin-table[data-visao^='processos-'] .admin-acoes {
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    justify-content: center;
+  }
+}
+
+.admin-autoria { display: grid; gap: 2px; }
+.admin-autoria > span:first-child { color: var(--text); }
 .admin-acao {
   display: inline-flex;
   min-height: 34px;

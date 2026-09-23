@@ -531,6 +531,7 @@ function desenharDetalhe(processos, hora) {
   });
 
   detalheTabela.replaceChildren(thead, tbody);
+  equalizarColunas(detalheTabela);
 }
 
 // ── Exportar a ata do sorteio em .docx ───────────────────────────────────────
