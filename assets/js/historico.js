@@ -146,9 +146,14 @@ detalheDialog.addEventListener('click', evento => {
 function mostrarMolduraDoPainel() {
   if (loginOnlyCard) loginOnlyCard.hidden = true;
   historicoPanel.hidden = false;
+}
+
+// O indicador ocupa o lugar da tabela — na abertura e também no Atualizar, que
+// antes mantinha a lista antiga na tela sem sinal nenhum de consulta por até o
+// tempo da resposta, enquanto o acervo, ao lado, mostrava o andamento.
+function mostrarCarregamentoDaTabela(texto) {
   if (tabelaScroll) tabelaScroll.hidden = true;
-  painelCarregando.replaceChildren(criarIndicadorCarregamento('Carregando o histórico…'));
-  painelCarregando.hidden = false;
+  mostrarIndicador(painelCarregando, texto);
 }
 
 // O erro do carregamento inicial quem mostra é o bootstrap, dentro do card de
@@ -378,6 +383,8 @@ function desenhar(sorteios) {
 
 async function carregarHistorico({ carregamentoInicial = false } = {}) {
   const pedido = ++historicoPedido;
+  const indicadorIniciadoEm = Date.now();
+  mostrarCarregamentoDaTabela(carregamentoInicial ? 'Carregando o histórico…' : 'Atualizando o histórico…');
   historicoErro.hidden = true;
   historicoVazio.hidden = true;
   historicoAtualizado.textContent = 'Carregando…';
@@ -391,7 +398,9 @@ async function carregarHistorico({ carregamentoInicial = false } = {}) {
       method: 'POST',
       body: JSON.stringify({ p_colegiado: COL.sigla })
     });
+    await aguardarIndicador(indicadorIniciadoEm);
   } catch (err) {
+    await aguardarIndicador(indicadorIniciadoEm);
     if (carregamentoInicial) {
       esconderMolduraDoPainel();
       throw err;
@@ -403,6 +412,8 @@ async function carregarHistorico({ carregamentoInicial = false } = {}) {
     historicoTotal.textContent = '';
     historicoAtualizado.textContent = 'Atualização indisponível';
     mostrarErro(historicoErro, 'Não foi possível carregar o histórico. Verifique sua conexão e tente novamente.', err.message);
+    painelCarregando.hidden = true;
+    painelCarregando.replaceChildren();
     return false;
   } finally {
     // Só a carga vigente devolve a tela ao estado ocioso: a atrasada

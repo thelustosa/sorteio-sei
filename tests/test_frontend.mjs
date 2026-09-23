@@ -179,7 +179,7 @@ function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null, local = ne
       aplicarVisibilidadePorOrgao: typeof aplicarVisibilidadePorOrgao === 'function' ? aplicarVisibilidadePorOrgao : undefined,
       erroSemPermissao: typeof erroSemPermissao === 'function' ? erroSemPermissao : undefined,
       CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicador,
-      alternarBotaoCarregando, redirecionarSemTransicao, mostrarErro, equalizarColunas,
+      alternarBotaoCarregando, redirecionarSemTransicao, mostrarErro, equalizarColunas, mostrarIndicador,
       estadoSessao: () => ({ accessToken, refreshToken })
     };`)(document, window, navigator, location, sessionStorage, localStorage, fetch, apiSubstituta);
   return { ...app, document, navegacoes, storage, local,
@@ -232,7 +232,7 @@ function paginaServidaComBundles(fetch) {
 // seu próprio script. As telas o enxergam como global; aqui ele é injetado, e
 // vem do arquivo de verdade para que uma divergência apareça como falha.
 const { CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicador,
-        alternarBotaoCarregando, mostrarErro, equalizarColunas } = supabaseApp(async () => {});
+        alternarBotaoCarregando, mostrarErro, equalizarColunas, mostrarIndicador } = supabaseApp(async () => {});
 
 function indexPage({ api = async () => null, aviso = () => {},
   supabaseUrl = 'url', supabaseKey = 'key', token = 'token' } = {}) {
@@ -1230,12 +1230,28 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
   location = { replace() {} },
   // O papel de administrador: só a tela inicial e o painel o consultam.
   buscarAdmin = async () => new Set(),
-  aplicarVisibilidadeAdmin = () => {}
+  aplicarVisibilidadeAdmin = () => {},
+  // A moldura estática do painel (acervo, histórico), como está no HTML.
+  comMoldura = false
 } = {}) {
   const document = new Document();
   document.body.dataset.page = pagina;
   const sessionLoading = document.add('sessionLoading', 'div');
   sessionLoading.hidden = true;
+  let moldura = null;
+  if (comMoldura) {
+    const cartaoLogin = document.createElement('div');
+    cartaoLogin.dataset.loginOnly = '';
+    cartaoLogin.append(sessionLoading);
+    moldura = document.add(pagina.startsWith('historico') ? 'historicoPanel' : 'acervoPanel', 'section');
+    moldura.hidden = true;
+    const tabela = document.createElement('div');
+    tabela.className = 'table-scroll';
+    const indicador = document.add('painelCarregando', 'div');
+    indicador.hidden = true;
+    moldura.append(indicador, tabela);
+    document.body.append(cartaoLogin, moldura);
+  }
   const loginScreen = document.add('loginScreen', 'div');
   loginScreen.hidden = true;
   const loginErro = document.add('loginErro', 'div');
@@ -1256,7 +1272,7 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
   const app = new Function('document', 'window', 'location', 'ASSET_VERSION', 'carregarScript',
     'criarIndicadorCarregamento', 'ligarLogin', 'buscarOrgaosAutorizados',
     'aplicarVisibilidadePorOrgao', 'erroSemPermissao', 'sair', 'redirecionarSemTransicao',
-    'buscarOrgaosAdministrados', 'aplicarVisibilidadeAdmin',
+    'buscarOrgaosAdministrados', 'aplicarVisibilidadeAdmin', 'mostrarIndicador',
     `${source('bootstrap.js')}\nreturn {
       resolverDestinoPermitido: typeof resolverDestinoPermitido === 'function' ? resolverDestinoPermitido : undefined,
       carregarPaginaAutenticada
@@ -1265,9 +1281,9 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
     texto => { const estado = document.createElement('div'); estado.textContent = texto; return estado; },
     callback => { aoEntrar = callback; }, buscarOrgaos, aplicarVisibilidade, erroPermissao,
     encerrarSessaoNoServidor, destino => location.replace(destino),
-    buscarAdmin, aplicarVisibilidadeAdmin);
+    buscarAdmin, aplicarVisibilidadeAdmin, mostrarIndicador);
 
-  return { ...app, document, sessionLoading, loginScreen, loginErro, btnSair, iniciar: () => aoEntrar() };
+  return { ...app, document, sessionLoading, moldura, loginScreen, loginErro, btnSair, iniciar: () => aoEntrar() };
 }
 
 // O carregamento geral cobre o que acontece antes de a tela existir: a consulta
@@ -1481,7 +1497,7 @@ test('falha ao consultar permissões preserva a sessão e permite tentar novamen
     await page.iniciar();
     assert.equal(page.sessionLoading.children.length, 1,
       'falha de rede deve manter o estado de carregamento com retentativa');
-    const tentarNovamente = page.sessionLoading.children[0].children[1];
+    const tentarNovamente = page.sessionLoading.children[0].children.find(filho => filho.tagName === 'BUTTON');
     assert.equal(tentarNovamente.textContent, 'Tentar novamente');
     tentarNovamente.click();
     await wait();
@@ -1535,6 +1551,59 @@ test('o carregamento geral passa a vez assim que a tela monta a própria moldura
     assert.equal(page.sessionLoading.hidden, true, pagina);
     assert.equal(visivelQuandoATelaMontou, true,
       `${pagina}: o indicador geral precisa estar na tela até a moldura existir`);
+  }
+});
+
+// No acervo e no histórico eram dois indicadores em fila — "Preparando…" num
+// card no meio da página, um vão, e "Carregando…" 48px abaixo, no painel. Com a
+// moldura na página, o andamento nasce no lugar da tabela e a tela o assume
+// sem recriá-lo: um nó só, do clique até a tabela.
+test('acervo e histórico mostram um indicador só, já no lugar da tabela', async () => {
+  for (const pagina of ['acervo-cj', 'historico-creg']) {
+    let responder;
+    let indicadorQuandoATelaMontou = null;
+    const page = bootstrapPage(() => {
+      indicadorQuandoATelaMontou = page.document.getElementById('painelCarregando').children[0];
+      mostrarIndicador(page.document.getElementById('painelCarregando'), 'texto da tela');
+      return Promise.resolve();
+    }, pagina, {
+      comMoldura: true,
+      buscarOrgaos: () => new Promise(resolve => { responder = resolve; })
+    });
+    const carregamento = page.iniciar();
+    await wait();
+
+    const indicador = page.document.getElementById('painelCarregando');
+    assert.equal(page.sessionLoading.hidden, true, `${pagina}: nada de card de carregamento à parte`);
+    assert.equal(page.moldura.hidden, false, `${pagina}: a moldura aparece já na consulta de permissão`);
+    assert.equal(indicador.hidden, false);
+    assert.equal(indicador.children[0].children[1].textContent,
+      pagina.startsWith('historico') ? 'Carregando o histórico…' : 'Carregando o acervo…');
+
+    responder(new Set([pagina.endsWith('creg') ? 'CREG' : 'CJ']));
+    await carregamento;
+    assert.equal(indicador.children.length, 1);
+    assert.equal(indicador.children[0], indicadorQuandoATelaMontou,
+      `${pagina}: a tela assume o mesmo nó; recriá-lo reiniciava a entrada e o indicador piscava`);
+    assert.equal(indicador.children[0].children[1].textContent, 'texto da tela');
+  }
+});
+
+test('sem permissão, a moldura antecipada sai e o login volta', async () => {
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    const page = bootstrapPage(async () => {}, 'acervo-creg', {
+      comMoldura: true,
+      buscarOrgaos: async () => new Set()
+    });
+    await page.iniciar();
+    assert.equal(page.moldura.hidden, true);
+    assert.equal(page.document.getElementById('painelCarregando').hidden, true);
+    assert.equal(page.sessionLoading.parentNode.hidden, false, 'o card do login volta à tela');
+    assert.equal(page.loginScreen.hidden, false);
+  } finally {
+    console.error = originalConsoleError;
   }
 });
 
@@ -1631,9 +1700,9 @@ function acervoPage(api, { imprimir = () => {}, colegiado = 'cj' } = {}) {
   const escolherRecorte = valor =>
     recorteCampo.dispatch('change', { target: { value: valor } });
 
-  const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador', 'mostrarErro', 'equalizarColunas',
+  const app = new Function('document', 'window', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador', 'mostrarErro', 'equalizarColunas', 'mostrarIndicador',
     `${source('acervo.js')}\nreturn { inicializarAcervo, carregarAcervo, exportar, criarExcel, criarExcelDetalhe, dadosTabulares, abrirDetalhe, exportarDetalhe, tempoPorExtenso };`)(
-    document, { print: imprimir }, api, criarIndicadorCarregamento, aguardarIndicador, mostrarErro, equalizarColunas);
+    document, { print: imprimir }, api, criarIndicadorCarregamento, aguardarIndicador, mostrarErro, equalizarColunas, mostrarIndicador);
   return { document, loginOnlyCard, dialog, painelCarregando, tabelaScroll,
            recorteCampo, escolherRecorte, ...app };
 }
@@ -2599,10 +2668,10 @@ function historicoPage(api, colegiado = 'creg') {
   document.getElementById('historicoPanel').hidden = true;
   document.getElementById('btnAtualizar').hidden = true;  // como nas páginas
 
-  const app = new Function('document', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador', 'mostrarErro', 'equalizarColunas',
+  const app = new Function('document', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador', 'mostrarErro', 'equalizarColunas', 'mostrarIndicador',
     `${source('historico.js')}\nreturn { inicializarHistorico, carregarHistorico, abrirDetalhe,
       criarDocxDetalhe, exportarDetalheDocx };`)(
-    document, api, criarIndicadorCarregamento, aguardarIndicador, mostrarErro, equalizarColunas);
+    document, api, criarIndicadorCarregamento, aguardarIndicador, mostrarErro, equalizarColunas, mostrarIndicador);
   return { document, loginOnlyCard, dialog, painelCarregando, tabelaScroll, ...app };
 }
 
@@ -2790,6 +2859,41 @@ test('cada página pede ao banco o histórico do seu colegiado', async () => {
     ['rpc/historico_sorteios', { p_colegiado: 'CJ' }],
     ['rpc/historico_sorteios', { p_colegiado: 'CREG' }]
   ]);
+});
+
+test('Atualizar do histórico mostra o andamento no lugar da tabela, como o acervo', async () => {
+  let responder;
+  let chamada = 0;
+  const page = historicoPage(() => (++chamada === 1
+    ? Promise.resolve(sorteiosCreg)
+    : new Promise(resolve => { responder = resolve; })), 'creg');
+  await page.inicializarHistorico();
+
+  const atualizando = page.carregarHistorico();
+  await wait();
+  assert.equal(page.painelCarregando.hidden, false,
+    'antes a lista antiga ficava na tela sem sinal nenhum de consulta');
+  assert.equal(page.painelCarregando.children[0].children[1].textContent, 'Atualizando o histórico…');
+  assert.equal(page.tabelaScroll.hidden, true);
+
+  responder(sorteiosCreg);
+  await atualizando;
+  assert.equal(page.painelCarregando.hidden, true);
+  assert.equal(page.tabelaScroll.hidden, false);
+});
+
+test('mostrarIndicador reaproveita o indicador que já está na tela', () => {
+  const app = supabaseApp(async () => {});
+  const conteiner = new Document().add('painelCarregando', 'div');
+  conteiner.hidden = true;
+  app.mostrarIndicador(conteiner, 'Atualizando o acervo…');
+  const primeiro = conteiner.children[0];
+  app.mostrarIndicador(conteiner, 'Atualizando o acervo…');
+  assert.equal(conteiner.children[0], primeiro,
+    'trocar o recorte duas vezes seguidas fazia o indicador sumir e voltar');
+  conteiner.hidden = true;
+  app.mostrarIndicador(conteiner, 'Carregando o acervo…');
+  assert.notEqual(conteiner.children[0], primeiro, 'escondido, ele entra de novo do começo');
 });
 
 test('histórico entrega a moldura do painel antes dos dados, como o acervo', async () => {

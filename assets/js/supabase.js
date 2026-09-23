@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = 'a8d9f41caf';
+const ASSET_VERSION = 'f6171e71e9';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -302,6 +302,18 @@ function criarIndicadorCarregamento(texto) {
 // lampejo lê pior do que animação nenhuma, e era o que separava o card do
 // histórico (uma rodada, resposta imediata) do card do acervo (o acervo
 // inteiro, resposta lenta o bastante para o spinner se firmar).
+// Põe o indicador no contêiner — ou, se ele já está lá, só troca o texto.
+// Criar outro reiniciava a entrada (150ms de atraso e o fade): trocar o recorte
+// do acervo duas vezes seguidas fazia o indicador sumir e voltar no meio de uma
+// espera que continuava a mesma, e a passagem do bootstrap para a tela piscava
+// do mesmo jeito. Continuidade é o mesmo nó na tela.
+function mostrarIndicador(conteiner, texto) {
+  const atual = conteiner.hidden ? null : conteiner.querySelector('.loading-state');
+  if (atual) atual.children[1].textContent = texto;
+  else conteiner.replaceChildren(criarIndicadorCarregamento(texto));
+  conteiner.hidden = false;
+}
+
 const ATRASO_DO_INDICADOR = 150;
 const TEMPO_MINIMO_DO_INDICADOR = 600;
 

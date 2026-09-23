@@ -294,6 +294,15 @@ própria moldura de forma síncrona e põe o indicador dentro dela —
 `.painel-carregando` no lugar da tabela do acervo/histórico, `#pautasContainer`
 na lista de julgados, `.detalhe-loading` no card de processos.
 
+No acervo e no histórico a moldura é HTML estático, e por isso o bootstrap já a
+mostra na consulta de permissão, com o indicador no lugar da tabela
+(`moldura` em `PAGINAS`, `bootstrap.js`); o card `.session-loading` fica para
+as telas sem moldura estática e para a mensagem de erro. Antes eram dois
+indicadores em fila — "Preparando…" num card no meio da página, ~165ms de
+nada, e "Carregando…" 48px abaixo, dentro do painel. O Atualizar do histórico,
+que mantinha a lista antiga sem sinal nenhum de consulta, passou a mostrar o
+andamento no lugar da tabela, como o acervo.
+
 ### Movimento reduzido
 
 `prefers-reduced-motion: reduce` desliga tudo: spinner, toast, pulso de
@@ -318,6 +327,13 @@ regra, com nome próprio e a cor de fundo no `::view-transition-group`.
 por `aguardarIndicador`: ou não aparece, ou fica tempo de ser lido. Meio termo —
 acender e apagar dentro da própria animação de entrada — é pior que animação
 nenhuma.
+
+**The One Indicator Rule.** Uma espera tem um indicador só, num lugar só. Quem
+põe o indicador é `mostrarIndicador(conteiner, texto)` (`supabase.js`): se o
+contêiner já mostra um, ele só troca o texto. Recriar o nó reiniciava a entrada
+(o atraso de 150ms e o fade) — trocar o recorte do acervo duas vezes seguidas
+fazia o indicador sumir e voltar no meio de uma espera que continuava a mesma.
+Passar a vez de um indicador para outro em outro lugar da tela conta como dois.
 
 **The Arrival Has a Name Rule.** Uma transição de página precisa aterrissar num
 lugar identificável. Tela que busca dados mostra a própria moldura com o título

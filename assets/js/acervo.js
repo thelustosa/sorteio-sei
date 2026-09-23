@@ -149,8 +149,7 @@ function mostrarMolduraDoPainel() {
 
 function mostrarCarregamentoDaTabela(texto) {
   if (tabelaScroll) tabelaScroll.hidden = true;
-  painelCarregando.replaceChildren(criarIndicadorCarregamento(texto));
-  painelCarregando.hidden = false;
+  mostrarIndicador(painelCarregando, texto);
 }
 
 // O erro do carregamento inicial quem mostra é o bootstrap, dentro do card de
