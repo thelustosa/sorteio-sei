@@ -1,0 +1,4 @@
+{
+  "extraPaths": ["sincronizacao", "dados", "tests"],
+  "pythonVersion": "3.11"
+}

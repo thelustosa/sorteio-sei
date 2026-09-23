@@ -60,7 +60,11 @@ assert.match(cssIndex,
   'os botões do sorteio precisam usar o primeiro tom do gradiente');
 assert.doesNotMatch(index, /<script[^>]+index\.min\.js/, 'index.js voltou ao carregamento inicial');
 assert.doesNotMatch(julgadosCj, /<script[^>]+julgados\.min\.js/, 'julgados.js voltou ao carregamento inicial');
-assert.doesNotMatch(julgadosCreg, /<script[^>]+julgados-creg\.min\.js/, 'julgados-creg.js voltou ao carregamento inicial');
+assert.doesNotMatch(julgadosCreg, /<script[^>]+julgados\.min\.js/, 'julgados.js voltou ao carregamento inicial (Conselho)');
+// As duas páginas de julgados são gêmeas — mesmo script, colegiados
+// diferentes —: sem data-colegiado, o Conselho gravaria na tabela da Câmara.
+assert.match(julgadosCj, /data-colegiado="cj"/, 'julgados-cj.html sem data-colegiado');
+assert.match(julgadosCreg, /data-colegiado="creg"/, 'julgados-creg.html sem data-colegiado');
 assert.ok(acervoCj.indexOf('class="nav-actions"') < acervoCj.indexOf('id="btnExportar"')
   && acervoCj.indexOf('id="btnExportar"') < acervoCj.indexOf('</nav>'),
   'Exportar precisa permanecer junto das ações da barra superior (Câmara)');
@@ -172,8 +176,14 @@ for (const pagina of PAGINAS) {
       escritos.map(v => `"${v}"`).join(', ')} — o rótulo pisca até os dados chegarem`);
   rotulosConferidos++;
 }
-assert.ok(rotulosConferidos >= 3,
-  `esperava conferir o rótulo de pelo menos 3 páginas, conferi ${rotulosConferidos}`);
+assert.ok(rotulosConferidos >= 1,
+  `esperava conferir o rótulo de pelo menos 1 página, conferi ${rotulosConferidos}`);
+// As telas de julgados escapam da conferência acima por construção: o script
+// guarda o rótulo que o HTML traz e o repõe, sem uma segunda cópia da palavra.
+assert.match(ler('assets/js/julgados.js'), /rotuloDaLista = txtModo\.textContent/,
+  'julgados.js voltou a escrever o rótulo da lista por conta própria');
+assert.match(ler('assets/js/julgados.js'), /txtModo\.textContent = rotuloDaLista/,
+  'julgados.js não repõe o rótulo da lista vindo do HTML');
 
 const css = ler('assets/css/index.css');
 // O seletor pode vir sozinho ou em lista, e a var pode trazer fallback — o que

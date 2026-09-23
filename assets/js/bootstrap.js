@@ -3,22 +3,10 @@
 // execução no caminho crítico sem mudar o fluxo do sistema.
 const PAGINAS = {
   sorteio: { arquivo: 'index.min.js', iniciar: 'inicializarSorteio', texto: 'Preparando o sorteio…' },
-  'julgados-cj': {
-    orgao: 'CJ',
-    familia: 'julgados',
-    arquivo: 'julgados.min.js',
-    iniciar: 'inicializarJulgados',
-    texto: 'Preparando as pautas…'
-  },
-  // A tela do Conselho é gêmea da da Câmara e mostra o mesmo indicador dentro
-  // da própria lista, então carrega pelo mesmo caminho.
-  'julgados-creg': {
-    orgao: 'CREG',
-    familia: 'julgados',
-    arquivo: 'julgados-creg.min.js',
-    iniciar: 'inicializarJulgadosCreg',
-    texto: 'Preparando as sessões…'
-  },
+  'julgados-cj': { orgao: 'CJ', familia: 'julgados', arquivo: 'julgados.min.js', iniciar: 'inicializarJulgados', texto: 'Preparando as pautas…' },
+  // Mesmo script para os dois colegiados: quem escolhe a tabela, a função do
+  // banco e o vocabulário é o data-colegiado do <body> (ver COLEGIADOS em julgados.js).
+  'julgados-creg': { orgao: 'CREG', familia: 'julgados', arquivo: 'julgados.min.js', iniciar: 'inicializarJulgados', texto: 'Preparando as sessões…' },
   'acervo-cj': { orgao: 'CJ', familia: 'acervo', arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Preparando o dashboard…' },
   // Mesmo script para os dois colegiados: quem escolhe o par de funções do
   // banco é o data-colegiado do <body> (ver COLEGIADOS em acervo.js).

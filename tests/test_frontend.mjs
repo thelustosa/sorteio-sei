@@ -279,8 +279,9 @@ async function preencherCreg(page, numero, recurso = 'Com recurso') {
   row.querySelector('.col-decisao select').value = recurso;
 }
 
-function julgadosPage(registrar, arquivo = 'julgados.js') {
+function julgadosPage(registrar, colegiado = 'cj') {
   const document = new Document();
+  document.body.dataset.colegiado = colegiado;
   const add = (id, tag) => document.add(id, tag);
   ['listaPautas', 'pautasContainer', 'semPendencia', 'pautasIntro', 'detalhePauta',
     'tituloPauta', 'contadorPendentes', 'btnSalvar', 'btnVoltar', 'txtModo',
@@ -289,7 +290,7 @@ function julgadosPage(registrar, arquivo = 'julgados.js') {
 
   const app = new Function('document', 'api', 'aviso', 'alternarBotaoCarregando', 'criarIndicadorCarregamento',
     'rotularCadeira',
-    `${source(arquivo)}\nreturn { abrirPauta, salvar, inicializarJulgados: typeof inicializarJulgados === 'function' ? inicializarJulgados : inicializarJulgadosCreg, pendentesPorPauta };`)(
+    `${source('julgados.js')}\nreturn { abrirPauta, salvar, inicializarJulgados, pendentesPorPauta };`)(
     document, registrar, () => {}, () => {}, () => document.createElement('div'), rotularCadeira);
   return { document, tbody, ...app };
 }
@@ -1084,12 +1085,13 @@ test('julgados revela o conselheiro no hover da cadeira', () => {
 });
 
 test('CJ e CREG enviam só o campo editado e preservam a tela após conflito', async () => {
-  for (const arquivo of ['julgados.js', 'julgados-creg.js']) {
-    let enviado;
-    const page = julgadosPage(async (_, options) => {
+  for (const colegiado of ['cj', 'creg']) {
+    let enviado, rota;
+    const page = julgadosPage(async (path, options) => {
+      rota = path;
       enviado = JSON.parse(options.body).itens;
       throw Object.assign(new Error('Julgamento alterado por outra pessoa'), { status: 409 });
-    }, arquivo);
+    }, colegiado);
     page.pendentesPorPauta.set('1|2026-08-21', [
       { id: 1, num_processo: '123', relator: 'CJ1', unidade: 'CREG1', voto: 'Manter', status: null }
     ]);
@@ -1099,8 +1101,14 @@ test('CJ e CREG enviam só o campo editado e preservam a tela após conflito', a
     page.tbody.dispatch('change', { target: status });
     await page.salvar();
     assert.deepEqual(enviado, [{ id: 1, anterior: { voto: 'Manter', status: null }, status: 'Julgado' }]);
+    assert.equal(rota, colegiado === 'cj' ? 'rpc/registrar_votos' : 'rpc/registrar_votos_creg');
     assert.equal(status.value, 'Julgado');
     assert.equal(page.document.getElementById('detalhePauta').hidden, false);
+    // O Conselho mostra a unidade e nenhum nome: os responsáveis pelas
+    // unidades pediram para não vincular pessoas aos processos.
+    const destino = page.tbody.children[0].children[1];
+    assert.equal(destino.textContent, colegiado === 'cj' ? 'CJ1' : 'CREG1');
+    if (colegiado === 'creg') assert.equal(destino.title, undefined, 'o Conselho não pode mostrar nome no hover');
   }
 });
 
@@ -1235,7 +1243,7 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
   const inicializadores = {
     sorteio: 'inicializarSorteio',
     'julgados-cj': 'inicializarJulgados',
-    'julgados-creg': 'inicializarJulgadosCreg',
+    'julgados-creg': 'inicializarJulgados',
     'acervo-cj': 'inicializarAcervo',
     'acervo-creg': 'inicializarAcervo',
     'historico-cj': 'inicializarHistorico',

@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=e0eaab1f91" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=2c8d623916" />
   <script>
     (function () {
       try {
@@ -35,11 +35,11 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=e0eaab1f91"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=e0eaab1f91"></script>
+  <script defer src="assets/js/supabase.min.js?v=2c8d623916"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=2c8d623916"></script>
 </head>
 
-<body data-page="julgados-creg">
+<body data-page="julgados-creg" data-colegiado="creg">
   <a class="skip-link" href="#conteudo-principal">Pular para o conteúdo principal</a>
   <div class="page-header-wrapper">
     <div class="container">
@@ -58,10 +58,9 @@
 
   <nav class="green-bar" aria-label="Navegação do sistema">
     <div class="container">
-      <!-- O vocabulário do colegiado já no HTML: julgados-creg.js reescreve este
-           rótulo para "Sessões pendentes", mas só depois de carregar as sessões,
-           e até lá a barra mostrava a palavra da Câmara. Com a transição entre
-           páginas isso virou meio segundo de rótulo errado na tela. -->
+      <!-- O vocabulário do colegiado mora aqui: julgados.js guarda este rótulo
+           e o repõe ao voltar de uma sessão, então não há outra cópia dele para
+           divergir e mostrar a palavra da Câmara na tela do Conselho. -->
       <span id="txtModo">Sessões pendentes</span>
       <div class="nav-actions">
         <a id="btnVoltarInicio" class="nav-action" href="./index.html" data-sessao hidden>

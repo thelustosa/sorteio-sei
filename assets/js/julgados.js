@@ -5,13 +5,50 @@
 // nulos porque só existem depois da sessão. Esta página é onde a secretaria
 // preenche os dois.
 //
-// A gravação não é UPDATE direto: vai pela função registrar_votos do banco, que
-// aceita só estes dois campos, recusa valor fora da lista e anota quem
-// preencheu (ver schema.sql).
+// A gravação não é UPDATE direto: vai pela função registrar_votos (ou
+// registrar_votos_creg) do banco, que aceita só estes dois campos, recusa valor
+// fora da lista e anota quem preencheu (ver schema.sql).
+//
+// A mesma página serve os dois colegiados, como o histórico e o painel do
+// acervo: o que muda entre eles cabe em COLEGIADOS, e quem escolhe é o
+// data-colegiado do <body>.
+const COLEGIADOS = {
+  cj: {
+    // Os mesmos rótulos que registrar_votos aceita. Mudou aqui, muda lá.
+    votos: ['Manter', 'Anular', 'Retirado', 'Vista'],
+    status: ['Julgado', 'Retornou', 'Retirado', 'Vista'],
+    tabela: 'julgados_cj',
+    rpc: 'rpc/registrar_votos',
+    // A coluna é a CADEIRA (CJ1..CJ5). Sem o de-para ela mostraria só "CJ3": o
+    // nome do conselheiro vai no hover e no aria-label, como nas outras telas.
+    destino: 'relator',
+    mostraConselheiro: true,
+    sujeito: 'a Câmara',
+    pautas: 'pautas',
+    pauta: 'pauta',
+    reuniao: 'reunião'
+  },
+  creg: {
+    // Os de registrar_votos_creg: sete votos e cinco status, porque o Conselho
+    // julga além de auto de infração, e a lista acompanha.
+    votos: ['Manter', 'Anular', 'Aprovação', 'Indeferimento', 'Extinção', 'Retirado', 'Vista'],
+    status: ['Julgado', 'Retirado', 'Vista', 'Sobrestado', 'Prejudicado'],
+    tabela: 'julgados_creg',
+    rpc: 'rpc/registrar_votos_creg',
+    // A UNIDADE (CREG1..CREG4), e para por aí: os responsáveis pelas unidades
+    // pediram para não ter os nomes vinculados aos processos (ver FLUXO-CREG.md).
+    destino: 'unidade',
+    mostraConselheiro: false,
+    sujeito: 'o Conselho',
+    pautas: 'sessões',
+    pauta: 'sessão',
+    reuniao: 'sessão'
+  }
+};
 
-// Os mesmos rótulos que a função do banco aceita. Mudou aqui, muda lá.
-const VOTOS = ['Manter', 'Anular', 'Retirado', 'Vista'];
-const STATUS = ['Julgado', 'Retornou', 'Retirado', 'Vista'];
+const COL = COLEGIADOS[document.body.dataset.colegiado] || COLEGIADOS.cj;
+const VOTOS = COL.votos;
+const STATUS = COL.status;
 
 const listaPautas = document.getElementById('listaPautas');
 const pautasContainer = document.getElementById('pautasContainer');
@@ -28,6 +65,10 @@ const btnTodosManter = document.getElementById('btnTodosManter');
 const btnTodosJulgado = document.getElementById('btnTodosJulgado');
 const txtModo = document.getElementById('txtModo');
 const listaPautasTitulo = document.getElementById('listaPautasTitulo');
+// O rótulo da lista ("Pautas pendentes", "Sessões pendentes") nasce no HTML e
+// é daqui que ele volta ao sair de uma pauta: com uma fonte só, a barra não
+// tem como mostrar a palavra de um colegiado na tela do outro.
+const rotuloDaLista = txtModo.textContent;
 
 // Pendentes agrupados por pauta: chave "numero|data".
 let pendentesPorPauta = new Map();
@@ -59,8 +100,8 @@ function registrarAlteracao(select) {
 }
 
 // Depois de quase toda sessão o resultado repetido é "Manter" no voto e
-// "Julgado" no status, então a secretaria preenche a coluna de uma vez e
-// corrige só as exceções. Só toca no que está em branco: quem já escolheu
+// "Julgado" no status — no Conselho, 3.426 e 4.404 do histórico —, então a
+// secretaria preenche a coluna de uma vez e corrige só as exceções. Só toca no que está em branco: quem já escolheu
 // Anular numa linha não perde a escolha ao clicar no botão.
 function preencherColuna(coluna, valor) {
   tbody.querySelectorAll(`.${coluna} select`).forEach(select => {
@@ -86,7 +127,7 @@ function dataBR(iso) {
 async function carregarPautas(moverFoco = false) {
   pautasIntro.hidden = true;
   semPendencia.hidden = true;
-  pautasContainer.replaceChildren(criarIndicadorCarregamento('Buscando pautas com julgamento pendente…'));
+  pautasContainer.replaceChildren(criarIndicadorCarregamento(`Buscando ${COL.pautas} com julgamento pendente…`));
   listaPautas.hidden = false;
   detalhePauta.hidden = true;
   btnVoltarInicio.hidden = false;
@@ -96,7 +137,7 @@ async function carregarPautas(moverFoco = false) {
   let pendentes;
   try {
     pendentes = await api(
-      'julgados_cj?select=id,num_processo,relator,data_sessao,pauta,voto,status'
+      `${COL.tabela}?select=id,num_processo,${COL.destino},data_sessao,pauta,voto,status`
       + '&or=(voto.is.null,status.is.null)'
       + '&order=data_sessao.desc,num_processo.asc,id.asc');
   } catch (err) {
@@ -119,7 +160,7 @@ function mostrarPautas(moverFoco = false) {
   detalhePauta.hidden = true;
   btnVoltar.hidden = true;
   btnVoltarInicio.hidden = false;
-  txtModo.textContent = 'Pautas pendentes';
+  txtModo.textContent = rotuloDaLista;
   listaPautas.hidden = false;
 
   semPendencia.hidden = pendentesPorPauta.size > 0;
@@ -134,14 +175,15 @@ function mostrarPautas(moverFoco = false) {
     cartao.addEventListener('click', () => abrirPauta(chave));
 
     // A data vem primeiro de propósito: ela confere com a listagem oficial da
-    // AGR em todas as sessões, enquanto o número da pauta é referência interna
-    // da Câmara e, até 2025, não bate com o número publicado (ver FLUXO-CJ.md).
+    // AGR em todas as sessões, enquanto o número da pauta é referência interna:
+    // na Câmara, até 2025, não bate com o publicado (ver FLUXO-CJ.md), e no
+    // Conselho diverge em 121 das 132 sessões do histórico (ver FLUXO-CREG.md).
     const titulo = document.createElement('strong');
     titulo.textContent = dataBR(data);
 
     const quando = document.createElement('span');
     quando.className = 'pauta-data';
-    quando.textContent = numero === 'null' ? 'sem número de pauta' : `${numero}ª reunião`;
+    quando.textContent = numero === 'null' ? `sem número de ${COL.pauta}` : `${numero}ª ${COL.reuniao}`;
 
     const quantos = document.createElement('span');
     quantos.className = 'pauta-quantidade';
@@ -164,7 +206,7 @@ function mostrarErroDeCarregamento() {
   estado.setAttribute('role', 'alert');
 
   const texto = document.createElement('p');
-  texto.textContent = 'Não foi possível carregar as pautas. Verifique sua conexão e tente novamente.';
+  texto.textContent = `Não foi possível carregar as ${COL.pautas}. Verifique sua conexão e tente novamente.`;
 
   const tentarNovamente = document.createElement('button');
   tentarNovamente.type = 'button';
@@ -194,8 +236,8 @@ function seletor(opcoes, valor, rotulo) {
     sel.appendChild(op);
   });
 
-  // Rótulo que veio da planilha e não está na lista da Câmara entra como opção
-  // própria. Sem ela o select viria em branco — atribuir um valor que não é
+  // Rótulo que veio da planilha e não está na lista do colegiado (no Conselho,
+  // "Parcialmente Deferido", "Suspender") entra como opção própria. Sem ela o select viria em branco — atribuir um valor que não é
   // option o DOM ignora —, a linha entraria como "sem decisão" e a primeira
   // gravação apagaria uma decisão que já existia.
   if (valor && !opcoes.includes(valor)) {
@@ -220,7 +262,7 @@ function abrirPauta(chave) {
   btnVoltarInicio.hidden = true;
   txtModo.textContent = numero === 'null'
     ? `Sessão de ${dataBR(data)}`
-    : `Sessão de ${dataBR(data)} — ${numero}ª reunião`;
+    : `Sessão de ${dataBR(data)} — ${numero}ª ${COL.reuniao}`;
   tituloPauta.textContent = 'Processos aguardando voto e status';
 
   const fragmento = document.createDocumentFragment();
@@ -235,11 +277,9 @@ function abrirPauta(chave) {
     const proc = document.createElement('td');
     proc.textContent = j.num_processo;
 
-    // relator é a CADEIRA (CJ1..CJ5). Sem o de-para a coluna mostraria só
-    // "CJ3": o nome vai no hover e no aria-label, como nas outras telas.
-    const relator = document.createElement('td');
-    relator.textContent = j.relator || 'Sem cadeira no acervo';
-    rotularCadeira(relator, j.relator);
+    const destino = document.createElement('td');
+    destino.textContent = j[COL.destino] || 'Sem cadeira no acervo';
+    if (COL.mostraConselheiro) rotularCadeira(destino, j[COL.destino]);
 
     const tdVoto = document.createElement('td');
     tdVoto.className = 'col-voto';
@@ -253,7 +293,7 @@ function abrirPauta(chave) {
     status.dataset.valorInicial = status.value;
     tdStatus.appendChild(status);
 
-    tr.append(proc, relator, tdVoto, tdStatus);
+    tr.append(proc, destino, tdVoto, tdStatus);
     fragmento.appendChild(tr);
   });
   tbody.replaceChildren(fragmento);
@@ -308,7 +348,7 @@ async function salvar() {
     (i.voto && !VOTOS.includes(i.voto)) || (i.status && !STATUS.includes(i.status)));
   if (foraDaLista.length > 0) {
     aviso(`${foraDaLista.length} ${foraDaLista.length === 1 ? 'processo tem' : 'processos têm'} `
-      + 'voto ou status de um registro anterior, que a Câmara não usa mais. '
+      + `voto ou status de um registro anterior, que ${COL.sujeito} não usa mais. `
       + 'Escolha um rótulo da lista nesses processos antes de salvar.', 'atencao');
     return;
   }
@@ -316,7 +356,7 @@ async function salvar() {
   alternarBotaoCarregando(btnSalvar, true, 'Salvando…');
 
   try {
-    const gravados = await api('rpc/registrar_votos', {
+    const gravados = await api(COL.rpc, {
       method: 'POST',
       body: JSON.stringify({ itens })
     });

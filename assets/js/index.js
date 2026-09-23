@@ -90,7 +90,7 @@ function inicializarSorteio() {
   avisarPendenciasDeJulgamento();
 }
 
-// Mesmo filtro que julgados.js/julgados-creg.js usam pra achar o que falta
+// Mesmo filtro que julgados.js usa pra achar o que falta
 // votar/status — aqui só a contagem importa, então pede só o id. Roda em
 // paralelo com o resto da tela, sem atrasar nada: se falhar, o card de
 // "Registrar dados faltantes" simplesmente fica sem o aviso.
@@ -731,7 +731,9 @@ function baixarArquivo(blob, nome) {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  // Alguns navegadores só assumem o Blob depois que a navegação de download
+  // avança; revogá-lo no mesmo ciclo pode cancelar um arquivo válido.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // dd/mm/aaaa → aaaa-mm-dd (formato date do Postgres)
