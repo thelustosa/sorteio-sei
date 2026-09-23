@@ -8,6 +8,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { calcularVersao, versaoGravada, PAGINAS } from '../tools/versionar.mjs';
+import vm from 'node:vm';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ler = caminho => readFileSync(join(raiz, caminho), 'utf8');
@@ -329,3 +330,24 @@ for (const [pagina, identidade] of loginsEspecificos) {
 }
 
 console.log('assets: minificação, lazy load e versão por hash coerentes ✓');
+
+// Toda página carrega supabase.js, bootstrap.js e o script da tela como scripts
+// clássicos, que dividem um só escopo global. Um nome de topo declarado em dois
+// deles com const/let/class derruba o segundo inteiro antes da primeira linha:
+// foi o que aconteceu quando bootstrap.js ganhou `const moldura` e admin.js já
+// tinha `function moldura()` — o painel abria em "window[paginaAtual.iniciar]
+// is not a function". Os testes de tela não pegam isso, porque avaliam cada
+// arquivo num escopo próprio; aqui os três rodam no mesmo, como no navegador.
+// A redeclaração falha na instanciação do script, antes de qualquer código, e
+// por isso não importa que falte DOM: os outros erros são esperados e ignorados.
+for (const tela of ['index', 'julgados', 'acervo', 'historico', 'admin']) {
+  const contexto = vm.createContext({});
+  for (const arquivo of ['supabase', 'bootstrap', tela]) {
+    try {
+      vm.runInContext(ler(`assets/js/${arquivo}.min.js`), contexto);
+    } catch (erro) {
+      assert.doesNotMatch(String(erro.message), /already been declared/,
+        `${tela}: ${arquivo}.min.js redeclara um nome global de outro script — ${erro.message}`);
+    }
+  }
+}

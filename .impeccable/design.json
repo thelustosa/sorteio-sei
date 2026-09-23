@@ -489,6 +489,11 @@
         "name": "The Row Owns Its Highlight Rule",
         "body": "O realce de linha pinta a linha inteira, inclusive o <th> que a identifica.",
         "section": "Components"
+      },
+      {
+        "name": "The One Indicator Rule",
+        "body": "Uma espera tem um indicador só, num lugar só. mostrarIndicador (supabase.js) reaproveita o indicador que já está no contêiner e só troca o texto; recriá-lo reiniciava a entrada e ele piscava. No acervo e no histórico o bootstrap já abre a moldura com o indicador no lugar da tabela.",
+        "section": "motion"
       }
     ],
     "dos": [
