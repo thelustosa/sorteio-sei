@@ -329,6 +329,21 @@ function botaoDeLinha(rotulo, aoClicar, { tom = 'secundario' } = {}) {
   return botao;
 }
 
+function autoria(quem, quando) {
+  const bloco = document.createElement('span');
+  bloco.className = 'admin-autoria';
+  // O endereço não tem espaço onde quebrar. Se a tela apertar, ele quebra
+  // antes do "@", e nunca no meio de uma palavra.
+  const email = document.createElement('span');
+  const arroba = String(quem).indexOf('@');
+  if (arroba > 0) email.append(quem.slice(0, arroba), document.createElement('wbr'), quem.slice(arroba));
+  else email.textContent = quem;
+  const instante = document.createElement('span');
+  instante.textContent = dataHoraBR(quando);
+  bloco.append(email, instante);
+  return bloco;
+}
+
 function celulaDeAcoes(botoes) {
   const grupo = document.createElement('div');
   grupo.className = 'admin-acoes';
@@ -416,6 +431,9 @@ function desenhar(colunas, linhas) {
     tbody.appendChild(tr);
   });
   painelTabela.replaceChildren(cabecalho(colunas), tbody);
+  // Só os detalhes (processos de uma sessão ou distribuição) igualam o vão: as
+  // listas mantêm trilhos iguais de propósito, para o ritmo das datas.
+  if (detalhe) equalizarColunas(painelTabela);
   medirRolagem();
 }
 
@@ -557,6 +575,16 @@ function moldura() {
 // tabela em vez de substituí-la, então não pode apagar o que já está na tela nem
 // trocar o rodapé por "Carregando…". Quem indica o andamento ali é o próprio
 // botão que a pediu.
+// O botão clicado some com a troca de tela — a linha da lista, o Voltar, o
+// Tentar novamente — e o foco caía no <body>: quem usa teclado ou leitor de
+// tela recomeçava do topo sem saber que a tela mudou. O título do painel já tem
+// tabindex="-1" para isso, e carregar() o reescreve antes da primeira espera.
+function abrirComFoco() {
+  const pronto = carregar();
+  painelTitulo.focus();
+  return pronto;
+}
+
 async function carregar({ anexando = false } = {}) {
   const meu = ++pedido;
   repintarBusca = null;
@@ -595,7 +623,7 @@ async function carregar({ anexando = false } = {}) {
     // Anexando, a tabela na tela continua válida: trocá-la pelo estado de erro
     // apagaria as correções já lidas por causa de uma página que não veio.
     if (anexando) {
-      aviso(`Não foi possível buscar as correções anteriores: ${err.message}`, 'erro');
+      aviso('Não foi possível buscar as correções anteriores. Tente novamente.', 'erro', err.message);
       return;
     }
     painelTabela.replaceChildren();
@@ -712,7 +740,7 @@ function pintarSessoes(linhas) {
     celulaDeAcoes([botaoDeLinha('Abrir sessão', () => {
       detalhe = { tipo: 'sessao', data: String(linha.data_sessao).slice(0, 10), pauta: linha.pauta };
       buscaProcesso = '';
-      carregar();
+      abrirComFoco();
     }, { tom: 'primario' })]),
     celula(ou(linha.pauta), 'td', 'historico-numero'),
     celula(linha.processos, 'td', 'historico-numero'),
@@ -755,7 +783,7 @@ function pintarSorteios(linhas) {
         origem: linha.origem || null
       };
       buscaProcesso = '';
-      carregar();
+      abrirComFoco();
     }, { tom: 'primario' })]),
     celula(linha.sorteado_em
       ? new Date(linha.sorteado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -820,8 +848,9 @@ function pintarProcessosDaSessao(linhas) {
       celula(linha.acervo_id
         ? badge(`Distribuição de ${dataBR(linha.data_distribuicao)}`, 'neutro')
         : badge('Sem distribuição', 'alerta')),
-      celula(linha.atualizado_por ? `${linha.atualizado_por} · ${dataHoraBR(linha.atualizado_em)}` : '—',
-        'td', 'small')
+      // Endereço e instante em duas linhas: numa só, o e-mail — que não tem onde
+      // quebrar — era cortado pela largura da coluna.
+      celula(linha.atualizado_por ? autoria(linha.atualizado_por, linha.atualizado_em) : '—', 'td', 'small')
     ];
   }));
   painelStatus.textContent = `${plural(filtradas.length, 'processo', 'processos')} nesta sessão.`;
@@ -852,10 +881,10 @@ function pintarProcessosDoSorteio(linhas) {
     { rotulo: 'Processo', eixo: 'centro' },
     { rotulo: 'Ações', eixo: 'acoes' },
     { rotulo: v.destino, eixo: 'centro' },
-    'Assunto',
+    { rotulo: 'Assunto', eixo: 'centro' },
     { rotulo: v.decisao, eixo: 'centro' }
   ];
-  if (v.temInteressado) colunas.push('Interessado');
+  if (v.temInteressado) colunas.push({ rotulo: 'Interessado', eixo: 'centro' });
   colunas.push({ rotulo: 'Julgados', eixo: 'centro' });
 
   desenhar(colunas, filtradas.map(linha => {
@@ -1021,10 +1050,8 @@ async function abrirDetalheDaMeta(indice, recorte, meses, ano) {
     detalheLoading.hidden = true;
     detalheLoading.replaceChildren();
     detalheResumo.textContent = '';
-    const mensagem = document.createElement('p');
-    mensagem.textContent = `Não foi possível carregar os julgados (${erro.message}).`;
-    detalheErro.replaceChildren(mensagem);
-    detalheErro.hidden = false;
+    detalheErro.replaceChildren(document.createElement('p'));
+    mostrarErro(detalheErro, 'Não foi possível carregar os julgados. Feche e abra o período de novo.', erro.message);
     return;
   }
 
@@ -1062,6 +1089,7 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
     tbody.appendChild(tr);
   });
   detalheTabela.replaceChildren(cabecalho(colunas), tbody);
+  equalizarColunas(detalheTabela);
 }
 
 function pintarMeta(linhas) {
@@ -1466,7 +1494,7 @@ async function passo(atual) {
     await carregar();
   } catch (err) {
     if (naTela()) mostrarErroNoDialogo(err.message);
-    aviso(`Não foi possível gravar: ${err.message}`, 'erro');
+    aviso('Nada foi gravado. Tente novamente.', 'erro', err.message);
   } finally {
     if (naTela()) alternarBotaoCarregando(btnAvancar, false, rotulos.confirmar);
   }
@@ -2043,9 +2071,9 @@ function inicializarAdmin(orgaosAdmin) {
 
   btnVoltar.addEventListener('click', () => {
     detalhe = null;
-    carregar();
+    abrirComFoco();
   });
-  btnTentarNovamente.addEventListener('click', () => carregar());
+  btnTentarNovamente.addEventListener('click', () => abrirComFoco());
   metaAno.addEventListener('change', repintarMeta);
   metaAgrupamento.addEventListener('change', repintarMeta);
   // Filtra a lista já carregada a cada tecla, sem nova consulta — todas as

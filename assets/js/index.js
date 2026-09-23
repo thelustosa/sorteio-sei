@@ -619,7 +619,7 @@ function sortearProcessos() {
       baixarBackupBtn.hidden = false;
       aviso(err.status === 409
         ? `Nada foi gravado: ${err.message}. O backup .json está pronto para baixar — confira o sorteio anterior antes de repetir.`
-        : `Falha ao gravar no banco (${err.message}). O backup .json está pronto para baixar.`, 'erro');
+        : 'Nada foi gravado no banco. O backup .json está pronto para baixar.', 'erro', err.status === 409 ? '' : err.message);
     })
     .finally(() => {
       btnVoltar.disabled = false;

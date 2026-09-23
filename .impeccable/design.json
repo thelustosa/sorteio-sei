@@ -200,6 +200,21 @@
         "name": "badge",
         "value": "0 2px 6px rgba(17, 39, 32, 0.22)",
         "purpose": "Selo flutuante (ex.: contagem de pendências) sobre a borda de um card."
+      },
+      {
+        "name": "dialog",
+        "value": "0 24px 60px rgba(17, 39, 32, 0.28)",
+        "purpose": "O <dialog> de detalhe, a camada mais alta da tela."
+      },
+      {
+        "name": "menu",
+        "value": "0 10px 28px rgba(17, 39, 32, 0.18)",
+        "purpose": "Menu de exportação aberto sob o botão."
+      },
+      {
+        "name": "popover",
+        "value": "0 8px 22px rgba(17, 39, 32, 0.16)",
+        "purpose": "Recado de exportação sob o menu."
       }
     ],
     "motion": [
@@ -448,7 +463,37 @@
       {
         "name": "The Numeric Axis Rule",
         "section": "Components",
-        "body": "O eixo visual depende da visão, mas sempre vale para th e td juntos: métricas de lista-resumo centralizam em trilhos iguais; texto de leitura longa alinha à esquerda; número, código e estado curtos podem centralizar com tabular-nums quando isso melhora a comparação."
+        "body": "O eixo sempre vale para th e td juntos. Listas-resumo centralizam em trilhos iguais; nos cards de detalhe tudo é centralizado, inclusive texto longo, com o vão igual entre colunas (The Equal Gutter Rule)."
+      },
+      {
+        "name": "The Named Step Rule",
+        "body": "Todo font-size cai num degrau da hierarquia — um token --text-* ou o clamp do Display. Um tamanho entre dois degraus não vira degrau novo: vira ruído. O login e o título do painel administrativo tinham clamps próprios fora da escala.",
+        "section": "Typography"
+      },
+      {
+        "name": "The Frame Shares One Edge Rule",
+        "body": "Cabeçalho, conteúdo e rodapé alinham pela mesma borda. O rodapé usa .footer-container, não .container: uma tela que alarga o .container alarga o rodapé junto. O painel administrativo abriu o conteúdo para 1280px e deixou o rodapé em 1100px.",
+        "section": "Layout"
+      },
+      {
+        "name": "The Hidden Column Rule",
+        "body": "No celular, rolagem lateral só serve a uma matriz. Uma lista cuja linha termina num campo ou numa ação vira ficha abaixo de 600px, com rótulos de data-label. A matriz do acervo mantém a rolagem com a coluna Período fixa à esquerda (sticky, com overflow: visible na tabela).",
+        "section": "Layout"
+      },
+      {
+        "name": "The Equal Gutter Rule",
+        "body": "Num card de detalhe o vão entre o conteúdo de colunas vizinhas é igual em todo o card. Nada de largura por coluna: equalizarColunas(tabela), em supabase.js, mede a extensão real de cada coluna depois do layout automático e reparte a sobra como --folga no respiro lateral de cada célula. Tudo centralizado; só texto corrido quebra linha.",
+        "section": "Components"
+      },
+      {
+        "name": "The Row Owns Its Highlight Rule",
+        "body": "O realce de linha pinta a linha inteira, inclusive o <th> que a identifica.",
+        "section": "Components"
+      },
+      {
+        "name": "The One Indicator Rule",
+        "body": "Uma espera tem um indicador só, num lugar só. mostrarIndicador (supabase.js) reaproveita o indicador que já está no contêiner e só troca o texto; recriá-lo reiniciava a entrada e ele piscava. No acervo e no histórico o bootstrap já abre a moldura com o indicador no lugar da tabela.",
+        "section": "motion"
       }
     ],
     "dos": [
@@ -456,14 +501,20 @@
       "Do derivar toda borda e divisor da Borda Institucional tingida — nunca introduzir cinza neutro puro.",
       "Do reservar box-shadow só para elementos que saem do fluxo normal (toast, painel/diálogo) — nunca num card, botão ou linha de tabela em repouso.",
       "Do manter Montserrat só para os pontos de identidade em peso 700 — o resto fica na pilha de sistema.",
-      "Do manter 44px de altura mínima em botão, input e select — é um piso de alvo de toque já embutido no sistema."
+      "Do manter 44px de altura mínima em botão, input e select — é um piso de alvo de toque já embutido no sistema.",
+      "Do levar o foco ao título do painel quando uma ação troca a vista inteira (abrirComFoco no painel administrativo).",
+      "Do escrever o subtítulo do cabeçalho de modo que continue verdadeiro em todos os estados da página."
     ],
     "donts": [
       "Don't introduzir um modo escuro sem uma decisão de produto — hoje existe um único tema, comprometido.",
       "Don't inventar uma escala de espaçamento em token — ela não existe; use o valor em pixel mais próximo já presente no contexto.",
       "Don't usar vermelho para ênfase neutra ou aviso brando — é exclusivo de erro e ação destrutiva.",
       "Don't clarear o Verde Institucional para um estado de interação — o único estado de hover/active é escurecer, nunca um tom mais claro.",
-      "Don't hardcodar hex direto num seletor .selection-card-* novo — as quatro cores de card já são token em :root; um quinto card ganha seu próprio par de tokens do mesmo jeito."
+      "Don't hardcodar hex direto num seletor .selection-card-* novo — as quatro cores de card já são token em :root; um quinto card ganha seu próprio par de tokens do mesmo jeito.",
+      "Don't ecoar a mensagem da exceção na frase de erro: use mostrarErro(caixa, frase, err.message) ou aviso(frase, 'erro', err.message), de supabase.js.",
+      "Don't deixar uma cápsula ou um selo sem texto.",
+      "Don't esconder atrás de rolagem lateral o campo ou a ação que encerra a linha de uma lista.",
+      "Don't relaxar as regras na folha de impressão: neutro tingido e dois pesos valem no papel."
     ]
   }
 }
