@@ -98,7 +98,7 @@ def _baixar(url):
         raise ErroAGR(f'não foi possível baixar {url}: {e}') from e
 
 
-def listar_pautas(ano, comissao='Câmara de Julgamento', listagem=LISTAGEM):
+def listar_pautas(ano, comissao: str | None = 'Câmara de Julgamento', listagem=LISTAGEM):
     """Pautas da comissão publicadas na página do ano, da mais recente para trás.
 
     A data vem da própria listagem (`– 25/06/2026 às 09:00 horas`), que é a

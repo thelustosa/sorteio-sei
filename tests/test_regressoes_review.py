@@ -32,7 +32,7 @@ def autenticar(cur):
     cur.execute('set local role authenticated')
 
 
-def criar(cur, tabela, numero='202600029999901', voto='Manter'):
+def criar(cur, tabela, numero='202600029999901', voto: str | None = 'Manter'):
     cur.execute('reset role')
     cur.execute(f"insert into public.{tabela}(num_processo,data_sessao,voto) "
                 "values (%s,'2026-07-02',%s) returning id", (numero, voto))

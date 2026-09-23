@@ -63,7 +63,9 @@ def comando_da_migracao(tabela):
     em vez de uma cópia que continuaria verde depois de a migração quebrar.
     """
     fonte = MIGRACAO_CADEIRAS.read_text(encoding='utf-8')
-    return re.search(rf'update public\.{tabela}\b.*?;', fonte, re.S).group(0)
+    achado = re.search(rf'update public\.{tabela}\b.*?;', fonte, re.S)
+    assert achado, f'UPDATE de {tabela} não encontrado em {MIGRACAO_CADEIRAS.name}'
+    return achado.group(0)
 
 
 # ── Planilha ─────────────────────────────────────────────────────────────────
@@ -112,7 +114,8 @@ class Planilha:
         wb.close()
 
 
-PLANILHA = None
+# Só é lida por testes @exige_planilha, que o main pula quando ela não existe.
+PLANILHA: Planilha = None  # type: ignore[assignment]
 
 
 def exige_planilha(fn):
