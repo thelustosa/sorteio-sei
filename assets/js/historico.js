@@ -367,6 +367,8 @@ function desenhar(sorteios) {
     Object.assign(botao.dataset, { data, carimbo });
     acao.append(botao);
     tr.append(acao);
+    // Rótulo de cada campo para a ficha do celular, onde o cabeçalho sai de vista.
+    COLUNAS.forEach((rotulo, i) => { tr.children[i].dataset.label = rotulo; });
 
     tbody.append(tr);
   });
@@ -400,8 +402,7 @@ async function carregarHistorico({ carregamentoInicial = false } = {}) {
     // sorteios acima de uma tabela vazia.
     historicoTotal.textContent = '';
     historicoAtualizado.textContent = 'Atualização indisponível';
-    historicoErro.querySelector('p').textContent = `Não foi possível carregar o histórico (${err.message}).`;
-    historicoErro.hidden = false;
+    mostrarErro(historicoErro, 'Não foi possível carregar o histórico. Verifique sua conexão e tente novamente.', err.message);
     return false;
   } finally {
     // Só a carga vigente devolve a tela ao estado ocioso: a atrasada
@@ -474,8 +475,7 @@ async function abrirDetalhe(botao) {
     detalheLoading.replaceChildren();
     detalheCorpo.hidden = true;
     detalheResumo.textContent = '';
-    detalheErro.querySelector('p').textContent = `Não foi possível carregar os processos (${err.message}).`;
-    detalheErro.hidden = false;
+    mostrarErro(detalheErro, 'Não foi possível carregar os processos. Feche e abra a lista de novo.', err.message);
     return;
   }
 
@@ -758,7 +758,6 @@ function exportarDetalheDocx() {
     const nome = [COL.arquivo, detalheAtual.data, detalheAtual.destino].filter(Boolean).join('-');
     baixarArquivo(criarDocxDetalhe(detalheAtual.processos, detalheAtual.data), `${nome}.docx`);
   } catch (erro) {
-    detalheErro.querySelector('p').textContent = `Não foi possível gerar o arquivo (${erro.message}).`;
-    detalheErro.hidden = false;
+    mostrarErro(detalheErro, 'Não foi possível gerar o arquivo. Tente exportar de novo.', erro.message);
   }
 }
