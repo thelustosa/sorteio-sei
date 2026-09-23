@@ -731,7 +731,9 @@ function baixarArquivo(blob, nome) {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  // Alguns navegadores só assumem o Blob depois que a navegação de download
+  // avança; revogá-lo no mesmo ciclo pode cancelar um arquivo válido.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // dd/mm/aaaa → aaaa-mm-dd (formato date do Postgres)
