@@ -326,7 +326,12 @@ regra, com nome próprio e a cor de fundo no `::view-transition-group`.
 **The Indicator Earns Its Entrance Rule.** Todo indicador de carregamento passa
 por `aguardarIndicador`: ou não aparece, ou fica tempo de ser lido. Meio termo —
 acender e apagar dentro da própria animação de entrada — é pior que animação
-nenhuma.
+nenhuma. Inclusive o "Preparando…" do bootstrap, que era a exceção: voltar do
+acervo à tela inicial com a permissão em ~400ms o mostrava pleno por ~80ms. A
+espera vem antes de a tela montar, para os dois não dividirem a tela. Pelo
+mesmo motivo, o que aparece junto com a tela entra junto com ela: a consulta
+do atalho do painel administrativo sai com a de permissão, e não depois, para
+o cartão não entrar sozinho acima da caixa, empurrando a tela.
 
 **The One Indicator Rule.** Uma espera tem um indicador só, num lugar só. Quem
 põe o indicador é `mostrarIndicador(conteiner, texto)` (`supabase.js`): se o
