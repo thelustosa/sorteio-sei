@@ -6,8 +6,8 @@
 // preenche os dois.
 //
 // A gravação não é UPDATE direto: vai pela função registrar_votos (ou
-// registrar_votos_creg) do banco, que aceita só estes dois campos, recusa valor
-// fora da lista e anota quem preencheu (ver schema.sql).
+// registrar_votos_creg) do banco, que valida as escolhas e anota quem preencheu.
+// No CREG, o destino do voto Vista é gravado junto com voto e status.
 //
 // A mesma página serve os dois colegiados, como o histórico e o painel do
 // acervo: o que muda entre eles cabe em COLEGIADOS, e quem escolhe é o
@@ -67,6 +67,12 @@ const btnTodosManter = document.getElementById('btnTodosManter');
 const btnTodosJulgado = document.getElementById('btnTodosJulgado');
 const txtModo = document.getElementById('txtModo');
 const listaPautasTitulo = document.getElementById('listaPautasTitulo');
+const dialogUnidadeVista = document.getElementById('dialogUnidadeVista');
+const formUnidadeVista = document.getElementById('formUnidadeVista');
+const resumoUnidadeVista = document.getElementById('resumoUnidadeVista');
+const unidadeDestinoVista = document.getElementById('unidadeDestinoVista');
+const erroUnidadeVista = document.getElementById('erroUnidadeVista');
+const UNIDADES_VISTA = ['CREG1', 'CREG2', 'CREG3', 'CREG4'];
 // O rótulo da lista ("Pautas pendentes", "Sessões pendentes") nasce no HTML e
 // é daqui que ele volta ao sair de uma pauta: com uma fonte só, a barra não
 // tem como mostrar a palavra de um colegiado na tela do outro.
@@ -75,6 +81,7 @@ const rotuloDaLista = txtModo.textContent;
 // Pendentes agrupados por pauta: chave "numero|data".
 let pendentesPorPauta = new Map();
 let pendentesNaTela = 0;
+let escolhaVistaPendente = null;
 
 btnVoltar.addEventListener('click', () => mostrarPautas(true));
 btnSalvar.addEventListener('click', salvar);
@@ -83,14 +90,67 @@ btnTodosJulgado.addEventListener('click', () => preencherColuna('col-status', 'J
 tbody.addEventListener('change', event => {
   const select = event.target.closest('select');
   if (!select || !tbody.contains(select)) return;
+  if (COL === COLEGIADOS.creg && select.closest('.col-voto') && select.value === 'Vista') {
+    pedirUnidadeVista(select, true);
+    return;
+  }
   registrarAlteracao(select);
 });
+
+if (dialogUnidadeVista) {
+  formUnidadeVista.addEventListener('submit', event => {
+    event.preventDefault();
+    if (!escolhaVistaPendente) return;
+    if (!UNIDADES_VISTA.includes(unidadeDestinoVista.value)) {
+      erroUnidadeVista.hidden = false;
+      unidadeDestinoVista.focus();
+      return;
+    }
+
+    const { select, resolve, votoAlterado } = escolhaVistaPendente;
+    const tr = select.closest('tr');
+    tr.dataset.unidadeVista = unidadeDestinoVista.value;
+    escolhaVistaPendente = null;
+    dialogUnidadeVista.close();
+    if (votoAlterado) registrarAlteracao(select);
+    else atualizarLinha(tr);
+    resolve(true);
+  });
+  document.getElementById('cancelarUnidadeVista').addEventListener('click', () => cancelarUnidadeVista());
+  dialogUnidadeVista.addEventListener('cancel', () => cancelarUnidadeVista(true));
+  unidadeDestinoVista.addEventListener('change', () => { erroUnidadeVista.hidden = true; });
+}
+
+function pedirUnidadeVista(select, votoAlterado) {
+  const tr = select.closest('tr');
+  resumoUnidadeVista.textContent = `Processo ${tr.dataset.numProcesso} · unidade atual: ${tr.dataset.unidadeAtual}`;
+  unidadeDestinoVista.value = tr.dataset.unidadeVista || '';
+  erroUnidadeVista.hidden = true;
+  dialogUnidadeVista.showModal();
+  return new Promise(resolve => { escolhaVistaPendente = { select, resolve, votoAlterado }; });
+}
+
+function cancelarUnidadeVista(fechaPeloEscape = false) {
+  if (!escolhaVistaPendente) return;
+  const { select, resolve, votoAlterado } = escolhaVistaPendente;
+  escolhaVistaPendente = null;
+  if (votoAlterado) {
+    select.value = select.dataset.votoConfirmado || '';
+    select.classList.toggle('placeholder-select', !select.value);
+  }
+  if (!fechaPeloEscape) dialogUnidadeVista.close();
+  resolve(false);
+}
 
 function registrarAlteracao(select) {
   if (select.closest('.col-status')) {
     // Uma escolha explícita prevalece sobre as próximas sugestões do voto.
     select.dataset.statusAutomatico = 'false';
   } else if (select.closest('.col-voto') && select.value) {
+    if (COL === COLEGIADOS.creg) {
+      select.dataset.votoConfirmado = select.value;
+      if (select.value !== 'Vista') select.closest('tr').dataset.unidadeVista = '';
+    }
     const status = select.closest('tr').querySelector('.col-status select');
     if (status.dataset.statusAutomatico !== 'false') {
       status.value = select.value === 'Retirado' || select.value === 'Vista'
@@ -102,7 +162,10 @@ function registrarAlteracao(select) {
 
   select.classList.toggle('placeholder-select', !select.value);
 
-  const tr = select.closest('tr');
+  atualizarLinha(select.closest('tr'));
+}
+
+function atualizarLinha(tr) {
   const incompletoAntes = tr.dataset.incompleto === 'true';
   const incompletoAgora = [...tr.querySelectorAll('select')].some(campo => !campo.value);
   if (incompletoAntes !== incompletoAgora) {
@@ -110,7 +173,9 @@ function registrarAlteracao(select) {
     tr.dataset.incompleto = String(incompletoAgora);
   }
   tr.dataset.alterada = String([...tr.querySelectorAll('select')]
-    .some(campo => campo.value !== (campo.dataset.valorInicial || '')));
+    .some(campo => campo.value !== (campo.dataset.valorInicial || ''))
+    || (COL === COLEGIADOS.creg
+      && tr.dataset.unidadeVista !== tr.dataset.unidadeVistaInicial));
   atualizarContador();
 }
 
@@ -152,7 +217,7 @@ async function carregarPautas(moverFoco = false) {
   let pendentes;
   try {
     pendentes = await api(
-      `${COL.tabela}?select=id,num_processo,${COL.destino},${COL === COLEGIADOS.creg ? 'assunto,' : ''}data_sessao,pauta,voto,status`
+      `${COL.tabela}?select=id,num_processo,${COL.destino},${COL === COLEGIADOS.creg ? 'assunto,unidade_vista,' : ''}data_sessao,pauta,voto,status`
       + '&or=(voto.is.null,status.is.null)'
       + '&order=data_sessao.desc,num_processo.asc,id.asc');
   } catch (err) {
@@ -285,6 +350,12 @@ function abrirPauta(chave) {
   processos.forEach(j => {
     const tr = document.createElement('tr');
     tr.dataset.id = j.id;
+    if (COL === COLEGIADOS.creg) {
+      tr.dataset.numProcesso = j.num_processo;
+      tr.dataset.unidadeAtual = j.unidade || 'Não informada';
+      tr.dataset.unidadeVistaInicial = j.unidade_vista || '';
+      tr.dataset.unidadeVista = j.unidade_vista || '';
+    }
     const incompleto = !j.voto || !j.status;
     tr.dataset.incompleto = String(incompleto);
     if (incompleto) pendentesNaTela++;
@@ -300,6 +371,7 @@ function abrirPauta(chave) {
     tdVoto.className = 'col-voto';
     const voto = seletor(VOTOS, j.voto, 'Selecione o voto');
     voto.dataset.valorInicial = voto.value;
+    if (COL === COLEGIADOS.creg) voto.dataset.votoConfirmado = voto.value;
     tdVoto.appendChild(voto);
 
     const tdStatus = document.createElement('td');
@@ -332,6 +404,9 @@ function linhasDaTela() {
     id: Number(tr.dataset.id),
     voto: tr.querySelector('.col-voto select').value,
     status: tr.querySelector('.col-status select').value,
+    ...(COL === COLEGIADOS.creg ? { unidade_vista: tr.dataset.unidadeVista || null } : {}),
+    ...(COL === COLEGIADOS.creg
+      ? { unidade_vista_inicial: tr.dataset.unidadeVistaInicial || null } : {}),
     anterior: Object.fromEntries(['voto', 'status'].map(campo =>
       [campo, tr.querySelector(`.col-${campo} select`).dataset.valorInicial || null])),
     alterada: tr.dataset.alterada === 'true'
@@ -348,14 +423,30 @@ function atualizarContador() {
 // ── Gravação ─────────────────────────────────────────────────────────────────
 
 async function salvar() {
+  if (COL === COLEGIADOS.creg) {
+    for (const tr of tbody.querySelectorAll('tr')) {
+      if (tr.dataset.alterada === 'true'
+          && tr.querySelector('.col-voto select').value === 'Vista'
+          && !UNIDADES_VISTA.includes(tr.dataset.unidadeVista)) {
+        if (!await pedirUnidadeVista(tr.querySelector('.col-voto select'), false)) return;
+      }
+    }
+  }
+
   // Só o que o funcionário efetivamente preencheu. Linha intocada continua
   // pendente e reaparece na próxima vez.
   const itens = linhasDaTela()
     .filter(l => l.alterada)
-    .map(({ id, voto, status, anterior }) => ({
-      id, anterior,
+    .map(({ id, voto, status, unidade_vista, unidade_vista_inicial, anterior }) => ({
+      id, anterior: {
+        ...anterior,
+        ...(COL === COLEGIADOS.creg && unidade_vista !== unidade_vista_inicial
+          ? { unidade_vista: unidade_vista_inicial } : {})
+      },
       ...(voto !== (anterior.voto || '') ? { voto } : {}),
-      ...(status !== (anterior.status || '') ? { status } : {})
+      ...(status !== (anterior.status || '') ? { status } : {}),
+      ...(COL === COLEGIADOS.creg && unidade_vista !== unidade_vista_inicial
+        ? { unidade_vista } : {})
     }));
   if (itens.length === 0) {
     aviso('Nada para salvar: preencha o voto ou o status de pelo menos um processo.', 'atencao');

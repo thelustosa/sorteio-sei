@@ -837,6 +837,10 @@ create table if not exists public.julgados_creg (
   voto              text,
   status            text,
 
+  -- Destino escolhido ao registrar voto Vista. O retorno ao acervo usa esta
+  -- unidade sem alterar a unidade que levou o processo à sessão.
+  unidade_vista     text,
+
   -- Cópia do acervo, não referência: registram o estado do processo no momento
   -- do julgamento. Uma redistribuição posterior muda o acervo e não pode
   -- reescrever o que já foi julgado.
@@ -913,6 +917,12 @@ create table if not exists public.julgados_creg (
   -- duplica.
   constraint julgados_creg_sessao_unica unique (num_processo, data_sessao)
 );
+
+alter table public.julgados_creg add column if not exists unidade_vista text;
+alter table public.julgados_creg drop constraint if exists julgados_creg_unidade_vista_valida;
+alter table public.julgados_creg add constraint julgados_creg_unidade_vista_valida
+  check (unidade_vista is null or
+         (coalesce(voto, '') = 'Vista' and unidade_vista in ('CREG1', 'CREG2', 'CREG3', 'CREG4')));
 
 create index if not exists idx_julgados_creg_acervo
   on public.julgados_creg (acervo_id);
@@ -1080,8 +1090,8 @@ create trigger julgados_creg_derivar
 
 -- ── CREG · Registro do voto e do status pela secretaria ──────────────────────
 -- Mesma porta estreita da Câmara: a escrita não é UPDATE direto, é esta função,
--- que só encosta em voto e status, recusa valor fora da lista e registra quem
--- preencheu.
+-- que grava voto, status e destino de Vista, recusa valor fora da lista e
+-- registra quem preencheu.
 --
 -- A lista é curta de propósito. O histórico da planilha tem 23 grafias de voto
 -- ("Aprovação"/"Aprovado"/"Apovação", "Indeferir"/"Indeferimento") — a
@@ -1122,10 +1132,12 @@ begin
                'Retirado', 'Vista'))
       or (nullif(i ->> 'status', '') is not null
           and nullif(i ->> 'status', '') not in
-              ('Julgado', 'Retirado', 'Vista', 'Sobrestado', 'Prejudicado'));
+              ('Julgado', 'Retirado', 'Vista', 'Sobrestado', 'Prejudicado'))
+      or (i ? 'unidade_vista' and i ->> 'unidade_vista' is not null
+          and i ->> 'unidade_vista' not in ('CREG1', 'CREG2', 'CREG3', 'CREG4'));
 
   if invalido > 0 then
-    raise exception 'id, voto ou status fora do permitido (% item(ns))', invalido;
+    raise exception 'id, voto, status ou unidade de vista fora do permitido (% item(ns))', invalido;
   end if;
 
   -- Só o que ainda está pendente, ou o que esta mesma página já preencheu antes
@@ -1153,10 +1165,23 @@ begin
   if exists (
     select 1 from public.julgados_creg j
     join jsonb_array_elements(itens) i on j.id = (i ->> 'id')::bigint
-    cross join (values ('voto'), ('status')) c(campo)
     where (j.voto is null or j.status is null or j.atualizado_em is not null)
-      and nullif(i ->> c.campo, '') is not null
-      and nullif(i ->> c.campo, '') is distinct from (to_jsonb(j) ->> c.campo)
+      and coalesce(nullif(i ->> 'voto', ''), j.voto) = 'Vista'
+      and (case when i ? 'unidade_vista' then i ->> 'unidade_vista'
+                else j.unidade_vista end) is null
+  ) then
+    raise exception 'Voto Vista exige unidade de destino (CREG1 a CREG4).'
+      using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1 from public.julgados_creg j
+    join jsonb_array_elements(itens) i on j.id = (i ->> 'id')::bigint
+    cross join (values ('voto'), ('status'), ('unidade_vista')) c(campo)
+    where (j.voto is null or j.status is null or j.atualizado_em is not null)
+      and (case when c.campo = 'unidade_vista' then i ? c.campo
+                else nullif(i ->> c.campo, '') is not null end)
+      and (i ->> c.campo) is distinct from (to_jsonb(j) ->> c.campo)
       and (
         -- Clientes antigos podem preencher vazios, mas não substituir uma
         -- decisão sem informar o valor anterior. Reenvio idêntico é seguro.
@@ -1174,6 +1199,12 @@ begin
   update public.julgados_creg j
      set voto           = coalesce(nullif(i ->> 'voto', ''), j.voto),
          status         = coalesce(nullif(i ->> 'status', ''), j.status),
+         unidade_vista  = case
+                           when coalesce(nullif(i ->> 'voto', ''), j.voto) is distinct from 'Vista'
+                             then null
+                           when i ? 'unidade_vista' then i ->> 'unidade_vista'
+                           else j.unidade_vista
+                         end,
          atualizado_em  = now(),
          atualizado_por = quem
     from jsonb_array_elements(itens) i

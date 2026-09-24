@@ -709,6 +709,71 @@ def registrar_votos_grava_so_o_que_esta_pendente(cur):
 
 
 @teste
+def voto_vista_exige_destino_valido_e_grava_na_mesma_transacao(cur):
+    limpar(cur)
+    autenticado(cur)
+    primeiro = julgar(cur, '202600029000601', date(2026, 9, 23))
+    segundo = julgar(cur, '202600029000602', date(2026, 9, 23))
+
+    for destino in [None, '', 'CREG5']:
+        cur.execute('savepoint tentar_vista')
+        try:
+            cur.execute("""select registrar_votos_creg(jsonb_build_array(
+                             jsonb_build_object('id', %s::text, 'voto', 'Manter',
+                                                'status', 'Julgado'),
+                             jsonb_build_object('id', %s::text, 'voto', 'Vista',
+                                                'status', 'Vista',
+                                                'unidade_vista', %s)))""",
+                        (primeiro, segundo, destino))
+        except psycopg2.Error:
+            cur.execute('rollback to savepoint tentar_vista')
+            cur.execute('release savepoint tentar_vista')
+        else:
+            raise AssertionError(f'aceitou destino de vista inválido: {destino!r}')
+        assert campos(cur, primeiro, 'voto', 'status') == (None, None)
+        assert campos(cur, segundo, 'voto', 'status', 'unidade_vista') == (None, None, None)
+
+    cur.execute("""select registrar_votos_creg(jsonb_build_array(
+                     jsonb_build_object('id', %s::text, 'voto', 'Vista',
+                                        'status', 'Vista', 'unidade_vista', 'CREG4')))""",
+                (segundo,))
+    assert cur.fetchone()[0] == 1
+    assert campos(cur, segundo, 'voto', 'status', 'unidade_vista') == \
+        ('Vista', 'Vista', 'CREG4')
+
+    # Outra pessoa mudou o destino enquanto esta tela continuava aberta.
+    cur.execute('update public.julgados_creg set unidade_vista = %s where id = %s',
+                ('CREG1', segundo))
+    cur.execute('savepoint destino_obsoleto')
+    try:
+        cur.execute("""select registrar_votos_creg(jsonb_build_array(
+                         jsonb_build_object('id', %s::text, 'voto', 'Retirado',
+                                            'status', 'Retirado',
+                                            'anterior', jsonb_build_object(
+                                              'voto', 'Vista', 'status', 'Vista',
+                                              'unidade_vista', 'CREG4'),
+                                            'unidade_vista', null)))""", (segundo,))
+    except psycopg2.Error as exc:
+        assert exc.pgcode == '40001'
+        cur.execute('rollback to savepoint destino_obsoleto')
+        cur.execute('release savepoint destino_obsoleto')
+    else:
+        raise AssertionError('aceitou apagar destino alterado por outra pessoa')
+    assert campos(cur, segundo, 'voto', 'status', 'unidade_vista') == \
+        ('Vista', 'Vista', 'CREG1')
+
+    cur.execute("""select registrar_votos_creg(jsonb_build_array(
+                     jsonb_build_object('id', %s::text, 'voto', 'Retirado',
+                                        'status', 'Retirado',
+                                        'anterior', jsonb_build_object(
+                                          'voto', 'Vista', 'status', 'Vista',
+                                          'unidade_vista', 'CREG1'),
+                                        'unidade_vista', null)))""", (segundo,))
+    assert campos(cur, segundo, 'voto', 'status', 'unidade_vista') == \
+        ('Retirado', 'Retirado', None)
+
+
+@teste
 def registrar_votos_nao_apaga_decisao_com_campo_em_branco(cur):
     """Branco quer dizer "ainda não decidi", nunca "apague o que está lá".
 
