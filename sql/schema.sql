@@ -801,7 +801,8 @@ create table if not exists public.acervo_creg (
   ordem             int,
   sorteado_em       timestamptz,
   origem            text        not null default 'sorteio'
-                    check (origem in ('sorteio', 'planilha', 'ata')),
+                    check (origem in ('sorteio', 'planilha', 'ata', 'retorno')),
+  retorno_julgado_id bigint,
   criado_em         timestamptz not null default now(),
 
   -- Reexecutar um sorteio ou uma importação não duplica o acervo. É também o
@@ -924,6 +925,26 @@ alter table public.julgados_creg add constraint julgados_creg_unidade_vista_vali
   check (unidade_vista is null or
          (coalesce(voto, '') = 'Vista' and unidade_vista in ('CREG1', 'CREG2', 'CREG3', 'CREG4')));
 
+-- O retorno é uma distribuição nova, ligada ao julgamento que a criou. O
+-- identificador permite mesma data/unidade da distribuição original (Retirado)
+-- sem abrir duplicatas em sorteios ou importações normais.
+alter table public.acervo_creg add column if not exists retorno_julgado_id bigint;
+alter table public.acervo_creg drop constraint if exists acervo_creg_distribuicao_unica;
+alter table public.acervo_creg add constraint acervo_creg_distribuicao_unica
+  unique nulls not distinct (num_processo, data_distribuicao, unidade, retorno_julgado_id);
+alter table public.acervo_creg drop constraint if exists acervo_creg_origem_check;
+alter table public.acervo_creg add constraint acervo_creg_origem_check
+  check (origem in ('sorteio', 'planilha', 'ata', 'retorno'));
+alter table public.acervo_creg drop constraint if exists acervo_creg_retorno_vinculado;
+alter table public.acervo_creg add constraint acervo_creg_retorno_vinculado
+  check ((origem = 'retorno') = (retorno_julgado_id is not null));
+alter table public.acervo_creg drop constraint if exists acervo_creg_retorno_julgado_id_fkey;
+alter table public.acervo_creg add constraint acervo_creg_retorno_julgado_id_fkey
+  foreign key (retorno_julgado_id) references public.julgados_creg(id) on delete cascade;
+alter table public.acervo_creg drop constraint if exists acervo_creg_retorno_unico;
+alter table public.acervo_creg add constraint acervo_creg_retorno_unico
+  unique (retorno_julgado_id);
+
 create index if not exists idx_julgados_creg_acervo
   on public.julgados_creg (acervo_id);
 
@@ -1043,6 +1064,7 @@ begin
       from public.acervo_creg
      where num_processo = new.num_processo
        and data_distribuicao = new.data_distribuicao
+       and retorno_julgado_id is distinct from new.id
      -- Desempate: a mesma distribuição em duas unidades é legal, e os dois
      -- ramos precisam escolher a MESMA linha, senão o vínculo troca a cada
      -- rederivação. Quem decide é a unidade que o julgado já tem — é ela que o
@@ -1057,6 +1079,7 @@ begin
       from public.acervo_creg
      where num_processo = new.num_processo
        and data_distribuicao <= new.data_sessao
+       and retorno_julgado_id is distinct from new.id
      order by data_distribuicao desc,
               (unidade is not distinct from new.unidade) desc, id desc
      limit 1;
@@ -1064,6 +1087,7 @@ begin
       select * into origem
         from public.acervo_creg
        where num_processo = new.num_processo
+         and retorno_julgado_id is distinct from new.id
        order by data_distribuicao, id
        limit 1;
     end if;
@@ -1220,6 +1244,92 @@ revoke all on function public.registrar_votos_creg(jsonb)
   from public, anon, service_role;
 grant execute on function public.registrar_votos_creg(jsonb) to authenticated;
 
+-- Cada Vista/Retirado confirmado cria ou corrige UMA distribuição de retorno.
+-- O gatilho roda na mesma transação da gravação e também acompanha correções
+-- administrativas de voto, unidade ou data da sessão. Importações históricas
+-- têm atualizado_em nulo e não geram retornos retroativos.
+create or replace function public.julgados_creg_sincronizar_retorno()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  destino text;
+  interessado_original text;
+begin
+  if new.atualizado_em is null then
+    return new;
+  end if;
+
+  -- Corrigir apenas metadados de um julgamento sem retorno não é uma nova
+  -- decisão. Isso preserva o histórico importado e as correções administrativas.
+  if tg_op = 'UPDATE' then
+    if old.voto is not distinct from new.voto
+       and old.status is not distinct from new.status
+       and old.unidade_vista is not distinct from new.unidade_vista
+       and not exists (select 1 from public.acervo_creg a
+                        where a.retorno_julgado_id = new.id) then
+      return new;
+    end if;
+  end if;
+
+  if new.voto in ('Vista', 'Retirado')
+     and new.status is not null and new.status <> new.voto then
+    raise exception 'Voto % exige status % para retornar ao acervo.', new.voto, new.voto
+      using errcode = '22023';
+  end if;
+
+  if new.voto = 'Vista' then
+    if coalesce(new.unidade_vista, '') not in ('CREG1', 'CREG2', 'CREG3', 'CREG4') then
+      raise exception 'Voto Vista exige unidade de destino (CREG1 a CREG4).'
+        using errcode = '22023';
+    end if;
+    destino := new.unidade_vista;
+  elsif new.voto = 'Retirado' then
+    if coalesce(new.unidade, '') !~ '^CREG[1-4]$' then
+      raise exception 'Voto Retirado exige unidade atual CREG1 a CREG4.'
+        using errcode = '22023';
+    end if;
+    destino := new.unidade;
+  end if;
+
+  if destino is not null and new.status = new.voto then
+    select a.interessado into interessado_original
+      from public.acervo_creg a where a.id = new.acervo_id;
+
+    insert into public.acervo_creg
+      (num_processo, unidade, data_distribuicao, assunto, recurso,
+       interessado, origem, retorno_julgado_id)
+    values
+      (new.num_processo, destino, new.data_sessao, new.assunto, new.recurso,
+       interessado_original, 'retorno', new.id)
+    on conflict on constraint acervo_creg_retorno_unico do update
+      set num_processo = excluded.num_processo,
+          unidade = excluded.unidade,
+          data_distribuicao = excluded.data_distribuicao,
+          assunto = excluded.assunto,
+          recurso = excluded.recurso,
+          interessado = excluded.interessado;
+  else
+    -- Desfazer uma decisão provisória remove apenas o retorno que ela criou;
+    -- a distribuição original e o julgamento continuam preservados.
+    delete from public.acervo_creg a where a.retorno_julgado_id = new.id;
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.julgados_creg_sincronizar_retorno()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists julgados_creg_retorno on public.julgados_creg;
+create trigger julgados_creg_retorno
+  after insert or update of num_processo, voto, status, unidade_vista, data_sessao, unidade,
+                            assunto, recurso, acervo_id, atualizado_em
+  on public.julgados_creg
+  for each row execute function public.julgados_creg_sincronizar_retorno();
+
 -- ── CREG · Diligências ───────────────────────────────────────────────────────
 -- Espelho de uma planilha que a equipe da AGR mantém à mão e publica na web.
 -- Uma linha por DILIGÊNCIA, não por processo: o mesmo processo volta à planilha
@@ -1343,7 +1453,8 @@ begin
       from public.acervo_creg a
      where not exists (select 1 from public.julgados_creg j
                         where j.num_processo = a.num_processo
-                          and j.data_sessao >= a.data_distribuicao)
+                          and j.data_sessao >= a.data_distribuicao
+                          and j.id is distinct from a.retorno_julgado_id)
      order by a.num_processo, a.data_distribuicao desc, a.id desc
   ),
 
@@ -1443,7 +1554,8 @@ begin
       from public.acervo_creg a
      where not exists (select 1 from public.julgados_creg j
                         where j.num_processo = a.num_processo
-                          and j.data_sessao >= a.data_distribuicao)
+                          and j.data_sessao >= a.data_distribuicao
+                          and j.id is distinct from a.retorno_julgado_id)
      order by a.num_processo, a.data_distribuicao desc, a.id desc
   )
   select p.num_processo,
@@ -1484,7 +1596,8 @@ drop policy if exists "usuario autenticado pode inserir" on public.acervo_creg;
 drop policy if exists "usuario com acesso creg pode inserir" on public.acervo_creg;
 create policy "usuario com acesso creg pode inserir"
   on public.acervo_creg for insert to authenticated
-  with check ((select public.tem_acesso_orgao('CREG')));
+  with check ((select public.tem_acesso_orgao('CREG'))
+              and origem <> 'retorno' and retorno_julgado_id is null);
 
 drop policy if exists "usuario autenticado pode ler" on public.julgados_creg;
 drop policy if exists "usuario com acesso creg pode ler" on public.julgados_creg;
