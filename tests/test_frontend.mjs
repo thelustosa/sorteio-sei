@@ -363,7 +363,7 @@ test('Tab numa linha seguinte não deixa o prefixo selecionado, e colar o númer
   assert.deepEqual([processo.selectionStart, processo.selectionEnd], [11, 11]);
 
   // Seleção feita pela pessoa, com o prefixo já editado, fica como está.
-  processo.value = '202500029000084';
+  processo.value = '000000000000084';
   processo.setSelectionRange(0, 15);
   tbody.dispatch('focusin', { target: processo });
   assert.deepEqual([processo.selectionStart, processo.selectionEnd], [0, 15]);
@@ -372,10 +372,10 @@ test('Tab numa linha seguinte não deixa o prefixo selecionado, e colar o númer
   let evitado = false;
   tbody.dispatch('paste', {
     target: processo,
-    clipboardData: { getData: () => ' 202500029000084\n' },
+    clipboardData: { getData: () => ' 000000000000084\n' },
     preventDefault() { evitado = true; }
   });
-  assert.equal(processo.value, '202500029000084');
+  assert.equal(processo.value, '000000000000084');
   assert.equal(evitado, true);
 
   // Trecho que não é o número inteiro segue a colagem normal do navegador.
@@ -391,7 +391,7 @@ test('oferece backup após falha sem baixá-lo automaticamente', async () => {
     aviso: (...args) => avisos.push(args)
   });
   const { document } = page;
-  await preencherCreg(page, '202600029000401');
+  await preencherCreg(page, '000000000000401');
   document.getElementById('sortear').dispatch('click');
   await wait();
 
@@ -412,7 +412,7 @@ test('sem banco configurado também exige clique para baixar o backup', async ()
     aviso: (...args) => avisos.push(args)
   });
   const { document } = page;
-  await preencherCreg(page, '202600029000402', 'Sem recurso');
+  await preencherCreg(page, '000000000000402', 'Sem recurso');
   document.getElementById('sortear').dispatch('click');
   await wait();
 
@@ -429,7 +429,7 @@ test('erro 401 não desmonta o sorteio nem força logout', async () => {
     }
   });
   const { document } = page;
-  await preencherCreg(page, '202600029000403');
+  await preencherCreg(page, '000000000000403');
   document.getElementById('sortear').dispatch('click');
   await wait();
 
@@ -447,7 +447,7 @@ test('bloqueia Voltar enquanto a persistência ainda pode responder', async () =
     api: () => new Promise((_, reject) => { rejeitar = reject; })
   });
   const { document } = page;
-  await preencherCreg(page, '202600029000404');
+  await preencherCreg(page, '000000000000404');
   document.getElementById('sortear').dispatch('click');
 
   const voltar = document.getElementById('btnVoltar');
@@ -466,7 +466,7 @@ test('interessado do CREG chega ao banco; a CJ não tem a coluna', async () => {
   let corpo;
   const page = indexPage({ api: async (_tabela, opcoes) => { corpo = JSON.parse(opcoes.body); } });
   const { document, tbody } = page;
-  await preencherCreg(page, '202600029000405');
+  await preencherCreg(page, '000000000000405');
   tbody.children[0].querySelector('.col-interessado input').value = '  Saneago  ';
   document.getElementById('sortear').dispatch('click');
   await wait();
@@ -485,7 +485,7 @@ test('interessado do CREG chega ao banco; a CJ não tem a coluna', async () => {
 test('interessado em branco vai como nulo, e não como texto vazio', async () => {
   let corpo;
   const page = indexPage({ api: async (_tabela, opcoes) => { corpo = JSON.parse(opcoes.body); } });
-  await preencherCreg(page, '202600029000406');
+  await preencherCreg(page, '000000000000406');
   page.document.getElementById('sortear').dispatch('click');
   await wait();
 
@@ -529,7 +529,7 @@ async function preencherCj(page, defesasDaLinha = ['Não', 'Sim', 'Sim', 'Sim', 
   defesasDaLinha.forEach((defesa, i) => {
     const row = tbody.children[i];
     row.querySelector('.num').textContent = String(i + 1);
-    row.querySelector('.col-processo input').value = `20260002900${String(i + 1).padStart(4, '0')}`;
+    row.querySelector('.col-processo input').value = `000000000${String(i + 1).padStart(6, '0')}`;
     row.querySelector('.col-decisao select').value = defesa;
   });
   return tbody.children;
@@ -560,7 +560,7 @@ test('processo sem defesa vai para a CJ1 sem passar pelo sorteio', async () => {
     'CJ3: 1 processo', 'CJ4: 1 processo', 'CJ5: 1 processo']);
 
   const semDefesa = corpo.filter(p => !p.defesa);
-  assert.deepEqual(semDefesa.map(p => p.num_processo), ['202600029000001', '202600029000003']);
+  assert.deepEqual(semDefesa.map(p => p.num_processo), ['000000000000001', '000000000000003']);
   assert.deepEqual(semDefesa.map(p => p.relator), ['CJ1', 'CJ1']);
 });
 
@@ -1081,8 +1081,8 @@ test('julgados revela o conselheiro no hover da cadeira', () => {
 
   const relator = linha => page.tbody.children[linha].children[1];
   assert.equal(relator(0).textContent, 'CJ1');
-  assert.equal(relator(0).title, 'Paulo Otoni Ribeiro');
-  assert.equal(relator(0)['aria-label'], 'CJ1 — Paulo Otoni Ribeiro');
+  assert.equal(relator(0).title, CADEIRAS_CJ.CJ1);
+  assert.equal(relator(0)['aria-label'], `CJ1 — ${CADEIRAS_CJ.CJ1}`);
   assert.equal(relator(1).textContent, 'Conselheiro De Antes');
   assert.equal(relator(1).title, undefined, 'title repetindo o rótulo é ruído');
 });
@@ -1092,7 +1092,7 @@ test('pauta pendente mostra assunto apenas no CREG', async () => {
     let consulta;
     const page = julgadosPage(async path => {
       consulta = path;
-      return [{ id: 1, num_processo: '202600029000315', unidade: 'CREG2',
+      return [{ id: 1, num_processo: '000000000000315', unidade: 'CREG2',
         relator: 'CJ2', assunto: 'Auto de Infração', data_sessao: '2026-09-23',
         pauta: 17, voto: null, status: null }];
     }, colegiado);
@@ -1114,7 +1114,7 @@ test('pauta pendente mostra assunto apenas no CREG', async () => {
 test('CREG identifica assunto ainda ausente no cadastro', () => {
   const page = julgadosPage(async () => [], 'creg');
   page.pendentesPorPauta.set('17|2026-09-23', [
-    { id: 1, num_processo: '202600029000315', unidade: 'CREG2', assunto: null,
+    { id: 1, num_processo: '000000000000315', unidade: 'CREG2', assunto: null,
       voto: null, status: null }
   ]);
   page.abrirPauta('17|2026-09-23');
@@ -1745,10 +1745,10 @@ const celulas = linha => linha.children.map(c => c.textContent);
 
 test('acervo monta as colunas a partir dos relatores que o banco devolve', async () => {
   const page = acervoPage(async () => [
-    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ3', conselheiro: 'Dorivan de Souza Lima', processos: 3 },
-    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 22 },
-    { ordem: 2, faixa: 'Até 30 dias', relator: 'CJ3', conselheiro: 'Dorivan de Souza Lima', processos: 1 },
-    { ordem: 2, faixa: 'Até 30 dias', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 0 }
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ3', conselheiro: CADEIRAS_CJ.CJ3, processos: 3 },
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', conselheiro: CADEIRAS_CJ.CJ1, processos: 22 },
+    { ordem: 2, faixa: 'Até 30 dias', relator: 'CJ3', conselheiro: CADEIRAS_CJ.CJ3, processos: 1 },
+    { ordem: 2, faixa: 'Até 30 dias', relator: 'CJ1', conselheiro: CADEIRAS_CJ.CJ1, processos: 0 }
   ]);
   page.inicializarAcervo();
   await wait();
@@ -1805,7 +1805,7 @@ test('acervo entrega a moldura do painel antes dos dados, e a tabela só depois'
   assert.equal(page.document.getElementById('exportMenu').hidden, true);
 
   responder([
-    { ordem: 1, faixa: 'Até 15 dias', relator: 'Dorivan de Souza Lima', processos: 1 }
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'Sicrano de Tal', processos: 1 }
   ]);
   await inicializacao;
 
@@ -1838,9 +1838,9 @@ test('falha inicial permanece no carregamento geral sem revelar painel incomplet
 
 test('acervo mantém o total vermelho desde Há 3 meses, inclusive quando zerado', async () => {
   const page = acervoPage(async () => [
-    { ordem: 3, faixa: 'Até 45 dias', relator: 'Dorivan de Souza Lima', processos: 1 },
-    { ordem: 4, faixa: 'Há 3 meses', relator: 'Dorivan de Souza Lima', processos: 2 },
-    { ordem: 5, faixa: 'Entre 3 e 6 meses', relator: 'Dorivan de Souza Lima', processos: 0 }
+    { ordem: 3, faixa: 'Até 45 dias', relator: 'Sicrano de Tal', processos: 1 },
+    { ordem: 4, faixa: 'Há 3 meses', relator: 'Sicrano de Tal', processos: 2 },
+    { ordem: 5, faixa: 'Entre 3 e 6 meses', relator: 'Sicrano de Tal', processos: 0 }
   ]);
   page.inicializarAcervo();
   await wait();
@@ -1877,7 +1877,7 @@ test('acervo propaga falha inicial sem forçar logout', async () => {
 
 test('acervo avisa quando não há processo parado', async () => {
   const page = acervoPage(async () => [
-    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ3', conselheiro: 'Dorivan de Souza Lima', processos: 0 }
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ3', conselheiro: CADEIRAS_CJ.CJ3, processos: 0 }
   ]);
   page.inicializarAcervo();
   await wait();
@@ -1889,8 +1889,8 @@ test('acervo avisa quando não há processo parado', async () => {
 
 test('acervo revela o conselheiro no hover da coluna', async () => {
   const page = acervoPage(async () => [
-    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 2 },
-    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ5', conselheiro: 'Lorena Patricia de Oliveira', processos: 1 }
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', conselheiro: CADEIRAS_CJ.CJ1, processos: 2 },
+    { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ5', conselheiro: CADEIRAS_CJ.CJ5, processos: 1 }
   ]);
   await page.inicializarAcervo();
   await wait();
@@ -1898,9 +1898,9 @@ test('acervo revela o conselheiro no hover da coluna', async () => {
   const [th1, th5] = page.document.getElementById('acervoTable')
     .children[0].children[0].children.slice(1, 3);
   assert.equal(th1.textContent, 'CJ1');
-  assert.equal(th1.title, 'Paulo Otoni Ribeiro', 'a cadeira sozinha não diz quem é');
-  assert.equal(th1['aria-label'], 'CJ1 — Paulo Otoni Ribeiro');
-  assert.equal(th5.title, 'Lorena Patricia de Oliveira');
+  assert.equal(th1.title, CADEIRAS_CJ.CJ1, 'a cadeira sozinha não diz quem é');
+  assert.equal(th1['aria-label'], `CJ1 — ${CADEIRAS_CJ.CJ1}`);
+  assert.equal(th5.title, CADEIRAS_CJ.CJ5);
 });
 
 test('acervo não inventa hover quando a cadeira não tem de-para', async () => {
@@ -2051,12 +2051,12 @@ test('sorteio da CJ mostra a cadeira e o conselheiro no hover', () => {
   const pills = document.getElementById('pillsContainer').children;
   assert.deepEqual(pills.map(p => p.textContent), ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'],
     'o sorteio precisa gravar a cadeira, que é o que acervo_cj guarda');
-  assert.equal(pills[0].title, 'Paulo Otoni Ribeiro');
-  assert.equal(pills[1].title, 'Deusdete Cardoso Belém');
-  assert.equal(pills[2].title, 'Dorivan de Souza Lima');
-  assert.equal(pills[3].title, 'Paulo Henrique Oliveira Marques');
-  assert.equal(pills[4].title, 'Lorena Patricia de Oliveira');
-  assert.equal(pills[0]['aria-label'], 'CJ1 — Paulo Otoni Ribeiro',
+  assert.equal(pills[0].title, CADEIRAS_CJ.CJ1);
+  assert.equal(pills[1].title, CADEIRAS_CJ.CJ2);
+  assert.equal(pills[2].title, CADEIRAS_CJ.CJ3);
+  assert.equal(pills[3].title, CADEIRAS_CJ.CJ4);
+  assert.equal(pills[4].title, CADEIRAS_CJ.CJ5);
+  assert.equal(pills[0]['aria-label'], `CJ1 — ${CADEIRAS_CJ.CJ1}`,
     'o leitor de tela precisa anunciar a pessoa, não soletrar a cadeira');
 });
 
@@ -2067,13 +2067,7 @@ test('resultado da CJ mostra o conselheiro abaixo de cada cadeira', async () => 
   page.document.getElementById('sortear').dispatch('click');
   await wait();
 
-  const nomesPorCadeira = {
-    CJ1: 'Paulo Otoni Ribeiro',
-    CJ2: 'Deusdete Cardoso Belém',
-    CJ3: 'Dorivan de Souza Lima',
-    CJ4: 'Paulo Henrique Oliveira Marques',
-    CJ5: 'Lorena Patricia de Oliveira'
-  };
+  const nomesPorCadeira = CADEIRAS_CJ;
   const destinos = page.document.getElementById('resultTableBody').children
     .map(row => row.querySelector('.sorteado-unidade'));
   assert.equal(destinos.length, 5);
@@ -2100,17 +2094,17 @@ test('ata do sorteio da CJ identifica cadeira e conselheiro', async () => {
 
   const ata = await page.blobs[0].text();
   for (const destino of [
-    'CJ1 — Paulo Otoni Ribeiro',
-    'CJ2 — Deusdete Cardoso Belém',
-    'CJ3 — Dorivan de Souza Lima',
-    'CJ4 — Paulo Henrique Oliveira Marques',
-    'CJ5 — Lorena Patricia de Oliveira'
+    `CJ1 — ${CADEIRAS_CJ.CJ1}`,
+    `CJ2 — ${CADEIRAS_CJ.CJ2}`,
+    `CJ3 — ${CADEIRAS_CJ.CJ3}`,
+    `CJ4 — ${CADEIRAS_CJ.CJ4}`,
+    `CJ5 — ${CADEIRAS_CJ.CJ5}`
   ]) assert.match(ata, new RegExp(destino));
 });
 
 test('resultado do CREG continua exibindo somente o código da unidade', async () => {
   const page = indexPage();
-  await preencherCreg(page, '202600029000900');
+  await preencherCreg(page, '000000000000900');
   page.document.getElementById('sortear').dispatch('click');
   await wait();
 
@@ -2127,16 +2121,16 @@ test('resultado do CREG continua exibindo somente o código da unidade', async (
 // Clicar num bloco com número abre a lista daquele recorte. O que o teste fixa
 // é o contrato com o banco: quais filtros o card pede em cada tipo de célula.
 const matriz = [
-  { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 2 },
-  { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ5', conselheiro: 'Lorena Patricia de Oliveira', processos: 0 },
-  { ordem: 4, faixa: 'Há 3 meses', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro', processos: 1 },
-  { ordem: 4, faixa: 'Há 3 meses', relator: 'CJ5', conselheiro: 'Lorena Patricia de Oliveira', processos: 0 }
+  { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ1', conselheiro: CADEIRAS_CJ.CJ1, processos: 2 },
+  { ordem: 1, faixa: 'Até 15 dias', relator: 'CJ5', conselheiro: CADEIRAS_CJ.CJ5, processos: 0 },
+  { ordem: 4, faixa: 'Há 3 meses', relator: 'CJ1', conselheiro: CADEIRAS_CJ.CJ1, processos: 1 },
+  { ordem: 4, faixa: 'Há 3 meses', relator: 'CJ5', conselheiro: CADEIRAS_CJ.CJ5, processos: 0 }
 ];
 
 const processosFalsos = [
-  { num_processo: '202600029001111', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro',
+  { num_processo: '000000000001111', relator: 'CJ1', conselheiro: CADEIRAS_CJ.CJ1,
     data_distribuicao: '2026-06-29', dias: 56 },
-  { num_processo: '202600029002222', relator: 'CJ1', conselheiro: 'Paulo Otoni Ribeiro',
+  { num_processo: '000000000002222', relator: 'CJ1', conselheiro: CADEIRAS_CJ.CJ1,
     data_distribuicao: '2026-08-14', dias: 10 }
 ];
 
@@ -2199,14 +2193,14 @@ test('o card lista os processos e habilita a exportação', async () => {
 
   const linhas = page.document.getElementById('detalheTable').children[1].children;
   assert.deepEqual(linhas.map(tr => tr.children.map(c => c.textContent)), [
-    ['202600029001111', 'CJ1', '29/06/2026', '56', '1 mês e 26 dias'],
-    ['202600029002222', 'CJ1', '14/08/2026', '10', '10 dias']
+    ['000000000001111', 'CJ1', '29/06/2026', '56', '1 mês e 26 dias'],
+    ['000000000002222', 'CJ1', '14/08/2026', '10', '10 dias']
   ]);
   assert.equal(page.document.getElementById('btnExportarDetalhe').disabled, false);
 
   const cadeira = linhas[0].children[1];
-  assert.equal(cadeira.title, 'Paulo Otoni Ribeiro');
-  assert.equal(cadeira['aria-label'], 'CJ1 — Paulo Otoni Ribeiro',
+  assert.equal(cadeira.title, CADEIRAS_CJ.CJ1);
+  assert.equal(cadeira['aria-label'], `CJ1 — ${CADEIRAS_CJ.CJ1}`,
     'só no title, o nome do conselheiro existe para o mouse e não para o leitor de tela');
 });
 
@@ -2274,7 +2268,7 @@ test('a coluna Tempo entra no cabeçalho e no Excel do card', async () => {
 // no meio. Tempo precisa continuar no fim, depois de Dias passados.
 test('no Conselho o Assunto entra no meio e Tempo continua por último', async () => {
   const page = acervoPage(async caminho => caminho.includes('processos_acervo_creg')
-    ? [{ num_processo: '202600029004444', unidade: 'CREG3', assunto: 'Auto de Infração',
+    ? [{ num_processo: '000000000004444', unidade: 'CREG3', assunto: 'Auto de Infração',
          data_distribuicao: '2026-06-29', dias: 56 }]
     : [{ ordem: 1, faixa: 'Até 15 dias', unidade: 'CREG3', processos: 1 }],
     { colegiado: 'creg' });
@@ -2286,7 +2280,7 @@ test('no Conselho o Assunto entra no meio e Tempo continua por último', async (
   assert.deepEqual(celulas(thead.children[0]),
     ['Nº do Processo', 'Unidade', 'Assunto', 'Distribuição', 'Dias passados', 'Tempo']);
   assert.deepEqual(celulas(tbody.children[0]),
-    ['202600029004444', 'CREG3', 'Auto de Infração', '29/06/2026', '56', '1 mês e 26 dias']);
+    ['000000000004444', 'CREG3', 'Auto de Infração', '29/06/2026', '56', '1 mês e 26 dias']);
 });
 
 test('o card fecha e a falha aparece dentro dele', async () => {
@@ -2321,7 +2315,7 @@ test('o Excel do card é um .xlsx válido com os processos', async () => {
   assert.deepEqual([...bytes.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04], 'assinatura ZIP');
   const texto = new TextDecoder().decode(bytes);
   assert.match(texto, /xl\/worksheets\/sheet1\.xml/);
-  assert.match(texto, /202600029001111/, 'o número do processo precisa estar na planilha');
+  assert.match(texto, /000000000001111/, 'o número do processo precisa estar na planilha');
   assert.match(texto, /29\/06\/2026/, 'a data vai formatada, não como serial');
 });
 
@@ -2363,8 +2357,8 @@ test('falha ao exportar o card avisa dentro do próprio card', async () => {
 
 test('zero dias passados sai como 0 no Excel, não como o travessão do painel', async () => {
   const page = await acervoComDetalhe();
-  const blob = page.criarExcelDetalhe([{ num_processo: '202600029003333', relator: 'CJ1',
-    conselheiro: 'Paulo Otoni Ribeiro', data_distribuicao: '2026-08-24', dias: 0 }], 'Até 15 dias · CJ1');
+  const blob = page.criarExcelDetalhe([{ num_processo: '000000000003333', relator: 'CJ1',
+    conselheiro: CADEIRAS_CJ.CJ1, data_distribuicao: '2026-08-24', dias: 0 }], 'Até 15 dias · CJ1');
   const xml = new TextDecoder().decode(new Uint8Array(await blob.arrayBuffer()));
 
   // No painel o travessão significa "nenhum processo". Aqui o zero é um
@@ -2612,9 +2606,9 @@ test('acervo vazio mostra só a mensagem: a tabela sai e exportar desliga', asyn
 
 test('"Em diligência desde" entra quando a lista tem a data, e só então', async () => {
   const comDiligencia = [
-    { num_processo: '202600029002495', unidade: 'CREG3', assunto: 'Auto de Infração',
+    { num_processo: '000000000002495', unidade: 'CREG3', assunto: 'Auto de Infração',
       data_distribuicao: '2026-07-30', dias: 54, diligencia_desde: '2026-08-10' },
-    { num_processo: '202500029005367', unidade: 'CREG3', assunto: 'Auto de Infração',
+    { num_processo: '000000000005367', unidade: 'CREG3', assunto: 'Auto de Infração',
       data_distribuicao: '2026-06-03', dias: 111, diligencia_desde: null }
   ];
   const page = acervoPage(async caminho =>
@@ -2989,9 +2983,9 @@ test('falha ao atualizar não deixa o total anunciando uma tabela vazia', async 
 });
 
 const processosCj = [
-  { ordem: 1, num_processo: '202600029000101', destino: 'CJ3', responsavel: 'Dorivan de Souza Lima',
+  { ordem: 1, num_processo: '000000000000101', destino: 'CJ3', responsavel: CADEIRAS_CJ.CJ3,
     assunto: 'Auto de Infração', decisao: 'Sim', interessado: null },
-  { ordem: 2, num_processo: '202600029000102', destino: 'CJ1', responsavel: 'CJ1',
+  { ordem: 2, num_processo: '000000000000102', destino: 'CJ1', responsavel: 'CJ1',
     assunto: 'Auto de Infração', decisao: 'Não', interessado: null }
 ];
 
@@ -3037,7 +3031,7 @@ test('clicar num destino abre o card já filtrado só para aquela unidade ou cad
   assert.equal(tbody.children.length, 1,
     'só o processo de CJ1 aparece; a resposta inteira da rodada não vaza para o card');
   assert.deepEqual(celulas(tbody.children[0]),
-    ['2', '202600029000102', 'CJ1', 'Auto de Infração', 'Não']);
+    ['2', '000000000000102', 'CJ1', 'Auto de Infração', 'Não']);
   assert.match(page.document.getElementById('detalheResumo').textContent,
     /^Câmara de Julgamento · 1 processo · às \d{2}:\d{2}$/,
     'o resumo conta só os processos filtrados, não o total da rodada');
@@ -3059,11 +3053,11 @@ test('o card da Câmara mostra a defesa e o conselheiro da época', async () => 
     ['Ordem', 'Nº do Processo', 'Cadeira', 'Assunto', 'Defesa'],
     'na Câmara a coluna de decisão é a defesa, e não há interessado');
   assert.deepEqual(celulas(tbody.children[0]),
-    ['1', '202600029000101', 'CJ3', 'Auto de Infração', 'Sim']);
+    ['1', '000000000000101', 'CJ3', 'Auto de Infração', 'Sim']);
 
   // A cadeira sozinha não diz quem é; o ocupante da época vem na mesma resposta.
-  assert.equal(tbody.children[0].children[2].title, 'Dorivan de Souza Lima');
-  assert.equal(tbody.children[0].children[2]['aria-label'], 'CJ3 — Dorivan de Souza Lima');
+  assert.equal(tbody.children[0].children[2].title, CADEIRAS_CJ.CJ3);
+  assert.equal(tbody.children[0].children[2]['aria-label'], `CJ3 — ${CADEIRAS_CJ.CJ3}`);
   // Cadeira sem de-para no período sai pelo próprio rótulo, sem hover vazio.
   assert.equal(tbody.children[1].children[2].title, undefined);
 });
@@ -3071,9 +3065,9 @@ test('o card da Câmara mostra a defesa e o conselheiro da época', async () => 
 test('o card do Conselho mostra o interessado e o recurso', async () => {
   const page = historicoPage(async caminho =>
     caminho === 'rpc/historico_sorteios' ? sorteiosCreg : [
-      { ordem: 1, num_processo: '202600029000792', destino: 'CREG3', responsavel: null,
+      { ordem: 1, num_processo: '000000000000792', destino: 'CREG3', responsavel: null,
         assunto: 'Outros', decisao: 'Não se aplica', interessado: null },
-      { ordem: null, num_processo: '202600029001295', destino: 'CREG4', responsavel: null,
+      { ordem: null, num_processo: '000000000001295', destino: 'CREG4', responsavel: null,
         assunto: 'Auto de Infração', decisao: 'Sem recurso', interessado: 'Concessionária X' }
     ], 'creg');
   await page.inicializarHistorico();
@@ -3083,7 +3077,7 @@ test('o card do Conselho mostra o interessado e o recurso', async () => {
   assert.deepEqual(celulas(thead.children[0]),
     ['Ordem', 'Nº do Processo', 'Unidade', 'Interessado', 'Assunto', 'Recurso']);
   assert.deepEqual(celulas(tbody.children[0]),
-    ['1', '202600029000792', 'CREG3', '—', 'Outros', 'Não se aplica']);
+    ['1', '000000000000792', 'CREG3', '—', 'Outros', 'Não se aplica']);
   // Rodada gravada sem a ordem do sorteio: travessão, e não um número inventado
   // a partir da posição na lista.
   assert.equal(tbody.children[1].children[0].textContent, '—');
@@ -3118,7 +3112,7 @@ test('resposta atrasada não sobrescreve a rodada aberta depois dela', async () 
   const lenta = page.abrirDetalhe(acaoDe(page, 0));
   const rapida = page.abrirDetalhe(acaoDe(page, 2));
 
-  respostas[1]([{ ordem: 1, num_processo: '202600029000999', destino: 'CJ2',
+  respostas[1]([{ ordem: 1, num_processo: '000000000000999', destino: 'CJ2',
     responsavel: null, assunto: 'Auto de Infração', decisao: 'Sim', interessado: null }]);
   await rapida;
   respostas[0](processosCj);
@@ -3126,7 +3120,7 @@ test('resposta atrasada não sobrescreve a rodada aberta depois dela', async () 
 
   assert.equal(page.document.getElementById('detalheTitulo').textContent, 'Sorteio de 31/08/2026');
   const tbody = page.document.getElementById('detalheTable').children[1];
-  assert.deepEqual(tbody.children.map(l => l.children[1].textContent), ['202600029000999'],
+  assert.deepEqual(tbody.children.map(l => l.children[1].textContent), ['000000000000999'],
     'a resposta da rodada abandonada não pode reescrever o card');
 });
 
@@ -3225,15 +3219,15 @@ test('ata do CJ lista Ordem, Nº do Processo e o RELATOR — não o código da c
   assert.doesNotMatch(texto, /<w:t[^>]*>Assunto<\/w:t>/, 'a ata oficial não tem essa coluna');
   assert.doesNotMatch(texto, /<w:t[^>]*>Defesa<\/w:t>/);
   // processosCj[0].destino é 'CJ3' (a cadeira); quem aparece na ata é
-  // 'Dorivan de Souza Lima', o responsável pela cadeira na data do sorteio.
-  assert.match(texto, /Dorivan de Souza Lima/);
+  // o responsável pela cadeira (CADEIRAS_CJ) na data do sorteio.
+  assert.match(texto, new RegExp(CADEIRAS_CJ.CJ3));
   assert.doesNotMatch(texto, /<w:t[^>]*>CJ3<\/w:t>/, 'a ata do CJ não mostra o código da cadeira');
 });
 
 test('ata do CREG lista Interessado e Unidade, sem agrupar quando é um recorte só', async () => {
   const page = historicoPage(async () => [], 'creg');
   const processos = [
-    { ordem: 1, num_processo: '202600029000792', destino: 'CREG3', interessado: 'Concessionária X' }
+    { ordem: 1, num_processo: '000000000000792', destino: 'CREG3', interessado: 'Concessionária X' }
   ];
   const texto = new TextDecoder().decode(new Uint8Array(
     await page.criarDocxDetalhe(processos, '2026-08-27').arrayBuffer()));
@@ -3283,9 +3277,9 @@ test('ata do CREG põe a linha sem ordem no fim do grupo, como a tela e a RPC', 
 test('ata do CJ mantém a ordem de sorteio, sem agrupar por relator', async () => {
   const page = historicoPage(async () => [], 'cj');
   const processos = [
-    { ordem: 1, num_processo: 'P1', destino: 'CJ3', responsavel: 'Dorivan de Souza Lima' },
-    { ordem: 2, num_processo: 'P2', destino: 'CJ1', responsavel: 'Paulo Otoni Ribeiro' },
-    { ordem: 3, num_processo: 'P3', destino: 'CJ3', responsavel: 'Dorivan de Souza Lima' }
+    { ordem: 1, num_processo: 'P1', destino: 'CJ3', responsavel: CADEIRAS_CJ.CJ3 },
+    { ordem: 2, num_processo: 'P2', destino: 'CJ1', responsavel: CADEIRAS_CJ.CJ1 },
+    { ordem: 3, num_processo: 'P3', destino: 'CJ3', responsavel: CADEIRAS_CJ.CJ3 }
   ];
   const texto = new TextDecoder().decode(new Uint8Array(
     await page.criarDocxDetalhe(processos, '2026-09-28').arrayBuffer()));
@@ -3421,7 +3415,7 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
 
 const SESSOES = [{ data_sessao: '2026-07-09', pauta: 24, processos: 2, pendentes: 1 }];
 const PROCESSOS_SESSAO = [
-  { id: 41, num_processo: '202600000000001', pauta: 24, voto: 'Manter', status: 'Julgado',
+  { id: 41, num_processo: '000000000000001', pauta: 24, voto: 'Manter', status: 'Julgado',
     destino: 'CJ3', data_distribuicao: '2026-06-18', acervo_id: 7,
     atualizado_por: null, atualizado_em: null }
 ];
@@ -3431,7 +3425,7 @@ const PROCESSOS_ACERVO = [
   // `decisao` é o texto que a tabela mostra (com o legado de `recurso` quando a
   // defesa é nula) e `defesa` é a coluna booleana que o formulário edita: são
   // duas colunas da resposta, e confundi-las era o defeito.
-  { id: 7, ordem: 1, num_processo: '202600000000001', destino: 'CJ3',
+  { id: 7, ordem: 1, num_processo: '000000000000001', destino: 'CJ3',
     assunto: 'Auto de Infração', decisao: 'Sim', defesa: true, interessado: null,
     origem: 'sorteio', julgados: 1 }
 ];
@@ -3458,7 +3452,7 @@ function apiDoPainel(chamadas, respostas = {}) {
     if (caminho === 'rpc/admin_processos_acervo') return PROCESSOS_ACERVO;
     if (caminho === 'rpc/admin_meta_45') return META_45;
     if (caminho === 'rpc/admin_julgados_do_acervo') {
-      return [{ id: 41, num_processo: '202600000000001', data_sessao: '2026-07-09',
+      return [{ id: 41, num_processo: '000000000000001', data_sessao: '2026-07-09',
                 pauta: 24, voto: 'Manter', status: 'Julgado', destino: 'CJ3',
                 data_distribuicao: '2026-06-18' }];
     }
@@ -3576,11 +3570,11 @@ test('a meta de 45 dias agrupa os meses e deixa o prazo nao aferivel fora do per
 test('cada contagem da meta abre o card so com os julgados dela', async () => {
   const chamadas = [];
   const PERIODO = [
-    { num_processo: '202600000000003', destino: 'CJ2', data_distribuicao: '2026-01-05',
+    { num_processo: '000000000000003', destino: 'CJ2', data_distribuicao: '2026-01-05',
       data_sessao: '2026-03-26', dias: 80, meta_45: false },
-    { num_processo: '202600000000001', destino: 'CJ3', data_distribuicao: '2026-02-02',
+    { num_processo: '000000000000001', destino: 'CJ3', data_distribuicao: '2026-02-02',
       data_sessao: '2026-03-12', dias: 38, meta_45: true },
-    { num_processo: '202600000000002', destino: 'CJ4', data_distribuicao: null,
+    { num_processo: '000000000000002', destino: 'CJ4', data_distribuicao: null,
       data_sessao: '2026-02-19', dias: null, meta_45: null }
   ];
   const page = adminPage({ api: apiDoPainel(chamadas, { 'rpc/admin_meta_45_processos': PERIODO }) });
@@ -3606,7 +3600,7 @@ test('cada contagem da meta abre o card so com os julgados dela', async () => {
   assert.equal(doc.getElementById('detalheResumo').textContent,
     'Câmara de Julgamento · 1 julgado · sessões de 01/01/2026 a 30/04/2026');
   const corpo = doc.getElementById('detalheTable').children[1];
-  assert.deepEqual(corpo.children.map(tr => tr.children[0].textContent), ['202600000000003']);
+  assert.deepEqual(corpo.children.map(tr => tr.children[0].textContent), ['000000000000003']);
 
   primeiro.children[1].children[0].dispatch('click');
   await wait();
@@ -3969,7 +3963,7 @@ test('o numero do processo e corrigivel de dentro da sessao, com escopo', async 
   await wait();
 
   page.acao(0, 'Corrigir número').dispatch('click');
-  page.campo('num_novo').value = '202600000009999';
+  page.campo('num_novo').value = '000000000009999';
   page.campo('escopo').value = 'tudo';
   page.form.dispatch('submit');
   await wait();
@@ -3977,8 +3971,8 @@ test('o numero do processo e corrigivel de dentro da sessao, com escopo', async 
   await wait();
 
   const gravacao = chamadas.find(c => c.caminho === 'rpc/admin_corrigir_processo_cj');
-  assert.equal(gravacao.corpo.p_num_atual, '202600000000001');
-  assert.equal(gravacao.corpo.p_num_novo, '202600000009999');
+  assert.equal(gravacao.corpo.p_num_atual, '000000000000001');
+  assert.equal(gravacao.corpo.p_num_novo, '000000000009999');
   assert.equal(gravacao.corpo.p_escopo, 'tudo');
 });
 
@@ -4213,9 +4207,9 @@ test('dentro de uma sessao ou distribuicao a pesquisa filtra por numero do proce
   const page = adminPage({
     api: apiDoPainel([], {
       'rpc/admin_processos_sessao': [
-        { id: 41, num_processo: '202600000000001', pauta: 24, voto: null, status: null,
+        { id: 41, num_processo: '000000000000001', pauta: 24, voto: null, status: null,
           destino: null, data_distribuicao: null, acervo_id: null, atualizado_por: null, atualizado_em: null },
-        { id: 42, num_processo: '202600000000099', pauta: 24, voto: null, status: null,
+        { id: 42, num_processo: '000000000000099', pauta: 24, voto: null, status: null,
           destino: null, data_distribuicao: null, acervo_id: null, atualizado_por: null, atualizado_em: null }
       ]
     })
@@ -4244,10 +4238,10 @@ test('a pesquisa por numero do processo tambem funciona dentro de uma distribuic
   const page = adminPage({
     api: apiDoPainel([], {
       'rpc/admin_processos_acervo': [
-        { id: 7, ordem: 1, num_processo: '202600000000001', destino: 'CJ3',
+        { id: 7, ordem: 1, num_processo: '000000000000001', destino: 'CJ3',
           assunto: 'Auto de Infração', decisao: 'Sim', defesa: true, interessado: null,
           origem: 'sorteio', julgados: 0 },
-        { id: 8, ordem: 2, num_processo: '202600000000099', destino: 'CJ4',
+        { id: 8, ordem: 2, num_processo: '000000000000099', destino: 'CJ4',
           assunto: 'Auto de Infração', decisao: 'Sim', defesa: true, interessado: null,
           origem: 'sorteio', julgados: 0 }
       ]
@@ -4270,7 +4264,7 @@ test('o Conselho usa o proprio vocabulario no formulario', async () => {
   const chamadas = [];
   const page = adminPage({
     api: apiDoPainel(chamadas, {
-      'rpc/admin_processos_acervo': [{ id: 9, ordem: 1, num_processo: '202600000000002',
+      'rpc/admin_processos_acervo': [{ id: 9, ordem: 1, num_processo: '000000000000002',
         destino: 'CREG2', assunto: 'Requerimento', decisao: 'Com recurso',
         interessado: 'Fulano', origem: 'sorteio', julgados: 0 }],
       'rpc/admin_sorteios': [{ data_distribuicao: '2026-06-18', sorteado_em: null,
@@ -4309,7 +4303,7 @@ test('voto longo do Conselho nao vira alteracao inventada', async () => {
   const page = adminPage({
     api: apiDoPainel(chamadas, {
       'rpc/admin_sessoes': [{ data_sessao: '2026-07-09', pauta: 24, processos: 1, pendentes: 0 }],
-      'rpc/admin_processos_sessao': [{ id: 55, num_processo: '202600000000002', pauta: 24,
+      'rpc/admin_processos_sessao': [{ id: 55, num_processo: '000000000000002', pauta: 24,
         voto: 'Indeferimento', status: 'Prejudicado', destino: 'CREG2',
         data_distribuicao: '2026-06-18', acervo_id: 9,
         atualizado_por: null, atualizado_em: null }]
@@ -4534,10 +4528,10 @@ test('a sessao mostra quais julgados estao sem distribuicao vinculada', async ()
   const page = adminPage({
     api: apiDoPainel([], {
       'rpc/admin_processos_sessao': [
-        { id: 41, num_processo: '202600000000001', pauta: 24, voto: 'Manter', status: 'Julgado',
+        { id: 41, num_processo: '000000000000001', pauta: 24, voto: 'Manter', status: 'Julgado',
           destino: 'CJ3', data_distribuicao: '2026-06-18', acervo_id: 7,
           atualizado_por: null, atualizado_em: null },
-        { id: 42, num_processo: '202600000000002', pauta: 24, voto: null, status: null,
+        { id: 42, num_processo: '000000000000002', pauta: 24, voto: null, status: null,
           destino: null, data_distribuicao: null, acervo_id: null,
           atualizado_por: null, atualizado_em: null }
       ]
@@ -4584,7 +4578,7 @@ test('corrigir o numero mostra os registros alcancados e conta os renumerados', 
   await wait();
 
   page.acao(0, 'Corrigir número').dispatch('click');
-  page.campo('num_novo').value = '202600000009999';
+  page.campo('num_novo').value = '000000000009999';
   page.form.dispatch('submit');
   await wait();
 
@@ -4622,7 +4616,7 @@ test('renumerar so os julgados avisa que o vinculo com o acervo cai', async () =
   await wait();
 
   page.acao(0, 'Corrigir número').dispatch('click');
-  page.campo('num_novo').value = '202600000009999';
+  page.campo('num_novo').value = '000000000009999';
   page.campo('escopo').value = 'julgados';
   page.form.dispatch('submit');
   await wait();
@@ -4655,7 +4649,7 @@ test('o escopo da renumeracao e escolhido por frase, e envia o valor do banco', 
     ['Distribuições e julgados', 'Somente as distribuições', 'Somente os julgados']);
 
   escopo.value = 'acervo';
-  page.campo('num_novo').value = '202600000009999';
+  page.campo('num_novo').value = '000000000009999';
   page.form.dispatch('submit');
   await wait();
   page.form.dispatch('submit');
@@ -4671,7 +4665,7 @@ test('a defesa editada vem da coluna armazenada, nao do texto legado', async () 
   const chamadas = [];
   const page = adminPage({
     api: apiDoPainel(chamadas, {
-      'rpc/admin_processos_acervo': [{ id: 7, ordem: 1, num_processo: '202600000000001',
+      'rpc/admin_processos_acervo': [{ id: 7, ordem: 1, num_processo: '000000000000001',
         destino: 'CJ3', assunto: 'Auto de Infração', decisao: 'Sim', defesa: null,
         interessado: null, origem: 'planilha', julgados: 0 }]
     })
@@ -4702,7 +4696,7 @@ test('a auditoria pagina e diz quando ha registros anteriores', async () => {
   const chamadas = [];
   const pagina = tamanho => Array.from({ length: tamanho }, (_, i) => ({
     id: 1000 - i, operacao: 'corrigir_julgado', tabela: 'julgados_cj', registro_id: 41,
-    num_processo: '202600000000001', antes: { voto: 'Manter' }, depois: { voto: 'Anular' },
+    num_processo: '000000000000001', antes: { voto: 'Manter' }, depois: { voto: 'Anular' },
     motivo: null, feito_por: 'admin@goias.gov.br', feito_em: '2026-09-08T12:00:00Z'
   }));
   let primeira = true;
@@ -4741,7 +4735,7 @@ test('cada linha da auditoria diz de qual processo se trata', async () => {
   const page = adminPage({
     api: apiDoPainel([], {
       'rpc/admin_auditoria': [{ id: 1, operacao: 'corrigir_julgado', tabela: 'julgados_cj',
-        registro_id: 3417, num_processo: '202600000000001', antes: { voto: 'Manter' },
+        registro_id: 3417, num_processo: '000000000000001', antes: { voto: 'Manter' },
         depois: { voto: 'Anular' }, motivo: null, feito_por: 'admin@goias.gov.br',
         feito_em: '2026-09-08T12:00:00Z' }]
     })
@@ -4752,7 +4746,7 @@ test('cada linha da auditoria diz de qual processo se trata', async () => {
 
   const registro = page.linhasDaTabela()[0].children.find(c => c.dataset.label === 'Registro');
   assert.deepEqual(registro.children[0].children.map(no => no.textContent),
-    ['Julgado nº 3417', 'processo 202600000000001']);
+    ['Julgado nº 3417', 'processo 000000000000001']);
 });
 
 // Falhar ao trocar de aba deixava o cabeçalho e o data-visao da aba anterior na
@@ -4986,7 +4980,7 @@ test('renumerar so as distribuicoes avisa que o vinculo dos julgados cai', async
   await wait();
 
   page.acao(0, 'Corrigir número').dispatch('click');
-  page.campo('num_novo').value = '202600000009999';
+  page.campo('num_novo').value = '000000000009999';
   page.campo('escopo').value = 'acervo';
   page.form.dispatch('submit');
   await wait();
@@ -5017,7 +5011,7 @@ test('o titulo da lista de impacto diz o que ela lista', async () => {
   const titulo = page.document.getElementById('edicaoImpactoTitulo');
 
   page.acao(0, 'Corrigir número').dispatch('click');
-  page.campo('num_novo').value = '202600000009999';
+  page.campo('num_novo').value = '000000000009999';
   page.form.dispatch('submit');
   await wait();
   assert.equal(titulo.textContent, 'Registros alcançados pela renumeração');
@@ -5036,7 +5030,7 @@ test('o titulo da lista de impacto diz o que ela lista', async () => {
 // A primeira ação do painel que não deixa nada no lugar. O que se persegue: o
 // motivo é exigido nas duas etapas, a lista do que some não pode faltar, cada
 // alcance bate na sua porta, e uma correção aberta depois não herda o vermelho.
-const RESULTADO_EXCLUSAO = { operacao: 'excluir_julgado', num_processo: '202600000000001',
+const RESULTADO_EXCLUSAO = { operacao: 'excluir_julgado', num_processo: '000000000000001',
                              acervo: [], julgados: [41], desvinculados: [] };
 
 async function abrirExclusaoNaSessao(chamadas, respostas = {}) {
@@ -5075,7 +5069,7 @@ test('excluir e a ultima acao da linha e diz de qual processo', async () => {
       .find(c => c.dataset.label === 'Ações').children[0].children;
     const ultimo = botoes.at(-1);
     assert.equal(ultimo.textContent, 'Excluir', abrir);
-    assert.equal(ultimo.getAttribute('aria-label'), 'Excluir processo 202600000000001', abrir);
+    assert.equal(ultimo.getAttribute('aria-label'), 'Excluir processo 000000000000001', abrir);
     assert.ok(ultimo.classList.contains('admin-acao-perigo'), abrir);
   }
 });
@@ -5129,7 +5123,7 @@ test('excluir so o julgado chama a porta do julgado e diz o que continua', async
   await wait();
   const gravacao = chamadas.find(c => c.caminho === 'rpc/admin_excluir_julgado_cj');
   assert.deepEqual(gravacao.corpo, { p_id: 41, p_motivo: 'importado em duplicidade' });
-  assert.equal(page.avisos.at(-1).texto, 'Exclusão gravada: 1 julgado do processo 202600000000001.');
+  assert.equal(page.avisos.at(-1).texto, 'Exclusão gravada: 1 julgado do processo 000000000000001.');
   assert.equal(page.avisos.at(-1).tipo, 'sucesso');
 });
 
@@ -5158,7 +5152,7 @@ test('excluir so a distribuicao avisa quem ficou sem vinculo', async () => {
   const chamadas = [];
   const page = await abrirExclusaoNaDistribuicao(chamadas, {
     'rpc/admin_excluir_distribuicao_cj': {
-      operacao: 'excluir_distribuicao', num_processo: '202600000000001',
+      operacao: 'excluir_distribuicao', num_processo: '000000000000001',
       acervo: [7], julgados: [], desvinculados: [41]
     }
   });
@@ -5174,7 +5168,7 @@ test('excluir so a distribuicao avisa quem ficou sem vinculo', async () => {
   assert.ok(chamadas.some(c => c.caminho === 'rpc/admin_excluir_distribuicao_cj' && c.corpo.p_id === 7));
   assert.equal(page.avisos.at(-1).tipo, 'atencao');
   assert.match(page.avisos.at(-1).texto,
-    /^Exclusão gravada: 1 distribuição do processo 202600000000001\. 1 julgado ficou sem distribuição vinculada/);
+    /^Exclusão gravada: 1 distribuição do processo 000000000000001\. 1 julgado ficou sem distribuição vinculada/);
 });
 
 test('falha ao listar o alcance impede a revisao da exclusao', async () => {
@@ -5240,8 +5234,8 @@ test('auditoria mostra o que o registro excluido guardava', async () => {
     api: apiDoPainel([], {
       'rpc/admin_auditoria': [{
         id: 9, operacao: 'excluir_julgado', tabela: 'julgados_cj', registro_id: 41,
-        num_processo: '202600000000001',
-        antes: { id: 41, num_processo: '202600000000001', data_sessao: '2026-07-09', pauta: 24,
+        num_processo: '000000000000001',
+        antes: { id: 41, num_processo: '000000000000001', data_sessao: '2026-07-09', pauta: 24,
                  voto: 'Manter', status: 'Julgado', relator: 'CJ3', dias_dt: 21, periodo_dt: '3T26',
                  acervo_id: 7, criado_em: '2026-07-09T12:00:00Z' },
         depois: {}, motivo: 'duplicado', feito_por: 'admin@goias.gov.br',

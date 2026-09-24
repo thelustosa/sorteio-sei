@@ -51,13 +51,13 @@
       { data_sessao: '2026-07-23', pauta: 26, processos: 12, pendentes: 0 }
     ];
     const PROCESSOS = [
-      { id: 41, num_processo: '202600029002147', pauta: 32, voto: null, status: null, destino: null, data_distribuicao: '2026-08-18', acervo_id: 7, atualizado_por: null, atualizado_em: null },
-      { id: 42, num_processo: '202600029002154', pauta: 32, voto: null, status: null, destino: null, data_distribuicao: '2026-08-18', acervo_id: 8, atualizado_por: null, atualizado_em: null },
-      { id: 43, num_processo: '202600029002155', pauta: 32, voto: null, status: null, destino: null, data_distribuicao: '2026-08-18', acervo_id: 9, atualizado_por: null, atualizado_em: null },
-      { id: 44, num_processo: '202600029002203', pauta: 32, voto: null, status: null, destino: 'CJ5', data_distribuicao: '2026-08-25', acervo_id: 10, atualizado_por: null, atualizado_em: null },
-      { id: 45, num_processo: '202600029002240', pauta: 32, voto: null, status: null, destino: 'CJ3', data_distribuicao: '2026-08-25', acervo_id: 11, atualizado_por: null, atualizado_em: null },
-      { id: 46, num_processo: '202600029002243', pauta: 32, voto: null, status: null, destino: 'CJ2', data_distribuicao: '2026-08-25', acervo_id: 12, atualizado_por: null, atualizado_em: null },
-      { id: 47, num_processo: '202600029002306', pauta: 32, voto: 'Manter', status: 'Julgado', destino: 'CJ3', data_distribuicao: '2026-08-25', acervo_id: 13, atualizado_por: 'sec-agr@goias.gov.br', atualizado_em: '2026-09-03T17:42:00-03:00' }
+      { id: 41, num_processo: '000000000002147', pauta: 32, voto: null, status: null, destino: null, data_distribuicao: '2026-08-18', acervo_id: 7, atualizado_por: null, atualizado_em: null },
+      { id: 42, num_processo: '000000000002154', pauta: 32, voto: null, status: null, destino: null, data_distribuicao: '2026-08-18', acervo_id: 8, atualizado_por: null, atualizado_em: null },
+      { id: 43, num_processo: '000000000002155', pauta: 32, voto: null, status: null, destino: null, data_distribuicao: '2026-08-18', acervo_id: 9, atualizado_por: null, atualizado_em: null },
+      { id: 44, num_processo: '000000000002203', pauta: 32, voto: null, status: null, destino: 'CJ5', data_distribuicao: '2026-08-25', acervo_id: 10, atualizado_por: null, atualizado_em: null },
+      { id: 45, num_processo: '000000000002240', pauta: 32, voto: null, status: null, destino: 'CJ3', data_distribuicao: '2026-08-25', acervo_id: 11, atualizado_por: null, atualizado_em: null },
+      { id: 46, num_processo: '000000000002243', pauta: 32, voto: null, status: null, destino: 'CJ2', data_distribuicao: '2026-08-25', acervo_id: 12, atualizado_por: null, atualizado_em: null },
+      { id: 47, num_processo: '000000000002306', pauta: 32, voto: 'Manter', status: 'Julgado', destino: 'CJ3', data_distribuicao: '2026-08-25', acervo_id: 13, atualizado_por: 'secretaria.demo@exemplo.invalid', atualizado_em: '2026-09-03T17:42:00-03:00' }
     ];
     const SORTEIOS = [
       { data_distribuicao: '2026-09-01', sorteado_em: '2026-09-01T10:34:00-03:00', origem: 'sorteio', processos: 16, destinos: ['CJ1', 'CJ2', 'CJ3', 'CJ4'] },
@@ -65,14 +65,14 @@
       { data_distribuicao: '2026-08-20', sorteado_em: null, origem: 'ata', processos: 4, destinos: ['CJ2', 'CJ4'] }
     ];
     const ACERVO = [
-      { id: 7, ordem: 1, num_processo: '202600000000001', destino: 'CJ3', assunto: 'Auto de Infração', decisao: 'Com defesa', origem: 'sorteio', julgados: 1 },
-      { id: 8, ordem: 2, num_processo: '202600000000128', destino: 'CJ1', assunto: 'Recurso administrativo', decisao: 'Sem defesa', origem: 'sorteio', julgados: 0 },
-      { id: 9, ordem: 3, num_processo: '202600000000244', destino: 'CJ4', assunto: 'Fiscalização de serviços', decisao: 'Com defesa', origem: 'sorteio', julgados: 2 }
+      { id: 7, ordem: 1, num_processo: '000000000000001', destino: 'CJ3', assunto: 'Auto de Infração', decisao: 'Com defesa', origem: 'sorteio', julgados: 1 },
+      { id: 8, ordem: 2, num_processo: '000000000000128', destino: 'CJ1', assunto: 'Recurso administrativo', decisao: 'Sem defesa', origem: 'sorteio', julgados: 0 },
+      { id: 9, ordem: 3, num_processo: '000000000000244', destino: 'CJ4', assunto: 'Fiscalização de serviços', decisao: 'Com defesa', origem: 'sorteio', julgados: 2 }
     ];
     const AUDITORIA = [
-      { feito_em: '2026-09-08T10:22:00-03:00', operacao: 'corrigir_julgado', tabela: 'julgados_cj', registro_id: 41, antes: { voto: 'Vista' }, depois: { voto: 'Manter' }, motivo: 'Ata da sessão confirma o voto', feito_por: 'sec-agr@goias.gov.br' },
-      { feito_em: '2026-09-07T15:40:00-03:00', operacao: 'redistribuir', tabela: 'acervo_cj', registro_id: 8, antes: { relator: 'CJ3' }, depois: { relator: 'CJ1' }, motivo: 'Impedimento registrado', feito_por: 'lucas.coelho@goias.gov.br' },
-      { feito_em: '2026-09-06T09:18:00-03:00', operacao: 'corrigir_processo', tabela: 'acervo_cj', registro_id: 7, antes: { num_processo: '202600000000010' }, depois: { num_processo: '202600000000001' }, motivo: 'Correção de digitação', feito_por: 'sec-agr@goias.gov.br' }
+      { feito_em: '2026-09-08T10:22:00-03:00', operacao: 'corrigir_julgado', tabela: 'julgados_cj', registro_id: 41, antes: { voto: 'Vista' }, depois: { voto: 'Manter' }, motivo: 'Ata da sessão confirma o voto', feito_por: 'secretaria.demo@exemplo.invalid' },
+      { feito_em: '2026-09-07T15:40:00-03:00', operacao: 'redistribuir', tabela: 'acervo_cj', registro_id: 8, antes: { relator: 'CJ3' }, depois: { relator: 'CJ1' }, motivo: 'Impedimento registrado', feito_por: 'usuario.demo@exemplo.invalid' },
+      { feito_em: '2026-09-06T09:18:00-03:00', operacao: 'corrigir_processo', tabela: 'acervo_cj', registro_id: 7, antes: { num_processo: '000000000000010' }, depois: { num_processo: '000000000000001' }, motivo: 'Correção de digitação', feito_por: 'secretaria.demo@exemplo.invalid' }
     ];
     const META_45 = [
       { ano: 2026, mes: 6, julgados: 28, dentro: 28, fora: 0, sem_prazo: 0 },
@@ -104,9 +104,9 @@
       // ninguém vê em produção.
       win.rotularCadeira = (elemento, cadeira) => {
         const nomes = {
-          CJ1: 'Marcelo Ferreira Sabino', CJ2: 'Deusdete Cardoso Belém',
-          CJ3: 'Dorivan de Souza Lima', CJ4: 'Paulo Henrique Oliveira Marques',
-          CJ5: 'Lorena Patricia de Oliveira'
+          CJ1: 'Fulano de Tal', CJ2: 'Beltrano de Tal',
+          CJ3: 'Sicrano de Tal', CJ4: 'Fulana de Souza',
+          CJ5: 'Beltrana de Souza'
         };
         const nome = nomes[cadeira];
         if (!nome) return elemento;
