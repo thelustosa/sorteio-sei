@@ -87,6 +87,19 @@ tbody.addEventListener('change', event => {
 });
 
 function registrarAlteracao(select) {
+  if (select.closest('.col-status')) {
+    // Uma escolha explícita prevalece sobre as próximas sugestões do voto.
+    select.dataset.statusAutomatico = 'false';
+  } else if (select.closest('.col-voto') && select.value) {
+    const status = select.closest('tr').querySelector('.col-status select');
+    if (status.dataset.statusAutomatico !== 'false') {
+      status.value = select.value === 'Retirado' || select.value === 'Vista'
+        ? select.value : 'Julgado';
+      status.dataset.statusAutomatico = 'true';
+      status.classList.remove('placeholder-select');
+    }
+  }
+
   select.classList.toggle('placeholder-select', !select.value);
 
   const tr = select.closest('tr');

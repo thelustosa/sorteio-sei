@@ -1121,6 +1121,70 @@ test('CREG identifica assunto ainda ausente no cadastro', () => {
   assert.equal(page.tbody.children[0].children[2].textContent, 'Não informado');
 });
 
+test('voto sugere status na CJ e no CREG sem impedir ajuste manual', async () => {
+  for (const colegiado of ['cj', 'creg']) {
+    let enviado;
+    const page = julgadosPage(async (path, options) => {
+      if (path.startsWith('rpc/registrar_votos')) {
+        enviado = JSON.parse(options.body).itens;
+        return 3;
+      }
+      return [];
+    }, colegiado);
+    page.pendentesPorPauta.set('1|2026-08-21', [
+      { id: 1, num_processo: '123', relator: 'CJ1', unidade: 'CREG1', voto: null, status: null },
+      { id: 2, num_processo: '456', relator: 'CJ2', unidade: 'CREG2', voto: null, status: 'Retirado' },
+      { id: 3, num_processo: '789', relator: 'CJ3', unidade: 'CREG3', voto: null, status: null },
+      { id: 4, num_processo: '987', relator: 'CJ4', unidade: 'CREG4', voto: null, status: null }
+    ]);
+    page.abrirPauta('1|2026-08-21');
+
+    const primeira = page.tbody.children[0];
+    const voto = primeira.querySelector('.col-voto select');
+    const status = primeira.querySelector('.col-status select');
+    const escolherVoto = valor => {
+      voto.value = valor;
+      page.tbody.dispatch('change', { target: voto });
+    };
+
+    escolherVoto(colegiado === 'creg' ? 'Aprovação' : 'Manter');
+    assert.equal(status.value, 'Julgado');
+    escolherVoto('Vista');
+    assert.equal(status.value, 'Vista');
+    escolherVoto('Retirado');
+    assert.equal(status.value, 'Retirado');
+
+    status.value = colegiado === 'creg' ? 'Sobrestado' : 'Retornou';
+    page.tbody.dispatch('change', { target: status });
+    escolherVoto('Anular');
+    assert.equal(status.value, colegiado === 'creg' ? 'Sobrestado' : 'Retornou');
+
+    const segunda = page.tbody.children[1];
+    const votoComStatusExistente = segunda.querySelector('.col-voto select');
+    votoComStatusExistente.value = 'Vista';
+    page.tbody.dispatch('change', { target: votoComStatusExistente });
+    assert.equal(segunda.querySelector('.col-status select').value, 'Vista');
+
+    const terceira = page.tbody.children[2];
+    const statusManualAntes = terceira.querySelector('.col-status select');
+    statusManualAntes.value = colegiado === 'creg' ? 'Sobrestado' : 'Retornou';
+    page.tbody.dispatch('change', { target: statusManualAntes });
+    const votoDepois = terceira.querySelector('.col-voto select');
+    votoDepois.value = 'Manter';
+    page.tbody.dispatch('change', { target: votoDepois });
+    assert.equal(statusManualAntes.value, colegiado === 'creg' ? 'Sobrestado' : 'Retornou');
+
+    await page.salvar();
+    assert.deepEqual(enviado, [
+      { id: 1, anterior: { voto: null, status: null },
+        voto: 'Anular', status: colegiado === 'creg' ? 'Sobrestado' : 'Retornou' },
+      { id: 2, anterior: { voto: null, status: 'Retirado' }, voto: 'Vista', status: 'Vista' },
+      { id: 3, anterior: { voto: null, status: null },
+        voto: 'Manter', status: colegiado === 'creg' ? 'Sobrestado' : 'Retornou' }
+    ]);
+  }
+});
+
 test('CJ e CREG enviam só o campo editado e preservam a tela após conflito', async () => {
   for (const colegiado of ['cj', 'creg']) {
     let enviado, rota;
@@ -1170,6 +1234,8 @@ test('preenche em massa só o que está em branco e marca a linha para salvar', 
   page.tbody.dispatch('change', { target: excecao });
 
   page.document.getElementById('btnTodosManter').click();
+  assert.equal(page.tbody.children[0].querySelector('.col-status select').value, 'Julgado');
+  assert.equal(page.tbody.children[1].querySelector('.col-status select').value, 'Julgado');
   page.document.getElementById('btnTodosJulgado').click();
 
   assert.equal(page.tbody.children[0].querySelector('.col-voto select').value, 'Manter');
