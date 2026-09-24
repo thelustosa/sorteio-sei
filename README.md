@@ -12,6 +12,14 @@ Acesse a aplicação online em: [https://thelustosa.github.io/sorteio-sei/](http
 
 ### Apresentação Visual do Sistema (Capturas em 1920×1080)
 
+> **Dados fictícios.** O repositório é público, então as capturas abaixo foram
+> geradas com massa de demonstração: os números de processo são sequências de 15
+> dígitos zerados (`000000000000001`), que não correspondem a nenhum processo SEI;
+> os nomes de conselheiro (`Fulano de Tal`, `Beltrano de Tal`, …), de interessado
+> (`Alfa Serviços Ltda.`, …) e de usuário (`usuario.demo@exemplo.invalid`) são
+> inventados. A interface, o CSS e os renderizadores são os de produção — só o
+> dado foi substituído.
+
 | Tela de Início / Menu de Serviços | Sorteador de Processos (Modo CREG) |
 | :---: | :---: |
 | ![Tela de Início](assets/img/screenshot_start.png) | ![Interface do Sorteador CREG](assets/img/screenshot.png) |
@@ -57,7 +65,7 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 - **Regras Específicas por Colegiado**:
   - **Câmara de Julgamento (CJ)**: todo processo é Auto de Infração (campo pré-fixado e travado, eliminando erro de digitação); a 5ª coluna registra se houve **Defesa** (Sim/Não) — dado herdado pelos julgamentos do acervo; os destinos correspondem às cadeiras `CJ1`..`CJ5`, mapeadas para os conselheiros relatores via `cadeiras_cj`.
     - **Regra da CJ1**: Processos com **Defesa = "Não"** não participam do sorteio: vão sempre para a `CJ1`, que recebe exclusivamente o lote de homologação de auto de infração. Os processos com defesa são sorteados igualitariamente entre as demais cadeiras (`CJ2`..`CJ5`). A pill da `CJ1` permanece visível, mas fixa (não pode ser excluída); um lote composto unicamente por processos sem defesa é distribuído diretamente mesmo com `CJ2`..`CJ5` excluídas.
-    - **Identificação dos Relatores**: Ao concluir o sorteio, a tela de resultados exibe cada cadeira acompanhada do nome oficial do respectivo conselheiro relator (`CJ1 — Paulo Otoni Ribeiro`, `CJ2 — Deusdete Cardoso Belém`, `CJ3 — Dorivan de Souza Lima`, `CJ4 — Paulo Henrique Oliveira Marques`, `CJ5 — Lorena Patricia de Oliveira`).
+    - **Identificação dos Relatores**: Ao concluir o sorteio, a tela de resultados exibe cada cadeira acompanhada do nome do respectivo conselheiro relator — `CJ1 — <conselheiro>`, `CJ2 — <conselheiro>` e assim por diante. A composição vem da tabela `cadeiras_cj` do banco; este repositório é público, então as capturas de tela e os exemplos desta documentação usam nomes fictícios (`Fulano de Tal`, `Beltrano de Tal`, …) em lugar dos nomes reais.
     - **Decisões em Sessão**: A secretaria registra o voto entre as opções homologadas (`Manter`, `Anular`, `Vista` e `Retirado`) e o status (`Julgado`, `Retornou`, `Retirado` e `Vista`).
   - **Conselho Regulador (CREG)**: 11 assuntos disponíveis; **Travamento de Recurso Inteligente** que define automaticamente o campo como "Não se aplica" e o desabilita caso o assunto selecionado não seja "Auto de Infração"; campo específico para identificação do **Interessado**; os destinos correspondem às unidades `CREG1`..`CREG4` (mantidas sem vinculação nominal pública de ocupantes por solicitação do colegiado). O sistema calcula automaticamente os indicadores `meta_45`, `dias_dist_cr_cj` e `em_relacao_cj`.
 - **Exportação da Ata em Word**: geração automática da ata de distribuição em formato Word (`.doc`), nomeada dinamicamente (`Sorteio_CREG_DD.MM.AAAA.doc` ou `Sorteio_CJ_DD.MM.AAAA.doc`). A ata traz cabeçalho institucional e as mesmas colunas da tela — ordem, processo, interessado (se houver), assunto, recurso (ou defesa, na CJ) e unidade sorteada — permitindo conferência da repartição por assunto sem depender do sistema.
