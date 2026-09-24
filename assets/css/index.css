@@ -835,7 +835,7 @@ tbody tr:hover td { background: var(--table-row-hover); }
    dimensiona cada <td> pelo próprio conteúdo — e como VOTOS e STATUS têm
    textos de tamanhos diferentes, os dois <select> saíam com larguras
    diferentes e a borda esquerda de cada coluna ficava desalinhada com o
-   cabeçalho acima. table-layout: fixed trava as quatro larguras.
+   cabeçalho acima. table-layout: fixed trava as larguras.
 
    Nº Processo e Relator têm conteúdo curto (um número ou uma cadeira tipo
    "CJ3"); dar a eles a mesma largura das colunas de Voto/Status sobrava
@@ -849,12 +849,22 @@ tbody tr:hover td { background: var(--table-row-hover); }
 #julgadosTable th,
 #julgadosTable td { text-align: center; }
 
-/* As quatro colunas dividem o espaço em partes iguais. Antes Voto/Status
+/* Na CJ, as quatro colunas dividem o espaço em partes iguais. Antes Voto/Status
    ganhavam 30% para o <select> esticar até a borda — mas agora ele tem
    largura própria (15rem, ver abaixo), e sobrava um vão bem maior ali do
    que ao redor do texto curto de Nº Processo/Relator. Com partes iguais o
    respiro em volta de cada valor fica parecido de coluna a coluna. */
 #julgadosTable th { width: 25%; }
+
+/* O Conselho mostra também o assunto. As colunas de seleção conservam espaço
+   suficiente para os rótulos; em telas menores a tabela rola na moldura. */
+body[data-colegiado="creg"] #julgadosTable { min-width: 1050px; }
+body[data-colegiado="creg"] #julgadosTable th:nth-child(1) { width: 18%; }
+body[data-colegiado="creg"] #julgadosTable th:nth-child(2) { width: 11%; }
+body[data-colegiado="creg"] #julgadosTable th:nth-child(3) { width: 25%; }
+body[data-colegiado="creg"] #julgadosTable th:nth-child(4),
+body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
+#julgadosTable .col-assunto { text-align: center; overflow-wrap: anywhere; }
 
 /* A regra global de select (mais acima) é width: 100% — pensada para campos
    empilhados em formulário. Aqui o <select> esticava até a borda da coluna
@@ -3369,6 +3379,9 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
   #julgadosTable tbody td.col-voto,
   #julgadosTable tbody td.col-status { grid-column: 1 / -1; }
+
+  #julgadosTable tbody td.col-assunto { grid-column: 1 / -1; text-align: start; }
+  body[data-colegiado="creg"] #julgadosTable { min-width: 0; }
 
   #julgadosTable .col-voto select,
   #julgadosTable .col-status select { width: 100%; min-width: 0; }

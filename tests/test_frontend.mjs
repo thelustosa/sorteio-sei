@@ -1087,6 +1087,40 @@ test('julgados revela o conselheiro no hover da cadeira', () => {
   assert.equal(relator(1).title, undefined, 'title repetindo o rótulo é ruído');
 });
 
+test('pauta pendente mostra assunto apenas no CREG', async () => {
+  for (const colegiado of ['creg', 'cj']) {
+    let consulta;
+    const page = julgadosPage(async path => {
+      consulta = path;
+      return [{ id: 1, num_processo: '202600029000315', unidade: 'CREG2',
+        relator: 'CJ2', assunto: 'Auto de Infração', data_sessao: '2026-09-23',
+        pauta: 17, voto: null, status: null }];
+    }, colegiado);
+
+    await page.inicializarJulgados();
+    page.document.getElementById('pautasContainer').children[0].click();
+
+    const linha = page.tbody.children[0];
+    assert.equal(consulta.includes('assunto'), colegiado === 'creg');
+    assert.equal(linha.children.length, colegiado === 'creg' ? 5 : 4);
+    if (colegiado === 'creg') {
+      assert.equal(linha.children[2].textContent, 'Auto de Infração');
+      assert.equal(linha.children[2].dataset.label, 'Assunto');
+    }
+    assert.equal(linha.querySelector('.col-voto select').value, '');
+  }
+});
+
+test('CREG identifica assunto ainda ausente no cadastro', () => {
+  const page = julgadosPage(async () => [], 'creg');
+  page.pendentesPorPauta.set('17|2026-09-23', [
+    { id: 1, num_processo: '202600029000315', unidade: 'CREG2', assunto: null,
+      voto: null, status: null }
+  ]);
+  page.abrirPauta('17|2026-09-23');
+  assert.equal(page.tbody.children[0].children[2].textContent, 'Não informado');
+});
+
 test('CJ e CREG enviam só o campo editado e preservam a tela após conflito', async () => {
   for (const colegiado of ['cj', 'creg']) {
     let enviado, rota;

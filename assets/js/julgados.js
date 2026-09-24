@@ -48,7 +48,8 @@ const COLEGIADOS = {
 
 const COL = COLEGIADOS[document.body.dataset.colegiado] || COLEGIADOS.cj;
 const VOTOS = COL.votos;
-const ROTULOS_DAS_COLUNAS = ['Nº Processo', COL.destino === 'relator' ? 'Relator' : 'Unidade', 'Voto', 'Status'];
+const ROTULOS_DAS_COLUNAS = ['Nº Processo', COL.destino === 'relator' ? 'Relator' : 'Unidade',
+  ...(COL === COLEGIADOS.creg ? ['Assunto'] : []), 'Voto', 'Status'];
 const STATUS = COL.status;
 
 const listaPautas = document.getElementById('listaPautas');
@@ -138,7 +139,7 @@ async function carregarPautas(moverFoco = false) {
   let pendentes;
   try {
     pendentes = await api(
-      `${COL.tabela}?select=id,num_processo,${COL.destino},data_sessao,pauta,voto,status`
+      `${COL.tabela}?select=id,num_processo,${COL.destino},${COL === COLEGIADOS.creg ? 'assunto,' : ''}data_sessao,pauta,voto,status`
       + '&or=(voto.is.null,status.is.null)'
       + '&order=data_sessao.desc,num_processo.asc,id.asc');
   } catch (err) {
@@ -294,7 +295,14 @@ function abrirPauta(chave) {
     status.dataset.valorInicial = status.value;
     tdStatus.appendChild(status);
 
-    tr.append(proc, destino, tdVoto, tdStatus);
+    tr.append(proc, destino);
+    if (COL === COLEGIADOS.creg) {
+      const assunto = document.createElement('td');
+      assunto.className = 'col-assunto';
+      assunto.textContent = j.assunto || 'Não informado';
+      tr.appendChild(assunto);
+    }
+    tr.append(tdVoto, tdStatus);
     // No celular a linha vira ficha e o cabeçalho sai de vista: cada campo
     // leva o próprio rótulo (ver "Tabelas no celular" no CSS).
     ROTULOS_DAS_COLUNAS.forEach((rotulo, i) => { tr.children[i].dataset.label = rotulo; });
