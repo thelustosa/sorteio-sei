@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=0fecd9def5" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=4f907bb49d" />
   <script>
     (function () {
       try {
@@ -35,8 +35,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=0fecd9def5"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=0fecd9def5"></script>
+  <script defer src="assets/js/supabase.min.js?v=4f907bb49d"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=4f907bb49d"></script>
 </head>
 
 <body data-page="julgados-creg" data-colegiado="creg">
@@ -177,6 +177,26 @@
 
     </div>
   </main>
+
+  <dialog id="dialogUnidadeVista" class="vista-dialog" aria-labelledby="tituloUnidadeVista">
+    <form id="formUnidadeVista">
+      <h2 id="tituloUnidadeVista">Destino do pedido de vista</h2>
+      <p id="resumoUnidadeVista"></p>
+      <label for="unidadeDestinoVista">Para qual unidade o processo vai?</label>
+      <select id="unidadeDestinoVista" required autofocus>
+        <option value="" disabled selected>Selecione a unidade</option>
+        <option value="CREG1">CREG1</option>
+        <option value="CREG2">CREG2</option>
+        <option value="CREG3">CREG3</option>
+        <option value="CREG4">CREG4</option>
+      </select>
+      <p id="erroUnidadeVista" class="text-danger" role="alert" hidden>Selecione uma unidade de destino.</p>
+      <div class="vista-dialog-actions">
+        <button id="cancelarUnidadeVista" class="button-secondary" type="button">Cancelar</button>
+        <button type="submit">Confirmar destino</button>
+      </div>
+    </form>
+  </dialog>
 
   <footer class="page-footer">
     <div class="footer-container">

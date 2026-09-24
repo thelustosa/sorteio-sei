@@ -875,6 +875,29 @@ body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
 #julgadosTable .col-voto select,
 #julgadosTable .col-status select { width: 15rem; max-width: 100%; }
 
+.vista-dialog {
+  width: min(28rem, calc(100vw - 2rem));
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: var(--shadow-panel);
+}
+
+.vista-dialog::backdrop { background: rgb(17 39 32 / 45%); }
+.vista-dialog form { display: grid; gap: 12px; padding: 24px; }
+.vista-dialog h2 { margin: 0; color: var(--accent); font-size: var(--text-lg); }
+.vista-dialog p { margin: 0; }
+.vista-dialog label { font-weight: 700; }
+.vista-dialog select { width: 100%; }
+.vista-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+
+@media screen and (max-width: 480px) {
+  .vista-dialog-actions { flex-direction: column-reverse; }
+  .vista-dialog-actions button { width: 100%; }
+}
+
 .button-secondary.button-danger {
   border-color: var(--danger);
   color: var(--danger);
