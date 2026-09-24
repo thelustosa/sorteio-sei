@@ -17,8 +17,9 @@ schema.sql e confere que o banco reproduz as fórmulas da planilha do CREG:
 Requisitos: docker e psycopg2.
 """
 
+import json
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import psycopg2
@@ -90,6 +91,18 @@ def campos(cur, jid, *nomes):
     cur.execute(f"select {', '.join(nomes)} from public.julgados_creg where id = %s",
                 (jid,))
     return cur.fetchone()
+
+
+def retornos(cur, jid):
+    cur.execute("""select id, unidade, data_distribuicao, origem
+                     from public.acervo_creg where retorno_julgado_id = %s""", (jid,))
+    return cur.fetchall()
+
+
+def registrar(cur, itens):
+    cur.execute('select public.registrar_votos_creg(%s::jsonb)',
+                (json.dumps(itens),))
+    return cur.fetchone()[0]
 
 
 def como(cur, papel, sql, args=None):
@@ -712,6 +725,8 @@ def registrar_votos_grava_so_o_que_esta_pendente(cur):
 def voto_vista_exige_destino_valido_e_grava_na_mesma_transacao(cur):
     limpar(cur)
     autenticado(cur)
+    distribuir(cur, '202600029000601', 'CREG1', date(2026, 9, 20))
+    distribuir(cur, '202600029000602', 'CREG2', date(2026, 9, 20))
     primeiro = julgar(cur, '202600029000601', date(2026, 9, 23))
     segundo = julgar(cur, '202600029000602', date(2026, 9, 23))
 
@@ -771,6 +786,165 @@ def voto_vista_exige_destino_valido_e_grava_na_mesma_transacao(cur):
                                         'unidade_vista', null)))""", (segundo,))
     assert campos(cur, segundo, 'voto', 'status', 'unidade_vista') == \
         ('Retirado', 'Retirado', None)
+
+
+@teste
+def vista_retorna_na_unidade_escolhida_no_mesmo_dia_sem_duplicar(cur):
+    limpar(cur)
+    autenticado(cur)
+    hoje = date.today()
+    numero = '202600029000621'
+    original = distribuir(cur, numero, 'CREG2', hoje, assunto='Requerimento')
+    jid = julgar(cur, numero, hoje)
+
+    assert registrar(cur, [{'id': jid, 'voto': 'Vista', 'status': 'Vista',
+                            'unidade_vista': 'CREG4'}]) == 1
+    primeira = retornos(cur, jid)
+    assert len(primeira) == 1
+    assert primeira[0][1:] == ('CREG4', hoje, 'retorno')
+    assert campos(cur, jid, 'acervo_id', 'unidade', 'unidade_vista') == \
+        (original, 'CREG2', 'CREG4')
+    cur.execute('select unidade, assunto from processos_acervo_creg() where num_processo=%s',
+                (numero,))
+    assert cur.fetchall() == [('CREG4', 'Requerimento')]
+    cur.execute("select sum(processos) from resumo_acervo_creg() where unidade='CREG4'")
+    assert cur.fetchone()[0] == 1
+
+    # Reenvio e correção mudam a mesma distribuição de retorno, não criam outra.
+    assert registrar(cur, [{'id': jid, 'voto': 'Vista', 'status': 'Vista',
+                            'unidade_vista': 'CREG4'}]) == 1
+    assert retornos(cur, jid) == primeira
+    assert registrar(cur, [{'id': jid, 'unidade_vista': 'CREG1',
+                            'anterior': {'unidade_vista': 'CREG4'}}]) == 1
+    assert retornos(cur, jid) == [(primeira[0][0], 'CREG1', hoje, 'retorno')]
+    cur.execute('select unidade from processos_acervo_creg() where num_processo=%s',
+                (numero,))
+    assert cur.fetchall() == [('CREG1',)]
+
+    # Rederivar o julgamento não pode vinculá-lo ao retorno que ele mesmo criou.
+    cur.execute('update public.julgados_creg set data_sessao=%s where id=%s',
+                (hoje, jid))
+    assert campos(cur, jid, 'acervo_id', 'unidade') == (original, 'CREG2')
+
+    # Uma correção definitiva desfaz só o retorno, conservando a distribuição
+    # original e o registro do julgamento.
+    assert registrar(cur, [{'id': jid, 'voto': 'Manter', 'status': 'Julgado',
+                            'unidade_vista': None,
+                            'anterior': {'voto': 'Vista', 'status': 'Vista',
+                                         'unidade_vista': 'CREG1'}}]) == 1
+    assert retornos(cur, jid) == []
+    cur.execute('select id from public.acervo_creg where num_processo=%s', (numero,))
+    assert cur.fetchall() == [(original,)]
+    cur.execute('select * from processos_acervo_creg() where num_processo=%s',
+                (numero,))
+    assert cur.fetchall() == []
+
+
+@teste
+def retirado_volta_a_mesma_unidade_e_redistribuicao_posterior_vence(cur):
+    limpar(cur)
+    autenticado(cur)
+    hoje = date.today()
+    ontem = hoje - timedelta(days=1)
+    numero = '202600029000622'
+    original = distribuir(cur, numero, 'CREG3', ontem)
+    jid = julgar(cur, numero, ontem)
+
+    # Voto sem status continua parcial e não retorna até a decisão combinar.
+    assert registrar(cur, [{'id': jid, 'voto': 'Retirado'}]) == 1
+    assert retornos(cur, jid) == []
+    assert registrar(cur, [{'id': jid, 'status': 'Retirado'}]) == 1
+    assert len(retornos(cur, jid)) == 1
+    assert retornos(cur, jid)[0][1:] == ('CREG3', ontem, 'retorno')
+    cur.execute('select id from public.acervo_creg where num_processo=%s order by id',
+                (numero,))
+    assert len(cur.fetchall()) == 2  # mesma data e unidade, eventos distintos
+    cur.execute('select unidade from processos_acervo_creg() where num_processo=%s',
+                (numero,))
+    assert cur.fetchall() == [('CREG3',)]
+
+    novo = distribuir(cur, numero, 'CREG4', hoje)
+    cur.execute('select unidade from processos_acervo_creg() where num_processo=%s',
+                (numero,))
+    assert cur.fetchall() == [('CREG4',)]
+    assert campos(cur, jid, 'acervo_id', 'unidade') == (original, 'CREG3')
+    assert len(retornos(cur, jid)) == 1
+
+    seguinte = julgar(cur, numero, hoje)
+    assert campos(cur, seguinte, 'acervo_id', 'unidade') == (novo, 'CREG4')
+    cur.execute('select * from processos_acervo_creg() where num_processo=%s',
+                (numero,))
+    assert cur.fetchall() == []
+
+
+@teste
+def retorno_inconsistente_recusa_lote_inteiro(cur):
+    limpar(cur)
+    autenticado(cur)
+    hoje = date.today()
+    numeros = ['202600029000623', '202600029000624']
+    for numero in numeros:
+        distribuir(cur, numero, 'CREG2', hoje)
+    primeiro, segundo = [julgar(cur, numero, hoje) for numero in numeros]
+
+    for voto, status in [('Vista', 'Julgado'), ('Retirado', 'Julgado')]:
+        cur.execute('savepoint lote_invalido')
+        try:
+            registrar(cur, [
+                {'id': primeiro, 'voto': 'Manter', 'status': 'Julgado'},
+                {'id': segundo, 'voto': voto, 'status': status,
+                 'unidade_vista': 'CREG4' if voto == 'Vista' else None}
+            ])
+        except psycopg2.Error as exc:
+            assert exc.pgcode == '22023'
+            cur.execute('rollback to savepoint lote_invalido')
+            cur.execute('release savepoint lote_invalido')
+        else:
+            raise AssertionError(f'aceitou {voto} com status {status}')
+        assert campos(cur, primeiro, 'voto', 'status') == (None, None)
+        assert campos(cur, segundo, 'voto', 'status') == (None, None)
+        assert retornos(cur, primeiro) == retornos(cur, segundo) == []
+
+
+@teste
+def historico_nao_cria_retorno_em_correcao_de_metadados(cur):
+    limpar(cur)
+    hoje = date.today()
+    numero = '202600029000625'
+    distribuir(cur, numero, 'CREG2', hoje)
+    jid = julgar(cur, numero, hoje, voto='Retirado', status='Retirado')
+    assert retornos(cur, jid) == []
+
+    # Importacoes antigas nao criam distribuições novas ao corrigir assunto.
+    cur.execute("update public.julgados_creg set assunto='Requerimento',"
+                " atualizado_em=now() where id=%s", (jid,))
+    assert retornos(cur, jid) == []
+
+
+@teste
+def usuario_nao_pode_fabricar_retorno_no_acervo(cur):
+    limpar(cur)
+    autenticado(cur)
+    hoje = date.today()
+    numero = '202600029000626'
+    distribuir(cur, numero, 'CREG2', hoje)
+    jid = julgar(cur, numero, hoje)
+
+    cur.execute('savepoint retorno_fabricado')
+    cur.execute('set local role authenticated')
+    try:
+        cur.execute("""insert into public.acervo_creg
+                       (num_processo, unidade, data_distribuicao, origem,
+                        retorno_julgado_id)
+                       values (%s, 'CREG4', %s, 'retorno', %s)""",
+                    (numero, hoje, jid))
+    except psycopg2.Error as exc:
+        assert exc.pgcode == '42501'
+        cur.execute('rollback to savepoint retorno_fabricado')
+        cur.execute('release savepoint retorno_fabricado')
+    else:
+        raise AssertionError('aceitou retorno fabricado pelo usuario')
+    assert retornos(cur, jid) == []
 
 
 @teste

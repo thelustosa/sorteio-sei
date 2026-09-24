@@ -254,11 +254,21 @@ O Conselho troca duas coisas na tela: a coluna do detalhe mostra a **unidade**
 sem hover de nome, e no lugar do conselheiro entra o **assunto** — que nele
 distingue de verdade, com 12 tipos contra o auto de infração único da Câmara.
 
-`resumo_acervo_creg()` e `processos_acervo_creg(ordem, unidade)` são o espelho
-das funções da Câmara, com as **mesmas oito faixas de tempo** — quem lê os dois
-painéis compara sem traduzir — e a mesma definição de pendente: processo do
-acervo que não aparece em `julgados_creg`, contado uma vez só, na unidade e na
-data da distribuição mais recente.
+`resumo_acervo_creg()` e `processos_acervo_creg(ordem, unidade)` usam as **mesmas
+oito faixas de tempo** da Câmara. Cada processo pendente conta uma vez, na
+unidade e na data da distribuição mais recente. Um julgamento definitivo
+retira o processo do painel. Vista e Retirado criam uma nova distribuição de
+retorno vinculada ao julgamento: Vista usa a unidade escolhida na janela;
+Retirado usa a unidade que levou o processo à sessão. As consultas ignoram o
+julgamento que criou esse retorno, inclusive quando sessão e retorno têm a
+mesma data, mas consideram julgamentos posteriores.
+
+O retorno preserva a distribuição original e o julgamento. O vínculo único com
+o julgamento faz o reenvio e a correção atualizarem o mesmo retorno. Um sorteio
+posterior é outra distribuição histórica; o painel continua contando o
+processo apenas uma vez. A gravação do voto, do status e do retorno ocorre na
+mesma transação. Vista exige status Vista e unidade CREG1..CREG4; Retirado exige
+status Retirado. O banco rejeita uma combinação divergente.
 
 **Não há de-para de unidades no Conselho.** A Câmara tem `cadeiras_cj`, que
 traduz CJ1..CJ5 no nome do conselheiro e aparece no hover do painel. Aqui não:
