@@ -21,13 +21,16 @@ import json
 import sys
 from datetime import date, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import psycopg2
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(RAIZ / 'sincronizacao'))
 import banco           # noqa: E402
 from banco import uma  # noqa: E402
+import sincronizar     # noqa: E402
 
 PG = banco.Postgres('sorteio_sei_creg_test')
 
@@ -875,6 +878,43 @@ def retirado_volta_a_mesma_unidade_e_redistribuicao_posterior_vence(cur):
     cur.execute('select * from processos_acervo_creg() where num_processo=%s',
                 (numero,))
     assert cur.fetchall() == []
+
+
+@teste
+def nova_pauta_usa_retorno_sem_passar_por_sorteio(cur):
+    ontem = date.today() - timedelta(days=1)
+    hoje = date.today()
+    for i, (voto, destino) in enumerate([('Vista', 'CREG4'),
+                                         ('Retirado', 'CREG2')]):
+        limpar(cur)
+        autenticado(cur)
+        numero = f'20260002900063{i}'
+        distribuir(cur, numero, 'CREG2', ontem)
+        primeiro = julgar(cur, numero, ontem)
+        item = {'id': primeiro, 'voto': voto, 'status': voto}
+        if voto == 'Vista':
+            item['unidade_vista'] = destino
+        assert registrar(cur, [item]) == 1
+        retorno = retornos(cur, primeiro)[0][0]
+
+        # A sincronizacao da nova pauta apenas insere outro julgado. Nenhum
+        # sorteio ou nova distribuicao manual acontece entre as sessoes.
+        importados, sem_acervo = sincronizar.gravar_julgados(
+            cur, sincronizar.COLEGIADOS['CREG'],
+            SimpleNamespace(data_sessao=hoje, numero=18), [numero])
+        assert (importados, sem_acervo) == (1, [])
+        cur.execute('select id from public.julgados_creg'
+                    ' where num_processo=%s and data_sessao=%s', (numero, hoje))
+        segundo = cur.fetchone()[0]
+        assert campos(cur, segundo, 'acervo_id', 'unidade') == (retorno, destino)
+        cur.execute('select id from public.acervo_creg where num_processo=%s',
+                    (numero,))
+        assert len(cur.fetchall()) == 2  # original + retorno, sem sorteio novo
+        assert registrar(cur, [{'id': segundo, 'voto': 'Manter',
+                                'status': 'Julgado'}]) == 1
+        cur.execute('select * from processos_acervo_creg() where num_processo=%s',
+                    (numero,))
+        assert cur.fetchall() == []
 
 
 @teste

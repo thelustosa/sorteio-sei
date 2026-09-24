@@ -263,6 +263,11 @@ Retirado usa a unidade que levou o processo à sessão. As consultas ignoram o
 julgamento que criou esse retorno, inclusive quando sessão e retorno têm a
 mesma data, mas consideram julgamentos posteriores.
 
+Quando a AGR inclui o processo em outra pauta, o sincronizador insere um novo
+julgamento e o vincula ao retorno mais recente. Não há novo sorteio nesse
+caminho. O novo julgamento conserva como unidade atual o destino da Vista ou
+a unidade anterior do Retirado.
+
 O retorno preserva a distribuição original e o julgamento. O vínculo único com
 o julgamento faz o reenvio e a correção atualizarem o mesmo retorno. Um sorteio
 posterior é outra distribuição histórica; o painel continua contando o
