@@ -516,7 +516,7 @@ function moldura() {
     definirVisaoTabela('processos-sessao');
     painelBusca.hidden = false;
     buscaRotulo.textContent = 'Pesquisar por número do processo';
-    buscaInput.placeholder = 'Ex.: 202600029002147';
+    buscaInput.placeholder = 'Ex.: 000000000000147';
     buscaInput.value = buscaProcesso;
     return tituloDoPainel(
       `Sessão de ${dataBR(detalhe.data)}${vazio(detalhe.pauta) ? '' : ` · pauta ${detalhe.pauta}`}`,
@@ -527,7 +527,7 @@ function moldura() {
     definirVisaoTabela('processos-sorteio');
     painelBusca.hidden = false;
     buscaRotulo.textContent = 'Pesquisar por número do processo';
-    buscaInput.placeholder = 'Ex.: 202600029002147';
+    buscaInput.placeholder = 'Ex.: 000000000000147';
     buscaInput.value = buscaProcesso;
     return tituloDoPainel(`Distribuição de ${dataBR(detalhe.data)}`,
       'Corrigir alcança também os julgados que copiaram este processo; redistribuir, não.',

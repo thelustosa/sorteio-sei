@@ -8,6 +8,15 @@ O Conselho Regulador (CREG) não está aqui — usou uma tabela de sorteio à pa
 até 27/08/2026, quando ganhou o mesmo par de tabelas — ver
 [FLUXO-CREG.md](FLUXO-CREG.md).
 
+> **Identificadores anonimizados.** Este repositório é público. Os números de
+> processo citados aqui foram substituídos por sequências fictícias de 15 dígitos
+> zerados (`000000000001283`) e os nomes de conselheiro por nomes inventados
+> (`Fulano de Tal`, `Beltrano de Tal`, `Sicrano de Tal`, `Fulana de Souza`,
+> `Beltrana de Souza`). Cada número real tem um substituto próprio, então a
+> narrativa continua distinguindo um caso do outro; o de-para não está no
+> repositório. A composição verdadeira das cadeiras vive na tabela `cadeiras_cj`
+> do banco, com acesso restrito.
+
 > **Reinício em 19/08/2026.** A série de julgados recomeçou nessa data: o
 > histórico importado da planilha saiu das tabelas de produção e ficou guardado
 > no schema `backup_cj`. Dois dias depois, uma carga de recuperação repôs o que
@@ -86,8 +95,8 @@ processos distintos).
 
 ```
 num_processo      relator                    data_distribuicao   origem
-202400029000262   Gilvan do Espírito Santo   2024-04-29          planilha
-202400029000262   Paulo Henrique Marques     2025-11-05          planilha   ← redistribuído
+000000000000262   Sicrano de Tal             2024-04-29          planilha
+000000000000262   Fulana de Souza            2025-11-05          planilha   ← redistribuído
 ```
 
 A chave natural `(num_processo, data_distribuicao, relator)` é o que impede
@@ -155,7 +164,7 @@ meio.
 Todo PDF termina com algo como:
 
 ```
-Referência: Processo nº 202600029000051 SEI 92118842
+Referência: Processo nº 000000000000051 SEI 00000000
 ```
 
 Esse é o processo **do próprio documento** no SEI, não um processo julgado. Ele
@@ -333,7 +342,7 @@ planilha, o equivalente era a fórmula devolver "Não encontrado".
 
 Hoje é raro: depois da carga das atas 015 e 016, em 17/09/2026, 245 dos 246
 julgados de 2026 encontram a distribuição. O único que não encontra é o
-`202600029001283`, da 25ª reunião, cuja distribuição não está em fonte nenhuma —
+`000000000001283`, da 25ª reunião, cuja distribuição não está em fonte nenhuma —
 nem nas atas de sorteio 010 a 016, nem na planilha. Dele se sabe o relator,
 porque a própria pauta o diz; a data da distribuição é que não existe em lugar
 nenhum, e sem ela não há linha de acervo a criar.
@@ -481,7 +490,7 @@ senão não há de onde derivar:
 
 | tabela | fonte | linhas |
 |---|---|---|
-| `acervo_cj` | atas de sorteio 011 a 014/2026 (SEI 202600029000052) | 157 distribuições |
+| `acervo_cj` | atas de sorteio 011 a 014/2026 (SEI 000000000000052) | 157 distribuições |
 | `julgados_cj` | pautas da 21ª à 30ª reunião, lidas pelo mesmo parser do job | 151 julgados |
 | `pautas_cj` | as dez URLs, com título e sha256 | 10 documentos |
 
@@ -493,18 +502,18 @@ O que fica é o que ele decidiu, porque isso vale para as próximas cargas.
 - **Defesa** sai do relator. Em 2026 o lote de homologação de auto de infração
   vai todo para um único relator — é o que as próprias atas anunciam no
   cabeçalho — e é o lote que corre sem defesa. A planilha confirma a regra sem
-  uma exceção nas 518 distribuições do ano: 365 linhas de Paulo Otoni Ribeiro,
-  todas `false`; 153 dos demais, todas `true`. A ata 010/2026 fecha com a
-  planilha nas 32 distribuições que as duas cobrem, relator por relator.
+  uma exceção nas 518 distribuições do ano: 365 linhas de Fulano de Tal, todas
+  `false`; 153 dos demais, todas `true`. A ata 010/2026 fecha com a planilha nas
+  32 distribuições que as duas cobrem, relator por relator.
 
   A regra tem três exceções, e nenhuma é palpite: a pauta da 28ª reunião lista
-  `202600029001899`, `202600029001961` e `202600029000516` sob o rótulo
-  *"Processo sem defesas:"*, dentro de um bloco que não é o do Otoni. Documento
+  `000000000001899`, `000000000001961` e `000000000000516` sob o rótulo
+  *"Processo sem defesas:"*, dentro de um bloco que não é o do Fulano. Documento
   oficial vence heurística, e as três entraram com `defesa = false`.
 - **Voto e status** ficam nulos, pelo motivo de sempre: a pauta é convocação, e
   o resultado da sessão não está no documento.
-- **Grafia do relator** é normalizada para a da planilha (`Belem` → `Belém`,
-  `Sousa` → `Souza`, esta última um erro de digitação numa linha da ata 011).
+- **Grafia do relator** é normalizada para a da planilha: acento faltando no
+  sobrenome e uma troca de letra (um erro de digitação numa linha da ata 011).
   Não é cosmético: `relator` entra na chave única do acervo, e duas grafias
   virariam duas distribuições do mesmo processo.
 
@@ -512,9 +521,9 @@ O que fica é o que ele decidiu, porque isso vale para as próximas cargas.
 
 A pauta agrupa os processos por relator — *"a serem relatados pelo relator X:"*
 — e isso é uma segunda fonte, independente da ata, para o mesmo fato. Cruzando
-as duas: **150 dos 151 julgados batem**. A exceção é o `202600029002208`, que a
-ata 013 sorteou para Paulo Henrique Oliveira Marques em 27/07 e a 28ª reunião
-levou à mesa pela Lorena Patricia de Oliveira em 06/08.
+as duas: **150 dos 151 julgados batem**. A exceção é o `000000000002208`, que a
+ata 013 sorteou para a Fulana de Souza em 27/07 e a 28ª reunião levou à mesa
+pela Beltrana de Souza em 06/08.
 
 Os dois documentos estão certos, cada um sobre o seu fato, e é por isso que o
 banco guarda os dois separados: o acervo registra o **sorteio** e fica com a
@@ -590,7 +599,7 @@ A carga foi feita pelas mesmas regras da de 21/08, direto no banco, num bloco s�
 - **Defesa pela cadeira**, a regra de *Três coisas que a ata de sorteio não
   traz*. Antes de gravar, as pautas da 32ª e da 33ª foram lidas: os 35 órfãos
   batem com a ata 015 relator por relator, e o rótulo *"Processos sem defesa:"*
-  só aparece no bloco do Paulo Otoni Ribeiro. Nenhuma exceção desta vez.
+  só aparece no bloco do Fulano de Tal. Nenhuma exceção desta vez.
 - **Nenhum processo das duas atas** já estava no acervo — não há
   redistribuição nesta carga.
 - **Depois do insert**, o `update` de [`rederivar_cj.sql`](../sql/rederivar_cj.sql)
@@ -680,7 +689,7 @@ duplicatas e 23 são a data arrastada — todos da pauta 17, que o banco pôs em
 28/05/2026, e a AGR confirma. Voto, status e relator batem em todos. As
 diferenças restantes são as correções já descritas: 70 pautas da troca 13/14 de
 março de 2025 e 32 datas de distribuição em que a planilha pegava a maior data,
-posterior à sessão. Sobrava uma sem explicação: `202400029002394` em 18/07/2024
+posterior à sessão. Sobrava uma sem explicação: `000000000002394` em 18/07/2024
 tinha Defesa "Não" na planilha e `true` no banco (as duas distribuições dele
 dizem "Sim"). Corrigida para `false` no mesmo dia, porque a planilha é a base do
 histórico — com isso, planilha e banco concordam em todos os julgados.
@@ -693,10 +702,10 @@ aparições de processo, 3.379 de 3.408 estão no banco. O que diverge:
   de 24/09/2024 (julgados em 03/10). A planilha anotava onde o processo foi
   decidido, não cada vez que foi à pauta. O julgamento está certo; falta só a
   passagem anterior.
-- **2 números com o ano trocado no PDF**: `202300029000185` (04/04/2024) e
-  `202300029004229` (14/11/2024). O banco tem `2024…` com distribuição no
+- **2 números com o ano trocado no PDF**: `000000000000185` (04/04/2024) e
+  `000000000004229` (14/11/2024). O banco tem `2024…` com distribuição no
   acervo; o `2023…` não existe em fonte nenhuma.
-- **1 processo pautado que não está em lugar nenhum**: `202300029005392`, 13ª
+- **1 processo pautado que não está em lugar nenhum**: `000000000005392`, 13ª
   reunião de 26/03/2024 — nem no acervo, nem nos julgados.
 - **7 julgados que nenhuma pauta traz** — 22/02/2024 (2), 11/03/2024,
   05/09/2024, 06/03/2025 (2) e 26/06/2025. Este último está no PDF, mas sem o
@@ -914,7 +923,7 @@ Revisto depois da carga das atas 015 e 016, em 17/09/2026.
   lançadas depois, por carga. Enquanto a ata não entra, cada pauta sincronizada
   grava órfãos, e só o `rederivar_cj.sql` os religa. O banco não tem como saber
   que um sorteio aconteceu; quem sabe é a ata.
-- **Um julgado sem distribuição.** O `202600029001283`, da 25ª reunião
+- **Um julgado sem distribuição.** O `000000000001283`, da 25ª reunião
   (16/07/2026), é o único dos 246 julgados da série sem vínculo com o
   acervo. Ele não está nas atas de sorteio 010 a 016 nem no histórico
   da planilha, que cobre tudo até 10/06 — a mesma data da ata 010, com as mesmas
@@ -923,10 +932,10 @@ Revisto depois da carga das atas 015 e 016, em 17/09/2026.
   segue listado em `pautas_cj.processos_sem_acervo` da 25ª reunião. Aparecendo o
   documento que registra a distribuição, basta inseri-la no acervo e rodar o
   [`rederivar_cj.sql`](../sql/rederivar_cj.sql).
-- **Um processo relatado por quem não o sorteou.** O `202600029002208`: ata 013
-  para Paulo Henrique, 28ª reunião pela Lorena. Está registrado assim de
-  propósito — ver *A pauta confere o acervo* — mas se a troca teve um documento,
-  ela vira uma redistribuição no acervo e o caso fecha.
+- **Um processo relatado por quem não o sorteou.** O `000000000002208`: ata 013
+  para a Fulana, 28ª reunião pela Beltrana. Está registrado assim de propósito —
+  ver *A pauta confere o acervo* — mas se a troca teve um documento, ela vira
+  uma redistribuição no acervo e o caso fecha.
 - **Cadeira × conselheiro — resolvido.** `acervo_cj.relator` guarda a **cadeira**
   (`CJ1`..`CJ5`), e quem ocupa cada uma sai de [`cadeiras_cj`](../sql/schema.sql),
   uma tabela por período. As 345 linhas que traziam nome foram convertidas pela
