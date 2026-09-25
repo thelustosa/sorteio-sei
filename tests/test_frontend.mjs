@@ -1488,7 +1488,7 @@ test('CREG barra antes do envio o par incoerente e o Retirado sem unidade', asyn
   assert.match(avisos.at(-1)[0], /não têm distribuição no acervo: 202600029000324\./);
 });
 
-test('CJ: status Vista pergunta a cadeira e envia cadeira_vista', async () => {
+test('CJ: voto Vista pergunta a cadeira, como no CREG, e envia cadeira_vista', async () => {
   let enviado;
   const page = julgadosPage(async (path, options) => {
     if (path === 'rpc/registrar_votos') {
@@ -1507,23 +1507,29 @@ test('CJ: status Vista pergunta a cadeira e envia cadeira_vista', async () => {
   const form = page.document.getElementById('formUnidadeVista');
   const [primeira, segunda] = page.tbody.children;
 
-  // Pelo status: cancelar volta o status e não marca a linha.
+  // Status sozinho não pergunta: quem decide é o voto.
   const status = primeira.querySelector('.col-status select');
   status.value = 'Vista';
   page.tbody.dispatch('change', { target: status });
+  assert.notEqual(dialog.open, true);
+
+  // Voto Vista pergunta; cancelar volta o voto e não mexe no status.
+  const votoPrimeira = primeira.querySelector('.col-voto select');
+  votoPrimeira.value = 'Vista';
+  page.tbody.dispatch('change', { target: votoPrimeira });
   assert.equal(dialog.open, true);
   assert.match(page.document.getElementById('resumoUnidadeVista').textContent,
     /202600029000801 · cadeira atual: CJ1/);
   page.document.getElementById('cancelarUnidadeVista').click();
-  assert.equal(status.value, '');
-  assert.equal(primeira.dataset.alterada, undefined);
+  assert.equal(votoPrimeira.value, '');
+  assert.equal(status.value, 'Vista');
 
-  status.value = 'Vista';
-  page.tbody.dispatch('change', { target: status });
+  votoPrimeira.value = 'Vista';
+  page.tbody.dispatch('change', { target: votoPrimeira });
   destino.value = 'CJ4';
   form.dispatch('submit');
 
-  // Pelo voto, que sugere o status Vista.
+  // O voto sugere o status Vista.
   const voto = segunda.querySelector('.col-voto select');
   voto.value = 'Vista';
   page.tbody.dispatch('change', { target: voto });
@@ -1535,7 +1541,7 @@ test('CJ: status Vista pergunta a cadeira e envia cadeira_vista', async () => {
   await page.salvar();
   assert.deepEqual(enviado, [
     { id: 1, anterior: { voto: null, status: null, cadeira_vista: null },
-      status: 'Vista', cadeira_vista: 'CJ4' },
+      voto: 'Vista', status: 'Vista', cadeira_vista: 'CJ4' },
     { id: 2, anterior: { voto: null, status: null, cadeira_vista: null },
       voto: 'Vista', status: 'Vista', cadeira_vista: 'CJ3' }
   ]);
@@ -1552,9 +1558,9 @@ test('CJ barra Retirado de processo sem cadeira antes do envio', async () => {
     { id: 1, num_processo: '202600029000803', relator: null, voto: null, status: null }
   ]);
   page.abrirPauta('1|2026-08-21');
-  const status = page.tbody.children[0].querySelector('.col-status select');
-  status.value = 'Retirado';
-  page.tbody.dispatch('change', { target: status });
+  const voto = page.tbody.children[0].querySelector('.col-voto select');
+  voto.value = 'Retirado';
+  page.tbody.dispatch('change', { target: voto });
   await page.salvar();
   assert.equal(enviado, undefined);
   assert.match(avisos.at(-1)[0], /cadeira que o levou.*202600029000803/);

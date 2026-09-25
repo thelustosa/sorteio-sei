@@ -1031,11 +1031,14 @@ def vista_na_camara_volta_na_cadeira_escolhida_sem_duplicar(cur):
                    values (%s, %s) returning id""", (num, hoje))
     jid = cur.fetchone()[0]
 
-    recusa_cj(cur, [{'id': jid, 'status': 'Vista'}], 'cadeira')
-    recusa_cj(cur, [{'id': jid, 'status': 'Vista', 'cadeira_vista': 'CJ9'}], 'fora do permitido')
+    recusa_cj(cur, [{'id': jid, 'voto': 'Vista'}], 'cadeira')
+    recusa_cj(cur, [{'id': jid, 'voto': 'Vista', 'cadeira_vista': 'CJ9'}], 'fora do permitido')
 
-    # O status decide: Vista com o voto ainda em branco já devolve ao acervo.
-    assert registrar(cur, [{'id': jid, 'status': 'Vista', 'cadeira_vista': 'CJ4'}]) == 1
+    # A mesma regra do Conselho: o voto decide e o retorno só nasce com o
+    # status igual. Só o voto é decisão pela metade.
+    assert registrar(cur, [{'id': jid, 'voto': 'Vista', 'cadeira_vista': 'CJ4'}]) == 1
+    assert retornos_cj(cur, jid) == []
+    assert registrar(cur, [{'id': jid, 'status': 'Vista'}]) == 1
     assert retornos_cj(cur, jid) == [('CJ4', hoje, 'retorno')]
     cur.execute('select num_processo, relator from public.processos_acervo_cj() where num_processo = %s',
                 (num,))
@@ -1077,10 +1080,15 @@ def retirado_na_camara_volta_na_mesma_cadeira_e_retornou_nao(cur):
 
     recusa_cj(cur, [{'id': ids[num], 'voto': 'Manter', 'status': 'Retirado'}], num)
     recusa_cj(cur, [{'id': ids[num], 'voto': 'Manter', 'status': 'Julgado'},
-                    {'id': ids[sem_cadeira], 'status': 'Retirado'}], sem_cadeira)
+                    {'id': ids[sem_cadeira], 'voto': 'Retirado', 'status': 'Retirado'}],
+              sem_cadeira)
+
+    # Só o status é decisão pela metade: não volta ainda.
+    assert registrar(cur, [{'id': ids[num], 'status': 'Retirado'}]) == 1
+    assert retornos_cj(cur, ids[num]) == []
 
     # Retirado de pauta antes da sessão: volta à mesma cadeira, com a data de hoje.
-    assert registrar(cur, [{'id': ids[num], 'status': 'Retirado'},
+    assert registrar(cur, [{'id': ids[num], 'voto': 'Retirado'},
                            {'id': ids[retornou], 'voto': 'Manter', 'status': 'Retornou'}]) == 2
     assert retornos_cj(cur, ids[num]) == [('CJ3', hoje, 'retorno')]
     assert retornos_cj(cur, ids[retornou]) == []
