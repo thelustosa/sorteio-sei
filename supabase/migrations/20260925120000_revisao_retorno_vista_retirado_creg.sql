@@ -392,9 +392,13 @@ $$;
 
 
 -- Retirados gravados pela página antes de existir o gatilho de retorno. Vistas
--- antigas ficam de fora: sem unidade_vista não há destino a usar, e cabe à
--- secretaria corrigi-las pelo painel admin. Processo que já voltou a outra
--- sessão não precisa de retorno — o julgado posterior o tiraria do painel.
+-- antigas ficam de fora: sem unidade_vista não há destino a usar.
+--
+-- atualizado_em preenchido NÃO prova que a linha veio da página: a carga de
+-- 28/08/2026 carimbou 167 julgados da planilha, entre eles 16 Retirados de
+-- 2024-2025. O filtro de sessão posterior é o que os deixa de fora. Todos já
+-- voltaram a outra sessão, e por isso em 25/09/2026 este insert não criava
+-- nenhuma linha em produção.
 insert into public.acervo_creg
   (num_processo, unidade, data_distribuicao, assunto, recurso,
    interessado, origem, retorno_julgado_id)

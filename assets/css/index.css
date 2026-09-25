@@ -742,10 +742,6 @@ select.fixed-field:disabled {
 }
 .pill.excluded:hover { background: var(--danger-hover); }
 .pill:active { transform: translateY(1px); }
-/* CJ1 no sorteio da CJ: fica à vista, mas não alterna (recebe só sem defesa). */
-.pill[aria-disabled="true"] { cursor: default; }
-.pill[aria-disabled="true"]:hover { background: var(--accent-soft-strong); }
-.pill[aria-disabled="true"]:active { transform: none; }
 
 /* Tabelas e resultados */
 .table-scroll { overflow-x: auto; overscroll-behavior-inline: contain; }
@@ -3747,7 +3743,7 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
    simples as colunas têm a mesma largura; nos detalhes ela recebe o espaço dos
    três botões sem empurrar os dados para posições imprevisíveis. */
 .admin-table[data-visao='sessoes'] thead th { width: 20%; }
-.admin-table[data-visao='sorteios'] thead th { width: 16.6667%; }
+.admin-table[data-visao='sorteios'] thead th { width: calc(100% / 7); }
 
 /* Os dois detalhes (processos de uma sessão e de uma distribuição) não têm
    largura por coluna: como nos cards de detalhe, cada coluna é o próprio
@@ -3762,11 +3758,7 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-table[data-visao='auditoria'] thead th:nth-child(5) { width: 18%; }
 .admin-table[data-visao='auditoria'] thead th:nth-child(6) { width: 16%; }
 
-/* O layout automático reparte a largura pelo conteúdo, e nisso uma coluna de
-   texto longo pode espremer a vizinha até ela quebrar linha. O piso em `ch` diz
-   quanto cada uma precisa para não quebrar, sem congelar a distribuição das
-   demais — é uma garantia mínima, não uma largura fixa. */
-.admin-table[data-visao='sorteios'] thead th:nth-child(6) { min-width: 18ch; }
+/* Os pisos restantes pertencem à auditoria, que continua com rolagem horizontal. */
 .admin-table[data-visao='auditoria'] thead th:nth-child(4) { min-width: 22ch; }
 .admin-table[data-visao='auditoria'] thead th:last-child { min-width: 20ch; }
 
@@ -3785,7 +3777,7 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   font-variant-numeric: tabular-nums;
 }
 .admin-table[data-visao='sessoes'] { min-width: 660px; }
-.admin-table[data-visao='sorteios'] { min-width: 780px; }
+.admin-table[data-visao='sorteios'] { min-width: 0; }
 .admin-table[data-visao='auditoria'] { min-width: 1080px; }
 
 /* Meta de 45 dias. Os filtros moram no cabeçalho, ao lado do título que eles
@@ -3934,6 +3926,9 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 /* Ausência de registro é ausência, não estado: um travessão dentro de um selo
    parece campo quebrado, e no selo de status herdava ainda a cor de alerta. */
 .admin-table .sem-valor { color: var(--muted); font-variant-numeric: tabular-nums; }
+.admin-table .admin-quem { overflow-wrap: anywhere; font-size: var(--text-xs); }
+.admin-table[data-visao='sorteios'] .admin-acao,
+.admin-table[data-visao='sorteios'] .admin-badge { white-space: normal; }
 
 .admin-acoes { display: flex; flex-wrap: nowrap; justify-content: center; gap: 6px; }
 
@@ -3982,7 +3977,7 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 }
 
 .admin-autoria { display: grid; gap: 2px; }
-.admin-autoria > span:first-child { color: var(--text); }
+.admin-autoria > span:first-child:not(.sem-valor) { color: var(--text); }
 .admin-acao {
   display: inline-flex;
   min-height: 34px;
@@ -4229,6 +4224,7 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
     padding: 12px;
     background: var(--surface-control);
   }
+  .admin-table[data-visao='sorteios'] .admin-quem { font-size: var(--text-base); }
   .admin-table[data-visao]:not([data-visao='auditoria']) thead {
     position: absolute;
     width: 1px;
