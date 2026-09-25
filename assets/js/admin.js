@@ -23,6 +23,9 @@ const VOCABULARIO = {
     campoDestino: 'relator',
     votos: ['Manter', 'Anular', 'Retirado', 'Vista'],
     status: ['Julgado', 'Retornou', 'Retirado', 'Vista'],
+    // Destino da Vista: na Câmara vale com voto OU status Vista.
+    vista: { campo: 'cadeira_vista', destinos: ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'],
+             pedeCom: ['voto', 'status'] },
     assuntoObrigatorio: true,
     temInteressado: false
   },
@@ -35,6 +38,9 @@ const VOCABULARIO = {
     campoDestino: 'unidade',
     votos: ['Manter', 'Anular', 'Aprovação', 'Indeferimento', 'Extinção', 'Retirado', 'Vista'],
     status: ['Julgado', 'Retirado', 'Vista', 'Sobrestado', 'Prejudicado'],
+    // No Conselho o destino só existe com voto Vista.
+    vista: { campo: 'unidade_vista', destinos: ['CREG1', 'CREG2', 'CREG3', 'CREG4'],
+             pedeCom: ['voto'] },
     assuntoObrigatorio: false,
     temInteressado: true
   }
@@ -76,7 +82,8 @@ const CAMPOS_LEGIVEIS = {
   recurso: 'Recurso',
   relator: 'Relator',
   unidade: 'Unidade',
-  unidade_vista: 'Destino da vista'
+  unidade_vista: 'Destino da vista',
+  cadeira_vista: 'Destino da vista'
 };
 
 // De onde veio a linha da distribuição: o valor cru do banco em minúsculas
@@ -1530,12 +1537,14 @@ async function passo(atual) {
 async function abrirCorrecaoDeJulgado(linha) {
   const v = VOCABULARIO[orgao];
   // O destino da Vista não vem em admin_processos_sessao: mudar o retorno dela
-  // quebraria a reaplicação das migrações. Só o voto Vista tem destino.
+  // quebraria a reaplicação das migrações. Só a Vista tem destino.
+  const { campo: campoVista, destinos, pedeCom } = v.vista;
+  const pedeDestino = campos => pedeCom.some(c => campos[c] === 'Vista');
   let unidadeVista = null;
-  if (orgao === 'CREG' && linha.voto === 'Vista') {
+  if (pedeDestino(linha)) {
     try {
-      const [atual] = await api(`julgados_creg?select=unidade_vista&id=eq.${linha.id}`);
-      unidadeVista = atual?.unidade_vista ?? null;
+      const [atual] = await api(`julgados_${v.sufixo}?select=${campoVista}&id=eq.${linha.id}`);
+      unidadeVista = atual?.[campoVista] ?? null;
     } catch (err) {
       aviso('Não foi possível abrir a correção. Tente novamente.', 'erro', err.message);
       return;
@@ -1544,10 +1553,8 @@ async function abrirCorrecaoDeJulgado(linha) {
   const campos = [
     campoSelecao({ nome: 'voto', rotulo: 'Voto', valor: linha.voto, opcoes: v.votos }),
     campoSelecao({ nome: 'status', rotulo: 'Status', valor: linha.status, opcoes: v.status }),
-    ...(orgao === 'CREG'
-      ? [campoSelecao({ nome: 'unidade_vista', rotulo: 'Destino da vista', valor: unidadeVista,
-        opcoes: ['CREG1', 'CREG2', 'CREG3', 'CREG4'], rotuloVazio: '— só com voto Vista —' })]
-      : []),
+    campoSelecao({ nome: campoVista, rotulo: 'Destino da vista', valor: unidadeVista,
+      opcoes: destinos, rotuloVazio: '— só com Vista —' }),
     campoTexto({
       nome: 'data_sessao', rotulo: 'Data da sessão', tipo: 'date', valor: detalhe.data,
       // O `max` é a mesma regra que admin_corrigir_julgado_* aplica no banco.
@@ -1566,7 +1573,7 @@ async function abrirCorrecaoDeJulgado(linha) {
   ];
 
   const original = {
-    voto: linha.voto, status: linha.status, unidade_vista: unidadeVista,
+    voto: linha.voto, status: linha.status, [campoVista]: unidadeVista,
     data_sessao: detalhe.data, pauta: linha.pauta
   };
 
@@ -1594,21 +1601,19 @@ async function abrirCorrecaoDeJulgado(linha) {
       // reescrevia atualizado_por por uma edição que ninguém fez.
       comparar('voto', 'Voto', String);
       comparar('status', 'Status', String);
-      if (orgao === 'CREG') {
-        comparar('unidade_vista', 'Destino da vista', String);
-        // As mesmas regras de julgados_creg_sincronizar_retorno, em português.
-        // Como lá, só valem quando a decisão muda: corrigir a pauta de uma
-        // Vista antiga, sem destino, continua possível.
-        const voto = valorDoCampo('voto');
-        const status = valorDoCampo('status');
-        const decisaoMudou = ['voto', 'status', 'unidade_vista'].some(c => c in alterados);
-        if (decisaoMudou && voto === 'Vista' && !valorDoCampo('unidade_vista')) {
-          throw new Error('Voto Vista exige o destino da vista.');
-        }
-        if (decisaoMudou && voto && status && voto !== status
-            && ['Vista', 'Retirado'].some(r => r === voto || r === status)) {
-          throw new Error('Vista e Retirado exigem voto e status iguais.');
-        }
+      comparar(campoVista, 'Destino da vista', String);
+      // As mesmas regras do gatilho de retorno, em português. Como lá, só
+      // valem quando a decisão muda: corrigir a pauta de uma Vista antiga, sem
+      // destino, continua possível.
+      const voto = valorDoCampo('voto');
+      const status = valorDoCampo('status');
+      const decisaoMudou = ['voto', 'status', campoVista].some(c => c in alterados);
+      if (decisaoMudou && pedeDestino({ voto, status }) && !valorDoCampo(campoVista)) {
+        throw new Error('Vista exige o destino da vista.');
+      }
+      if (decisaoMudou && voto && status && voto !== status
+          && ['Vista', 'Retirado'].some(r => r === voto || r === status)) {
+        throw new Error('Vista e Retirado exigem voto e status iguais.');
       }
       comparar('data_sessao', 'Data da sessão', valor => String(valor).slice(0, 10));
       comparar('pauta', 'Número da pauta', Number);

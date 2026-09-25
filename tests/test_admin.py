@@ -358,6 +358,45 @@ def corrigir_julgado_creg_trata_string_vazia_como_ausencia(cur):
 
 
 @teste
+def corrigir_julgado_cj_grava_a_cadeira_da_vista_e_protege_o_retorno(cur):
+    """Na Câmara quem decide o retorno é o status; a cadeira vem da correção."""
+    _, _, julgado_id = cenario_cj(cur)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    deve_falhar(cur, """select public.admin_corrigir_julgado_cj(
+                          %s, '{"voto":"Vista","status":"Vista"}'::jsonb, null)""",
+                (julgado_id,), codigo='22023')
+    autenticar(cur, 'lucas')
+    cur.execute("""select public.admin_corrigir_julgado_cj(
+                     %s, '{"voto":"Vista","status":"Vista","cadeira_vista":"CJ5"}'::jsonb,
+                     null)""", (julgado_id,))
+    cur.execute('reset role')
+    assert julgado(cur, 'julgados_cj', julgado_id, 'cadeira_vista') == ('CJ5',)
+    retorno = como_dono(cur, """select id from public.acervo_cj
+                                 where retorno_julgado_id = %s and relator = 'CJ5'""",
+                        (julgado_id,))
+    assert retorno
+    cur.connection.commit()
+
+    autenticar(cur, 'lucas')
+    deve_falhar(cur, """select public.admin_corrigir_acervo_cj(
+                          %s, '{"relator":"CJ1"}'::jsonb, null)""",
+                (retorno,), codigo='22023')
+    autenticar(cur, 'lucas')
+    deve_falhar(cur, "select public.admin_excluir_distribuicao_cj(%s, 'teste')",
+                (retorno,), codigo='22023')
+
+    autenticar(cur, 'lucas')
+    cur.execute("""select public.admin_corrigir_julgado_cj(
+                     %s, '{"voto":"Manter","status":"Julgado"}'::jsonb, null)""",
+                (julgado_id,))
+    cur.execute('reset role')
+    assert julgado(cur, 'julgados_cj', julgado_id, 'voto, cadeira_vista') == ('Manter', None)
+    assert como_dono(cur, 'select count(*) from public.acervo_cj where retorno_julgado_id = %s',
+                     (julgado_id,)) == 0
+
+
+@teste
 def corrigir_julgado_creg_grava_e_limpa_o_destino_da_vista(cur):
     """A CHECK de unidade_vista não pode travar a correção do admin."""
     _, _, julgado_id = cenario_creg(cur)
@@ -786,7 +825,7 @@ def auditoria_lista_do_mais_recente_para_o_mais_antigo(cur):
     _, _, julgado_id = cenario_cj(cur)
     cur.connection.commit()
     autenticar(cur, 'lucas')
-    for voto in ['Anular', 'Vista', 'Manter']:
+    for voto in ['Anular', 'Manter', 'Anular']:
         cur.execute('select public.admin_corrigir_julgado_cj(%s, %s::jsonb, null)',
                     (julgado_id, json.dumps({'voto': voto})))
     cur.execute("""select id from public.admin_auditoria('CJ', 3, null)""")
@@ -1385,7 +1424,7 @@ def correcoes_nao_deixam_erro_na_verificacao(cur):
     autenticar(cur, 'lucas')
     cur.execute("select public.admin_corrigir_acervo_cj(%s, '{\"relator\":\"CJ5\"}'::jsonb, null)",
                 (acervo_cj_id,))
-    cur.execute("select public.admin_corrigir_julgado_cj(%s, '{\"voto\":\"Vista\"}'::jsonb, null)",
+    cur.execute("select public.admin_corrigir_julgado_cj(%s, '{\"voto\":\"Anular\"}'::jsonb, null)",
                 (julgado_cj_id,))
     cur.execute('select public.admin_religar_julgado_cj(%s, null)', (julgado_cj_id,))
     cur.execute("select public.admin_corrigir_acervo_creg(%s, '{\"unidade\":\"CREG4\"}'::jsonb, null)",
