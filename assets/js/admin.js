@@ -75,7 +75,8 @@ const CAMPOS_LEGIVEIS = {
   defesa: 'Defesa',
   recurso: 'Recurso',
   relator: 'Relator',
-  unidade: 'Unidade'
+  unidade: 'Unidade',
+  unidade_vista: 'Destino da vista'
 };
 
 // De onde veio a linha da distribuição: o valor cru do banco em minúsculas
@@ -85,7 +86,10 @@ const CAMPOS_LEGIVEIS = {
 const ORIGENS_LEGIVEIS = {
   sorteio: 'Sorteio eletrônico',
   planilha: 'Planilha importada',
-  ata: 'Ata publicada'
+  ata: 'Ata publicada',
+  // Criada pelo gatilho do julgado com Vista ou Retirado. Não se edita aqui:
+  // quem corrige é o julgado, e o banco recusa as portas do acervo para ela.
+  retorno: 'Retorno de Vista/Retirado'
 };
 
 // O escopo da correção de número decide quantos registros mudam de nome — e se
@@ -893,12 +897,14 @@ function pintarProcessosDoSorteio(linhas) {
     const celulas = [
       celula(ou(linha.ordem), 'td', 'historico-numero'),
       celula(linha.num_processo, 'td', 'historico-numero'),
-      celulaDeAcoes([
-        botaoDeLinha('Corrigir dados', () => abrirAlteracaoDeAcervo(linha, 'corrigir'), { tom: 'primario' }),
-        botaoDeLinha('Redistribuir', () => abrirAlteracaoDeAcervo(linha, 'redistribuir')),
-        botaoDeLinha('Corrigir número', () => abrirCorrecaoDeNumero(linha.num_processo)),
-        botaoExcluir(linha.num_processo, () => abrirExclusaoDeDistribuicao(linha))
-      ]),
+      celulaDeAcoes(detalhe.origem === 'retorno'
+        ? [botaoDeLinha('Corrigir número', () => abrirCorrecaoDeNumero(linha.num_processo))]
+        : [
+          botaoDeLinha('Corrigir dados', () => abrirAlteracaoDeAcervo(linha, 'corrigir'), { tom: 'primario' }),
+          botaoDeLinha('Redistribuir', () => abrirAlteracaoDeAcervo(linha, 'redistribuir')),
+          botaoDeLinha('Corrigir número', () => abrirCorrecaoDeNumero(linha.num_processo)),
+          botaoExcluir(linha.num_processo, () => abrirExclusaoDeDistribuicao(linha))
+        ]),
       destino,
       celula(ou(linha.assunto)),
       celula(ou(linha.decisao))
@@ -1501,11 +1507,27 @@ async function passo(atual) {
 }
 
 // ── Operações ────────────────────────────────────────────────────────────────
-function abrirCorrecaoDeJulgado(linha) {
+async function abrirCorrecaoDeJulgado(linha) {
   const v = VOCABULARIO[orgao];
+  // O destino da Vista não vem em admin_processos_sessao: mudar o retorno dela
+  // quebraria a reaplicação das migrações. Só o voto Vista tem destino.
+  let unidadeVista = null;
+  if (orgao === 'CREG' && linha.voto === 'Vista') {
+    try {
+      const [atual] = await api(`julgados_creg?select=unidade_vista&id=eq.${linha.id}`);
+      unidadeVista = atual?.unidade_vista ?? null;
+    } catch (err) {
+      aviso('Não foi possível abrir a correção. Tente novamente.', 'erro', err.message);
+      return;
+    }
+  }
   const campos = [
     campoSelecao({ nome: 'voto', rotulo: 'Voto', valor: linha.voto, opcoes: v.votos }),
     campoSelecao({ nome: 'status', rotulo: 'Status', valor: linha.status, opcoes: v.status }),
+    ...(orgao === 'CREG'
+      ? [campoSelecao({ nome: 'unidade_vista', rotulo: 'Destino da vista', valor: unidadeVista,
+        opcoes: ['CREG1', 'CREG2', 'CREG3', 'CREG4'], rotuloVazio: '— só com voto Vista —' })]
+      : []),
     campoTexto({
       nome: 'data_sessao', rotulo: 'Data da sessão', tipo: 'date', valor: detalhe.data,
       // O `max` é a mesma regra que admin_corrigir_julgado_* aplica no banco.
@@ -1524,7 +1546,7 @@ function abrirCorrecaoDeJulgado(linha) {
   ];
 
   const original = {
-    voto: linha.voto, status: linha.status,
+    voto: linha.voto, status: linha.status, unidade_vista: unidadeVista,
     data_sessao: detalhe.data, pauta: linha.pauta
   };
 
@@ -1552,6 +1574,22 @@ function abrirCorrecaoDeJulgado(linha) {
       // reescrevia atualizado_por por uma edição que ninguém fez.
       comparar('voto', 'Voto', String);
       comparar('status', 'Status', String);
+      if (orgao === 'CREG') {
+        comparar('unidade_vista', 'Destino da vista', String);
+        // As mesmas regras de julgados_creg_sincronizar_retorno, em português.
+        // Como lá, só valem quando a decisão muda: corrigir a pauta de uma
+        // Vista antiga, sem destino, continua possível.
+        const voto = valorDoCampo('voto');
+        const status = valorDoCampo('status');
+        const decisaoMudou = ['voto', 'status', 'unidade_vista'].some(c => c in alterados);
+        if (decisaoMudou && voto === 'Vista' && !valorDoCampo('unidade_vista')) {
+          throw new Error('Voto Vista exige o destino da vista.');
+        }
+        if (decisaoMudou && voto && status && voto !== status
+            && ['Vista', 'Retirado'].some(r => r === voto || r === status)) {
+          throw new Error('Vista e Retirado exigem voto e status iguais.');
+        }
+      }
       comparar('data_sessao', 'Data da sessão', valor => String(valor).slice(0, 10));
       comparar('pauta', 'Número da pauta', Number);
 

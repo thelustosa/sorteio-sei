@@ -73,6 +73,11 @@ const resumoUnidadeVista = document.getElementById('resumoUnidadeVista');
 const unidadeDestinoVista = document.getElementById('unidadeDestinoVista');
 const erroUnidadeVista = document.getElementById('erroUnidadeVista');
 const UNIDADES_VISTA = ['CREG1', 'CREG2', 'CREG3', 'CREG4'];
+// No CREG, Vista e Retirado devolvem o processo ao acervo, e o banco só aceita
+// esses rótulos com voto e status iguais (julgados_creg_sincronizar_retorno).
+const RETORNO = COL === COLEGIADOS.creg ? ['Vista', 'Retirado'] : [];
+const incoerente = (voto, status) => Boolean(voto && status && voto !== status
+  && (RETORNO.includes(voto) || RETORNO.includes(status)));
 // O rótulo da lista ("Pautas pendentes", "Sessões pendentes") nasce no HTML e
 // é daqui que ele volta ao sair de uma pauta: com uma fonte só, a barra não
 // tem como mostrar a palavra de um colegiado na tela do outro.
@@ -142,7 +147,7 @@ function cancelarUnidadeVista(fechaPeloEscape = false) {
   resolve(false);
 }
 
-function registrarAlteracao(select) {
+function registrarAlteracao(select, sugerirStatus = true) {
   if (select.closest('.col-status')) {
     // Uma escolha explícita prevalece sobre as próximas sugestões do voto.
     select.dataset.statusAutomatico = 'false';
@@ -152,7 +157,10 @@ function registrarAlteracao(select) {
       if (select.value !== 'Vista') select.closest('tr').dataset.unidadeVista = '';
     }
     const status = select.closest('tr').querySelector('.col-status select');
-    if (status.dataset.statusAutomatico !== 'false') {
+    // Vista e Retirado no CREG não são sugestão: sem o status igual, o banco
+    // recusa a sessão inteira. Vale mesmo depois de um status escolhido à mão.
+    if ((sugerirStatus && status.dataset.statusAutomatico !== 'false')
+        || RETORNO.includes(select.value)) {
       status.value = select.value === 'Retirado' || select.value === 'Vista'
         ? select.value : 'Julgado';
       status.dataset.statusAutomatico = 'true';
@@ -186,8 +194,15 @@ function atualizarLinha(tr) {
 function preencherColuna(coluna, valor) {
   tbody.querySelectorAll(`.${coluna} select`).forEach(select => {
     if (select.value) return;
+    // A linha que já tem Vista ou Retirado no outro campo fica para a escolha
+    // manual: preenchê-la em lote criaria um par que o banco recusa.
+    const outro = select.closest('tr')
+      .querySelector(coluna === 'col-voto' ? '.col-status select' : '.col-voto select');
+    if (incoerente(valor, outro.value)) return;
     select.value = valor;
-    registrarAlteracao(select);
+    // O lote não sugere status por cima de um que a linha já tem: "Retirado" ou
+    // "Sobrestado" gravados antes são decisão, não campo em branco.
+    registrarAlteracao(select, !outro.value);
   });
 }
 
@@ -424,10 +439,26 @@ function atualizarContador() {
 
 async function salvar() {
   if (COL === COLEGIADOS.creg) {
-    for (const tr of tbody.querySelectorAll('tr')) {
-      if (tr.dataset.alterada === 'true'
-          && tr.querySelector('.col-voto select').value === 'Vista'
-          && !UNIDADES_VISTA.includes(tr.dataset.unidadeVista)) {
+    // O banco recusa a sessão inteira por uma linha; aqui a mensagem diz qual.
+    const alteradas = [...tbody.querySelectorAll('tr')].filter(tr => tr.dataset.alterada === 'true');
+    const valor = (tr, campo) => tr.querySelector(`.col-${campo} select`).value;
+    const numeros = linhas => linhas.map(tr => tr.dataset.numProcesso).join(', ');
+    const incoerentes = alteradas.filter(tr => incoerente(valor(tr, 'voto'), valor(tr, 'status')));
+    if (incoerentes.length > 0) {
+      aviso('Vista e Retirado exigem voto e status iguais. '
+        + `Corrija antes de salvar: ${numeros(incoerentes)}.`, 'atencao');
+      return;
+    }
+    const semUnidade = alteradas.filter(tr => valor(tr, 'voto') === 'Retirado'
+      && !UNIDADES_VISTA.includes(tr.dataset.unidadeAtual));
+    if (semUnidade.length > 0) {
+      aviso('Retirado devolve o processo à unidade que o levou à sessão, e '
+        + `estes não têm distribuição no acervo: ${numeros(semUnidade)}.`, 'atencao');
+      return;
+    }
+
+    for (const tr of alteradas) {
+      if (valor(tr, 'voto') === 'Vista' && !UNIDADES_VISTA.includes(tr.dataset.unidadeVista)) {
         if (!await pedirUnidadeVista(tr.querySelector('.col-voto select'), false)) return;
       }
     }

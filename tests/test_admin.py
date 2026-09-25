@@ -358,6 +358,46 @@ def corrigir_julgado_creg_trata_string_vazia_como_ausencia(cur):
 
 
 @teste
+def corrigir_julgado_creg_grava_e_limpa_o_destino_da_vista(cur):
+    """A CHECK de unidade_vista não pode travar a correção do admin."""
+    _, _, julgado_id = cenario_creg(cur)
+    cur.connection.commit()
+    autenticar(cur, 'lucas')
+    deve_falhar(cur, """select public.admin_corrigir_julgado_creg(
+                          %s, '{"voto":"Vista","status":"Vista"}'::jsonb, null)""",
+                (julgado_id,), codigo='22023')
+    autenticar(cur, 'lucas')
+    cur.execute("""select public.admin_corrigir_julgado_creg(
+                     %s, '{"voto":"Vista","status":"Vista","unidade_vista":"CREG4"}'::jsonb,
+                     null)""", (julgado_id,))
+    cur.execute('reset role')
+    assert julgado(cur, 'julgados_creg', julgado_id, 'unidade_vista') == ('CREG4',)
+    retorno = como_dono(cur, """select id from public.acervo_creg
+                                 where retorno_julgado_id = %s and unidade = 'CREG4'""",
+                        (julgado_id,))
+    assert retorno
+    cur.connection.commit()
+
+    # O retorno é derivado do julgado: as portas do acervo não o alteram.
+    autenticar(cur, 'lucas')
+    deve_falhar(cur, """select public.admin_corrigir_acervo_creg(
+                          %s, '{"unidade":"CREG1"}'::jsonb, null)""",
+                (retorno,), codigo='22023')
+    autenticar(cur, 'lucas')
+    deve_falhar(cur, "select public.admin_excluir_distribuicao_creg(%s, 'teste')",
+                (retorno,), codigo='22023')
+
+    autenticar(cur, 'lucas')
+    cur.execute("""select public.admin_corrigir_julgado_creg(
+                     %s, '{"voto":"Manter","status":"Julgado"}'::jsonb, null)""",
+                (julgado_id,))
+    cur.execute('reset role')
+    assert julgado(cur, 'julgados_creg', julgado_id, 'voto, unidade_vista') == ('Manter', None)
+    assert como_dono(cur, 'select count(*) from public.acervo_creg where retorno_julgado_id = %s',
+                     (julgado_id,)) == 0
+
+
+@teste
 def corrigir_julgado_recusa_data_vazia_com_a_mensagem_certa(cur):
     """A data em branco tem recusa própria; sem o nullif ela estourava no cast."""
     _, _, julgado_id = cenario_cj(cur)

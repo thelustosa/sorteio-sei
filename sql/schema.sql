@@ -945,6 +945,15 @@ alter table public.acervo_creg drop constraint if exists acervo_creg_retorno_uni
 alter table public.acervo_creg add constraint acervo_creg_retorno_unico
   unique (retorno_julgado_id);
 
+-- Um retorno some quando a decisão que o criou é desfeita ou excluída, e o
+-- julgado da pauta seguinte pode estar vinculado a ele. Sem o set null, a
+-- correção ou a exclusão do julgado original falhava por causa dessa FK.
+-- O julgado fica sem vínculo, como em excluir_distribuicao, e "Religar ao
+-- acervo" refaz o vínculo.
+alter table public.julgados_creg drop constraint if exists julgados_creg_acervo_id_fkey;
+alter table public.julgados_creg add constraint julgados_creg_acervo_id_fkey
+  foreign key (acervo_id) references public.acervo_creg (id) on delete set null;
+
 create index if not exists idx_julgados_creg_acervo
   on public.julgados_creg (acervo_id);
 
@@ -1273,21 +1282,28 @@ begin
     end if;
   end if;
 
-  if new.voto in ('Vista', 'Retirado')
-     and new.status is not null and new.status <> new.voto then
-    raise exception 'Voto % exige status % para retornar ao acervo.', new.voto, new.voto
+  -- Vista e Retirado valem pelos dois lados: um só dos campos com esse rótulo
+  -- e o outro com rótulo diferente é incoerente. Um campo ainda em branco não
+  -- é: a decisão está pela metade, a linha continua pendente na página de
+  -- julgados e o retorno só nasce quando os dois campos baterem.
+  if (new.voto in ('Vista', 'Retirado') or new.status in ('Vista', 'Retirado'))
+     and new.voto <> new.status then
+    raise exception 'Processo %: voto % e status % não combinam. Vista e Retirado exigem voto e status iguais.',
+      new.num_processo, new.voto, new.status
       using errcode = '22023';
   end if;
 
   if new.voto = 'Vista' then
     if coalesce(new.unidade_vista, '') not in ('CREG1', 'CREG2', 'CREG3', 'CREG4') then
-      raise exception 'Voto Vista exige unidade de destino (CREG1 a CREG4).'
+      raise exception 'Processo %: voto Vista exige unidade de destino (CREG1 a CREG4).',
+        new.num_processo
         using errcode = '22023';
     end if;
     destino := new.unidade_vista;
   elsif new.voto = 'Retirado' then
     if coalesce(new.unidade, '') !~ '^CREG[1-4]$' then
-      raise exception 'Voto Retirado exige unidade atual CREG1 a CREG4.'
+      raise exception 'Processo %: voto Retirado exige unidade atual CREG1 a CREG4, e o processo não tem distribuição no acervo.',
+        new.num_processo
         using errcode = '22023';
     end if;
     destino := new.unidade;
@@ -1297,19 +1313,22 @@ begin
     select a.interessado into interessado_original
       from public.acervo_creg a where a.id = new.acervo_id;
 
+    -- Retirado pode ser registrado antes da sessão. O retorno vale a partir da
+    -- gravação, e não da data futura: com dias negativos o processo cairia fora
+    -- de todas as faixas do painel.
     insert into public.acervo_creg
       (num_processo, unidade, data_distribuicao, assunto, recurso,
        interessado, origem, retorno_julgado_id)
     values
-      (new.num_processo, destino, new.data_sessao, new.assunto, new.recurso,
-       interessado_original, 'retorno', new.id)
+      (new.num_processo, destino, least(new.data_sessao, current_date), new.assunto,
+       new.recurso, interessado_original, 'retorno', new.id)
     on conflict on constraint acervo_creg_retorno_unico do update
       set num_processo = excluded.num_processo,
           unidade = excluded.unidade,
           data_distribuicao = excluded.data_distribuicao,
           assunto = excluded.assunto,
           recurso = excluded.recurso,
-          interessado = excluded.interessado;
+          interessado = coalesce(excluded.interessado, acervo_creg.interessado);
   else
     -- Desfazer uma decisão provisória remove apenas o retorno que ela criou;
     -- a distribuição original e o julgamento continuam preservados.
@@ -2598,10 +2617,11 @@ security definer
 set search_path = ''
 as $$
 declare
-  editaveis  constant text[] := array['voto', 'status', 'data_sessao', 'pauta'];
+  editaveis  constant text[] := array['voto', 'status', 'data_sessao', 'pauta',
+                                      'unidade_vista'];
   observados constant text[] := array['voto', 'status', 'data_sessao', 'pauta',
-                                      'acervo_id', 'unidade', 'assunto', 'recurso',
-                                      'data_distribuicao'];
+                                      'unidade_vista', 'acervo_id', 'unidade', 'assunto',
+                                      'recurso', 'data_distribuicao'];
   antes  public.julgados_creg%rowtype;
   depois public.julgados_creg%rowtype;
   delta  jsonb;
@@ -2639,6 +2659,12 @@ begin
     raise exception 'numero de pauta invalido: %', p_campos ->> 'pauta' using errcode = '22023';
   end if;
 
+  if p_campos ? 'unidade_vista' and nullif(p_campos ->> 'unidade_vista', '') is not null
+     and p_campos ->> 'unidade_vista' not in ('CREG1', 'CREG2', 'CREG3', 'CREG4') then
+    raise exception 'destino da vista fora do permitido: %', p_campos ->> 'unidade_vista'
+      using errcode = '22023';
+  end if;
+
   select * into antes from public.julgados_creg where id = p_id for update;
   if not found then
     raise exception 'julgado % nao encontrado', p_id using errcode = '22023';
@@ -2657,6 +2683,16 @@ begin
                               then (p_campos ->> 'data_sessao')::date else k.data_sessao end,
            pauta       = case when p_campos ? 'pauta'
                               then nullif(p_campos ->> 'pauta', '')::int else k.pauta end,
+           -- O destino só existe com voto Vista (julgados_creg_unidade_vista_valida):
+           -- corrigir o voto para outro rótulo leva o destino junto.
+           unidade_vista = case
+                             when (case when p_campos ? 'voto'
+                                        then nullif(p_campos ->> 'voto', '') else k.voto end)
+                                  is distinct from 'Vista' then null
+                             when p_campos ? 'unidade_vista'
+                               then nullif(p_campos ->> 'unidade_vista', '')
+                             else k.unidade_vista
+                           end,
            atualizado_em  = now(),
            atualizado_por = public.auth_email()
      where k.id = p_id
@@ -2950,6 +2986,14 @@ begin
   select * into antes from public.acervo_creg where id = p_id for update;
   if not found then
     raise exception 'distribuicao % nao encontrada', p_id using errcode = '22023';
+  end if;
+
+  -- O retorno de Vista/Retirado é derivado do julgamento, e o gatilho
+  -- julgados_creg_retorno o reescreve na próxima correção dele. Editado ou
+  -- apagado por aqui, voltaria sem aviso: quem corrige é o julgado.
+  if antes.origem = 'retorno' then
+    raise exception 'distribuicao de retorno (Vista/Retirado) vem do julgado %: corrija o julgado',
+      antes.retorno_julgado_id using errcode = '22023';
   end if;
 
   begin
@@ -3492,6 +3536,14 @@ begin
   select * into antes from public.acervo_creg where id = p_id for update;
   if not found then
     raise exception 'distribuicao % nao encontrada', p_id using errcode = '22023';
+  end if;
+
+  -- O retorno de Vista/Retirado é derivado do julgamento, e o gatilho
+  -- julgados_creg_retorno o reescreve na próxima correção dele. Editado ou
+  -- apagado por aqui, voltaria sem aviso: quem corrige é o julgado.
+  if antes.origem = 'retorno' then
+    raise exception 'distribuicao de retorno (Vista/Retirado) vem do julgado %: corrija o julgado',
+      antes.retorno_julgado_id using errcode = '22023';
   end if;
 
   for vinculado in
