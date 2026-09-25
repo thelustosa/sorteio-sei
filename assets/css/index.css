@@ -742,10 +742,6 @@ select.fixed-field:disabled {
 }
 .pill.excluded:hover { background: var(--danger-hover); }
 .pill:active { transform: translateY(1px); }
-/* CJ1 no sorteio da CJ: fica à vista, mas não alterna (recebe só sem defesa). */
-.pill[aria-disabled="true"] { cursor: default; }
-.pill[aria-disabled="true"]:hover { background: var(--accent-soft-strong); }
-.pill[aria-disabled="true"]:active { transform: none; }
 
 /* Tabelas e resultados */
 .table-scroll { overflow-x: auto; overscroll-behavior-inline: contain; }
