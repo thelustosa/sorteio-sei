@@ -1566,6 +1566,52 @@ test('CJ barra Retirado de processo sem cadeira antes do envio', async () => {
   assert.match(avisos.at(-1)[0], /cadeira que o levou.*202600029000803/);
 });
 
+test('o destino da Vista aparece embaixo do voto e reabre a janela', async () => {
+  let enviado;
+  const page = julgadosPage(async (path, options) => {
+    enviado = JSON.parse(options.body).itens;
+    return 1;
+  }, 'creg');
+  page.pendentesPorPauta.set('1|2026-08-21', [
+    { id: 1, num_processo: '202600029000901', unidade: 'CREG2', voto: null, status: null },
+    { id: 2, num_processo: '202600029000902', unidade: 'CREG3', voto: 'Vista', status: null,
+      unidade_vista: 'CREG1' }
+  ]);
+  page.abrirPauta('1|2026-08-21');
+  const [primeira, segunda] = page.tbody.children;
+  const marca = tr => tr.querySelector('.vista-destino');
+  const dialog = page.document.getElementById('dialogUnidadeVista');
+  const destino = page.document.getElementById('unidadeDestinoVista');
+  const form = page.document.getElementById('formUnidadeVista');
+
+  // O que já veio gravado aparece ao abrir a pauta.
+  assert.equal(marca(segunda).textContent, 'Destino: CREG1');
+  assert.equal(marca(primeira), null);
+
+  const voto = primeira.querySelector('.col-voto select');
+  voto.value = 'Vista';
+  page.tbody.dispatch('change', { target: voto });
+  destino.value = 'CREG4';
+  form.dispatch('submit');
+  assert.equal(marca(primeira).textContent, 'Destino: CREG4');
+
+  // Clicar no lembrete troca o destino sem mexer no voto.
+  marca(primeira).click();
+  assert.equal(dialog.open, true);
+  destino.value = 'CREG2';
+  form.dispatch('submit');
+  assert.equal(marca(primeira).textContent, 'Destino: CREG2');
+  assert.equal(voto.value, 'Vista');
+
+  await page.salvar();
+  assert.equal(enviado[0].unidade_vista, 'CREG2');
+
+  // Trocar o voto leva o destino e o lembrete junto.
+  voto.value = 'Manter';
+  page.tbody.dispatch('change', { target: voto });
+  assert.equal(marca(primeira), null);
+});
+
 test('move o foco para o cadastro ao escolher uma modalidade', () => {
   const { document } = indexPage();
   document.getElementById('btnCreg').dispatch('click');

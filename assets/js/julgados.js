@@ -206,7 +206,30 @@ function atualizarLinha(tr) {
   tr.dataset.alterada = String([...tr.querySelectorAll('select')]
     .some(campo => campo.value !== (campo.dataset.valorInicial || ''))
     || tr.dataset.unidadeVista !== tr.dataset.unidadeVistaInicial);
+  mostrarDestino(tr);
   atualizarContador();
+}
+
+// O destino da Vista só aparece na janela: sem este lembrete embaixo do voto,
+// a linha dizia "Vista" e ninguém sabia para onde. Clicar reabre a janela.
+function mostrarDestino(tr) {
+  const celula = tr.querySelector('.col-voto');
+  let marca = celula.querySelector('.vista-destino');
+  const destino = emVista(tr) ? tr.dataset.unidadeVista : '';
+  if (!destino) {
+    marca?.remove();
+    return;
+  }
+  if (!marca) {
+    marca = document.createElement('button');
+    marca.type = 'button';
+    marca.className = 'vista-destino';
+    marca.addEventListener('click', () => pedirUnidadeVista(celula.querySelector('select'), false));
+    celula.appendChild(marca);
+  }
+  marca.textContent = `Destino: ${destino}`;
+  if (COL.mostraConselheiro) rotularCadeira(marca, destino);
+  marca.setAttribute('aria-label', `Destino da vista: ${destino}. Alterar`);
 }
 
 // Depois de quase toda sessão o resultado repetido é "Manter" no voto e
@@ -424,6 +447,7 @@ function abrirPauta(chave) {
       tr.appendChild(assunto);
     }
     tr.append(tdVoto, tdStatus);
+    mostrarDestino(tr);
     // No celular a linha vira ficha e o cabeçalho sai de vista: cada campo
     // leva o próprio rótulo (ver "Tabelas no celular" no CSS).
     ROTULOS_DAS_COLUNAS.forEach((rotulo, i) => { tr.children[i].dataset.label = rotulo; });

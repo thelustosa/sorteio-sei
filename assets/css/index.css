@@ -871,6 +871,48 @@ body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
 #julgadosTable .col-voto select,
 #julgadosTable .col-status select { width: 15rem; max-width: 100%; }
 
+/* Lembrete do destino escolhido na janela da Vista. É botão: clicar reabre a
+   janela para trocar o destino. Em tela estreita fica embaixo do voto; com
+   espaço sobrando, sai para a direita da linha, fora da tabela. */
+.vista-destino {
+  display: block;
+  min-height: 0;
+  margin: 6px auto 0;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.vista-destino:hover,
+.vista-destino:focus-visible { border-color: var(--accent); }
+
+/* A partir daqui a margem ao lado do container comporta a pílula. A tabela e
+   o rolador cortam o que passa da borda (cantos arredondados e rolagem
+   horizontal); nesta largura a tabela cabe inteira, então os dois deixam de
+   cortar e os cantos do cabeçalho se arredondam sozinhos. */
+@media screen and (min-width: 1400px) {
+  #detalhePauta .table-scroll,
+  #julgadosTable { overflow: visible; }
+  #julgadosTable thead th:first-child { border-top-left-radius: var(--radius-card); }
+  #julgadosTable thead th:last-child { border-top-right-radius: var(--radius-card); }
+  #julgadosTable tbody tr:last-child td:first-child { border-bottom-left-radius: var(--radius-card); }
+  #julgadosTable tbody tr:last-child td:last-child { border-bottom-right-radius: var(--radius-card); }
+  #julgadosTable tbody tr { position: relative; }
+  #julgadosTable .vista-destino {
+    position: absolute;
+    top: 50%;
+    left: calc(100% + 12px);
+    margin: 0;
+    transform: translateY(-50%);
+  }
+}
+
 .vista-dialog {
   width: min(28rem, calc(100vw - 2rem));
   padding: 0;
