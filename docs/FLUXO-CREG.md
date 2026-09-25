@@ -284,9 +284,12 @@ Vista/Retirado", e corrigir ou excluir essa distribuição por lá é recusado;
 quem se corrige é o julgado, inclusive o destino da Vista. Se a decisão for
 desfeita depois que a pauta seguinte se vinculou ao retorno, o julgado novo
 fica sem vínculo (`on delete set null`), e "Religar ao acervo" refaz a ligação.
-Retirados gravados antes do gatilho foram devolvidos ao acervo pela migração
-`20260925120000`; Vistas antigas, sem destino registrado, precisam de correção
-manual do destino no painel admin.
+A migração `20260925120000` devolve ao acervo os Retirados gravados antes do
+gatilho, exceto os processos que já voltaram a outra sessão. Em produção, em
+25/09/2026, não havia nenhum pendente: os 16 Retirados e as 5 Vistas com
+`atualizado_em` eram histórico da planilha, carimbado pela carga de
+28/08/2026, e todos já tinham sessão posterior. Uma Vista sem destino só
+precisa de correção se o processo ainda não voltou à pauta.
 
 **Não há de-para de unidades no Conselho.** A Câmara tem `cadeiras_cj`, que
 traduz CJ1..CJ5 no nome do conselheiro e aparece no hover do painel. Aqui não:

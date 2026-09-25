@@ -133,7 +133,7 @@ def tabelas_criadas(cur):
         'relator': 'text', 'data_distribuicao': 'date', 'defesa': 'boolean',
         'assunto': 'text', 'recurso': 'text', 'ordem': 'integer',
         'sorteado_em': 'timestamp with time zone', 'origem': 'text',
-        'criado_em': 'timestamp with time zone',
+        'criado_em': 'timestamp with time zone', 'criado_por': 'text',
     }
     esperado_julgados = {
         'id': 'bigint', 'acervo_id': 'bigint', 'num_processo': 'text',
@@ -2100,6 +2100,11 @@ def migracoes_a_aplicar():
 def preparar_upgrade_da_migracao():
     """Volta só os deltas desta migração ao estado do schema no HEAD."""
     PG.executar("""
+        -- O schema atual já tem Quem no retorno. A migração original do painel
+        -- recria admin_sorteios com o retorno antigo; a migração de autoria
+        -- adiciona Quem novamente ao fim da sequência.
+        drop function if exists public.admin_sorteios(text);
+
         -- As tabelas da Câmara sem o check de 15 dígitos, como produção estava
         -- até 15/09/2026: quem tem de devolvê-lo é a migração, e
         -- cj_exige_numero_de_processo_com_15_digitos mede o resultado dela.

@@ -314,14 +314,15 @@ function badge(rotulo, tom = 'neutro') {
 // Um travessão dentro de um selo parece campo quebrado, e no selo de status a
 // ausência ainda herdava a cor de alerta — a falta de registro era pintada como
 // se fosse um aviso. Sem valor, sai texto simples.
+function semValor() {
+  const traco = document.createElement('span');
+  traco.className = 'sem-valor';
+  traco.textContent = '—';
+  return traco;
+}
+
 function valorOuSelo(valor, tom) {
-  if (vazio(valor)) {
-    const traco = document.createElement('span');
-    traco.className = 'sem-valor';
-    traco.textContent = '—';
-    return traco;
-  }
-  return badge(String(valor), tom);
+  return vazio(valor) ? semValor() : badge(String(valor), tom);
 }
 
 function botaoDeLinha(rotulo, aoClicar, { tom = 'secundario' } = {}) {
@@ -333,15 +334,32 @@ function botaoDeLinha(rotulo, aoClicar, { tom = 'secundario' } = {}) {
   return botao;
 }
 
-function autoria(quem, quando) {
-  const bloco = document.createElement('span');
-  bloco.className = 'admin-autoria';
+function emailComQuebra(quem) {
+  if (vazio(quem)) return semValor();
   // O endereço não tem espaço onde quebrar. Se a tela apertar, ele quebra
-  // antes do "@", e nunca no meio de uma palavra.
+  // primeiro antes do "@"; endereços mais longos ainda cabem na célula.
   const email = document.createElement('span');
   const arroba = String(quem).indexOf('@');
   if (arroba > 0) email.append(quem.slice(0, arroba), document.createElement('wbr'), quem.slice(arroba));
   else email.textContent = quem;
+  return email;
+}
+
+// Lote com mais de um autor lista todos, um por linha: é o caso a investigar.
+function autores(lista) {
+  if (!lista?.length) return semValor();
+  const bloco = document.createElement('span');
+  lista.forEach((quem, i) => {
+    if (i) bloco.append(document.createElement('br'));
+    bloco.append(emailComQuebra(quem));
+  });
+  return bloco;
+}
+
+function autoria(quem, quando) {
+  const bloco = document.createElement('span');
+  bloco.className = 'admin-autoria';
+  const email = emailComQuebra(quem);
   const instante = document.createElement('span');
   instante.textContent = dataHoraBR(quando);
   bloco.append(email, instante);
@@ -520,7 +538,7 @@ function moldura() {
     definirVisaoTabela('processos-sessao');
     painelBusca.hidden = false;
     buscaRotulo.textContent = 'Pesquisar por número do processo';
-    buscaInput.placeholder = 'Ex.: 202600029002147';
+    buscaInput.placeholder = 'Ex.: 000000000000147';
     buscaInput.value = buscaProcesso;
     return tituloDoPainel(
       `Sessão de ${dataBR(detalhe.data)}${vazio(detalhe.pauta) ? '' : ` · pauta ${detalhe.pauta}`}`,
@@ -531,7 +549,7 @@ function moldura() {
     definirVisaoTabela('processos-sorteio');
     painelBusca.hidden = false;
     buscaRotulo.textContent = 'Pesquisar por número do processo';
-    buscaInput.placeholder = 'Ex.: 202600029002147';
+    buscaInput.placeholder = 'Ex.: 000000000000147';
     buscaInput.value = buscaProcesso;
     return tituloDoPainel(`Distribuição de ${dataBR(detalhe.data)}`,
       'Corrigir alcança também os julgados que copiaram este processo; redistribuir, não.',
@@ -774,7 +792,8 @@ function pintarSorteios(linhas) {
     { rotulo: 'Hora', eixo: 'centro' },
     { rotulo: 'Origem', eixo: 'centro' },
     { rotulo: 'Processos', eixo: 'centro' },
-    { rotulo: 'Destinos', eixo: 'centro' }
+    { rotulo: 'Destinos', eixo: 'centro' },
+    { rotulo: 'Quem', eixo: 'centro' }
   ];
 
   desenhar(colunas, filtradas.map(linha => [
@@ -794,7 +813,8 @@ function pintarSorteios(linhas) {
       : '—', 'td', 'historico-hora'),
     celula(badge(ORIGENS_LEGIVEIS[linha.origem] || ou(linha.origem), 'neutro')),
     celula(linha.processos, 'td', 'historico-numero'),
-    celula((linha.destinos || []).join(', '))
+    celula((linha.destinos || []).join(', ')),
+    celula(autores(linha.quem), 'td', 'admin-quem')
   ]));
   painelStatus.textContent =
     `${plural(filtradas.length, 'distribuição registrada', 'distribuições registradas')}.`;
@@ -2160,5 +2180,5 @@ function inicializarAdmin(orgaosAdmin) {
   dialogo.addEventListener('close', () => { dialogoAtual = null; });
 
   painel.hidden = false;
-  return selecionarOrgao(administrados.has('CJ') ? 'CJ' : 'CREG');
+  return selecionarOrgao(administrados.has('CREG') ? 'CREG' : 'CJ');
 }
