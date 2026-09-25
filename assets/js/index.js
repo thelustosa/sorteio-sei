@@ -437,7 +437,10 @@ function sortearProcessos() {
 
   const linhasPorAssunto = {};
   rows.forEach(r => {
-    const assunto = r.querySelector('.col-assunto select').value;
+    // Na Câmara o assunto é sempre auto de infração; o que pesa na cadeira é
+    // ter defesa (julgamento) ou não (homologação). Equilibra pelos dois.
+    const assunto = r.querySelector('.col-assunto select').value
+      + (modoSorteio === 'CJ' ? `|${r.querySelector('.col-decisao select').value}` : '');
     if (!linhasPorAssunto[assunto]) {
       linhasPorAssunto[assunto] = [];
     }

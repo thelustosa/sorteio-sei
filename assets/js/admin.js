@@ -310,14 +310,15 @@ function badge(rotulo, tom = 'neutro') {
 // Um travessão dentro de um selo parece campo quebrado, e no selo de status a
 // ausência ainda herdava a cor de alerta — a falta de registro era pintada como
 // se fosse um aviso. Sem valor, sai texto simples.
+function semValor() {
+  const traco = document.createElement('span');
+  traco.className = 'sem-valor';
+  traco.textContent = '—';
+  return traco;
+}
+
 function valorOuSelo(valor, tom) {
-  if (vazio(valor)) {
-    const traco = document.createElement('span');
-    traco.className = 'sem-valor';
-    traco.textContent = '—';
-    return traco;
-  }
-  return badge(String(valor), tom);
+  return vazio(valor) ? semValor() : badge(String(valor), tom);
 }
 
 function botaoDeLinha(rotulo, aoClicar, { tom = 'secundario' } = {}) {
@@ -330,19 +331,25 @@ function botaoDeLinha(rotulo, aoClicar, { tom = 'secundario' } = {}) {
 }
 
 function emailComQuebra(quem) {
-  if (vazio(quem)) return '—';
+  if (vazio(quem)) return semValor();
   // O endereço não tem espaço onde quebrar. Se a tela apertar, ele quebra
   // primeiro antes do "@"; endereços mais longos ainda cabem na célula.
   const email = document.createElement('span');
   const arroba = String(quem).indexOf('@');
-  if (arroba > 0) {
-    const usuario = document.createElement('span');
-    usuario.textContent = quem.slice(0, arroba);
-    const dominio = document.createElement('span');
-    dominio.textContent = quem.slice(arroba);
-    email.append(usuario, document.createElement('wbr'), dominio);
-  } else email.textContent = quem;
+  if (arroba > 0) email.append(quem.slice(0, arroba), document.createElement('wbr'), quem.slice(arroba));
+  else email.textContent = quem;
   return email;
+}
+
+// Lote com mais de um autor lista todos, um por linha: é o caso a investigar.
+function autores(lista) {
+  if (!lista?.length) return semValor();
+  const bloco = document.createElement('span');
+  lista.forEach((quem, i) => {
+    if (i) bloco.append(document.createElement('br'));
+    bloco.append(emailComQuebra(quem));
+  });
+  return bloco;
 }
 
 function autoria(quem, quando) {
@@ -803,7 +810,7 @@ function pintarSorteios(linhas) {
     celula(badge(ORIGENS_LEGIVEIS[linha.origem] || ou(linha.origem), 'neutro')),
     celula(linha.processos, 'td', 'historico-numero'),
     celula((linha.destinos || []).join(', ')),
-    celula(emailComQuebra(linha.quem), 'td', 'admin-quem')
+    celula(autores(linha.quem), 'td', 'admin-quem')
   ]));
   painelStatus.textContent =
     `${plural(filtradas.length, 'distribuição registrada', 'distribuições registradas')}.`;

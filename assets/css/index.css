@@ -3954,7 +3954,7 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 }
 
 .admin-autoria { display: grid; gap: 2px; }
-.admin-autoria > span:first-child { color: var(--text); }
+.admin-autoria > span:first-child:not(.sem-valor) { color: var(--text); }
 .admin-acao {
   display: inline-flex;
   min-height: 34px;

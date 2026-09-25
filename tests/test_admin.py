@@ -847,40 +847,68 @@ def autoria_da_distribuicao_vem_do_token_e_so_admin_a_le(cur):
                                 'autor-falso@goias.gov.br')""", (numero_sorteio, destino))
         cur.connection.commit()
 
+        sql_quem = """select quem from public.admin_sorteios(%s)
+                       where data_distribuicao = date '2026-09-25' and origem = 'sorteio'
+                         and sorteado_em = timestamptz '2026-09-25 10:00-03'"""
         autenticar(cur, 'sec-agr')
-        cur.execute("""select quem from public.admin_sorteios(%s)
-                        where data_distribuicao = date '2026-09-25'""", (orgao,))
-        assert cur.fetchone() == (f'{operador}@goias.gov.br',), orgao
+        cur.execute(sql_quem, (orgao,))
+        assert cur.fetchone() == ([f'{operador}@goias.gov.br'],), orgao
 
-        autenticar(cur, operador)
-        deve_negar(cur, f"select criado_por from public.acervo_{orgao.lower()}")
+        # Outra pessoa no mesmo lote não some atrás de um traço: aparecem as duas.
+        autenticar(cur, 'lucas')
+        cur.execute(f"""insert into public.acervo_{orgao.lower()}
+                        (num_processo, {destino_coluna}, data_distribuicao,
+                         sorteado_em, origem)
+                        values (%s, %s, '2026-09-25',
+                                timestamptz '2026-09-25 10:00-03', 'sorteio')""",
+                    (numero(), destino))
+        cur.connection.commit()
+        autenticar(cur, 'sec-agr')
+        cur.execute(sql_quem, (orgao,))
+        assert cur.fetchone() == (sorted(['lucas@goias.gov.br', f'{operador}@goias.gov.br']),), orgao
 
         cur.execute('reset role')
+        cur.execute("""select has_column_privilege('authenticated', %s, 'criado_por', 'SELECT')""",
+                    (f'public.acervo_{orgao.lower()}',))
+        assert cur.fetchone() == (False,), orgao
         cur.execute(f"""select criado_por from public.acervo_{orgao.lower()}
                         where num_processo = %s""", (numero_sorteio,))
         assert cur.fetchone() == (f'{operador}@goias.gov.br',), orgao
 
 
 @teste
-def sorteio_autenticado_sem_email_nao_fica_sem_autor(cur):
+def sorteio_com_token_sem_email_grava_autor_do_cadastro(cur):
+    """Token sem e-mail não pode custar a distribuição inteira."""
+    num = numero()
     autenticar(cur, 'terezinha')
     cur.execute("select set_config('request.jwt.claims', %s, true)",
                 (json.dumps({'sub': USUARIOS['terezinha'], 'role': 'authenticated'}),))
-    deve_falhar(cur, """insert into public.acervo_cj
-                       (num_processo, relator, data_distribuicao, origem)
-                       values (%s, 'CJ3', '2026-09-25', 'sorteio')""",
-                (numero(),), '28000')
+    cur.execute("""insert into public.acervo_cj
+                   (num_processo, relator, data_distribuicao, origem)
+                   values (%s, 'CJ3', '2026-09-25', 'sorteio')""", (num,))
+    cur.connection.commit()
+    assert como_dono(cur, "select criado_por from public.acervo_cj where num_processo = %s",
+                     (num,)) == 'terezinha.bueno@goias.gov.br'
 
 
 @teste
-def importacoes_e_distribuicoes_antigas_nao_ganham_autor(cur):
+def importacoes_nao_ganham_autor_e_navegador_so_grava_sorteio(cur):
     for orgao, operador, destino_coluna, destino in [
         ('CJ', 'terezinha', 'relator', 'CJ4'),
         ('CREG', 'alberto', 'unidade', 'CREG3')
     ]:
+        tabela = f'public.acervo_{orgao.lower()}'
         for origem, data in [('planilha', '2024-04-11'), ('ata', '2024-04-12')]:
+            # Declarar outra origem era o jeito de gravar sem autor.
             autenticar(cur, operador)
-            cur.execute(f"""insert into public.acervo_{orgao.lower()}
+            deve_negar(cur, f"""insert into {tabela}
+                                (num_processo, {destino_coluna}, data_distribuicao, origem)
+                                values (%s, %s, %s, %s)""", (numero(), destino, data, origem))
+
+            # O importador conecta direto, sem sessão: nem o valor enviado vale.
+            cur.execute('reset role')
+            cur.execute("select set_config('request.jwt.claims', '', true)")
+            cur.execute(f"""insert into {tabela}
                             (num_processo, {destino_coluna}, data_distribuicao,
                              origem, criado_por)
                             values (%s, %s, %s, %s, 'autor-falso@goias.gov.br')""",
@@ -889,7 +917,8 @@ def importacoes_e_distribuicoes_antigas_nao_ganham_autor(cur):
 
             autenticar(cur, 'lucas')
             cur.execute("""select quem from public.admin_sorteios(%s)
-                            where data_distribuicao = %s""", (orgao, data))
+                            where data_distribuicao = %s and origem = %s""",
+                        (orgao, data, origem))
             assert cur.fetchone() == (None,), (orgao, origem)
 
 
