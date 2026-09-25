@@ -987,6 +987,113 @@ def usuario_nao_pode_fabricar_retorno_no_acervo(cur):
     assert retornos(cur, jid) == []
 
 
+def recusa(cur, itens, trecho):
+    """registrar_votos_creg recusa o lote com 22023 e diz qual processo falhou."""
+    cur.execute('savepoint recusa')
+    try:
+        registrar(cur, itens)
+    except psycopg2.Error as exc:
+        assert exc.pgcode == '22023', exc
+        assert trecho in str(exc), exc
+        cur.execute('rollback to savepoint recusa')
+        cur.execute('release savepoint recusa')
+    else:
+        raise AssertionError(f'aceitou {itens}')
+
+
+@teste
+def vista_e_retirado_valem_pelo_status_e_o_erro_nomeia_o_processo(cur):
+    limpar(cur)
+    autenticado(cur)
+    hoje = date.today()
+    numero, sem_acervo = '202600029000641', '202600029000642'
+    distribuir(cur, numero, 'CREG2', hoje)
+    jid = julgar(cur, numero, hoje)
+    orfao = julgar(cur, sem_acervo, hoje)
+
+    recusa(cur, [{'id': jid, 'voto': 'Manter', 'status': 'Retirado'}], numero)
+    recusa(cur, [{'id': jid, 'voto': 'Manter', 'status': 'Vista'}], numero)
+    recusa(cur, [{'id': jid, 'voto': 'Manter', 'status': 'Julgado'},
+                 {'id': orfao, 'voto': 'Retirado', 'status': 'Retirado'}], sem_acervo)
+    assert campos(cur, jid, 'voto', 'status') == (None, None)
+
+    # Um campo em branco é decisão pela metade: grava e só retorna ao completar.
+    assert registrar(cur, [{'id': jid, 'status': 'Retirado'}]) == 1
+    assert retornos(cur, jid) == []
+    assert registrar(cur, [{'id': jid, 'voto': 'Retirado'}]) == 1
+    assert len(retornos(cur, jid)) == 1
+
+
+@teste
+def retirado_antes_da_sessao_volta_ao_painel_com_data_de_hoje(cur):
+    limpar(cur)
+    autenticado(cur)
+    hoje = date.today()
+    numero = '202600029000643'
+    distribuir(cur, numero, 'CREG3', hoje - timedelta(days=10))
+    jid = julgar(cur, numero, hoje + timedelta(days=3))
+
+    assert registrar(cur, [{'id': jid, 'voto': 'Retirado', 'status': 'Retirado'}]) == 1
+    assert retornos(cur, jid)[0][1:] == ('CREG3', hoje, 'retorno')
+    cur.execute('select unidade, dias from processos_acervo_creg() where num_processo=%s',
+                (numero,))
+    assert cur.fetchall() == [('CREG3', 0)]
+
+
+@teste
+def desfazer_ou_excluir_vista_nao_trava_na_pauta_seguinte(cur):
+    limpar(cur)
+    autenticado(cur)
+    hoje = date.today()
+    ontem = hoje - timedelta(days=1)
+    numero = '202600029000644'
+    distribuir(cur, numero, 'CREG2', ontem)
+    primeiro = julgar(cur, numero, ontem)
+    vista = {'id': primeiro, 'voto': 'Vista', 'status': 'Vista', 'unidade_vista': 'CREG4'}
+    assert registrar(cur, [vista]) == 1
+    seguinte = julgar(cur, numero, hoje)
+    assert campos(cur, seguinte, 'acervo_id') == (retornos(cur, primeiro)[0][0],)
+
+    # A pauta seguinte aponta para o retorno; desfazê-lo não pode falhar na FK.
+    assert registrar(cur, [{'id': primeiro, 'voto': 'Manter', 'status': 'Julgado',
+                            'unidade_vista': None,
+                            'anterior': {'voto': 'Vista', 'status': 'Vista',
+                                         'unidade_vista': 'CREG4'}}]) == 1
+    assert retornos(cur, primeiro) == []
+    assert campos(cur, seguinte, 'acervo_id') == (None,)
+
+    assert registrar(cur, [{**vista, 'anterior': {'voto': 'Manter', 'status': 'Julgado',
+                                                   'unidade_vista': None}}]) == 1
+    cur.execute('update public.julgados_creg set acervo_id=%s where id=%s',
+                (retornos(cur, primeiro)[0][0], seguinte))
+    cur.execute('delete from public.julgados_creg where id=%s', (primeiro,))
+    assert campos(cur, seguinte, 'acervo_id') == (None,)
+
+
+@teste
+def migracao_devolve_ao_acervo_retirados_gravados_antes_do_gatilho(cur):
+    limpar(cur)
+    hoje = date.today()
+    pendente, ja_voltou = '202600029000645', '202600029000646'
+    for numero in (pendente, ja_voltou):
+        distribuir(cur, numero, 'CREG1', hoje - timedelta(days=20))
+    cur.execute('alter table public.julgados_creg disable trigger julgados_creg_retorno')
+    antigo = julgar(cur, pendente, hoje - timedelta(days=5), voto='Retirado',
+                    status='Retirado', atualizado_em=hoje)
+    voltou = julgar(cur, ja_voltou, hoje - timedelta(days=5), voto='Retirado',
+                    status='Retirado', atualizado_em=hoje)
+    julgar(cur, ja_voltou, hoje)
+    planilha = julgar(cur, '202600029000647', hoje, voto='Retirado', status='Retirado')
+    cur.execute('alter table public.julgados_creg enable trigger julgados_creg_retorno')
+
+    migracao = RAIZ / 'supabase' / 'migrations' /         '20260925120000_revisao_retorno_vista_retirado_creg.sql'
+    for _ in range(2):  # reaplicar não duplica
+        cur.execute(migracao.read_text(encoding='utf-8'))
+    assert retornos(cur, antigo)[0][1:] == ('CREG1', hoje - timedelta(days=5), 'retorno')
+    assert retornos(cur, voltou) == []
+    assert retornos(cur, planilha) == []
+
+
 @teste
 def registrar_votos_nao_apaga_decisao_com_campo_em_branco(cur):
     """Branco quer dizer "ainda não decidi", nunca "apague o que está lá".

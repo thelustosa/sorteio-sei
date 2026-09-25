@@ -273,7 +273,20 @@ o julgamento faz o reenvio e a correção atualizarem o mesmo retorno. Um sortei
 posterior é outra distribuição histórica; o painel continua contando o
 processo apenas uma vez. A gravação do voto, do status e do retorno ocorre na
 mesma transação. Vista exige status Vista e unidade CREG1..CREG4; Retirado exige
-status Retirado. O banco rejeita uma combinação divergente.
+status Retirado e uma unidade atual. A regra vale pelos dois lados: status
+Vista ou Retirado com voto diferente também é recusado, e a mensagem diz qual
+processo falhou. Com um dos campos ainda em branco, a decisão fica pendente e
+o retorno só nasce quando os dois baterem. Retirado registrado antes da sessão
+gera retorno com a data da gravação, nunca uma data futura.
+
+O retorno é derivado do julgamento: o painel admin o mostra como "Retorno de
+Vista/Retirado", e corrigir ou excluir essa distribuição por lá é recusado;
+quem se corrige é o julgado, inclusive o destino da Vista. Se a decisão for
+desfeita depois que a pauta seguinte se vinculou ao retorno, o julgado novo
+fica sem vínculo (`on delete set null`), e "Religar ao acervo" refaz a ligação.
+Retirados gravados antes do gatilho foram devolvidos ao acervo pela migração
+`20260925120000`; Vistas antigas, sem destino registrado, precisam de correção
+manual do destino no painel admin.
 
 **Não há de-para de unidades no Conselho.** A Câmara tem `cadeiras_cj`, que
 traduz CJ1..CJ5 no nome do conselheiro e aparece no hover do painel. Aqui não:
