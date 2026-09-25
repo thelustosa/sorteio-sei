@@ -1095,6 +1095,23 @@ def migracao_devolve_ao_acervo_retirados_gravados_antes_do_gatilho(cur):
 
 
 @teste
+def retornos_de_vista_listam_so_a_vista_com_a_unidade_anterior(cur):
+    limpar(cur)
+    autenticado(cur)
+    hoje = date.today()
+    vista, retirado = '202600029000651', '202600029000652'
+    for numero in (vista, retirado):
+        distribuir(cur, numero, 'CREG2', hoje - timedelta(days=5))
+    jv = julgar(cur, vista, hoje)
+    jr = julgar(cur, retirado, hoje)
+    assert registrar(cur, [{'id': jv, 'voto': 'Vista', 'status': 'Vista', 'unidade_vista': 'CREG4'},
+                           {'id': jr, 'voto': 'Retirado', 'status': 'Retirado'}]) == 2
+
+    cur.execute("select * from public.retornos_de_vista('CREG')")
+    assert cur.fetchall() == [(vista, hoje, 'CREG2', None)]
+
+
+@teste
 def registrar_votos_nao_apaga_decisao_com_campo_em_branco(cur):
     """Branco quer dizer "ainda não decidi", nunca "apague o que está lá".
 
