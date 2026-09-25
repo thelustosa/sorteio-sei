@@ -18,6 +18,7 @@
     frame.id = 'aplicacao';
     frame.title = 'Painel administrativo em dados de demonstração';
     const parametros = new URLSearchParams(location.search);
+    const orgao = parametros.get('orgao') === 'CREG' ? 'CREG' : 'CJ';
     const viewport = parametros.get('viewport');
     if (viewport === 'mobile') {
       document.body.style.display = 'grid';
@@ -25,7 +26,7 @@
       document.body.style.overflow = 'auto';
       document.body.style.padding = '24px';
       frame.style.width = '390px';
-      frame.style.height = '844px';
+      frame.style.height = parametros.has('full') ? '1900px' : '844px';
       frame.style.boxShadow = '0 18px 50px rgba(17,39,32,.22)';
     } else if (viewport === 'tablet') {
       document.body.style.display = 'grid';
@@ -60,9 +61,9 @@
       { id: 47, num_processo: '000000000002306', pauta: 32, voto: 'Manter', status: 'Julgado', destino: 'CJ3', data_distribuicao: '2026-08-25', acervo_id: 13, atualizado_por: 'secretaria.demo@exemplo.invalid', atualizado_em: '2026-09-03T17:42:00-03:00' }
     ];
     const SORTEIOS = [
-      { data_distribuicao: '2026-09-01', sorteado_em: '2026-09-01T10:34:00-03:00', origem: 'sorteio', processos: 16, destinos: ['CJ1', 'CJ2', 'CJ3', 'CJ4'] },
-      { data_distribuicao: '2026-08-25', sorteado_em: '2026-08-25T14:08:00-03:00', origem: 'sorteio', processos: 12, destinos: ['CJ1', 'CJ2', 'CJ3', 'CJ4'] },
-      { data_distribuicao: '2026-08-20', sorteado_em: null, origem: 'ata', processos: 4, destinos: ['CJ2', 'CJ4'] }
+      { data_distribuicao: '2026-09-01', sorteado_em: '2026-09-01T10:34:00-03:00', origem: 'sorteio', processos: 16, destinos: orgao === 'CJ' ? ['CJ1', 'CJ2', 'CJ3', 'CJ4'] : ['CREG1', 'CREG2', 'CREG3', 'CREG4'], quem: 'secretaria.demo@exemplo.invalid' },
+      { data_distribuicao: '2026-08-25', sorteado_em: '2026-08-25T14:08:00-03:00', origem: 'sorteio', processos: 12, destinos: orgao === 'CJ' ? ['CJ1', 'CJ2', 'CJ3', 'CJ4'] : ['CREG1', 'CREG2', 'CREG3', 'CREG4'], quem: 'usuario.demo@exemplo.invalid' },
+      { data_distribuicao: '2026-08-20', sorteado_em: null, origem: 'ata', processos: 4, destinos: orgao === 'CJ' ? ['CJ2', 'CJ4'] : ['CREG2', 'CREG4'], quem: null }
     ];
     const ACERVO = [
       { id: 7, ordem: 1, num_processo: '000000000000001', destino: 'CJ3', assunto: 'Auto de Infração', decisao: 'Com defesa', origem: 'sorteio', julgados: 1 },
@@ -134,6 +135,10 @@
       script.src = 'assets/js/admin.js';
       script.onload = async () => {
         await win.inicializarAdmin(new win.Set(['CJ', 'CREG']));
+        if (orgao === 'CJ') {
+          doc.querySelector('[data-orgao-admin="CJ"]').click();
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
         const modo = parametros.get('view') || 'sessoes';
         if (modo === 'sorteios' || modo === 'auditoria' || modo === 'meta') {
           doc.querySelector(`[data-aba="${modo}"]`).click();
