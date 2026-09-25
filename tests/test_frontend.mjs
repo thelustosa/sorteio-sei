@@ -2169,7 +2169,9 @@ function acervoPage(api, { imprimir = () => {}, colegiado = 'cj' } = {}) {
            recorteCampo, escolherRecorte, ...app };
 }
 
-const celulas = linha => linha.children.map(c => c.textContent);
+// Cabeçalho ordenável guarda o rótulo no <span> dentro do botão.
+const textoDaCelula = c => c.textContent || c.children[0]?.children?.[0]?.textContent || '';
+const celulas = linha => linha.children.map(textoDaCelula);
 
 test('acervo monta as colunas a partir dos relatores que o banco devolve', async () => {
   const page = acervoPage(async () => [
@@ -2632,6 +2634,124 @@ test('o card lista os processos e habilita a exportação', async () => {
     'só no title, o nome do conselheiro existe para o mouse e não para o leitor de tela');
 });
 
+test('processo que voltou por Vista fica amarelo e mostra de onde veio', async () => {
+  const page = acervoPage(async caminho => {
+    if (caminho === 'rpc/retornos_de_vista') {
+      return [{ num_processo: '000000000001111', data_distribuicao: '2026-06-29',
+                destino_anterior: 'CJ4', conselheiro_anterior: CADEIRAS_CJ.CJ4 },
+              // Outra distribuição do mesmo processo não pinta a linha.
+              { num_processo: '000000000002222', data_distribuicao: '2026-01-02',
+                destino_anterior: 'CJ3' }];
+    }
+    return caminho.includes('processos_acervo_cj') ? processosFalsos : matriz;
+  });
+  await page.inicializarAcervo();
+  await wait();
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  const [vista, comum] = page.document.getElementById('detalheTable').children[1].children
+    .map(tr => tr.children[0]);
+  assert.equal(vista.classList.contains('processo-vista'), true);
+  assert.equal(vista.title, `Voltou de Vista. Antes: CJ4 (${CADEIRAS_CJ.CJ4})`);
+  assert.equal(comum.classList.contains('processo-vista'), false);
+  assert.equal(comum.title, undefined);
+});
+
+test('resposta atrasada de um card anterior não vaza para o card aberto depois', async () => {
+  let liberarRetornos;
+  const retornos = new Promise(resolve => { liberarRetornos = resolve; });
+  let pedidoDeProcessos = 0;
+  let pedidosDeRetorno = 0;
+  const page = acervoPage(async caminho => {
+    if (caminho === 'rpc/retornos_de_vista') {
+      pedidosDeRetorno++;
+      return retornos;
+    }
+    if (caminho.includes('processos_acervo_cj')) {
+      pedidoDeProcessos++;
+      if (pedidoDeProcessos === 2) throw new Error('rede fora');
+      return processosFalsos;
+    }
+    return matriz;
+  });
+  await page.inicializarAcervo();
+  await wait();
+
+  // A: a lista volta, os retornos não. B é aberto por cima e falha.
+  const abrindoA = page.abrirDetalhe(celulaDe(page, 0, 1));
+  await wait();
+  await page.abrirDetalhe(celulaDe(page, 0, 3));
+  liberarRetornos([]);
+  await abrindoA;
+
+  assert.equal(page.document.getElementById('detalheErro').hidden, false, 'B mostra a própria falha');
+  assert.equal(page.document.getElementById('btnExportarDetalhe').disabled, true,
+    'a lista de A não pode ser exportada sob o título de B');
+  assert.equal(page.document.getElementById('detalheResumo').textContent, '');
+  assert.equal(pedidosDeRetorno, 1, 'os retornos são pedidos uma vez por carregamento do painel');
+});
+
+test('sem a consulta dos retornos, o card abre igual e sem destaque', async () => {
+  const page = acervoPage(async caminho => {
+    if (caminho === 'rpc/retornos_de_vista') throw new Error('falhou');
+    return caminho.includes('processos_acervo_creg')
+      ? [{ num_processo: '000000000004444', unidade: 'CREG3', assunto: 'Auto de Infração',
+           data_distribuicao: '2026-06-29', dias: 56 }]
+      : [{ ordem: 1, faixa: 'Até 15 dias', unidade: 'CREG3', processos: 1 }];
+  }, { colegiado: 'creg' });
+  await page.inicializarAcervo();
+  await wait();
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  const linhas = page.document.getElementById('detalheTable').children[1].children;
+  assert.equal(linhas.length, 1);
+  assert.equal(linhas[0].children[0].classList.contains('processo-vista'), false);
+});
+
+test('Distribuição, Dias passados e Tempo ordenam: crescente, decrescente, padrão', async () => {
+  // Fora de ordem de propósito: o padrão é a ordem que o banco devolveu.
+  const lista = [
+    { num_processo: '000000000003333', relator: 'CJ1', data_distribuicao: '2026-07-25', dias: 30 },
+    { num_processo: '000000000001111', relator: 'CJ1', data_distribuicao: '2026-06-29', dias: 56 },
+    { num_processo: '000000000002222', relator: 'CJ1', data_distribuicao: '2026-08-14', dias: 10 }
+  ];
+  const page = await acervoComDetalhe(() => lista);
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+  const tabela = () => page.document.getElementById('detalheTable');
+  const ordem = () => tabela().children[1].children.map(tr => tr.children[0].textContent.slice(-4));
+  const th = rotulo => tabela().children[0].children[0].children
+    .find(c => textoDaCelula(c) === rotulo);
+  const clicar = rotulo => th(rotulo).children[0].click();
+
+  assert.deepEqual(ordem(), ['3333', '1111', '2222']);
+  assert.equal(th('Nº do Processo').children.length, 0, 'só as três colunas de prazo ordenam');
+  assert.equal(th('Distribuição').getAttribute('aria-sort'), null);
+
+  clicar('Distribuição');
+  assert.deepEqual(ordem(), ['1111', '3333', '2222']);
+  assert.equal(th('Distribuição').getAttribute('aria-sort'), 'ascending');
+  assert.equal(page.document.activeElement, th('Distribuição').children[0],
+    'o foco volta ao cabeçalho redesenhado');
+
+  clicar('Distribuição');
+  assert.deepEqual(ordem(), ['2222', '3333', '1111']);
+  assert.equal(th('Distribuição').getAttribute('aria-sort'), 'descending');
+
+  clicar('Distribuição');
+  assert.deepEqual(ordem(), ['3333', '1111', '2222']);
+  assert.equal(th('Distribuição').getAttribute('aria-sort'), null);
+
+  // Outra coluna assume a ordem, e a anterior volta ao neutro.
+  clicar('Tempo');
+  assert.deepEqual(ordem(), ['2222', '3333', '1111']);
+  assert.equal(th('Tempo').getAttribute('aria-sort'), 'ascending');
+  assert.equal(th('Distribuição').getAttribute('aria-sort'), null);
+
+  // Abrir outro card começa do padrão.
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+  assert.deepEqual(ordem(), ['3333', '1111', '2222']);
+});
+
 // ── Tempo por extenso ────────────────────────────────────────────────────────
 // A coluna Tempo escreve o MESMO prazo que Dias passados mede. O intervalo é
 // contado no calendário, e é por isso que ele fecha com a data de distribuição
@@ -2679,7 +2799,7 @@ test('a coluna Tempo entra no cabeçalho e no Excel do card', async () => {
   await page.abrirDetalhe(celulaDe(page, 0, 1));
 
   const cabecalho = page.document.getElementById('detalheTable').children[0].children[0];
-  assert.deepEqual(cabecalho.children.map(c => c.textContent),
+  assert.deepEqual(cabecalho.children.map(textoDaCelula),
     ['Nº do Processo', 'Relator', 'Distribuição', 'Dias passados', 'Tempo'],
     'Tempo fica ao lado de Dias passados, que é o mesmo prazo em número');
 
@@ -2960,8 +3080,10 @@ test('o card abre o mesmo recorte que a célula contava', async () => {
 
   await page.abrirDetalhe(celulaDe(page, 0, 1));
 
-  const detalhe = page.pedidos.at(-1);
-  assert.ok(detalhe.caminho.includes('processos_acervo_creg'));
+  // O card pede a lista e, em paralelo, os retornos de Vista: o que importa
+  // aqui é o pedido da lista.
+  const detalhe = page.pedidos.findLast(p => p.caminho.includes('processos_acervo_creg'));
+  assert.ok(detalhe);
   assert.equal(detalhe.corpo.p_diligencia, true,
     'o card listaria um recorte diferente do número que estava na tela');
   // E os filtros antigos continuam viajando junto.
