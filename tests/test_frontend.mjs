@@ -102,6 +102,8 @@ class Node {
     if (this.tagName === 'A') this.document.downloads.push(this.download);
     else this.dispatch('click');
   }
+  showModal() { this.open = true; }
+  close() { this.open = false; this.dispatch('close'); }
 }
 
 class Fragment extends Node {
@@ -287,7 +289,7 @@ async function preencherCreg(page, numero, recurso = 'Com recurso') {
   row.querySelector('.col-decisao select').value = recurso;
 }
 
-function julgadosPage(registrar, colegiado = 'cj') {
+function julgadosPage(registrar, colegiado = 'cj', aviso = () => {}) {
   const document = new Document();
   document.body.dataset.colegiado = colegiado;
   const add = (id, tag) => document.add(id, tag);
@@ -295,11 +297,17 @@ function julgadosPage(registrar, colegiado = 'cj') {
     'tituloPauta', 'contadorPendentes', 'btnSalvar', 'btnVoltar', 'txtModo',
     'listaPautasTitulo', 'btnVoltarInicio', 'btnTodosManter', 'btnTodosJulgado'].forEach(id => add(id, id.startsWith('btn') ? 'button' : 'div'));
   const tbody = add('julgadosTableBody', 'tbody');
+  add('dialogUnidadeVista', 'dialog');
+  add('formUnidadeVista', 'form');
+  add('resumoUnidadeVista', 'p');
+  add('unidadeDestinoVista', 'select');
+  add('erroUnidadeVista', 'p').hidden = true;
+  add('cancelarUnidadeVista', 'button');
 
   const app = new Function('document', 'api', 'aviso', 'alternarBotaoCarregando', 'criarIndicadorCarregamento',
     'rotularCadeira',
     `${source('julgados.js')}\nreturn { abrirPauta, salvar, inicializarJulgados, pendentesPorPauta };`)(
-    document, registrar, () => {}, () => {}, () => document.createElement('div'), rotularCadeira);
+    document, registrar, aviso, () => {}, () => document.createElement('div'), rotularCadeira);
   return { document, tbody, ...app };
 }
 
@@ -1161,6 +1169,176 @@ test('CREG identifica assunto ainda ausente no cadastro', () => {
   assert.equal(page.tbody.children[0].children[2].textContent, 'Não informado');
 });
 
+test('CREG exige destino para Vista e preserva a escolha após falha de gravação', async () => {
+  let enviado;
+  const page = julgadosPage(async (path, options) => {
+    if (path === 'rpc/registrar_votos_creg') {
+      enviado = JSON.parse(options.body).itens;
+      throw new Error('sem rede');
+    }
+    return [];
+  }, 'creg');
+  page.pendentesPorPauta.set('17|2026-09-23', [
+    { id: 1, num_processo: '202600029000315', unidade: 'CREG2',
+      voto: null, status: null, unidade_vista: null }
+  ]);
+  page.abrirPauta('17|2026-09-23');
+  const linha = page.tbody.children[0];
+  const voto = linha.querySelector('.col-voto select');
+  const dialog = page.document.getElementById('dialogUnidadeVista');
+  const destino = page.document.getElementById('unidadeDestinoVista');
+  const form = page.document.getElementById('formUnidadeVista');
+
+  voto.value = 'Vista';
+  page.tbody.dispatch('change', { target: voto });
+  assert.equal(dialog.open, true);
+  assert.match(page.document.getElementById('resumoUnidadeVista').textContent,
+    /202600029000315.*CREG2/);
+  assert.equal(linha.querySelector('.col-status select').value, '');
+
+  form.dispatch('submit');
+  assert.equal(dialog.open, true);
+  assert.equal(page.document.getElementById('erroUnidadeVista').hidden, false);
+  page.document.getElementById('cancelarUnidadeVista').click();
+  assert.equal(dialog.open, false);
+  assert.equal(voto.value, '');
+  assert.equal(linha.dataset.alterada, undefined);
+  assert.equal(enviado, undefined);
+
+  voto.value = 'Vista';
+  page.tbody.dispatch('change', { target: voto });
+  destino.value = 'CREG4';
+  form.dispatch('submit');
+  assert.equal(voto.value, 'Vista');
+  assert.equal(linha.querySelector('.col-status select').value, 'Vista');
+  await page.salvar();
+  assert.deepEqual(enviado, [{ id: 1,
+    anterior: { voto: null, status: null, unidade_vista: null },
+    voto: 'Vista', status: 'Vista', unidade_vista: 'CREG4' }]);
+  assert.equal(linha.dataset.unidadeVista, 'CREG4');
+  assert.equal(voto.value, 'Vista');
+});
+
+test('CREG guarda um destino de Vista por processo e pede o que falta antes de salvar', async () => {
+  let enviado;
+  const page = julgadosPage(async (path, options) => {
+    if (path === 'rpc/registrar_votos_creg') {
+      enviado = JSON.parse(options.body).itens;
+      return 2;
+    }
+    return [];
+  }, 'creg');
+  page.pendentesPorPauta.set('17|2026-09-23', [
+    { id: 1, num_processo: '202600029000315', unidade: 'CREG2',
+      voto: null, status: null, unidade_vista: null },
+    { id: 2, num_processo: '202600029000324', unidade: 'CREG3',
+      voto: 'Vista', status: null, unidade_vista: null }
+  ]);
+  page.abrirPauta('17|2026-09-23');
+
+  const primeiroVoto = page.tbody.children[0].querySelector('.col-voto select');
+  primeiroVoto.value = 'Vista';
+  page.tbody.dispatch('change', { target: primeiroVoto });
+  page.document.getElementById('unidadeDestinoVista').value = 'CREG1';
+  page.document.getElementById('formUnidadeVista').dispatch('submit');
+
+  const segundoStatus = page.tbody.children[1].querySelector('.col-status select');
+  segundoStatus.value = 'Vista';
+  page.tbody.dispatch('change', { target: segundoStatus });
+  const salvamento = page.salvar();
+  assert.equal(page.document.getElementById('dialogUnidadeVista').open, true);
+  assert.match(page.document.getElementById('resumoUnidadeVista').textContent,
+    /202600029000324.*CREG3/);
+  assert.equal(enviado, undefined);
+  page.document.getElementById('cancelarUnidadeVista').click();
+  await salvamento;
+  assert.equal(enviado, undefined, 'cancelar uma escolha impede o envio de toda a pauta');
+
+  const novoSalvamento = page.salvar();
+  page.document.getElementById('unidadeDestinoVista').value = 'CREG4';
+  page.document.getElementById('formUnidadeVista').dispatch('submit');
+  await novoSalvamento;
+  assert.deepEqual(enviado, [
+    { id: 1, anterior: { voto: null, status: null, unidade_vista: null },
+      voto: 'Vista', status: 'Vista', unidade_vista: 'CREG1' },
+    { id: 2, anterior: { voto: 'Vista', status: null, unidade_vista: null },
+      status: 'Vista', unidade_vista: 'CREG4' }
+  ]);
+});
+
+test('voto sugere status na CJ e no CREG sem impedir ajuste manual', async () => {
+  for (const colegiado of ['cj', 'creg']) {
+    let enviado;
+    const page = julgadosPage(async (path, options) => {
+      if (path.startsWith('rpc/registrar_votos')) {
+        enviado = JSON.parse(options.body).itens;
+        return 3;
+      }
+      return [];
+    }, colegiado);
+    page.pendentesPorPauta.set('1|2026-08-21', [
+      { id: 1, num_processo: '123', relator: 'CJ1', unidade: 'CREG1', voto: null, status: null },
+      { id: 2, num_processo: '456', relator: 'CJ2', unidade: 'CREG2', voto: null, status: 'Retirado' },
+      { id: 3, num_processo: '789', relator: 'CJ3', unidade: 'CREG3', voto: null, status: null },
+      { id: 4, num_processo: '987', relator: 'CJ4', unidade: 'CREG4', voto: null, status: null }
+    ]);
+    page.abrirPauta('1|2026-08-21');
+
+    const primeira = page.tbody.children[0];
+    const voto = primeira.querySelector('.col-voto select');
+    const status = primeira.querySelector('.col-status select');
+    const destino = n => (colegiado === 'creg' ? `CREG${n}` : `CJ${n}`);
+    const campoVista = colegiado === 'creg' ? 'unidade_vista' : 'cadeira_vista';
+    const escolherVoto = valor => {
+      voto.value = valor;
+      page.tbody.dispatch('change', { target: voto });
+      if (valor === 'Vista') {
+        page.document.getElementById('unidadeDestinoVista').value = destino(1);
+        page.document.getElementById('formUnidadeVista').dispatch('submit');
+      }
+    };
+
+    escolherVoto(colegiado === 'creg' ? 'Aprovação' : 'Manter');
+    assert.equal(status.value, 'Julgado');
+    escolherVoto('Vista');
+    assert.equal(status.value, 'Vista');
+    escolherVoto('Retirado');
+    assert.equal(status.value, 'Retirado');
+
+    status.value = colegiado === 'creg' ? 'Sobrestado' : 'Retornou';
+    page.tbody.dispatch('change', { target: status });
+    escolherVoto('Anular');
+    assert.equal(status.value, colegiado === 'creg' ? 'Sobrestado' : 'Retornou');
+
+    const segunda = page.tbody.children[1];
+    const votoComStatusExistente = segunda.querySelector('.col-voto select');
+    votoComStatusExistente.value = 'Vista';
+    page.tbody.dispatch('change', { target: votoComStatusExistente });
+    page.document.getElementById('unidadeDestinoVista').value = destino(2);
+    page.document.getElementById('formUnidadeVista').dispatch('submit');
+    assert.equal(segunda.querySelector('.col-status select').value, 'Vista');
+
+    const terceira = page.tbody.children[2];
+    const statusManualAntes = terceira.querySelector('.col-status select');
+    statusManualAntes.value = colegiado === 'creg' ? 'Sobrestado' : 'Retornou';
+    page.tbody.dispatch('change', { target: statusManualAntes });
+    const votoDepois = terceira.querySelector('.col-voto select');
+    votoDepois.value = 'Manter';
+    page.tbody.dispatch('change', { target: votoDepois });
+    assert.equal(statusManualAntes.value, colegiado === 'creg' ? 'Sobrestado' : 'Retornou');
+
+    await page.salvar();
+    assert.deepEqual(enviado, [
+      { id: 1, anterior: { voto: null, status: null },
+        voto: 'Anular', status: colegiado === 'creg' ? 'Sobrestado' : 'Retornou' },
+      { id: 2, anterior: { voto: null, status: 'Retirado', [campoVista]: null },
+        voto: 'Vista', status: 'Vista', [campoVista]: destino(2) },
+      { id: 3, anterior: { voto: null, status: null },
+        voto: 'Manter', status: colegiado === 'creg' ? 'Sobrestado' : 'Retornou' }
+    ]);
+  }
+});
+
 test('CJ e CREG enviam só o campo editado e preservam a tela após conflito', async () => {
   for (const colegiado of ['cj', 'creg']) {
     let enviado, rota;
@@ -1210,6 +1388,8 @@ test('preenche em massa só o que está em branco e marca a linha para salvar', 
   page.tbody.dispatch('change', { target: excecao });
 
   page.document.getElementById('btnTodosManter').click();
+  assert.equal(page.tbody.children[0].querySelector('.col-status select').value, 'Julgado');
+  assert.equal(page.tbody.children[1].querySelector('.col-status select').value, 'Julgado');
   page.document.getElementById('btnTodosJulgado').click();
 
   assert.equal(page.tbody.children[0].querySelector('.col-voto select').value, 'Manter');
@@ -1222,6 +1402,214 @@ test('preenche em massa só o que está em branco e marca a linha para salvar', 
     { id: 1, anterior: { voto: null, status: null }, voto: 'Manter', status: 'Julgado' },
     { id: 2, anterior: { voto: null, status: null }, voto: 'Anular', status: 'Julgado' }
   ]);
+});
+
+test('CREG: Vista e Retirado impõem o status mesmo depois do lote de Julgado', async () => {
+  let enviado;
+  const page = julgadosPage(async (path, options) => {
+    enviado = JSON.parse(options.body).itens;
+    return 1;
+  }, 'creg');
+  page.pendentesPorPauta.set('1|2026-08-21', [
+    { id: 1, num_processo: '123', unidade: 'CREG1', voto: null, status: null }
+  ]);
+  page.abrirPauta('1|2026-08-21');
+  page.document.getElementById('btnTodosJulgado').click();
+
+  const voto = page.tbody.children[0].querySelector('.col-voto select');
+  const status = page.tbody.children[0].querySelector('.col-status select');
+  voto.value = 'Retirado';
+  page.tbody.dispatch('change', { target: voto });
+  assert.equal(status.value, 'Retirado');
+  voto.value = 'Vista';
+  page.tbody.dispatch('change', { target: voto });
+  page.document.getElementById('unidadeDestinoVista').value = 'CREG2';
+  page.document.getElementById('formUnidadeVista').dispatch('submit');
+  assert.equal(status.value, 'Vista');
+
+  await page.salvar();
+  assert.deepEqual(enviado, [{ id: 1, anterior: { voto: null, status: null, unidade_vista: null },
+    voto: 'Vista', status: 'Vista', unidade_vista: 'CREG2' }]);
+});
+
+test('lote de Manter não troca status já gravado e pula Vista/Retirado', () => {
+  for (const colegiado of ['cj', 'creg']) {
+    const page = julgadosPage(async () => 0, colegiado);
+    page.pendentesPorPauta.set('1|2026-08-21', [
+      { id: 1, num_processo: '123', relator: 'CJ1', unidade: 'CREG1', voto: null, status: 'Retirado' },
+      { id: 2, num_processo: '456', relator: 'CJ2', unidade: 'CREG2', voto: null,
+        status: colegiado === 'creg' ? 'Sobrestado' : 'Retornou' }
+    ]);
+    page.abrirPauta('1|2026-08-21');
+    page.document.getElementById('btnTodosManter').click();
+
+    const [retirado, outro] = page.tbody.children;
+    assert.equal(retirado.querySelector('.col-status select').value, 'Retirado');
+    assert.equal(retirado.querySelector('.col-voto select').value, '',
+      'Manter com Retirado seria recusado pelo banco');
+    assert.equal(outro.querySelector('.col-voto select').value, 'Manter');
+    assert.equal(outro.querySelector('.col-status select').value,
+      colegiado === 'creg' ? 'Sobrestado' : 'Retornou');
+  }
+});
+
+test('CREG barra antes do envio o par incoerente e o Retirado sem unidade', async () => {
+  let enviado;
+  const avisos = [];
+  const page = julgadosPage(async (path, options) => {
+    enviado = JSON.parse(options.body).itens;
+    return 1;
+  }, 'creg', (...args) => avisos.push(args));
+  page.pendentesPorPauta.set('1|2026-08-21', [
+    { id: 1, num_processo: '202600029000315', unidade: 'CREG1', voto: null, status: null },
+    { id: 2, num_processo: '202600029000324', unidade: null, voto: null, status: null }
+  ]);
+  page.abrirPauta('1|2026-08-21');
+  const [primeira, segunda] = page.tbody.children;
+
+  // Status escolhido à mão prevalece sobre a sugestão do voto.
+  const status = primeira.querySelector('.col-status select');
+  status.value = 'Retirado';
+  page.tbody.dispatch('change', { target: status });
+  const voto = primeira.querySelector('.col-voto select');
+  voto.value = 'Manter';
+  page.tbody.dispatch('change', { target: voto });
+  await page.salvar();
+  assert.equal(enviado, undefined);
+  assert.match(avisos.at(-1)[0], /voto e status iguais.*202600029000315/);
+
+  voto.value = 'Retirado';
+  page.tbody.dispatch('change', { target: voto });
+  const semUnidade = segunda.querySelector('.col-voto select');
+  semUnidade.value = 'Retirado';
+  page.tbody.dispatch('change', { target: semUnidade });
+  await page.salvar();
+  assert.equal(enviado, undefined);
+  assert.match(avisos.at(-1)[0], /não têm distribuição no acervo: 202600029000324\./);
+});
+
+test('CJ: voto Vista pergunta a cadeira, como no CREG, e envia cadeira_vista', async () => {
+  let enviado;
+  const page = julgadosPage(async (path, options) => {
+    if (path === 'rpc/registrar_votos') {
+      enviado = JSON.parse(options.body).itens;
+      return 2;
+    }
+    return [];
+  });
+  page.pendentesPorPauta.set('1|2026-08-21', [
+    { id: 1, num_processo: '202600029000801', relator: 'CJ1', voto: null, status: null },
+    { id: 2, num_processo: '202600029000802', relator: 'CJ2', voto: null, status: null }
+  ]);
+  page.abrirPauta('1|2026-08-21');
+  const dialog = page.document.getElementById('dialogUnidadeVista');
+  const destino = page.document.getElementById('unidadeDestinoVista');
+  const form = page.document.getElementById('formUnidadeVista');
+  const [primeira, segunda] = page.tbody.children;
+
+  // Status sozinho não pergunta: quem decide é o voto.
+  const status = primeira.querySelector('.col-status select');
+  status.value = 'Vista';
+  page.tbody.dispatch('change', { target: status });
+  assert.notEqual(dialog.open, true);
+
+  // Voto Vista pergunta; cancelar volta o voto e não mexe no status.
+  const votoPrimeira = primeira.querySelector('.col-voto select');
+  votoPrimeira.value = 'Vista';
+  page.tbody.dispatch('change', { target: votoPrimeira });
+  assert.equal(dialog.open, true);
+  assert.match(page.document.getElementById('resumoUnidadeVista').textContent,
+    /202600029000801 · cadeira atual: CJ1/);
+  page.document.getElementById('cancelarUnidadeVista').click();
+  assert.equal(votoPrimeira.value, '');
+  assert.equal(status.value, 'Vista');
+
+  votoPrimeira.value = 'Vista';
+  page.tbody.dispatch('change', { target: votoPrimeira });
+  destino.value = 'CJ4';
+  form.dispatch('submit');
+
+  // O voto sugere o status Vista.
+  const voto = segunda.querySelector('.col-voto select');
+  voto.value = 'Vista';
+  page.tbody.dispatch('change', { target: voto });
+  assert.equal(dialog.open, true);
+  destino.value = 'CJ3';
+  form.dispatch('submit');
+  assert.equal(segunda.querySelector('.col-status select').value, 'Vista');
+
+  await page.salvar();
+  assert.deepEqual(enviado, [
+    { id: 1, anterior: { voto: null, status: null, cadeira_vista: null },
+      voto: 'Vista', status: 'Vista', cadeira_vista: 'CJ4' },
+    { id: 2, anterior: { voto: null, status: null, cadeira_vista: null },
+      voto: 'Vista', status: 'Vista', cadeira_vista: 'CJ3' }
+  ]);
+});
+
+test('CJ barra Retirado de processo sem cadeira antes do envio', async () => {
+  let enviado;
+  const avisos = [];
+  const page = julgadosPage(async (path, options) => {
+    enviado = JSON.parse(options.body).itens;
+    return 1;
+  }, 'cj', (...args) => avisos.push(args));
+  page.pendentesPorPauta.set('1|2026-08-21', [
+    { id: 1, num_processo: '202600029000803', relator: null, voto: null, status: null }
+  ]);
+  page.abrirPauta('1|2026-08-21');
+  const voto = page.tbody.children[0].querySelector('.col-voto select');
+  voto.value = 'Retirado';
+  page.tbody.dispatch('change', { target: voto });
+  await page.salvar();
+  assert.equal(enviado, undefined);
+  assert.match(avisos.at(-1)[0], /cadeira que o levou.*202600029000803/);
+});
+
+test('o destino da Vista aparece embaixo do voto e reabre a janela', async () => {
+  let enviado;
+  const page = julgadosPage(async (path, options) => {
+    enviado = JSON.parse(options.body).itens;
+    return 1;
+  }, 'creg');
+  page.pendentesPorPauta.set('1|2026-08-21', [
+    { id: 1, num_processo: '202600029000901', unidade: 'CREG2', voto: null, status: null },
+    { id: 2, num_processo: '202600029000902', unidade: 'CREG3', voto: 'Vista', status: null,
+      unidade_vista: 'CREG1' }
+  ]);
+  page.abrirPauta('1|2026-08-21');
+  const [primeira, segunda] = page.tbody.children;
+  const marca = tr => tr.querySelector('.vista-destino');
+  const dialog = page.document.getElementById('dialogUnidadeVista');
+  const destino = page.document.getElementById('unidadeDestinoVista');
+  const form = page.document.getElementById('formUnidadeVista');
+
+  // O que já veio gravado aparece ao abrir a pauta.
+  assert.equal(marca(segunda).textContent, 'Destino: CREG1');
+  assert.equal(marca(primeira), null);
+
+  const voto = primeira.querySelector('.col-voto select');
+  voto.value = 'Vista';
+  page.tbody.dispatch('change', { target: voto });
+  destino.value = 'CREG4';
+  form.dispatch('submit');
+  assert.equal(marca(primeira).textContent, 'Destino: CREG4');
+
+  // Clicar no lembrete troca o destino sem mexer no voto.
+  marca(primeira).click();
+  assert.equal(dialog.open, true);
+  destino.value = 'CREG2';
+  form.dispatch('submit');
+  assert.equal(marca(primeira).textContent, 'Destino: CREG2');
+  assert.equal(voto.value, 'Vista');
+
+  await page.salvar();
+  assert.equal(enviado[0].unidade_vista, 'CREG2');
+
+  // Trocar o voto leva o destino e o lembrete junto.
+  voto.value = 'Manter';
+  page.tbody.dispatch('change', { target: voto });
+  assert.equal(marca(primeira), null);
 });
 
 test('move o foco para o cadastro ao escolher uma modalidade', () => {
@@ -3481,7 +3869,7 @@ const META_45 = [
 
 function apiDoPainel(chamadas, respostas = {}) {
   return async (caminho, opcoes) => {
-    chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+    chamadas.push({ caminho, corpo: opcoes ? JSON.parse(opcoes.body) : null });
     if (caminho in respostas) {
       const resposta = respostas[caminho];
       return typeof resposta === 'function' ? resposta() : resposta;
@@ -4368,6 +4756,46 @@ test('o Conselho usa o proprio vocabulario no formulario', async () => {
   page.form.dispatch('submit');
   await wait();
   assert.ok(chamadas.some(c => c.caminho === 'rpc/admin_corrigir_acervo_creg'));
+});
+
+test('Conselho corrige o destino da Vista e não edita a distribuição de retorno', async () => {
+  const chamadas = [];
+  const page = adminPage({
+    api: apiDoPainel(chamadas, {
+      'rpc/admin_sessoes': [{ data_sessao: '2026-07-09', pauta: 24, processos: 1, pendentes: 0 }],
+      'rpc/admin_processos_sessao': [{ id: 55, num_processo: '202600000000002', pauta: 24,
+        voto: 'Vista', status: 'Vista', destino: 'CREG2', data_distribuicao: '2026-06-18',
+        acervo_id: 9, atualizado_por: null, atualizado_em: null }],
+      'julgados_creg?select=unidade_vista&id=eq.55': [{ unidade_vista: 'CREG1' }],
+      'rpc/admin_sorteios': [{ data_distribuicao: '2026-07-09', sorteado_em: null,
+        origem: 'retorno', processos: 1, destinos: ['CREG1'] }],
+      'rpc/admin_processos_acervo': [{ id: 10, ordem: null, num_processo: '202600000000002',
+        destino: 'CREG1', assunto: null, decisao: null, interessado: null,
+        origem: 'retorno', julgados: 0 }]
+    })
+  });
+  await page.inicializarAdmin(new Set(['CREG']));
+  page.acao(0, 'Abrir sessão').dispatch('click');
+  await wait();
+
+  page.acao(0, 'Corrigir dados').dispatch('click');
+  await wait();
+  assert.equal(page.campo('unidade_vista').value, 'CREG1');
+  page.campo('unidade_vista').value = 'CREG3';
+  page.form.dispatch('submit');
+  await wait();
+  page.form.dispatch('submit');
+  await wait();
+  const correcao = chamadas.find(c => c.caminho === 'rpc/admin_corrigir_julgado_creg');
+  assert.deepEqual(correcao.corpo.p_campos, { unidade_vista: 'CREG3' });
+
+  page.botaoDeAba('sorteios').dispatch('click');
+  await wait();
+  page.acao(0, 'Abrir distribuição').dispatch('click');
+  await wait();
+  assert.equal(page.acao(0, 'Corrigir dados'), undefined, 'o retorno se corrige pelo julgado');
+  assert.equal(page.acao(0, 'Redistribuir'), undefined);
+  assert.ok(page.acao(0, 'Corrigir número'));
 });
 
 // ── Regressões do painel ─────────────────────────────────────────
