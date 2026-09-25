@@ -2657,6 +2657,40 @@ test('processo que voltou por Vista fica amarelo e mostra de onde veio', async (
   assert.equal(comum.title, undefined);
 });
 
+test('resposta atrasada de um card anterior não vaza para o card aberto depois', async () => {
+  let liberarRetornos;
+  const retornos = new Promise(resolve => { liberarRetornos = resolve; });
+  let pedidoDeProcessos = 0;
+  let pedidosDeRetorno = 0;
+  const page = acervoPage(async caminho => {
+    if (caminho === 'rpc/retornos_de_vista') {
+      pedidosDeRetorno++;
+      return retornos;
+    }
+    if (caminho.includes('processos_acervo_cj')) {
+      pedidoDeProcessos++;
+      if (pedidoDeProcessos === 2) throw new Error('rede fora');
+      return processosFalsos;
+    }
+    return matriz;
+  });
+  await page.inicializarAcervo();
+  await wait();
+
+  // A: a lista volta, os retornos não. B é aberto por cima e falha.
+  const abrindoA = page.abrirDetalhe(celulaDe(page, 0, 1));
+  await wait();
+  await page.abrirDetalhe(celulaDe(page, 0, 3));
+  liberarRetornos([]);
+  await abrindoA;
+
+  assert.equal(page.document.getElementById('detalheErro').hidden, false, 'B mostra a própria falha');
+  assert.equal(page.document.getElementById('btnExportarDetalhe').disabled, true,
+    'a lista de A não pode ser exportada sob o título de B');
+  assert.equal(page.document.getElementById('detalheResumo').textContent, '');
+  assert.equal(pedidosDeRetorno, 1, 'os retornos são pedidos uma vez por carregamento do painel');
+});
+
 test('sem a consulta dos retornos, o card abre igual e sem destaque', async () => {
   const page = acervoPage(async caminho => {
     if (caminho === 'rpc/retornos_de_vista') throw new Error('falhou');
@@ -3046,8 +3080,10 @@ test('o card abre o mesmo recorte que a célula contava', async () => {
 
   await page.abrirDetalhe(celulaDe(page, 0, 1));
 
-  const detalhe = page.pedidos.at(-1);
-  assert.ok(detalhe.caminho.includes('processos_acervo_creg'));
+  // O card pede a lista e, em paralelo, os retornos de Vista: o que importa
+  // aqui é o pedido da lista.
+  const detalhe = page.pedidos.findLast(p => p.caminho.includes('processos_acervo_creg'));
+  assert.ok(detalhe);
   assert.equal(detalhe.corpo.p_diligencia, true,
     'o card listaria um recorte diferente do número que estava na tela');
   // E os filtros antigos continuam viajando junto.
