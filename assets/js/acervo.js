@@ -832,6 +832,10 @@ async function abrirDetalhe(celulaEl) {
   if (!detalheDialog.open) detalheDialog.showModal();
 
   let processos;
+  // Quem voltou por Vista é só destaque: se a consulta falhar, a lista abre
+  // igual, sem a cor.
+  const vistas = api('rpc/retornos_de_vista', { paginar: true, method: 'POST',
+    body: JSON.stringify({ p_colegiado: COL.sigla }) }).catch(() => []);
   try {
     processos = await api(COL.processos, { paginar: true,
       method: 'POST',
@@ -859,6 +863,15 @@ async function abrirDetalhe(celulaEl) {
   detalheLoading.hidden = true;
   detalheLoading.replaceChildren();
   detalheCorpo.hidden = false;
+  // A linha mostra a distribuição mais recente do processo; o retorno de
+  // Vista casa com ela pelo número e pela data.
+  const retornos = await vistas;
+  const anterior = new Map((Array.isArray(retornos) ? retornos : [])
+    .map(r => [`${r.num_processo}|${r.data_distribuicao}`,
+      r.conselheiro_anterior ? `${r.destino_anterior} (${r.conselheiro_anterior})` : r.destino_anterior]));
+  (processos || []).forEach(p => {
+    p.vista_de = anterior.get(`${p.num_processo}|${p.data_distribuicao}`) || null;
+  });
   detalheAtual = { rotulo, processos: processos || [] };
   desenharDetalhe(detalheAtual.processos);
   btnExportarDetalhe.disabled = detalheAtual.processos.length === 0;
@@ -876,7 +889,10 @@ async function abrirDetalhe(celulaEl) {
 function colunasDoDetalhe(processos) {
   const colunas = [
     { rotulo: 'Nº do Processo', largura: 22, naTela: true,
-      valor: p => p.num_processo },
+      valor: p => p.num_processo,
+      // Voltou ao acervo por Vista: o número fica amarelo e o hover diz de
+      // onde ele saiu. Na Câmara a cadeira vem com o conselheiro.
+      titulo: p => (p.vista_de ? `Voltou de Vista. Antes: ${p.vista_de}` : '') },
     { rotulo: COL.coluna, largura: 10, naTela: true,
       valor: p => p[COL.campo],
       // Mesmo par title/aria-label do painel: sem o rótulo, o leitor de tela
@@ -924,6 +940,7 @@ function desenharDetalhe(processos) {
       const el = n === 0
         ? celula(conteudo, 'th', 'linha')
         : celula(conteudo === '' ? '—' : conteudo, 'td', coluna.rotulo === 'Assunto' ? 'historico-livre' : '');
+      if (n === 0 && p.vista_de) el.classList.add('processo-vista');
 
       const titulo = coluna.titulo ? coluna.titulo(p) : '';
       if (titulo) {

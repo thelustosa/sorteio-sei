@@ -67,6 +67,9 @@
   --surface-historico: #f1f7f5;
   --accent-panel: #e9f3ef;
   --accent-secondary: #2f7668;
+  /* Amarelo escuro o bastante para o texto sobre branco (4,9:1): o amarelo
+     puro some no fundo do card. */
+  --vista-texto: #a16207;
   --accent-secondary-hover: #245f55;
   --accent-secondary-ring: rgba(47, 118, 104, 0.2);
   --accent-secondary-ring-strong: rgba(47, 118, 104, 0.38);
@@ -2097,6 +2100,9 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
 .detalhe-table tbody tr:last-child th,
 .detalhe-table tbody tr:last-child td { border-bottom: none; }
+
+/* Processo que voltou ao acervo por Vista (retornos_de_vista). */
+.detalhe-table tbody th.processo-vista { color: var(--vista-texto); cursor: help; }
 
 .detalhe-table tbody th {
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;

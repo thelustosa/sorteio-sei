@@ -2632,6 +2632,46 @@ test('o card lista os processos e habilita a exportação', async () => {
     'só no title, o nome do conselheiro existe para o mouse e não para o leitor de tela');
 });
 
+test('processo que voltou por Vista fica amarelo e mostra de onde veio', async () => {
+  const page = acervoPage(async caminho => {
+    if (caminho === 'rpc/retornos_de_vista') {
+      return [{ num_processo: '000000000001111', data_distribuicao: '2026-06-29',
+                destino_anterior: 'CJ4', conselheiro_anterior: CADEIRAS_CJ.CJ4 },
+              // Outra distribuição do mesmo processo não pinta a linha.
+              { num_processo: '000000000002222', data_distribuicao: '2026-01-02',
+                destino_anterior: 'CJ3' }];
+    }
+    return caminho.includes('processos_acervo_cj') ? processosFalsos : matriz;
+  });
+  await page.inicializarAcervo();
+  await wait();
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  const [vista, comum] = page.document.getElementById('detalheTable').children[1].children
+    .map(tr => tr.children[0]);
+  assert.equal(vista.classList.contains('processo-vista'), true);
+  assert.equal(vista.title, `Voltou de Vista. Antes: CJ4 (${CADEIRAS_CJ.CJ4})`);
+  assert.equal(comum.classList.contains('processo-vista'), false);
+  assert.equal(comum.title, undefined);
+});
+
+test('sem a consulta dos retornos, o card abre igual e sem destaque', async () => {
+  const page = acervoPage(async caminho => {
+    if (caminho === 'rpc/retornos_de_vista') throw new Error('falhou');
+    return caminho.includes('processos_acervo_creg')
+      ? [{ num_processo: '000000000004444', unidade: 'CREG3', assunto: 'Auto de Infração',
+           data_distribuicao: '2026-06-29', dias: 56 }]
+      : [{ ordem: 1, faixa: 'Até 15 dias', unidade: 'CREG3', processos: 1 }];
+  }, { colegiado: 'creg' });
+  await page.inicializarAcervo();
+  await wait();
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+
+  const linhas = page.document.getElementById('detalheTable').children[1].children;
+  assert.equal(linhas.length, 1);
+  assert.equal(linhas[0].children[0].classList.contains('processo-vista'), false);
+});
+
 // ── Tempo por extenso ────────────────────────────────────────────────────────
 // A coluna Tempo escreve o MESMO prazo que Dias passados mede. O intervalo é
 // contado no calendário, e é por isso que ele fecha com a data de distribuição
