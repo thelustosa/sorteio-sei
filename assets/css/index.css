@@ -904,10 +904,12 @@ body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
   #julgadosTable tbody tr:last-child td:first-child { border-bottom-left-radius: var(--radius-card); }
   #julgadosTable tbody tr:last-child td:last-child { border-bottom-right-radius: var(--radius-card); }
   #julgadosTable tbody tr { position: relative; }
+  /* 100% é a borda da tabela; o card em volta tem 24px de padding. A pílula
+     começa 12px depois da borda do CARD, senão atravessa a linha dele. */
   #julgadosTable .vista-destino {
     position: absolute;
     top: 50%;
-    left: calc(100% + 12px);
+    left: calc(100% + 24px + 12px);
     margin: 0;
     transform: translateY(-50%);
   }
