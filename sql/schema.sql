@@ -732,7 +732,7 @@ drop policy if exists "usuario autenticado pode inserir" on public.acervo_cj;
 drop policy if exists "usuario com acesso cj pode inserir" on public.acervo_cj;
 create policy "usuario com acesso cj pode inserir"
   on public.acervo_cj for insert to authenticated
-  with check ((select public.tem_acesso_orgao('CJ')));
+  with check ((select public.tem_acesso_orgao('CJ')) and origem = 'sorteio');
 
 -- julgados_cj é a única tabela que o navegador lê, e ele só lê: a página
 -- julgados-cj.html precisa listar os pendentes. Gravar voto e status é feito pela
@@ -1455,7 +1455,7 @@ drop policy if exists "usuario autenticado pode inserir" on public.acervo_creg;
 drop policy if exists "usuario com acesso creg pode inserir" on public.acervo_creg;
 create policy "usuario com acesso creg pode inserir"
   on public.acervo_creg for insert to authenticated
-  with check ((select public.tem_acesso_orgao('CREG')));
+  with check ((select public.tem_acesso_orgao('CREG')) and origem = 'sorteio');
 
 drop policy if exists "usuario autenticado pode ler" on public.julgados_creg;
 drop policy if exists "usuario com acesso creg pode ler" on public.julgados_creg;
@@ -2040,10 +2040,15 @@ begin
 end;
 $$;
 
--- A autoria nasce no banco, a partir do token validado pelo Supabase. Uma
--- importação de planilha ou ata não tem autor do lançamento original; mesmo
--- quando executada por alguém autenticado, permanece sem autoria atribuída.
--- A função roda como dono porque auth_email() não é executável pelo navegador.
+-- A autoria nasce no banco, a partir do token validado pelo Supabase; o valor
+-- enviado pelo cliente é sempre descartado. Toda linha gravada com sessão leva
+-- o autor, qualquer que seja a origem (o navegador só insere 'sorteio', pela
+-- política; funções do banco podem inserir outras). Importação de planilha ou
+-- ata roda por conexão direta, sem sessão, e fica sem autor.
+-- Token sem e-mail não derruba o sorteio: cai para o cadastro e, por último,
+-- para o id do usuário — perder a distribuição seria pior que um autor feio.
+-- A função roda como dono porque auth_email() e auth.users não são acessíveis
+-- ao navegador.
 alter table public.acervo_cj add column if not exists criado_por text;
 alter table public.acervo_creg add column if not exists criado_por text;
 
@@ -2053,16 +2058,14 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  usuario uuid := (select auth.uid());
 begin
-  if new.origem = 'sorteio' and (select auth.uid()) is not null then
-    new.criado_por := nullif(public.auth_email(), '');
-    if new.criado_por is null then
-      raise exception 'e-mail do usuário autenticado não disponível'
-        using errcode = '28000';
-    end if;
-  else
-    new.criado_por := null;
-  end if;
+  new.criado_por := case when usuario is not null then
+    coalesce(nullif(public.auth_email(), ''),
+             nullif((select u.email from auth.users u where u.id = usuario), ''),
+             usuario::text)
+  end;
   return new;
 end;
 $$;
@@ -2083,12 +2086,13 @@ create trigger acervo_creg_registrar_autor
 -- Agrupa por (data, carimbo, ORIGEM). Uma data pode ter a rodada do sorteio
 -- eletrônico e um registro importado de ata; fundi-las esconderia justamente a
 -- linha que precisa de conserto.
--- Se um mesmo lote reunir autores distintos ou linhas sem autor, não atribui
--- toda a distribuição a uma só pessoa.
+-- Quem traz todos os autores distintos do lote, não um só: lote com mais de um
+-- autor é exatamente o que o admin precisa ver. Nulo só quando nenhuma linha
+-- tem autor (importação ou registro anterior à autoria).
 drop function if exists public.admin_sorteios(text);
 create or replace function public.admin_sorteios(p_colegiado text)
 returns table (data_distribuicao date, sorteado_em timestamptz, origem text,
-               processos int, destinos text[], quem text)
+               processos int, destinos text[], quem text[])
 language plpgsql
 stable
 security definer
@@ -2114,9 +2118,7 @@ begin
   )
   select d.dia, d.carimbo, d.fonte, sum(d.qtd)::int,
          array_agg(distinct d.destino order by d.destino),
-         case when count(*) filter (where d.autor is null) = 0
-                   and count(distinct d.autor) = 1
-              then min(d.autor) else null end
+         array_agg(distinct d.autor order by d.autor) filter (where d.autor is not null)
     from por_destino d
    group by d.dia, d.carimbo, d.fonte
    order by 1 desc, 2 desc nulls last, 3;

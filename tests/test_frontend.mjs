@@ -37,7 +37,15 @@ class Node {
   get parentElement() { return this.parentNode; }
   get firstChild() { return this.children[0]; }
 
-  append(...nodes) { nodes.forEach(node => this.appendChild(node)); }
+  // Como no navegador, texto solto vira nó de texto.
+  append(...nodes) {
+    nodes.forEach(node => {
+      if (typeof node !== 'string') return this.appendChild(node);
+      const texto = new Node(this.document, '#text');
+      texto.textContent = node;
+      this.appendChild(texto);
+    });
+  }
   appendChild(node) {
     if (node.tagName === '#FRAGMENT') {
       [...node.children].forEach(child => this.appendChild(child));
@@ -554,8 +562,8 @@ test('CJ sorteia processos com e sem defesa entre todas as cadeiras', async () =
 
   const semDefesa = corpo.filter(p => !p.defesa);
   assert.equal(semDefesa.length, 5);
-  assert.ok(semDefesa.some(p => p.relator !== 'CJ1'),
-    'processos sem defesa também precisam participar do sorteio');
+  assert.deepEqual(semDefesa.map(p => p.relator).sort(), ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'],
+    'o sorteio equilibra pela defesa: cada cadeira leva um sem defesa e um com');
   assert.deepEqual(corpo.map(p => p.relator), unidadesDe(linhas));
 });
 
@@ -3556,22 +3564,33 @@ test('Distribuições mostra o autor persistido e um traço nos registros sem au
     const page = adminPage({ api: apiDoPainel([], {
       'rpc/admin_sorteios': [
         { data_distribuicao: '2026-09-25', sorteado_em: '2026-09-25T13:00:00Z',
-          origem: 'sorteio', processos: 1, destinos: [destino], quem: email },
+          origem: 'sorteio', processos: 1, destinos: [destino], quem: [email] },
         { data_distribuicao: '2024-04-11', sorteado_em: null,
-          origem: 'planilha', processos: 1, destinos: [destino], quem: null }
+          origem: 'planilha', processos: 1, destinos: [destino], quem: null },
+        { data_distribuicao: '2024-04-10', sorteado_em: '2024-04-10T13:00:00Z',
+          origem: 'sorteio', processos: 2, destinos: [destino], quem: ['a@goias.gov.br', email] }
       ]
     }) });
     await page.inicializarAdmin(new Set([orgao]));
     page.botaoDeAba('sorteios').dispatch('click');
     await wait();
 
+    const texto = email => email.children.map(parte => parte.textContent).join('');
     const linhas = page.linhasDaTabela();
     const quem = linhas[0].children.find(c => c.dataset.label === 'Quem');
     assert.ok(quem.classList.contains('col-centro'), orgao);
-    assert.equal(quem.children[0].children.map(parte => parte.textContent).join(''), email, orgao);
-    assert.equal(quem.children[0].children[1].tagName, 'WBR',
+    const [unico] = quem.children[0].children;
+    assert.equal(texto(unico), email, orgao);
+    assert.equal(unico.children[1].tagName, 'WBR',
       'o e-mail pode quebrar antes do @ sem cortar o texto');
-    assert.equal(linhas[1].children.find(c => c.dataset.label === 'Quem').textContent, '—', orgao);
+
+    const semAutor = linhas[1].children.find(c => c.dataset.label === 'Quem').children[0];
+    assert.equal(semAutor.textContent, '—', orgao);
+    assert.ok(semAutor.classList.contains('sem-valor'), 'ausência de autor tem o traço do painel');
+
+    const [primeiro, quebra, segundo] = linhas[2].children.find(c => c.dataset.label === 'Quem').children[0].children;
+    assert.deepEqual([texto(primeiro), quebra.tagName, texto(segundo)],
+      ['a@goias.gov.br', 'BR', email], 'lote com dois autores mostra os dois');
   }
 });
 
