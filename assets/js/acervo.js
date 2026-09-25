@@ -105,6 +105,9 @@ let totalAtual = 0;
 // acervo" sob o rótulo atual "Em diligência" e contaminaria detalhe/exportação.
 let acervoPedido = 0;
 let detalheAtual = null;
+// Ordenação do card: null é a ordem do banco (mais parado primeiro). O clique
+// no cabeçalho cicla crescente → decrescente → de volta ao padrão.
+let ordemDetalhe = null;
 // Cada abertura invalida a anterior. Sem isso, fechar no Escape durante uma
 // busca lenta e clicar noutro bloco deixava a resposta atrasada chegar por
 // último e sobrescrever o card: título de um recorte, lista e exportação de
@@ -816,6 +819,7 @@ async function abrirDetalhe(celulaEl) {
   const { ordem, unidade, rotulo } = celulaEl.dataset;
   const pedido = ++detalhePedido;
   detalheAtual = null;
+  ordemDetalhe = null;
   detalheTitulo.textContent = rotulo;
   detalheResumo.textContent = 'Carregando…';
   detalheTabela.replaceChildren();
@@ -873,6 +877,7 @@ async function abrirDetalhe(celulaEl) {
     p.vista_de = anterior.get(`${p.num_processo}|${p.data_distribuicao}`) || null;
   });
   detalheAtual = { rotulo, processos: processos || [] };
+  detalheResumo.textContent = `${quantidadeProcessos(detalheAtual.processos.length)} · Atualizado em: ${dataHoraBR()}`;
   desenharDetalhe(detalheAtual.processos);
   btnExportarDetalhe.disabled = detalheAtual.processos.length === 0;
 }
@@ -900,12 +905,14 @@ function colunasDoDetalhe(processos) {
       titulo: p => p.conselheiro && p.conselheiro !== p[COL.campo] ? p.conselheiro : '' },
     { rotulo: COL.segundaColuna.rotulo, largura: 34, naTela: COL.segundaColuna.naTela,
       valor: p => p[COL.segundaColuna.campo] || '' },
+    // `ordenar` devolve a chave comparável: a data ISO ordena como texto, e
+    // Tempo é o mesmo prazo de Dias passados escrito por extenso.
     { rotulo: 'Distribuição', largura: 16, naTela: true,
-      valor: p => dataBR(p.data_distribuicao) },
+      valor: p => dataBR(p.data_distribuicao), ordenar: p => p.data_distribuicao || '' },
     { rotulo: 'Dias passados', largura: 14, naTela: true, numero: true,
-      valor: p => Number(p.dias) || 0 },
+      valor: p => Number(p.dias) || 0, ordenar: p => Number(p.dias) || 0 },
     { rotulo: 'Tempo', largura: 26, naTela: true,
-      valor: p => tempoPorExtenso(p.data_distribuicao, p.dias) }
+      valor: p => tempoPorExtenso(p.data_distribuicao, p.dias), ordenar: p => Number(p.dias) || 0 }
   ];
 
   if (processos.some(p => p.diligencia_desde)) {
@@ -915,8 +922,69 @@ function colunasDoDetalhe(processos) {
   return colunas;
 }
 
-function desenharDetalhe(processos) {
-  detalheResumo.textContent = `${quantidadeProcessos(processos.length)} · Atualizado em: ${dataHoraBR()}`;
+// A cópia ordenada que a tela e o Excel do card mostram. Sem ordem escolhida,
+// é a lista como veio do banco. O sort é estável: empate mantém a ordem padrão.
+function processosOrdenados(processos) {
+  const coluna = ordemDetalhe
+    && colunasDoDetalhe(processos).find(c => c.rotulo === ordemDetalhe.rotulo);
+  if (!coluna) return processos;
+  const sinal = ordemDetalhe.sentido === 'asc' ? 1 : -1;
+  return [...processos].sort((a, b) => {
+    const x = coluna.ordenar(a);
+    const y = coluna.ordenar(b);
+    return x < y ? -sinal : x > y ? sinal : 0;
+  });
+}
+
+const PROXIMA_ORDEM = { nenhuma: 'asc', asc: 'desc', desc: 'nenhuma' };
+const ARIA_SORT = { asc: 'ascending', desc: 'descending' };
+
+// O par de setas fica sempre desenhado; o estado só muda qual delas acende. Assim
+// o cabeçalho não muda de largura a cada clique.
+function setasDeOrdem() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'ordenar-setas');
+  svg.setAttribute('viewBox', '0 0 12 16');
+  svg.setAttribute('aria-hidden', 'true');
+  [['ordenar-sobe', 'm2.5 6 3.5-3.5L9.5 6'], ['ordenar-desce', 'm2.5 10 3.5 3.5L9.5 10']]
+    .forEach(([classe, d]) => {
+      const seta = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      seta.setAttribute('class', classe);
+      seta.setAttribute('d', d);
+      svg.append(seta);
+    });
+  return svg;
+}
+
+function cabecalhoOrdenavel(coluna) {
+  const th = celula('', 'th');
+  const sentido = ordemDetalhe?.rotulo === coluna.rotulo ? ordemDetalhe.sentido : 'nenhuma';
+  if (ARIA_SORT[sentido]) th.setAttribute('aria-sort', ARIA_SORT[sentido]);
+  th.classList.add('ordenavel');
+  th.dataset.ordem = sentido;
+
+  const botao = document.createElement('button');
+  botao.type = 'button';
+  botao.className = 'ordenar-coluna';
+  botao.dataset.coluna = coluna.rotulo;
+  const texto = document.createElement('span');
+  texto.textContent = coluna.rotulo;
+  botao.append(texto, setasDeOrdem());
+  botao.addEventListener('click', () => {
+    const proxima = PROXIMA_ORDEM[sentido];
+    ordemDetalhe = proxima === 'nenhuma' ? null : { rotulo: coluna.rotulo, sentido: proxima };
+    desenharDetalhe(detalheAtual.processos);
+    // A tabela é redesenhada inteira: o foco volta ao mesmo cabeçalho, senão
+    // quem ordena pelo teclado cai no começo da página.
+    [...detalheTabela.querySelectorAll('.ordenar-coluna')]
+      .find(b => b.dataset.coluna === coluna.rotulo)?.focus();
+  });
+  th.append(botao);
+  return th;
+}
+
+function desenharDetalhe(todos) {
+  const processos = processosOrdenados(todos);
 
   // O Conselho ganha a coluna de assunto, que nele distingue de verdade: são 12
   // tipos, contra o auto de infração único da Câmara.
@@ -924,7 +992,7 @@ function desenharDetalhe(processos) {
 
   const thead = document.createElement('thead');
   const cabecalho = document.createElement('tr');
-  colunas.forEach(c => cabecalho.append(celula(c.rotulo, 'th')));
+  colunas.forEach(c => cabecalho.append(c.ordenar ? cabecalhoOrdenavel(c) : celula(c.rotulo, 'th')));
   thead.append(cabecalho);
 
   const tbody = document.createElement('tbody');
@@ -963,7 +1031,8 @@ function exportarDetalhe() {
   // arquivo é indistinguível de um download que o navegador engoliu.
   detalheErro.hidden = true;
   try {
-    baixarArquivo(criarExcelDetalhe(detalheAtual.processos, detalheAtual.rotulo),
+    // O arquivo sai na ordem que está na tela.
+    baixarArquivo(criarExcelDetalhe(processosOrdenados(detalheAtual.processos), detalheAtual.rotulo),
       `${COL.arquivo}-${nome}-${dataArquivo()}.xlsx`);
   } catch (erro) {
     mostrarErro(detalheErro, 'Não foi possível gerar o arquivo. Tente exportar de novo.', erro.message);

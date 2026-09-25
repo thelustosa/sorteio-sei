@@ -2101,6 +2101,45 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 .detalhe-table tbody tr:last-child th,
 .detalhe-table tbody tr:last-child td { border-bottom: none; }
 
+/* Cabeçalho ordenável: o botão veste o próprio cabeçalho (mesma caixa alta, mesma
+   cor), e o par de setas diz o estado. Padrão: as duas apagadas, só dizem que dá
+   para ordenar. Crescente/decrescente: a seta do sentido acende em verde e o
+   rótulo acompanha; a outra quase some. */
+.detalhe-table th.ordenavel { padding-block: 0; }
+.ordenar-coluna {
+  display: inline-flex;
+  min-height: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 4px 10px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+.ordenar-coluna:hover,
+.detalhe-table th[aria-sort] .ordenar-coluna { color: var(--accent); }
+.ordenar-setas {
+  width: 9px;
+  height: 12px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ordenar-setas path { opacity: 0.45; transition: opacity 140ms ease; }
+.detalhe-table th[aria-sort='ascending'] .ordenar-sobe,
+.detalhe-table th[aria-sort='descending'] .ordenar-desce { opacity: 1; }
+.detalhe-table th[aria-sort='ascending'] .ordenar-desce,
+.detalhe-table th[aria-sort='descending'] .ordenar-sobe { opacity: 0.15; }
+
 /* Processo que voltou ao acervo por Vista (retornos_de_vista). */
 .detalhe-table tbody th.processo-vista { color: var(--vista-texto); cursor: help; }
 
