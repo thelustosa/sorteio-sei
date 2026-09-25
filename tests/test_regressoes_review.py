@@ -70,7 +70,8 @@ def conflito_recusa_lote_inteiro_e_cliente_antigo(conn):
             gravar(cur, rpc, [{'id': ident, 'voto': 'Anular', 'anterior': {'voto': 'Manter'}}])
             for item in [
                 {'id': ident, 'voto': 'Vista', 'anterior': {'voto': 'Manter'},
-                 **({'unidade_vista': 'CREG2'} if tabela == 'julgados_creg' else {})},
+                 **({'unidade_vista': 'CREG2'} if tabela == 'julgados_creg'
+                    else {'cadeira_vista': 'CJ2'})},
                 {'id': ident, 'voto': 'Manter', 'status': 'Julgado'},
             ]:
                 cur.execute('savepoint conflito')

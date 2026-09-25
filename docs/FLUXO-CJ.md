@@ -427,6 +427,39 @@ hora de salvar.
 Só as linhas em que a funcionária mexeu são enviadas. Linha intocada continua
 pendente e reaparece na próxima vez.
 
+### Vista e Retirado voltam ao acervo
+
+Escolher o voto sugere o status. Vista e Retirado impõem o status igual.
+Na Câmara, quem decide a volta ao acervo é o **status**:
+
+- **Vista**: escolher Vista no status (ou no voto, que o sugere) abre uma janela
+  que pergunta a cadeira de destino (CJ1 a CJ5). Cancelar volta o campo ao valor
+  anterior e não envia nada. A cadeira fica em `julgados_cj.cadeira_vista`.
+- **Retirado**: o processo volta à cadeira que o levou à sessão (`relator`).
+- **Retornou** não é volta ao acervo: o processo continua fora do painel.
+
+O gatilho `julgados_cj_retorno` cria uma distribuição `origem = 'retorno'` em
+`acervo_cj`, ligada ao julgado (`retorno_julgado_id`), na mesma transação da
+gravação.
+- **Reenvio e troca de cadeira:** atualizam o mesmo retorno.
+- **Decisão desfeita:** trocar para Julgado ou Manter remove o retorno.
+- **Voto preenchido:** tem de ser igual ao status; o banco recusa, por exemplo,
+  Manter com status Retirado, e a mensagem diz qual processo falhou.
+- **Retirado antes da sessão:** o retorno recebe a data da gravação, nunca uma
+  data futura.
+- **Painel do acervo:** ignora o julgado que criou o retorno e continua
+  considerando os julgados posteriores. Uma nova pauta do mesmo processo se
+  vincula ao retorno, sem sorteio.
+
+No painel admin, "Corrigir julgado" tem o campo "Destino da vista". Corrigir,
+redistribuir ou excluir a distribuição de retorno por lá é recusado: quem se
+corrige é o julgado.
+
+O histórico da planilha, com `atualizado_em` nulo, não gera retorno, e a
+migração `20260925140000` não faz backfill. Os Vista e Retirado com
+`atualizado_em` preenchido são de 2024, carimbados em carga, e já passaram por
+sessões posteriores.
+
 ---
 
 ## 5. Reinício da série (19/08/2026)

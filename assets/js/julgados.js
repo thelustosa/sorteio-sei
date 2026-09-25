@@ -7,7 +7,8 @@
 //
 // A gravação não é UPDATE direto: vai pela função registrar_votos (ou
 // registrar_votos_creg) do banco, que valida as escolhas e anota quem preencheu.
-// No CREG, o destino do voto Vista é gravado junto com voto e status.
+// O destino da Vista (cadeira na CJ, unidade no CREG) é gravado junto com voto
+// e status, e o banco devolve o processo ao acervo nele.
 //
 // A mesma página serve os dois colegiados, como o histórico e o painel do
 // acervo: o que muda entre eles cabe em COLEGIADOS, e quem escolhe é o
@@ -23,6 +24,13 @@ const COLEGIADOS = {
     // nome do conselheiro vai no hover e no aria-label, como nas outras telas.
     destino: 'relator',
     mostraConselheiro: true,
+    // Vista e Retirado devolvem o processo ao acervo (julgados_cj_retorno). Na
+    // Câmara quem decide é o STATUS: escolher Vista nele, ou no voto que o
+    // sugere, pergunta a cadeira de destino.
+    vista: {
+      campo: 'cadeira_vista', destinos: ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'],
+      nome: 'cadeira', decide: 'status', atualValida: /^CJ[1-9][0-9]*$/
+    },
     sujeito: 'a Câmara',
     pautas: 'pautas',
     pauta: 'pauta',
@@ -39,6 +47,11 @@ const COLEGIADOS = {
     // pediram para não ter os nomes vinculados aos processos (ver FLUXO-CREG.md).
     destino: 'unidade',
     mostraConselheiro: false,
+    // No Conselho quem decide é o voto (julgados_creg_retorno).
+    vista: {
+      campo: 'unidade_vista', destinos: ['CREG1', 'CREG2', 'CREG3', 'CREG4'],
+      nome: 'unidade', decide: 'voto', atualValida: /^CREG[1-4]$/
+    },
     sujeito: 'o Conselho',
     pautas: 'sessões',
     pauta: 'sessão',
@@ -72,10 +85,16 @@ const formUnidadeVista = document.getElementById('formUnidadeVista');
 const resumoUnidadeVista = document.getElementById('resumoUnidadeVista');
 const unidadeDestinoVista = document.getElementById('unidadeDestinoVista');
 const erroUnidadeVista = document.getElementById('erroUnidadeVista');
-const UNIDADES_VISTA = ['CREG1', 'CREG2', 'CREG3', 'CREG4'];
-// No CREG, Vista e Retirado devolvem o processo ao acervo, e o banco só aceita
-// esses rótulos com voto e status iguais (julgados_creg_sincronizar_retorno).
-const RETORNO = COL === COLEGIADOS.creg ? ['Vista', 'Retirado'] : [];
+const VISTA = COL.vista;
+// Vista e Retirado devolvem o processo ao acervo, e o banco só aceita esses
+// rótulos com voto e status iguais quando os dois estão preenchidos.
+const RETORNO = ['Vista', 'Retirado'];
+// A cadeira da CJ vale para Vista no voto ou no status; a unidade do CREG, só
+// para o voto — é o que cada banco guarda.
+const pedeDestino = select => select.value === 'Vista'
+  && (select.closest('.col-voto') || (VISTA.decide === 'status' && select.closest('.col-status')));
+const emVista = tr => tr.querySelector('.col-voto select').value === 'Vista'
+  || (VISTA.decide === 'status' && tr.querySelector('.col-status select').value === 'Vista');
 const incoerente = (voto, status) => Boolean(voto && status && voto !== status
   && (RETORNO.includes(voto) || RETORNO.includes(status)));
 // O rótulo da lista ("Pautas pendentes", "Sessões pendentes") nasce no HTML e
@@ -95,7 +114,7 @@ btnTodosJulgado.addEventListener('click', () => preencherColuna('col-status', 'J
 tbody.addEventListener('change', event => {
   const select = event.target.closest('select');
   if (!select || !tbody.contains(select)) return;
-  if (COL === COLEGIADOS.creg && select.closest('.col-voto') && select.value === 'Vista') {
+  if (pedeDestino(select)) {
     pedirUnidadeVista(select, true);
     return;
   }
@@ -103,10 +122,14 @@ tbody.addEventListener('change', event => {
 });
 
 if (dialogUnidadeVista) {
+  // A cadeira mostra o conselheiro no hover, como nas outras telas da Câmara.
+  if (COL.mostraConselheiro) {
+    [...unidadeDestinoVista.options || []].forEach(opcao => rotularCadeira(opcao, opcao.value));
+  }
   formUnidadeVista.addEventListener('submit', event => {
     event.preventDefault();
     if (!escolhaVistaPendente) return;
-    if (!UNIDADES_VISTA.includes(unidadeDestinoVista.value)) {
+    if (!VISTA.destinos.includes(unidadeDestinoVista.value)) {
       erroUnidadeVista.hidden = false;
       unidadeDestinoVista.focus();
       return;
@@ -128,7 +151,8 @@ if (dialogUnidadeVista) {
 
 function pedirUnidadeVista(select, votoAlterado) {
   const tr = select.closest('tr');
-  resumoUnidadeVista.textContent = `Processo ${tr.dataset.numProcesso} · unidade atual: ${tr.dataset.unidadeAtual}`;
+  resumoUnidadeVista.textContent =
+    `Processo ${tr.dataset.numProcesso} · ${VISTA.nome} atual: ${tr.dataset.unidadeAtual}`;
   unidadeDestinoVista.value = tr.dataset.unidadeVista || '';
   erroUnidadeVista.hidden = true;
   dialogUnidadeVista.showModal();
@@ -140,7 +164,7 @@ function cancelarUnidadeVista(fechaPeloEscape = false) {
   const { select, resolve, votoAlterado } = escolhaVistaPendente;
   escolhaVistaPendente = null;
   if (votoAlterado) {
-    select.value = select.dataset.votoConfirmado || '';
+    select.value = select.dataset.confirmado || '';
     select.classList.toggle('placeholder-select', !select.value);
   }
   if (!fechaPeloEscape) dialogUnidadeVista.close();
@@ -148,25 +172,26 @@ function cancelarUnidadeVista(fechaPeloEscape = false) {
 }
 
 function registrarAlteracao(select, sugerirStatus = true) {
+  // O valor aceito é para onde o cancelamento da janela da Vista volta.
+  select.dataset.confirmado = select.value;
   if (select.closest('.col-status')) {
     // Uma escolha explícita prevalece sobre as próximas sugestões do voto.
     select.dataset.statusAutomatico = 'false';
   } else if (select.closest('.col-voto') && select.value) {
-    if (COL === COLEGIADOS.creg) {
-      select.dataset.votoConfirmado = select.value;
-      if (select.value !== 'Vista') select.closest('tr').dataset.unidadeVista = '';
-    }
     const status = select.closest('tr').querySelector('.col-status select');
-    // Vista e Retirado no CREG não são sugestão: sem o status igual, o banco
-    // recusa a sessão inteira. Vale mesmo depois de um status escolhido à mão.
+    // Vista e Retirado não são sugestão: sem o status igual, o banco recusa a
+    // sessão inteira. Vale mesmo depois de um status escolhido à mão.
     if ((sugerirStatus && status.dataset.statusAutomatico !== 'false')
         || RETORNO.includes(select.value)) {
       status.value = select.value === 'Retirado' || select.value === 'Vista'
         ? select.value : 'Julgado';
       status.dataset.statusAutomatico = 'true';
+      status.dataset.confirmado = status.value;
       status.classList.remove('placeholder-select');
     }
   }
+  const tr = select.closest('tr');
+  if (!emVista(tr)) tr.dataset.unidadeVista = '';
 
   select.classList.toggle('placeholder-select', !select.value);
 
@@ -182,8 +207,7 @@ function atualizarLinha(tr) {
   }
   tr.dataset.alterada = String([...tr.querySelectorAll('select')]
     .some(campo => campo.value !== (campo.dataset.valorInicial || ''))
-    || (COL === COLEGIADOS.creg
-      && tr.dataset.unidadeVista !== tr.dataset.unidadeVistaInicial));
+    || tr.dataset.unidadeVista !== tr.dataset.unidadeVistaInicial);
   atualizarContador();
 }
 
@@ -232,7 +256,7 @@ async function carregarPautas(moverFoco = false) {
   let pendentes;
   try {
     pendentes = await api(
-      `${COL.tabela}?select=id,num_processo,${COL.destino},${COL === COLEGIADOS.creg ? 'assunto,unidade_vista,' : ''}data_sessao,pauta,voto,status`
+      `${COL.tabela}?select=id,num_processo,${COL.destino},${COL === COLEGIADOS.creg ? 'assunto,' : ''}${VISTA.campo},data_sessao,pauta,voto,status`
       + '&or=(voto.is.null,status.is.null)'
       + '&order=data_sessao.desc,num_processo.asc,id.asc');
   } catch (err) {
@@ -365,12 +389,10 @@ function abrirPauta(chave) {
   processos.forEach(j => {
     const tr = document.createElement('tr');
     tr.dataset.id = j.id;
-    if (COL === COLEGIADOS.creg) {
-      tr.dataset.numProcesso = j.num_processo;
-      tr.dataset.unidadeAtual = j.unidade || 'Não informada';
-      tr.dataset.unidadeVistaInicial = j.unidade_vista || '';
-      tr.dataset.unidadeVista = j.unidade_vista || '';
-    }
+    tr.dataset.numProcesso = j.num_processo;
+    tr.dataset.unidadeAtual = j[COL.destino] || 'Não informada';
+    tr.dataset.unidadeVistaInicial = j[VISTA.campo] || '';
+    tr.dataset.unidadeVista = j[VISTA.campo] || '';
     const incompleto = !j.voto || !j.status;
     tr.dataset.incompleto = String(incompleto);
     if (incompleto) pendentesNaTela++;
@@ -386,13 +408,14 @@ function abrirPauta(chave) {
     tdVoto.className = 'col-voto';
     const voto = seletor(VOTOS, j.voto, 'Selecione o voto');
     voto.dataset.valorInicial = voto.value;
-    if (COL === COLEGIADOS.creg) voto.dataset.votoConfirmado = voto.value;
+    voto.dataset.confirmado = voto.value;
     tdVoto.appendChild(voto);
 
     const tdStatus = document.createElement('td');
     tdStatus.className = 'col-status';
     const status = seletor(STATUS, j.status, 'Selecione o status');
     status.dataset.valorInicial = status.value;
+    status.dataset.confirmado = status.value;
     tdStatus.appendChild(status);
 
     tr.append(proc, destino);
@@ -419,9 +442,8 @@ function linhasDaTela() {
     id: Number(tr.dataset.id),
     voto: tr.querySelector('.col-voto select').value,
     status: tr.querySelector('.col-status select').value,
-    ...(COL === COLEGIADOS.creg ? { unidade_vista: tr.dataset.unidadeVista || null } : {}),
-    ...(COL === COLEGIADOS.creg
-      ? { unidade_vista_inicial: tr.dataset.unidadeVistaInicial || null } : {}),
+    destinoVista: tr.dataset.unidadeVista || null,
+    destinoVistaInicial: tr.dataset.unidadeVistaInicial || null,
     anterior: Object.fromEntries(['voto', 'status'].map(campo =>
       [campo, tr.querySelector(`.col-${campo} select`).dataset.valorInicial || null])),
     alterada: tr.dataset.alterada === 'true'
@@ -438,29 +460,28 @@ function atualizarContador() {
 // ── Gravação ─────────────────────────────────────────────────────────────────
 
 async function salvar() {
-  if (COL === COLEGIADOS.creg) {
-    // O banco recusa a sessão inteira por uma linha; aqui a mensagem diz qual.
-    const alteradas = [...tbody.querySelectorAll('tr')].filter(tr => tr.dataset.alterada === 'true');
-    const valor = (tr, campo) => tr.querySelector(`.col-${campo} select`).value;
-    const numeros = linhas => linhas.map(tr => tr.dataset.numProcesso).join(', ');
-    const incoerentes = alteradas.filter(tr => incoerente(valor(tr, 'voto'), valor(tr, 'status')));
-    if (incoerentes.length > 0) {
-      aviso('Vista e Retirado exigem voto e status iguais. '
-        + `Corrija antes de salvar: ${numeros(incoerentes)}.`, 'atencao');
-      return;
-    }
-    const semUnidade = alteradas.filter(tr => valor(tr, 'voto') === 'Retirado'
-      && !UNIDADES_VISTA.includes(tr.dataset.unidadeAtual));
-    if (semUnidade.length > 0) {
-      aviso('Retirado devolve o processo à unidade que o levou à sessão, e '
-        + `estes não têm distribuição no acervo: ${numeros(semUnidade)}.`, 'atencao');
-      return;
-    }
+  // O banco recusa a sessão inteira por uma linha; aqui a mensagem diz qual.
+  const alteradas = [...tbody.querySelectorAll('tr')].filter(tr => tr.dataset.alterada === 'true');
+  const valor = (tr, campo) => tr.querySelector(`.col-${campo} select`).value;
+  const numeros = linhas => linhas.map(tr => tr.dataset.numProcesso).join(', ');
+  const incoerentes = alteradas.filter(tr => incoerente(valor(tr, 'voto'), valor(tr, 'status')));
+  if (incoerentes.length > 0) {
+    aviso('Vista e Retirado exigem voto e status iguais. '
+      + `Corrija antes de salvar: ${numeros(incoerentes)}.`, 'atencao');
+    return;
+  }
+  const semUnidade = alteradas.filter(tr => valor(tr, VISTA.decide) === 'Retirado'
+    && !VISTA.atualValida.test(tr.dataset.unidadeAtual));
+  if (semUnidade.length > 0) {
+    aviso(`Retirado devolve o processo à ${VISTA.nome} que o levou à sessão, e `
+      + `estes não têm distribuição no acervo: ${numeros(semUnidade)}.`, 'atencao');
+    return;
+  }
 
-    for (const tr of alteradas) {
-      if (valor(tr, 'voto') === 'Vista' && !UNIDADES_VISTA.includes(tr.dataset.unidadeVista)) {
-        if (!await pedirUnidadeVista(tr.querySelector('.col-voto select'), false)) return;
-      }
+  for (const tr of alteradas) {
+    if (emVista(tr) && !VISTA.destinos.includes(tr.dataset.unidadeVista)) {
+      const origem = tr.querySelector(`.col-${valor(tr, 'voto') === 'Vista' ? 'voto' : 'status'} select`);
+      if (!await pedirUnidadeVista(origem, false)) return;
     }
   }
 
@@ -468,16 +489,14 @@ async function salvar() {
   // pendente e reaparece na próxima vez.
   const itens = linhasDaTela()
     .filter(l => l.alterada)
-    .map(({ id, voto, status, unidade_vista, unidade_vista_inicial, anterior }) => ({
+    .map(({ id, voto, status, destinoVista, destinoVistaInicial, anterior }) => ({
       id, anterior: {
         ...anterior,
-        ...(COL === COLEGIADOS.creg && unidade_vista !== unidade_vista_inicial
-          ? { unidade_vista: unidade_vista_inicial } : {})
+        ...(destinoVista !== destinoVistaInicial ? { [VISTA.campo]: destinoVistaInicial } : {})
       },
       ...(voto !== (anterior.voto || '') ? { voto } : {}),
       ...(status !== (anterior.status || '') ? { status } : {}),
-      ...(COL === COLEGIADOS.creg && unidade_vista !== unidade_vista_inicial
-        ? { unidade_vista } : {})
+      ...(destinoVista !== destinoVistaInicial ? { [VISTA.campo]: destinoVista } : {})
     }));
   if (itens.length === 0) {
     aviso('Nada para salvar: preencha o voto ou o status de pelo menos um processo.', 'atencao');
