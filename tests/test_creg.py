@@ -1110,6 +1110,32 @@ def retornos_de_vista_listam_so_a_vista_com_a_unidade_anterior(cur):
     cur.execute("select * from public.retornos_de_vista('CREG')")
     assert cur.fetchall() == [(vista, hoje, 'CREG2', None)]
 
+    # Uma distribuição posterior no MESMO dia é a linha que o painel mostra, e
+    # ela não veio da Vista: o destaque não pode passar para ela.
+    distribuir(cur, vista, 'CREG1', hoje)
+    cur.execute("select * from public.retornos_de_vista('CREG')")
+    assert cur.fetchall() == []
+
+
+@teste
+def retornos_de_vista_saem_quando_o_processo_volta_a_julgamento(cur):
+    limpar(cur)
+    autenticado(cur)
+    hoje = date.today()
+    ontem = hoje - timedelta(days=1)
+    numero = '202600029000653'
+    distribuir(cur, numero, 'CREG2', ontem - timedelta(days=5))
+    jid = julgar(cur, numero, ontem)
+    assert registrar(cur, [{'id': jid, 'voto': 'Vista', 'status': 'Vista',
+                            'unidade_vista': 'CREG3'}]) == 1
+    cur.execute("select num_processo from public.retornos_de_vista('CREG')")
+    assert cur.fetchall() == [(numero,)]
+
+    # Julgado de novo depois do retorno: sai do painel e sai do destaque.
+    julgar(cur, numero, hoje, voto='Manter', status='Julgado')
+    cur.execute("select * from public.retornos_de_vista('CREG')")
+    assert cur.fetchall() == []
+
 
 @teste
 def registrar_votos_nao_apaga_decisao_com_campo_em_branco(cur):

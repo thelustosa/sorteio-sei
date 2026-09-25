@@ -105,6 +105,9 @@ let totalAtual = 0;
 // acervo" sob o rótulo atual "Em diligência" e contaminaria detalhe/exportação.
 let acervoPedido = 0;
 let detalheAtual = null;
+// Os processos que voltaram por Vista, pedidos uma vez por carregamento do
+// painel e reusados por todo card aberto depois dele (retornos_de_vista).
+let retornosDeVista = null;
 // Ordenação do card: null é a ordem do banco (mais parado primeiro). O clique
 // no cabeçalho cicla crescente → decrescente → de volta ao padrão.
 let ordemDetalhe = null;
@@ -734,6 +737,8 @@ function ajustarVazio() {
 
 async function carregarAcervo({ carregamentoInicial = false } = {}) {
   const pedido = ++acervoPedido;
+  // O painel vai ser refeito: o destaque de Vista acompanha a nova consulta.
+  retornosDeVista = null;
   const indicadorIniciadoEm = Date.now();
   mostrarCarregamentoDaTabela(carregamentoInicial ? 'Carregando o acervo…' : 'Atualizando o acervo…');
   acervoErro.hidden = true;
@@ -836,12 +841,11 @@ async function abrirDetalhe(celulaEl) {
   if (!detalheDialog.open) detalheDialog.showModal();
 
   let processos;
-  // Quem voltou por Vista é só destaque: se a consulta falhar, a lista abre
-  // igual, sem a cor.
-  const vistas = api('rpc/retornos_de_vista', { paginar: true, method: 'POST',
-    body: JSON.stringify({ p_colegiado: COL.sigla }) }).catch(() => []);
+  let retornos;
   try {
-    processos = await api(COL.processos, { paginar: true,
+    // As duas respostas chegam juntas: só assim a checagem de pedido abaixo
+    // cobre as duas, e o indicador fica na tela até a lista estar completa.
+    [processos, retornos] = await Promise.all([api(COL.processos, { paginar: true,
       method: 'POST',
       body: JSON.stringify({
         p_ordem: ordem ? Number(ordem) : null,
@@ -850,7 +854,7 @@ async function abrirDetalhe(celulaEl) {
         // número que ele lista diverge do que estava na tela.
         ...parametroDoRecorte()
       })
-    });
+    }), buscarRetornosDeVista()]);
   } catch (err) {
     await aguardarIndicador(montadoEm);
     if (pedido !== detalhePedido) return;
@@ -867,9 +871,8 @@ async function abrirDetalhe(celulaEl) {
   detalheLoading.hidden = true;
   detalheLoading.replaceChildren();
   detalheCorpo.hidden = false;
-  // A linha mostra a distribuição mais recente do processo; o retorno de
-  // Vista casa com ela pelo número e pela data.
-  const retornos = await vistas;
+  // A linha mostra a distribuição mais recente do processo, a mesma que
+  // retornos_de_vista considera; número e data confirmam o par.
   const anterior = new Map((Array.isArray(retornos) ? retornos : [])
     .map(r => [`${r.num_processo}|${r.data_distribuicao}`,
       r.conselheiro_anterior ? `${r.destino_anterior} (${r.conselheiro_anterior})` : r.destino_anterior]));
@@ -880,6 +883,18 @@ async function abrirDetalhe(celulaEl) {
   detalheResumo.textContent = `${quantidadeProcessos(detalheAtual.processos.length)} · Atualizado em: ${dataHoraBR()}`;
   desenharDetalhe(detalheAtual.processos);
   btnExportarDetalhe.disabled = detalheAtual.processos.length === 0;
+}
+
+// Quem voltou por Vista é só destaque: se a consulta falhar, a lista abre igual,
+// sem a cor, e o próximo card tenta de novo.
+function buscarRetornosDeVista() {
+  retornosDeVista ??= api('rpc/retornos_de_vista', { paginar: true, method: 'POST',
+    body: JSON.stringify({ p_colegiado: COL.sigla }) })
+    .catch(() => {
+      retornosDeVista = null;
+      return [];
+    });
+  return retornosDeVista;
 }
 
 // As colunas do card, numa lista só. A tela e o Excel do card liam duas listas
