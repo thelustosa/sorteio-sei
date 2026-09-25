@@ -1086,7 +1086,7 @@ def migracao_devolve_ao_acervo_retirados_gravados_antes_do_gatilho(cur):
     planilha = julgar(cur, '202600029000647', hoje, voto='Retirado', status='Retirado')
     cur.execute('alter table public.julgados_creg enable trigger julgados_creg_retorno')
 
-    migracao = RAIZ / 'supabase' / 'migrations' /         '20260925120000_revisao_retorno_vista_retirado_creg.sql'
+    migracao = RAIZ / 'supabase' / 'migrations' /         '20260925115048_revisao_retorno_vista_retirado_creg.sql'
     for _ in range(2):  # reaplicar não duplica
         cur.execute(migracao.read_text(encoding='utf-8'))
     assert retornos(cur, antigo)[0][1:] == ('CREG1', hoje - timedelta(days=5), 'retorno')

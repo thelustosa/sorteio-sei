@@ -284,7 +284,7 @@ Vista/Retirado", e corrigir ou excluir essa distribuição por lá é recusado;
 quem se corrige é o julgado, inclusive o destino da Vista. Se a decisão for
 desfeita depois que a pauta seguinte se vinculou ao retorno, o julgado novo
 fica sem vínculo (`on delete set null`), e "Religar ao acervo" refaz a ligação.
-A migração `20260925120000` devolve ao acervo os Retirados gravados antes do
+A migração `20260925115048` devolve ao acervo os Retirados gravados antes do
 gatilho, exceto os processos que já voltaram a outra sessão. Em produção, em
 25/09/2026, não havia nenhum pendente: os 16 Retirados e as 5 Vistas com
 `atualizado_em` eram histórico da planilha, carimbado pela carga de
