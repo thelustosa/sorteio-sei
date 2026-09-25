@@ -206,8 +206,7 @@ alter table public.julgados_cj add column if not exists cadeira_vista text;
 alter table public.julgados_cj drop constraint if exists julgados_cj_cadeira_vista_valida;
 alter table public.julgados_cj add constraint julgados_cj_cadeira_vista_valida
   check (cadeira_vista is null or
-         ((coalesce(status, '') = 'Vista' or coalesce(voto, '') = 'Vista')
-          and cadeira_vista ~ '^CJ[1-9][0-9]*$'));
+         (coalesce(voto, '') = 'Vista' and cadeira_vista ~ '^CJ[1-9][0-9]*$'));
 
 alter table public.acervo_cj add column if not exists retorno_julgado_id bigint;
 alter table public.acervo_cj drop constraint if exists acervo_cj_distribuicao_unica;
@@ -490,12 +489,11 @@ begin
     select 1 from public.julgados_cj j
     join jsonb_array_elements(itens) i on j.id = (i ->> 'id')::bigint
     where (j.voto is null or j.status is null or j.atualizado_em is not null)
-      and 'Vista' in (coalesce(nullif(i ->> 'voto', ''), j.voto, ''),
-                      coalesce(nullif(i ->> 'status', ''), j.status, ''))
+      and coalesce(nullif(i ->> 'voto', ''), j.voto) = 'Vista'
       and (case when i ? 'cadeira_vista' then i ->> 'cadeira_vista'
                 else j.cadeira_vista end) is null
   ) then
-    raise exception 'Vista exige a cadeira para onde o processo vai.'
+    raise exception 'Voto Vista exige a cadeira para onde o processo vai.'
       using errcode = '22023';
   end if;
 
@@ -524,11 +522,9 @@ begin
   update public.julgados_cj j
      set voto           = coalesce(nullif(i ->> 'voto', ''), j.voto),
          status         = coalesce(nullif(i ->> 'status', ''), j.status),
-         -- A cadeira só existe enquanto voto ou status for Vista
-         -- (julgados_cj_cadeira_vista_valida).
+         -- A cadeira só existe com voto Vista (julgados_cj_cadeira_vista_valida).
          cadeira_vista  = case
-                           when 'Vista' not in (coalesce(nullif(i ->> 'voto', ''), j.voto, ''),
-                                                coalesce(nullif(i ->> 'status', ''), j.status, ''))
+                           when coalesce(nullif(i ->> 'voto', ''), j.voto) is distinct from 'Vista'
                              then null
                            when i ? 'cadeira_vista' then i ->> 'cadeira_vista'
                            else j.cadeira_vista
@@ -548,11 +544,12 @@ revoke all on function public.registrar_votos(jsonb) from public, anon, service_
 grant execute on function public.registrar_votos(jsonb) to authenticated;
 
 -- ── CJ · Retorno de Vista e Retirado ao acervo ───────────────────────────────
--- Na Câmara quem decide é o STATUS: Vista volta na cadeira escolhida na tela,
--- Retirado volta na cadeira que levou o processo à sessão. O voto pode estar em
--- branco (retirado de pauta tem status e não tem voto), mas, preenchido, tem de
--- ser o mesmo rótulo. Retornou não é retorno ao acervo: é o processo que voltou
--- de diligência, e continua fora do painel.
+-- A mesma regra do Conselho (julgados_creg_sincronizar_retorno): o voto decide
+-- e o retorno só nasce quando o status é o mesmo rótulo. Vista volta na cadeira
+-- escolhida na tela; Retirado volta na cadeira que levou o processo à sessão.
+-- Um dos dois ainda em branco é decisão pela metade: a linha continua pendente
+-- na página de julgados. Retornou não é retorno ao acervo: é o processo que
+-- voltou de diligência, e continua fora do painel.
 --
 -- Linhas com atualizado_em nulo não geram retorno: é o histórico da planilha,
 -- que não se mexe. Corrigir só metadados de um julgado sem retorno também não.
@@ -586,24 +583,24 @@ begin
       using errcode = '22023';
   end if;
 
-  if new.status = 'Vista' then
+  if new.voto = 'Vista' then
     if not exists (select 1 from public.cadeiras_cj c
                     where c.cadeira = new.cadeira_vista and c.ate is null) then
-      raise exception 'Processo %: Vista exige a cadeira para onde o processo vai (CJ1 a CJ5).',
+      raise exception 'Processo %: voto Vista exige a cadeira para onde o processo vai (CJ1 a CJ5).',
         new.num_processo
         using errcode = '22023';
     end if;
     destino := new.cadeira_vista;
-  elsif new.status = 'Retirado' then
+  elsif new.voto = 'Retirado' then
     if coalesce(new.relator, '') !~ '^CJ[1-9][0-9]*$' then
-      raise exception 'Processo %: Retirado volta para a cadeira que levou o processo à sessão, e o processo não tem cadeira no acervo.',
+      raise exception 'Processo %: voto Retirado volta para a cadeira que levou o processo à sessão, e o processo não tem cadeira no acervo.',
         new.num_processo
         using errcode = '22023';
     end if;
     destino := new.relator;
   end if;
 
-  if destino is not null then
+  if destino is not null and new.status = new.voto then
     select * into original from public.acervo_cj a where a.id = new.acervo_id;
 
     -- Retirado pode ser registrado antes da sessão: o retorno vale a partir da
@@ -2804,17 +2801,12 @@ begin
                               then (p_campos ->> 'data_sessao')::date else j.data_sessao end,
            pauta       = case when p_campos ? 'pauta'
                               then nullif(p_campos ->> 'pauta', '')::int else j.pauta end,
-           -- A cadeira só existe com voto ou status Vista
-           -- (julgados_cj_cadeira_vista_valida).
+           -- A cadeira só existe com voto Vista (julgados_cj_cadeira_vista_valida):
+           -- corrigir o voto para outro rótulo leva a cadeira junto.
            cadeira_vista = case
-                             when 'Vista' not in (
-                                    coalesce(case when p_campos ? 'voto'
-                                                  then nullif(p_campos ->> 'voto', '')
-                                                  else j.voto end, ''),
-                                    coalesce(case when p_campos ? 'status'
-                                                  then nullif(p_campos ->> 'status', '')
-                                                  else j.status end, ''))
-                               then null
+                             when (case when p_campos ? 'voto'
+                                        then nullif(p_campos ->> 'voto', '') else j.voto end)
+                                  is distinct from 'Vista' then null
                              when p_campos ? 'cadeira_vista'
                                then nullif(p_campos ->> 'cadeira_vista', '')
                              else j.cadeira_vista

@@ -429,12 +429,14 @@ pendente e reaparece na próxima vez.
 
 ### Vista e Retirado voltam ao acervo
 
-Escolher o voto sugere o status. Vista e Retirado impõem o status igual.
-Na Câmara, quem decide a volta ao acervo é o **status**:
+Escolher o voto sugere o status. Vista e Retirado impõem o status igual. A
+regra é a mesma do Conselho: o **voto** decide, e o processo só volta ao acervo
+quando voto e status são o mesmo rótulo. Com um dos dois em branco a decisão está
+pela metade, e a linha continua pendente na tela.
 
-- **Vista**: escolher Vista no status (ou no voto, que o sugere) abre uma janela
-  que pergunta a cadeira de destino (CJ1 a CJ5). Cancelar volta o campo ao valor
-  anterior e não envia nada. A cadeira fica em `julgados_cj.cadeira_vista`.
+- **Vista**: escolher Vista no voto abre uma janela que pergunta a cadeira de
+  destino (CJ1 a CJ5). Cancelar volta o voto ao valor anterior e não envia
+  nada. A cadeira fica em `julgados_cj.cadeira_vista` e só existe com voto Vista.
 - **Retirado**: o processo volta à cadeira que o levou à sessão (`relator`).
 - **Retornou** não é volta ao acervo: o processo continua fora do painel.
 

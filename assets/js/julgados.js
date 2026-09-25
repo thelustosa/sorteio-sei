@@ -24,12 +24,11 @@ const COLEGIADOS = {
     // nome do conselheiro vai no hover e no aria-label, como nas outras telas.
     destino: 'relator',
     mostraConselheiro: true,
-    // Vista e Retirado devolvem o processo ao acervo (julgados_cj_retorno). Na
-    // Câmara quem decide é o STATUS: escolher Vista nele, ou no voto que o
-    // sugere, pergunta a cadeira de destino.
+    // Vista e Retirado devolvem o processo ao acervo (julgados_cj_retorno):
+    // Vista na cadeira escolhida na janela, Retirado na que levou à sessão.
     vista: {
       campo: 'cadeira_vista', destinos: ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'],
-      nome: 'cadeira', decide: 'status', atualValida: /^CJ[1-9][0-9]*$/
+      nome: 'cadeira', atualValida: /^CJ[1-9][0-9]*$/
     },
     sujeito: 'a Câmara',
     pautas: 'pautas',
@@ -47,10 +46,11 @@ const COLEGIADOS = {
     // pediram para não ter os nomes vinculados aos processos (ver FLUXO-CREG.md).
     destino: 'unidade',
     mostraConselheiro: false,
-    // No Conselho quem decide é o voto (julgados_creg_retorno).
+    // A mesma regra da Câmara, com a unidade no lugar da cadeira
+    // (julgados_creg_retorno).
     vista: {
       campo: 'unidade_vista', destinos: ['CREG1', 'CREG2', 'CREG3', 'CREG4'],
-      nome: 'unidade', decide: 'voto', atualValida: /^CREG[1-4]$/
+      nome: 'unidade', atualValida: /^CREG[1-4]$/
     },
     sujeito: 'o Conselho',
     pautas: 'sessões',
@@ -86,15 +86,13 @@ const resumoUnidadeVista = document.getElementById('resumoUnidadeVista');
 const unidadeDestinoVista = document.getElementById('unidadeDestinoVista');
 const erroUnidadeVista = document.getElementById('erroUnidadeVista');
 const VISTA = COL.vista;
-// Vista e Retirado devolvem o processo ao acervo, e o banco só aceita esses
-// rótulos com voto e status iguais quando os dois estão preenchidos.
+// Vista e Retirado devolvem o processo ao acervo, nos dois colegiados pela
+// mesma regra: o voto decide, e o banco só aceita esses rótulos com voto e
+// status iguais quando os dois estão preenchidos. O destino da Vista é pedido
+// ao escolher o voto.
 const RETORNO = ['Vista', 'Retirado'];
-// A cadeira da CJ vale para Vista no voto ou no status; a unidade do CREG, só
-// para o voto — é o que cada banco guarda.
-const pedeDestino = select => select.value === 'Vista'
-  && (select.closest('.col-voto') || (VISTA.decide === 'status' && select.closest('.col-status')));
-const emVista = tr => tr.querySelector('.col-voto select').value === 'Vista'
-  || (VISTA.decide === 'status' && tr.querySelector('.col-status select').value === 'Vista');
+const pedeDestino = select => select.value === 'Vista' && select.closest('.col-voto');
+const emVista = tr => tr.querySelector('.col-voto select').value === 'Vista';
 const incoerente = (voto, status) => Boolean(voto && status && voto !== status
   && (RETORNO.includes(voto) || RETORNO.includes(status)));
 // O rótulo da lista ("Pautas pendentes", "Sessões pendentes") nasce no HTML e
@@ -470,7 +468,7 @@ async function salvar() {
       + `Corrija antes de salvar: ${numeros(incoerentes)}.`, 'atencao');
     return;
   }
-  const semUnidade = alteradas.filter(tr => valor(tr, VISTA.decide) === 'Retirado'
+  const semUnidade = alteradas.filter(tr => valor(tr, 'voto') === 'Retirado'
     && !VISTA.atualValida.test(tr.dataset.unidadeAtual));
   if (semUnidade.length > 0) {
     aviso(`Retirado devolve o processo à ${VISTA.nome} que o levou à sessão, e `
@@ -480,8 +478,7 @@ async function salvar() {
 
   for (const tr of alteradas) {
     if (emVista(tr) && !VISTA.destinos.includes(tr.dataset.unidadeVista)) {
-      const origem = tr.querySelector(`.col-${valor(tr, 'voto') === 'Vista' ? 'voto' : 'status'} select`);
-      if (!await pedirUnidadeVista(origem, false)) return;
+      if (!await pedirUnidadeVista(tr.querySelector('.col-voto select'), false)) return;
     }
   }
 
