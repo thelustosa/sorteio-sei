@@ -37,7 +37,15 @@ class Node {
   get parentElement() { return this.parentNode; }
   get firstChild() { return this.children[0]; }
 
-  append(...nodes) { nodes.forEach(node => this.appendChild(node)); }
+  // Como no navegador, texto solto vira nó de texto.
+  append(...nodes) {
+    nodes.forEach(node => {
+      if (typeof node !== 'string') return this.appendChild(node);
+      const texto = new Node(this.document, '#text');
+      texto.textContent = node;
+      this.appendChild(texto);
+    });
+  }
   appendChild(node) {
     if (node.tagName === '#FRAGMENT') {
       [...node.children].forEach(child => this.appendChild(child));
@@ -512,8 +520,7 @@ test('CREG recusa processo sem 15 dígitos antes do sorteio', async () => {
 
 // Uma linha por item de `defesas` ('Sim'/'Não'), na ordem. `excluidas` tira
 // cadeiras do sorteio pela pill — o clique vai no container, que é quem escuta.
-// O padrão é um sem defesa e quatro com defesa: cada cadeira leva exatamente um,
-// a CJ1 pelo lote sem defesa e as outras quatro pelo sorteio.
+// O padrão mistura processos com e sem defesa; todos participam do mesmo sorteio.
 async function preencherCj(page, defesasDaLinha = ['Não', 'Sim', 'Sim', 'Sim', 'Sim'], excluidas = []) {
   const { document, tbody } = page;
   document.getElementById('btnCj').dispatch('click');
@@ -540,74 +547,107 @@ const unidadesDe = linhas => linhas.map(r => r.dataset.unidade);
 const resumoDe = page => page.document.getElementById('resumoContagem')
   .querySelectorAll('.unidade-badge').map(badge => badge.children[0].textContent);
 
-test('processo sem defesa vai para a CJ1 sem passar pelo sorteio', async () => {
+test('CJ sorteia processos com e sem defesa entre todas as cadeiras', async () => {
   let corpo;
   const page = indexPage({ api: async (_tabela, opcoes) => { corpo = JSON.parse(opcoes.body); } });
-  const linhas = await preencherCj(page, ['Não', 'Sim', 'Não', 'Sim', 'Sim', 'Sim']);
+  const linhas = await preencherCj(page, ['Não', 'Sim', 'Não', 'Sim', 'Não',
+    'Sim', 'Não', 'Sim', 'Não', 'Sim']);
   page.document.getElementById('sortear').dispatch('click');
   await wait();
 
-  assert.match(page.document.getElementById('processSetupHint').textContent,
-    /Defesa "Não" não entra no sorteio: vai direto para a CJ1, que só recebe esses/,
-    'a tela tem de avisar a regra antes, não só mostrar o resultado');
-
-  assert.deepEqual(unidadesDe([linhas[0], linhas[2]]), ['CJ1', 'CJ1']);
-  // Quatro com defesa para as quatro cadeiras do sorteio: uma para cada.
-  assert.deepEqual(unidadesDe([linhas[1], linhas[3], linhas[4], linhas[5]]).sort(),
-    ['CJ2', 'CJ3', 'CJ4', 'CJ5']);
-
-  assert.deepEqual(resumoDe(page), ['CJ1: 2 processos', 'CJ2: 1 processo',
-    'CJ3: 1 processo', 'CJ4: 1 processo', 'CJ5: 1 processo']);
+  assert.doesNotMatch(page.document.getElementById('processSetupHint').textContent,
+    /vai direto para a CJ1/);
+  assert.deepEqual(resumoDe(page), ['CJ1: 2 processos', 'CJ2: 2 processos',
+    'CJ3: 2 processos', 'CJ4: 2 processos', 'CJ5: 2 processos']);
 
   const semDefesa = corpo.filter(p => !p.defesa);
-  assert.deepEqual(semDefesa.map(p => p.num_processo), ['000000000000001', '000000000000003']);
-  assert.deepEqual(semDefesa.map(p => p.relator), ['CJ1', 'CJ1']);
+  assert.equal(semDefesa.length, 5);
+  assert.deepEqual(semDefesa.map(p => p.relator).sort(), ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'],
+    'o sorteio equilibra pela defesa: cada cadeira leva um sem defesa e um com');
+  assert.deepEqual(corpo.map(p => p.relator), unidadesDe(linhas));
 });
 
-test('a CJ1 não recebe processo com defesa e a pill dela não alterna', async () => {
+test('lote sintético sem defesa é balanceado como um sorteio normal do CREG', async () => {
+  let gravadoCj;
+  const cj = indexPage({ api: async (_tabela, opcoes) => { gravadoCj = JSON.parse(opcoes.body); } });
+  const linhasCj = await preencherCj(cj, Array(20).fill('Não'));
+  cj.document.getElementById('sortear').dispatch('click');
+  await wait();
+
+  let gravadoCreg;
+  const creg = indexPage({ api: async (_tabela, opcoes) => { gravadoCreg = JSON.parse(opcoes.body); } });
+  const { document, tbody } = creg;
+  document.getElementById('btnCreg').dispatch('click');
+  document.getElementById('numRows').value = '20';
+  document.getElementById('createRows').dispatch('click');
+  await wait();
+  for (const [i, linha] of tbody.children.entries()) {
+    linha.querySelector('.num').textContent = String(i + 1);
+    linha.querySelector('.col-processo input').value = `000000000${String(i + 1).padStart(6, '0')}`;
+    linha.querySelector('.col-assunto select').value = 'Auto de Infração';
+    linha.querySelector('.col-decisao select').value = 'Sem recurso';
+  }
+  document.getElementById('sortear').dispatch('click');
+  await wait();
+
+  for (const [linhas, destinos, quantidade] of [
+    [linhasCj, ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'], 4],
+    [tbody.children, ['CREG1', 'CREG2', 'CREG3', 'CREG4'], 5]
+  ]) {
+    assert.equal(linhas.length, 20);
+    assert.deepEqual(destinos.map(destino => unidadesDe(linhas).filter(u => u === destino).length),
+      destinos.map(() => quantidade));
+  }
+  assert.deepEqual(gravadoCj.map(p => p.relator), unidadesDe(linhasCj));
+  assert.ok(gravadoCj.every(p => p.defesa === false));
+  assert.deepEqual(gravadoCreg.map(p => p.unidade), unidadesDe(tbody.children));
+});
+
+test('CJ1 participa do sorteio com defesa e pode ser riscada da rodada', async () => {
   const page = indexPage();
-  // Dez com defesa: se a CJ1 estivesse no sorteio, levaria dois deles.
-  const linhas = await preencherCj(page, Array(10).fill('Sim'));
+  const linhas = await preencherCj(page, Array(5).fill('Sim'));
 
   const pills = page.document.getElementById('pillsContainer');
   assert.deepEqual(pills.children.map(p => p.dataset.creg), ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5']);
-  pills.dispatch('click', { target: pills.children[0] });
-  assert.equal(pills.children[0].classList.contains('excluded'), false,
-    'excluir a CJ1 não mudaria nada: a pill não pode fingir que muda');
-  assert.equal(pills.children[0].getAttribute('aria-pressed'), 'false');
-  assert.equal(pills.children[0].getAttribute('aria-disabled'), 'true');
+  assert.equal(pills.children[0].getAttribute('aria-disabled'), null);
   assert.equal(pills.children[1].getAttribute('aria-disabled'), null);
 
   page.document.getElementById('sortear').dispatch('click');
   await wait();
-  assert.ok(unidadesDe(linhas).every(u => u !== 'CJ1'), 'processo com defesa caiu na CJ1');
-  // Dez entre quatro: duas ou três para cada, sem sobra para ninguém de fora.
-  const porCadeira = ['CJ2', 'CJ3', 'CJ4', 'CJ5'].map(c => unidadesDe(linhas).filter(u => u === c).length);
-  assert.ok(porCadeira.every(n => n === 2 || n === 3), `distribuição desigual: ${porCadeira}`);
-  assert.equal(porCadeira.reduce((x, y) => x + y), 10);
-  assert.equal(resumoDe(page).some(badge => badge.startsWith('CJ1')), false);
+  assert.deepEqual(unidadesDe(linhas).sort(), ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5']);
+
+  const semCj1 = indexPage();
+  const linhasSemCj1 = await preencherCj(semCj1,
+    ['Não', 'Sim', 'Não', 'Sim', 'Não', 'Sim', 'Não', 'Sim'], ['CJ1']);
+  const pillCj1 = semCj1.document.getElementById('pillsContainer').children[0];
+  assert.equal(pillCj1.classList.contains('excluded'), true);
+  assert.equal(pillCj1.getAttribute('aria-pressed'), 'true');
+  semCj1.document.getElementById('sortear').dispatch('click');
+  await wait();
+  assert.deepEqual(resumoDe(semCj1), ['CJ2: 2 processos', 'CJ3: 2 processos',
+    'CJ4: 2 processos', 'CJ5: 2 processos']);
+  assert.ok(unidadesDe(linhasSemCj1).every(u => u !== 'CJ1'));
 });
 
-test('sem cadeira no sorteio, só o lote sem defesa pode ser distribuído', async () => {
-  const todas = ['CJ2', 'CJ3', 'CJ4', 'CJ5'];
+test('CJ requer participante mesmo sem defesa e aceita apenas CJ1', async () => {
+  const todas = ['CJ1', 'CJ2', 'CJ3', 'CJ4', 'CJ5'];
 
-  const soSemDefesa = indexPage();
-  const linhas = await preencherCj(soSemDefesa, ['Não', 'Não'], todas);
-  soSemDefesa.document.getElementById('sortear').dispatch('click');
+  const nenhuma = indexPage();
+  const linhas = await preencherCj(nenhuma, ['Não', 'Não'], todas);
+  nenhuma.document.getElementById('sortear').dispatch('click');
   await wait();
-  assert.equal(soSemDefesa.document.getElementById('processFormMessage').hidden, true);
-  assert.deepEqual(unidadesDe(linhas), ['CJ1', 'CJ1']);
+  assert.equal(nenhuma.document.getElementById('processFormMessage').hidden, false);
+  assert.match(nenhuma.document.getElementById('processFormMessage').textContent,
+    /Todas as cadeiras do CJ estão excluídas/);
+  assert.equal(nenhuma.document.activeElement.dataset.creg, 'CJ1');
+  assert.deepEqual(unidadesDe(linhas), [undefined, undefined]);
 
-  const comDefesa = indexPage();
-  const linhasComDefesa = await preencherCj(comDefesa, ['Não', 'Sim'], todas);
-  comDefesa.document.getElementById('sortear').dispatch('click');
+  const soCj1 = indexPage();
+  const linhasSoCj1 = await preencherCj(soCj1, ['Não', 'Sim'], todas.slice(1));
+  soCj1.document.getElementById('sortear').dispatch('click');
   await wait();
-  assert.equal(comDefesa.document.getElementById('processFormMessage').hidden, false);
-  assert.match(comDefesa.document.getElementById('processFormMessage').textContent,
-    /cadeiras que recebem processo com defesa estão excluídas/);
-  assert.equal(comDefesa.document.activeElement.dataset.creg, 'CJ2',
-    'o foco não pode cair na CJ1, que não alterna');
-  assert.deepEqual(unidadesDe(linhasComDefesa), [undefined, undefined]);
+  assert.equal(soCj1.document.getElementById('processFormMessage').hidden, true);
+  assert.deepEqual(unidadesDe(linhasSoCj1), ['CJ1', 'CJ1']);
 });
 
 test('autenticação envia credenciais e devolve o par de tokens', async () => {
@@ -3420,7 +3460,7 @@ const PROCESSOS_SESSAO = [
     atualizado_por: null, atualizado_em: null }
 ];
 const SORTEIOS = [{ data_distribuicao: '2026-06-18', sorteado_em: null, origem: 'sorteio',
-                    processos: 1, destinos: ['CJ3'] }];
+                    processos: 1, destinos: ['CJ3'], quem: null }];
 const PROCESSOS_ACERVO = [
   // `decisao` é o texto que a tabela mostra (com o legado de `recurso` quando a
   // defesa é nula) e `defesa` é a coluna booleana que o formulário edita: são
@@ -3471,21 +3511,22 @@ test('o seletor mostra so os orgaos que o usuario administra', async () => {
     'com um órgão só, o seletor não é escolha');
 });
 
-test('com os dois orgaos o seletor aparece e comeca pela Camara', async () => {
+test('com os dois orgaos o seletor aparece e comeca pelo Conselho', async () => {
   const chamadas = [];
   const page = adminPage({ api: apiDoPainel(chamadas) });
   await page.inicializarAdmin(new Set(['CJ', 'CREG']));
 
   assert.equal(page.document.getElementById('seletorOrgaoCard').hidden, false);
-  assert.equal(chamadas[0].corpo.p_colegiado, 'CJ');
-  assert.equal(page.document.getElementById('adminOrgaoAtual').textContent, 'Câmara de Julgamento',
+  assert.equal(chamadas[0].corpo.p_colegiado, 'CREG');
+  assert.equal(page.botaoDeOrgao('CREG').getAttribute('aria-pressed'), 'true');
+  assert.equal(page.document.getElementById('adminOrgaoAtual').textContent, 'Conselho Regulador',
     'o contexto do colegiado precisa continuar visível fora do seletor');
 
-  page.botaoDeOrgao('CREG').dispatch('click');
+  page.botaoDeOrgao('CJ').dispatch('click');
   await wait();
-  assert.equal(chamadas.at(-1).corpo.p_colegiado, 'CREG',
+  assert.equal(chamadas.at(-1).corpo.p_colegiado, 'CJ',
     'trocar de órgão tem de recarregar a lista pelo colegiado novo');
-  assert.equal(page.document.getElementById('adminOrgaoAtual').textContent, 'Conselho Regulador');
+  assert.equal(page.document.getElementById('adminOrgaoAtual').textContent, 'Câmara de Julgamento');
 });
 
 test('cada aba consulta a sua propria porta do banco', async () => {
@@ -3513,6 +3554,44 @@ test('cada aba consulta a sua propria porta do banco', async () => {
   // ausência de coluna fixa e o formato tabular que a auditoria mantém.
   assert.equal(page.document.getElementById('painelTable').dataset.visao, 'auditoria',
     'a auditoria não vira cartão nem ganha coluna de ações fixa');
+});
+
+test('Distribuições mostra o autor persistido e um traço nos registros sem autor, em CJ e CREG', async () => {
+  for (const [orgao, destino, email] of [
+    ['CJ', 'CJ3', 'terezinha@goias.gov.br'],
+    ['CREG', 'CREG2', 'alberto@goias.gov.br']
+  ]) {
+    const page = adminPage({ api: apiDoPainel([], {
+      'rpc/admin_sorteios': [
+        { data_distribuicao: '2026-09-25', sorteado_em: '2026-09-25T13:00:00Z',
+          origem: 'sorteio', processos: 1, destinos: [destino], quem: [email] },
+        { data_distribuicao: '2024-04-11', sorteado_em: null,
+          origem: 'planilha', processos: 1, destinos: [destino], quem: null },
+        { data_distribuicao: '2024-04-10', sorteado_em: '2024-04-10T13:00:00Z',
+          origem: 'sorteio', processos: 2, destinos: [destino], quem: ['a@goias.gov.br', email] }
+      ]
+    }) });
+    await page.inicializarAdmin(new Set([orgao]));
+    page.botaoDeAba('sorteios').dispatch('click');
+    await wait();
+
+    const texto = email => email.children.map(parte => parte.textContent).join('');
+    const linhas = page.linhasDaTabela();
+    const quem = linhas[0].children.find(c => c.dataset.label === 'Quem');
+    assert.ok(quem.classList.contains('col-centro'), orgao);
+    const [unico] = quem.children[0].children;
+    assert.equal(texto(unico), email, orgao);
+    assert.equal(unico.children[1].tagName, 'WBR',
+      'o e-mail pode quebrar antes do @ sem cortar o texto');
+
+    const semAutor = linhas[1].children.find(c => c.dataset.label === 'Quem').children[0];
+    assert.equal(semAutor.textContent, '—', orgao);
+    assert.ok(semAutor.classList.contains('sem-valor'), 'ausência de autor tem o traço do painel');
+
+    const [primeiro, quebra, segundo] = linhas[2].children.find(c => c.dataset.label === 'Quem').children[0].children;
+    assert.deepEqual([texto(primeiro), quebra.tagName, texto(segundo)],
+      ['a@goias.gov.br', 'BR', email], 'lote com dois autores mostra os dois');
+  }
 });
 
 test('a meta de 45 dias agrupa os meses e deixa o prazo nao aferivel fora do percentual', async () => {
@@ -3732,12 +3811,12 @@ test('tabela administrativa identifica o colegiado para dimensionar colunas excl
   await page.inicializarAdmin(new Set(['CJ', 'CREG']));
 
   const tabela = page.document.getElementById('painelTable');
-  assert.equal(tabela.dataset.orgao, 'CJ');
+  assert.equal(tabela.dataset.orgao, 'CREG');
 
-  page.botaoDeOrgao('CREG').dispatch('click');
+  page.botaoDeOrgao('CJ').dispatch('click');
   await wait();
-  assert.equal(tabela.dataset.orgao, 'CREG',
-    'o CREG precisa reservar espaço para a coluna adicional de interessado');
+  assert.equal(tabela.dataset.orgao, 'CJ',
+    'trocar de colegiado precisa atualizar as colunas da tabela');
 });
 
 test('pendencias e estados importantes aparecem como sinais visuais, nao como numeros soltos', async () => {
