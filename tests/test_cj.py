@@ -1099,6 +1099,31 @@ def retirado_na_camara_volta_na_mesma_cadeira_e_retornou_nao(cur):
 
 
 @teste
+def retornos_de_vista_na_camara_trazem_a_cadeira_e_o_conselheiro(cur):
+    autenticar(cur)
+    hoje = date.today()
+    vista, retirado = '202600029000711', '202600029000712'
+    for num in (vista, retirado):
+        cur.execute("""insert into acervo_cj (num_processo, relator, data_distribuicao, origem)
+                       values (%s, 'CJ2', %s, 'sorteio')""", (num, hoje - timedelta(days=9)))
+    ids = []
+    for num in (vista, retirado):
+        cur.execute("""insert into julgados_cj (num_processo, data_sessao)
+                       values (%s, %s) returning id""", (num, hoje))
+        ids.append(cur.fetchone()[0])
+    assert registrar(cur, [{'id': ids[0], 'voto': 'Vista', 'status': 'Vista',
+                            'cadeira_vista': 'CJ5'},
+                           {'id': ids[1], 'voto': 'Retirado', 'status': 'Retirado'}]) == 2
+
+    conselheiro = uma(cur, "select conselheiro from cadeiras_cj where cadeira = 'CJ2' and ate is null")
+    cur.execute("select * from public.retornos_de_vista('CJ') where num_processo in (%s, %s)",
+                (vista, retirado))
+    assert cur.fetchall() == [(vista, hoje, 'CJ2', conselheiro)], \
+        'a cadeira de ANTES da Vista (relator), não a de destino; Retirado fica de fora'
+    cur.connection.rollback()
+
+
+@teste
 def registrar_votos_grava_varios_de_uma_vez(cur):
     a, _, _ = julgado_pendente(cur, num='900000000000204')
     b, _, _ = julgado_pendente(cur, num='900000000000205')

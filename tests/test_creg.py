@@ -1095,6 +1095,49 @@ def migracao_devolve_ao_acervo_retirados_gravados_antes_do_gatilho(cur):
 
 
 @teste
+def retornos_de_vista_listam_so_a_vista_com_a_unidade_anterior(cur):
+    limpar(cur)
+    autenticado(cur)
+    hoje = date.today()
+    vista, retirado = '202600029000651', '202600029000652'
+    for numero in (vista, retirado):
+        distribuir(cur, numero, 'CREG2', hoje - timedelta(days=5))
+    jv = julgar(cur, vista, hoje)
+    jr = julgar(cur, retirado, hoje)
+    assert registrar(cur, [{'id': jv, 'voto': 'Vista', 'status': 'Vista', 'unidade_vista': 'CREG4'},
+                           {'id': jr, 'voto': 'Retirado', 'status': 'Retirado'}]) == 2
+
+    cur.execute("select * from public.retornos_de_vista('CREG')")
+    assert cur.fetchall() == [(vista, hoje, 'CREG2', None)]
+
+    # Uma distribuição posterior no MESMO dia é a linha que o painel mostra, e
+    # ela não veio da Vista: o destaque não pode passar para ela.
+    distribuir(cur, vista, 'CREG1', hoje)
+    cur.execute("select * from public.retornos_de_vista('CREG')")
+    assert cur.fetchall() == []
+
+
+@teste
+def retornos_de_vista_saem_quando_o_processo_volta_a_julgamento(cur):
+    limpar(cur)
+    autenticado(cur)
+    hoje = date.today()
+    ontem = hoje - timedelta(days=1)
+    numero = '202600029000653'
+    distribuir(cur, numero, 'CREG2', ontem - timedelta(days=5))
+    jid = julgar(cur, numero, ontem)
+    assert registrar(cur, [{'id': jid, 'voto': 'Vista', 'status': 'Vista',
+                            'unidade_vista': 'CREG3'}]) == 1
+    cur.execute("select num_processo from public.retornos_de_vista('CREG')")
+    assert cur.fetchall() == [(numero,)]
+
+    # Julgado de novo depois do retorno: sai do painel e sai do destaque.
+    julgar(cur, numero, hoje, voto='Manter', status='Julgado')
+    cur.execute("select * from public.retornos_de_vista('CREG')")
+    assert cur.fetchall() == []
+
+
+@teste
 def registrar_votos_nao_apaga_decisao_com_campo_em_branco(cur):
     """Branco quer dizer "ainda não decidi", nunca "apague o que está lá".
 
