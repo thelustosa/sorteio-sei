@@ -254,11 +254,42 @@ O Conselho troca duas coisas na tela: a coluna do detalhe mostra a **unidade**
 sem hover de nome, e no lugar do conselheiro entra o **assunto** — que nele
 distingue de verdade, com 12 tipos contra o auto de infração único da Câmara.
 
-`resumo_acervo_creg()` e `processos_acervo_creg(ordem, unidade)` são o espelho
-das funções da Câmara, com as **mesmas oito faixas de tempo** — quem lê os dois
-painéis compara sem traduzir — e a mesma definição de pendente: processo do
-acervo que não aparece em `julgados_creg`, contado uma vez só, na unidade e na
-data da distribuição mais recente.
+`resumo_acervo_creg()` e `processos_acervo_creg(ordem, unidade)` usam as **mesmas
+oito faixas de tempo** da Câmara. Cada processo pendente conta uma vez, na
+unidade e na data da distribuição mais recente. Um julgamento definitivo
+retira o processo do painel. Vista e Retirado criam uma nova distribuição de
+retorno vinculada ao julgamento: Vista usa a unidade escolhida na janela;
+Retirado usa a unidade que levou o processo à sessão. As consultas ignoram o
+julgamento que criou esse retorno, inclusive quando sessão e retorno têm a
+mesma data, mas consideram julgamentos posteriores.
+
+Quando a AGR inclui o processo em outra pauta, o sincronizador insere um novo
+julgamento e o vincula ao retorno mais recente. Não há novo sorteio nesse
+caminho. O novo julgamento conserva como unidade atual o destino da Vista ou
+a unidade anterior do Retirado.
+
+O retorno preserva a distribuição original e o julgamento. O vínculo único com
+o julgamento faz o reenvio e a correção atualizarem o mesmo retorno. Um sorteio
+posterior é outra distribuição histórica; o painel continua contando o
+processo apenas uma vez. A gravação do voto, do status e do retorno ocorre na
+mesma transação. Vista exige status Vista e unidade CREG1..CREG4; Retirado exige
+status Retirado e uma unidade atual. A regra vale pelos dois lados: status
+Vista ou Retirado com voto diferente também é recusado, e a mensagem diz qual
+processo falhou. Com um dos campos ainda em branco, a decisão fica pendente e
+o retorno só nasce quando os dois baterem. Retirado registrado antes da sessão
+gera retorno com a data da gravação, nunca uma data futura.
+
+O retorno é derivado do julgamento: o painel admin o mostra como "Retorno de
+Vista/Retirado", e corrigir ou excluir essa distribuição por lá é recusado;
+quem se corrige é o julgado, inclusive o destino da Vista. Se a decisão for
+desfeita depois que a pauta seguinte se vinculou ao retorno, o julgado novo
+fica sem vínculo (`on delete set null`), e "Religar ao acervo" refaz a ligação.
+A migração `20260925115048` devolve ao acervo os Retirados gravados antes do
+gatilho, exceto os processos que já voltaram a outra sessão. Em produção, em
+25/09/2026, não havia nenhum pendente: os 16 Retirados e as 5 Vistas com
+`atualizado_em` eram histórico da planilha, carimbado pela carga de
+28/08/2026, e todos já tinham sessão posterior. Uma Vista sem destino só
+precisa de correção se o processo ainda não voltou à pauta.
 
 **Não há de-para de unidades no Conselho.** A Câmara tem `cadeiras_cj`, que
 traduz CJ1..CJ5 no nome do conselheiro e aparece no hover do painel. Aqui não:

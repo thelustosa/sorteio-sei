@@ -15,7 +15,7 @@ import json
 import re
 import subprocess
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import psycopg2
@@ -134,6 +134,7 @@ def tabelas_criadas(cur):
         'assunto': 'text', 'recurso': 'text', 'ordem': 'integer',
         'sorteado_em': 'timestamp with time zone', 'origem': 'text',
         'criado_em': 'timestamp with time zone', 'criado_por': 'text',
+        'retorno_julgado_id': 'bigint',
     }
     esperado_julgados = {
         'id': 'bigint', 'acervo_id': 'bigint', 'num_processo': 'text',
@@ -143,6 +144,7 @@ def tabelas_criadas(cur):
         'meta_45': 'boolean',
         'criado_em': 'timestamp with time zone',
         'atualizado_em': 'timestamp with time zone', 'atualizado_por': 'text',
+        'cadeira_vista': 'text',
     }
     for tabela, esperado in [('acervo_cj', esperado_acervo), ('julgados_cj', esperado_julgados)]:
         cur.execute("""select column_name, data_type from information_schema.columns
@@ -169,7 +171,7 @@ def restricoes_e_indices(cur):
 
     assert uma(cur, """select confdeltype from pg_constraint
                         where conrelid = 'public.julgados_cj'::regclass
-                          and contype = 'f'""") == 'a', 'FK não pode apagar em cascata'
+                          and contype = 'f'""") == 'n',         'FK não pode apagar julgado em cascata; apagar um retorno só solta o vínculo'
 
     assert uma(cur, """select count(*) from pg_indexes
                         where tablename = 'julgados_cj' and indexname = 'idx_julgados_cj_acervo'""") == 1
@@ -987,12 +989,112 @@ def registrar_votos_so_mexe_em_voto_e_status(cur):
                      from julgados_cj where id = %s""", (ident,))
     antes = cur.fetchone()
 
-    registrar(cur, [{'id': ident, 'voto': 'Vista', 'status': 'Vista'}])
+    registrar(cur, [{'id': ident, 'voto': 'Vista', 'status': 'Vista',
+                     'cadeira_vista': 'CJ3'}])
 
     cur.execute("""select num_processo, data_sessao, pauta, relator, defesa,
                           data_distribuicao, acervo_id
                      from julgados_cj where id = %s""", (ident,))
     assert cur.fetchone() == antes
+    cur.connection.rollback()
+
+
+def retornos_cj(cur, jid):
+    cur.execute("""select relator, data_distribuicao, origem from public.acervo_cj
+                    where retorno_julgado_id = %s""", (jid,))
+    return cur.fetchall()
+
+
+def recusa_cj(cur, itens, trecho):
+    """registrar_votos recusa o lote com 22023 e diz o que falhou."""
+    cur.execute('savepoint recusa')
+    try:
+        registrar(cur, itens)
+    except psycopg2.Error as exc:
+        assert exc.pgcode in ('22023', 'P0001'), exc
+        assert trecho in str(exc), exc
+        cur.execute('rollback to savepoint recusa')
+    else:
+        raise AssertionError(f'aceitou {itens}')
+
+
+@teste
+def vista_na_camara_volta_na_cadeira_escolhida_sem_duplicar(cur):
+    autenticar(cur)
+    hoje = date.today()
+    num = '202600029000701'
+    cur.execute("""insert into acervo_cj (num_processo, relator, data_distribuicao, defesa, origem)
+                   values (%s, 'CJ1', %s, true, 'sorteio') returning id""",
+                (num, hoje - timedelta(days=30)))
+    original = cur.fetchone()[0]
+    cur.execute("""insert into julgados_cj (num_processo, data_sessao)
+                   values (%s, %s) returning id""", (num, hoje))
+    jid = cur.fetchone()[0]
+
+    recusa_cj(cur, [{'id': jid, 'voto': 'Vista'}], 'cadeira')
+    recusa_cj(cur, [{'id': jid, 'voto': 'Vista', 'cadeira_vista': 'CJ9'}], 'fora do permitido')
+
+    # A mesma regra do Conselho: o voto decide e o retorno só nasce com o
+    # status igual. Só o voto é decisão pela metade.
+    assert registrar(cur, [{'id': jid, 'voto': 'Vista', 'cadeira_vista': 'CJ4'}]) == 1
+    assert retornos_cj(cur, jid) == []
+    assert registrar(cur, [{'id': jid, 'status': 'Vista'}]) == 1
+    assert retornos_cj(cur, jid) == [('CJ4', hoje, 'retorno')]
+    cur.execute('select num_processo, relator from public.processos_acervo_cj() where num_processo = %s',
+                (num,))
+    assert cur.fetchall() == [(num, 'CJ4')]
+
+    # Voto igual, reenvio e troca de cadeira mexem no MESMO retorno.
+    assert registrar(cur, [{'id': jid, 'voto': 'Vista', 'status': 'Vista',
+                            'cadeira_vista': 'CJ4'}]) == 1
+    assert registrar(cur, [{'id': jid, 'cadeira_vista': 'CJ2',
+                            'anterior': {'cadeira_vista': 'CJ4'}}]) == 1
+    assert retornos_cj(cur, jid) == [('CJ2', hoje, 'retorno')]
+    cur.execute('select acervo_id, relator from julgados_cj where id = %s', (jid,))
+    assert cur.fetchone() == (original, 'CJ1')
+
+    # Decisão definitiva desfaz só o retorno e a cadeira da Vista.
+    assert registrar(cur, [{'id': jid, 'voto': 'Manter', 'status': 'Julgado',
+                            'anterior': {'voto': 'Vista', 'status': 'Vista'}}]) == 1
+    assert retornos_cj(cur, jid) == []
+    cur.execute('select cadeira_vista from julgados_cj where id = %s', (jid,))
+    assert cur.fetchone() == (None,)
+    cur.execute('select count(*) from public.processos_acervo_cj() where num_processo = %s', (num,))
+    assert cur.fetchone()[0] == 0
+    cur.connection.rollback()
+
+
+@teste
+def retirado_na_camara_volta_na_mesma_cadeira_e_retornou_nao(cur):
+    autenticar(cur)
+    hoje = date.today()
+    num, sem_cadeira, retornou = '202600029000702', '202600029000703', '202600029000704'
+    for n in (num, retornou):
+        cur.execute("""insert into acervo_cj (num_processo, relator, data_distribuicao, origem)
+                       values (%s, 'CJ3', %s, 'sorteio')""", (n, hoje - timedelta(days=10)))
+    ids = {}
+    for n in (num, sem_cadeira, retornou):
+        cur.execute("""insert into julgados_cj (num_processo, data_sessao)
+                       values (%s, %s) returning id""", (n, hoje + timedelta(days=2)))
+        ids[n] = cur.fetchone()[0]
+
+    recusa_cj(cur, [{'id': ids[num], 'voto': 'Manter', 'status': 'Retirado'}], num)
+    recusa_cj(cur, [{'id': ids[num], 'voto': 'Manter', 'status': 'Julgado'},
+                    {'id': ids[sem_cadeira], 'voto': 'Retirado', 'status': 'Retirado'}],
+              sem_cadeira)
+
+    # Só o status é decisão pela metade: não volta ainda.
+    assert registrar(cur, [{'id': ids[num], 'status': 'Retirado'}]) == 1
+    assert retornos_cj(cur, ids[num]) == []
+
+    # Retirado de pauta antes da sessão: volta à mesma cadeira, com a data de hoje.
+    assert registrar(cur, [{'id': ids[num], 'voto': 'Retirado'},
+                           {'id': ids[retornou], 'voto': 'Manter', 'status': 'Retornou'}]) == 2
+    assert retornos_cj(cur, ids[num]) == [('CJ3', hoje, 'retorno')]
+    assert retornos_cj(cur, ids[retornou]) == []
+    cur.execute('select num_processo, relator, dias from public.processos_acervo_cj()'
+                ' where num_processo in (%s, %s)', (num, retornou))
+    assert cur.fetchall() == [(num, 'CJ3', 0)]
     cur.connection.rollback()
 
 

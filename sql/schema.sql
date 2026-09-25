@@ -195,7 +195,38 @@ alter table public.julgados_cj
 alter table public.acervo_cj
   drop constraint if exists acervo_cj_origem_check;
 alter table public.acervo_cj
-  add constraint acervo_cj_origem_check check (origem in ('sorteio', 'planilha', 'ata'));
+  add constraint acervo_cj_origem_check
+  check (origem in ('sorteio', 'planilha', 'ata', 'retorno'));
+
+-- Vista e Retirado devolvem o processo ao acervo, como no Conselho. A cadeira
+-- escolhida para a Vista fica no julgado; o retorno é uma distribuição nova
+-- (origem 'retorno') ligada a ele. O identificador na chave única permite o
+-- Retirado voltar à mesma cadeira na mesma data da distribuição original.
+alter table public.julgados_cj add column if not exists cadeira_vista text;
+alter table public.julgados_cj drop constraint if exists julgados_cj_cadeira_vista_valida;
+alter table public.julgados_cj add constraint julgados_cj_cadeira_vista_valida
+  check (cadeira_vista is null or
+         (coalesce(voto, '') = 'Vista' and cadeira_vista ~ '^CJ[1-9][0-9]*$'));
+
+alter table public.acervo_cj add column if not exists retorno_julgado_id bigint;
+alter table public.acervo_cj drop constraint if exists acervo_cj_distribuicao_unica;
+alter table public.acervo_cj add constraint acervo_cj_distribuicao_unica
+  unique nulls not distinct (num_processo, data_distribuicao, relator, retorno_julgado_id);
+alter table public.acervo_cj drop constraint if exists acervo_cj_retorno_vinculado;
+alter table public.acervo_cj add constraint acervo_cj_retorno_vinculado
+  check ((origem = 'retorno') = (retorno_julgado_id is not null));
+alter table public.acervo_cj drop constraint if exists acervo_cj_retorno_julgado_id_fkey;
+alter table public.acervo_cj add constraint acervo_cj_retorno_julgado_id_fkey
+  foreign key (retorno_julgado_id) references public.julgados_cj (id) on delete cascade;
+alter table public.acervo_cj drop constraint if exists acervo_cj_retorno_unico;
+alter table public.acervo_cj add constraint acervo_cj_retorno_unico
+  unique (retorno_julgado_id);
+
+-- Como no Conselho: desfazer ou excluir a decisão que criou o retorno não pode
+-- travar no julgado da pauta seguinte que se vinculou a ele.
+alter table public.julgados_cj drop constraint if exists julgados_cj_acervo_id_fkey;
+alter table public.julgados_cj add constraint julgados_cj_acervo_id_fkey
+  foreign key (acervo_id) references public.acervo_cj (id) on delete set null;
 
 -- Numeração da pauta: cuidado ao usar em relatório.
 --
@@ -296,6 +327,7 @@ begin
       from public.acervo_cj
      where num_processo = new.num_processo
        and data_distribuicao = new.data_distribuicao
+       and retorno_julgado_id is distinct from new.id
      -- Desempate: a mesma distribuição em duas cadeiras é legal, e os dois
      -- ramos precisam escolher a MESMA linha, senão o vínculo troca a cada
      -- rederivação. Quem decide é a cadeira que o julgado já tem — é ela que o
@@ -310,6 +342,7 @@ begin
       from public.acervo_cj
      where num_processo = new.num_processo
        and data_distribuicao <= new.data_sessao
+       and retorno_julgado_id is distinct from new.id
      order by data_distribuicao desc,
               (relator is not distinct from new.relator) desc, id desc
      limit 1;
@@ -317,6 +350,7 @@ begin
       select * into origem
         from public.acervo_cj
        where num_processo = new.num_processo
+         and retorno_julgado_id is distinct from new.id
        order by data_distribuicao, id
        limit 1;
     end if;
@@ -418,10 +452,15 @@ begin
           and nullif(i ->> 'voto', '') not in ('Manter', 'Anular', 'Retirado', 'Vista'))
       or (nullif(i ->> 'status', '') is not null
           and nullif(i ->> 'status', '')
-              not in ('Julgado', 'Retornou', 'Retirado', 'Vista'));
+              not in ('Julgado', 'Retornou', 'Retirado', 'Vista'))
+      -- A cadeira da Vista precisa estar ocupada hoje: é para ela que o
+      -- processo volta.
+      or (i ? 'cadeira_vista' and i ->> 'cadeira_vista' is not null
+          and not exists (select 1 from public.cadeiras_cj c
+                           where c.cadeira = i ->> 'cadeira_vista' and c.ate is null));
 
   if invalido > 0 then
-    raise exception 'id, voto ou status fora do permitido (% item(ns))', invalido;
+    raise exception 'id, voto, status ou cadeira da vista fora do permitido (% item(ns))', invalido;
   end if;
 
   -- Só o que ainda está pendente, ou o que esta mesma página já preencheu antes
@@ -449,10 +488,23 @@ begin
   if exists (
     select 1 from public.julgados_cj j
     join jsonb_array_elements(itens) i on j.id = (i ->> 'id')::bigint
-    cross join (values ('voto'), ('status')) c(campo)
     where (j.voto is null or j.status is null or j.atualizado_em is not null)
-      and nullif(i ->> c.campo, '') is not null
-      and nullif(i ->> c.campo, '') is distinct from (to_jsonb(j) ->> c.campo)
+      and coalesce(nullif(i ->> 'voto', ''), j.voto) = 'Vista'
+      and (case when i ? 'cadeira_vista' then i ->> 'cadeira_vista'
+                else j.cadeira_vista end) is null
+  ) then
+    raise exception 'Voto Vista exige a cadeira para onde o processo vai.'
+      using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1 from public.julgados_cj j
+    join jsonb_array_elements(itens) i on j.id = (i ->> 'id')::bigint
+    cross join (values ('voto'), ('status'), ('cadeira_vista')) c(campo)
+    where (j.voto is null or j.status is null or j.atualizado_em is not null)
+      and (case when c.campo = 'cadeira_vista' then i ? c.campo
+                else nullif(i ->> c.campo, '') is not null end)
+      and (i ->> c.campo) is distinct from (to_jsonb(j) ->> c.campo)
       and (
         -- Clientes antigos podem preencher vazios, mas não substituir uma
         -- decisão sem informar o valor anterior. Reenvio idêntico é seguro.
@@ -470,6 +522,13 @@ begin
   update public.julgados_cj j
      set voto           = coalesce(nullif(i ->> 'voto', ''), j.voto),
          status         = coalesce(nullif(i ->> 'status', ''), j.status),
+         -- A cadeira só existe com voto Vista (julgados_cj_cadeira_vista_valida).
+         cadeira_vista  = case
+                           when coalesce(nullif(i ->> 'voto', ''), j.voto) is distinct from 'Vista'
+                             then null
+                           when i ? 'cadeira_vista' then i ->> 'cadeira_vista'
+                           else j.cadeira_vista
+                         end,
          atualizado_em  = now(),
          atualizado_por = quem
     from jsonb_array_elements(itens) i
@@ -483,6 +542,99 @@ $$;
 
 revoke all on function public.registrar_votos(jsonb) from public, anon, service_role;
 grant execute on function public.registrar_votos(jsonb) to authenticated;
+
+-- ── CJ · Retorno de Vista e Retirado ao acervo ───────────────────────────────
+-- A mesma regra do Conselho (julgados_creg_sincronizar_retorno): o voto decide
+-- e o retorno só nasce quando o status é o mesmo rótulo. Vista volta na cadeira
+-- escolhida na tela; Retirado volta na cadeira que levou o processo à sessão.
+-- Um dos dois ainda em branco é decisão pela metade: a linha continua pendente
+-- na página de julgados. Retornou não é retorno ao acervo: é o processo que
+-- voltou de diligência, e continua fora do painel.
+--
+-- Linhas com atualizado_em nulo não geram retorno: é o histórico da planilha,
+-- que não se mexe. Corrigir só metadados de um julgado sem retorno também não.
+create or replace function public.julgados_cj_sincronizar_retorno()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  destino text;
+  original public.acervo_cj%rowtype;
+begin
+  if new.atualizado_em is null then
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    if old.voto is not distinct from new.voto
+       and old.status is not distinct from new.status
+       and old.cadeira_vista is not distinct from new.cadeira_vista
+       and not exists (select 1 from public.acervo_cj a
+                        where a.retorno_julgado_id = new.id) then
+      return new;
+    end if;
+  end if;
+
+  if (new.voto in ('Vista', 'Retirado') or new.status in ('Vista', 'Retirado'))
+     and new.voto <> new.status then
+    raise exception 'Processo %: voto % e status % não combinam. Vista e Retirado exigem voto e status iguais.',
+      new.num_processo, new.voto, new.status
+      using errcode = '22023';
+  end if;
+
+  if new.voto = 'Vista' then
+    if not exists (select 1 from public.cadeiras_cj c
+                    where c.cadeira = new.cadeira_vista and c.ate is null) then
+      raise exception 'Processo %: voto Vista exige a cadeira para onde o processo vai (CJ1 a CJ5).',
+        new.num_processo
+        using errcode = '22023';
+    end if;
+    destino := new.cadeira_vista;
+  elsif new.voto = 'Retirado' then
+    if coalesce(new.relator, '') !~ '^CJ[1-9][0-9]*$' then
+      raise exception 'Processo %: voto Retirado volta para a cadeira que levou o processo à sessão, e o processo não tem cadeira no acervo.',
+        new.num_processo
+        using errcode = '22023';
+    end if;
+    destino := new.relator;
+  end if;
+
+  if destino is not null and new.status = new.voto then
+    select * into original from public.acervo_cj a where a.id = new.acervo_id;
+
+    -- Retirado pode ser registrado antes da sessão: o retorno vale a partir da
+    -- gravação, nunca de uma data futura, que cairia fora das faixas do painel.
+    insert into public.acervo_cj
+      (num_processo, relator, data_distribuicao, defesa, assunto,
+       origem, retorno_julgado_id)
+    values
+      (new.num_processo, destino, least(new.data_sessao, current_date), new.defesa,
+       coalesce(original.assunto, 'Auto de Infração'), 'retorno', new.id)
+    on conflict on constraint acervo_cj_retorno_unico do update
+      set num_processo = excluded.num_processo,
+          relator = excluded.relator,
+          data_distribuicao = excluded.data_distribuicao,
+          defesa = excluded.defesa,
+          assunto = excluded.assunto;
+  else
+    -- Desfazer a decisão remove só o retorno que ela criou.
+    delete from public.acervo_cj a where a.retorno_julgado_id = new.id;
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.julgados_cj_sincronizar_retorno()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists julgados_cj_retorno on public.julgados_cj;
+create trigger julgados_cj_retorno
+  after insert or update of num_processo, voto, status, cadeira_vista, data_sessao, relator,
+                            defesa, acervo_id, atualizado_em
+  on public.julgados_cj
+  for each row execute function public.julgados_cj_sincronizar_retorno();
 
 -- ── CJ · Quem ocupa cada cadeira ─────────────────────────────────────────────
 -- acervo_cj.relator guarda a CADEIRA (CJ1..CJ5), não o nome. A cadeira é
@@ -572,10 +724,9 @@ begin
   -- Uma linha por PROCESSO, não por distribuição: um processo redistribuído
   -- conta uma vez só, na cadeira e na data da distribuição mais recente.
   --
-  -- "Não julgado" = não aparece em julgados_cj. Quem foi à mesa e voltou sem
-  -- decisão (Retornou, Vista, Retirado) sai do painel — tem fila própria, que é
-  -- a tela de registro. Para contá-los aqui, acrescente
-  -- `and j.status = 'Julgado'` ao not exists.
+  -- "Não julgado" = não aparece em julgados_cj. Vista e Retirado criam uma
+  -- distribuição de retorno (julgados_cj_sincronizar_retorno), e o julgado que
+  -- a criou não a esconde. Retornou continua fora do painel.
   --
   -- "Julgado" aqui é julgado DEPOIS de receber esta distribuição
   -- (data_sessao >= data_distribuicao). Sem a correlação de data, um julgado
@@ -589,7 +740,8 @@ begin
       from public.acervo_cj a
      where not exists (select 1 from public.julgados_cj j
                         where j.num_processo = a.num_processo
-                          and j.data_sessao >= a.data_distribuicao)
+                          and j.data_sessao >= a.data_distribuicao
+                          and j.id is distinct from a.retorno_julgado_id)
      order by a.num_processo, a.data_distribuicao desc, a.id desc
   ),
 
@@ -685,7 +837,8 @@ begin
       from public.acervo_cj a
      where not exists (select 1 from public.julgados_cj j
                         where j.num_processo = a.num_processo
-                          and j.data_sessao >= a.data_distribuicao)
+                          and j.data_sessao >= a.data_distribuicao
+                          and j.id is distinct from a.retorno_julgado_id)
      order by a.num_processo, a.data_distribuicao desc, a.id desc
   )
   select p.num_processo,
@@ -802,7 +955,8 @@ create table if not exists public.acervo_creg (
   ordem             int,
   sorteado_em       timestamptz,
   origem            text        not null default 'sorteio'
-                    check (origem in ('sorteio', 'planilha', 'ata')),
+                    check (origem in ('sorteio', 'planilha', 'ata', 'retorno')),
+  retorno_julgado_id bigint,
   criado_em         timestamptz not null default now(),
   criado_por        text,
 
@@ -838,6 +992,10 @@ create table if not exists public.julgados_creg (
   pauta             int,
   voto              text,
   status            text,
+
+  -- Destino escolhido ao registrar voto Vista. O retorno ao acervo usa esta
+  -- unidade sem alterar a unidade que levou o processo à sessão.
+  unidade_vista     text,
 
   -- Cópia do acervo, não referência: registram o estado do processo no momento
   -- do julgamento. Uma redistribuição posterior muda o acervo e não pode
@@ -915,6 +1073,41 @@ create table if not exists public.julgados_creg (
   -- duplica.
   constraint julgados_creg_sessao_unica unique (num_processo, data_sessao)
 );
+
+alter table public.julgados_creg add column if not exists unidade_vista text;
+alter table public.julgados_creg drop constraint if exists julgados_creg_unidade_vista_valida;
+alter table public.julgados_creg add constraint julgados_creg_unidade_vista_valida
+  check (unidade_vista is null or
+         (coalesce(voto, '') = 'Vista' and unidade_vista in ('CREG1', 'CREG2', 'CREG3', 'CREG4')));
+
+-- O retorno é uma distribuição nova, ligada ao julgamento que a criou. O
+-- identificador permite mesma data/unidade da distribuição original (Retirado)
+-- sem abrir duplicatas em sorteios ou importações normais.
+alter table public.acervo_creg add column if not exists retorno_julgado_id bigint;
+alter table public.acervo_creg drop constraint if exists acervo_creg_distribuicao_unica;
+alter table public.acervo_creg add constraint acervo_creg_distribuicao_unica
+  unique nulls not distinct (num_processo, data_distribuicao, unidade, retorno_julgado_id);
+alter table public.acervo_creg drop constraint if exists acervo_creg_origem_check;
+alter table public.acervo_creg add constraint acervo_creg_origem_check
+  check (origem in ('sorteio', 'planilha', 'ata', 'retorno'));
+alter table public.acervo_creg drop constraint if exists acervo_creg_retorno_vinculado;
+alter table public.acervo_creg add constraint acervo_creg_retorno_vinculado
+  check ((origem = 'retorno') = (retorno_julgado_id is not null));
+alter table public.acervo_creg drop constraint if exists acervo_creg_retorno_julgado_id_fkey;
+alter table public.acervo_creg add constraint acervo_creg_retorno_julgado_id_fkey
+  foreign key (retorno_julgado_id) references public.julgados_creg(id) on delete cascade;
+alter table public.acervo_creg drop constraint if exists acervo_creg_retorno_unico;
+alter table public.acervo_creg add constraint acervo_creg_retorno_unico
+  unique (retorno_julgado_id);
+
+-- Um retorno some quando a decisão que o criou é desfeita ou excluída, e o
+-- julgado da pauta seguinte pode estar vinculado a ele. Sem o set null, a
+-- correção ou a exclusão do julgado original falhava por causa dessa FK.
+-- O julgado fica sem vínculo, como em excluir_distribuicao, e "Religar ao
+-- acervo" refaz o vínculo.
+alter table public.julgados_creg drop constraint if exists julgados_creg_acervo_id_fkey;
+alter table public.julgados_creg add constraint julgados_creg_acervo_id_fkey
+  foreign key (acervo_id) references public.acervo_creg (id) on delete set null;
 
 create index if not exists idx_julgados_creg_acervo
   on public.julgados_creg (acervo_id);
@@ -1035,6 +1228,7 @@ begin
       from public.acervo_creg
      where num_processo = new.num_processo
        and data_distribuicao = new.data_distribuicao
+       and retorno_julgado_id is distinct from new.id
      -- Desempate: a mesma distribuição em duas unidades é legal, e os dois
      -- ramos precisam escolher a MESMA linha, senão o vínculo troca a cada
      -- rederivação. Quem decide é a unidade que o julgado já tem — é ela que o
@@ -1049,6 +1243,7 @@ begin
       from public.acervo_creg
      where num_processo = new.num_processo
        and data_distribuicao <= new.data_sessao
+       and retorno_julgado_id is distinct from new.id
      order by data_distribuicao desc,
               (unidade is not distinct from new.unidade) desc, id desc
      limit 1;
@@ -1056,6 +1251,7 @@ begin
       select * into origem
         from public.acervo_creg
        where num_processo = new.num_processo
+         and retorno_julgado_id is distinct from new.id
        order by data_distribuicao, id
        limit 1;
     end if;
@@ -1082,8 +1278,8 @@ create trigger julgados_creg_derivar
 
 -- ── CREG · Registro do voto e do status pela secretaria ──────────────────────
 -- Mesma porta estreita da Câmara: a escrita não é UPDATE direto, é esta função,
--- que só encosta em voto e status, recusa valor fora da lista e registra quem
--- preencheu.
+-- que grava voto, status e destino de Vista, recusa valor fora da lista e
+-- registra quem preencheu.
 --
 -- A lista é curta de propósito. O histórico da planilha tem 23 grafias de voto
 -- ("Aprovação"/"Aprovado"/"Apovação", "Indeferir"/"Indeferimento") — a
@@ -1124,10 +1320,12 @@ begin
                'Retirado', 'Vista'))
       or (nullif(i ->> 'status', '') is not null
           and nullif(i ->> 'status', '') not in
-              ('Julgado', 'Retirado', 'Vista', 'Sobrestado', 'Prejudicado'));
+              ('Julgado', 'Retirado', 'Vista', 'Sobrestado', 'Prejudicado'))
+      or (i ? 'unidade_vista' and i ->> 'unidade_vista' is not null
+          and i ->> 'unidade_vista' not in ('CREG1', 'CREG2', 'CREG3', 'CREG4'));
 
   if invalido > 0 then
-    raise exception 'id, voto ou status fora do permitido (% item(ns))', invalido;
+    raise exception 'id, voto, status ou unidade de vista fora do permitido (% item(ns))', invalido;
   end if;
 
   -- Só o que ainda está pendente, ou o que esta mesma página já preencheu antes
@@ -1155,10 +1353,23 @@ begin
   if exists (
     select 1 from public.julgados_creg j
     join jsonb_array_elements(itens) i on j.id = (i ->> 'id')::bigint
-    cross join (values ('voto'), ('status')) c(campo)
     where (j.voto is null or j.status is null or j.atualizado_em is not null)
-      and nullif(i ->> c.campo, '') is not null
-      and nullif(i ->> c.campo, '') is distinct from (to_jsonb(j) ->> c.campo)
+      and coalesce(nullif(i ->> 'voto', ''), j.voto) = 'Vista'
+      and (case when i ? 'unidade_vista' then i ->> 'unidade_vista'
+                else j.unidade_vista end) is null
+  ) then
+    raise exception 'Voto Vista exige unidade de destino (CREG1 a CREG4).'
+      using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1 from public.julgados_creg j
+    join jsonb_array_elements(itens) i on j.id = (i ->> 'id')::bigint
+    cross join (values ('voto'), ('status'), ('unidade_vista')) c(campo)
+    where (j.voto is null or j.status is null or j.atualizado_em is not null)
+      and (case when c.campo = 'unidade_vista' then i ? c.campo
+                else nullif(i ->> c.campo, '') is not null end)
+      and (i ->> c.campo) is distinct from (to_jsonb(j) ->> c.campo)
       and (
         -- Clientes antigos podem preencher vazios, mas não substituir uma
         -- decisão sem informar o valor anterior. Reenvio idêntico é seguro.
@@ -1176,6 +1387,12 @@ begin
   update public.julgados_creg j
      set voto           = coalesce(nullif(i ->> 'voto', ''), j.voto),
          status         = coalesce(nullif(i ->> 'status', ''), j.status),
+         unidade_vista  = case
+                           when coalesce(nullif(i ->> 'voto', ''), j.voto) is distinct from 'Vista'
+                             then null
+                           when i ? 'unidade_vista' then i ->> 'unidade_vista'
+                           else j.unidade_vista
+                         end,
          atualizado_em  = now(),
          atualizado_por = quem
     from jsonb_array_elements(itens) i
@@ -1190,6 +1407,104 @@ $$;
 revoke all on function public.registrar_votos_creg(jsonb)
   from public, anon, service_role;
 grant execute on function public.registrar_votos_creg(jsonb) to authenticated;
+
+-- Cada Vista/Retirado confirmado cria ou corrige UMA distribuição de retorno.
+-- O gatilho roda na mesma transação da gravação e também acompanha correções
+-- administrativas de voto, unidade ou data da sessão. Linhas com atualizado_em
+-- nulo não geram retorno. Isso não cobre todo o histórico: a carga de 28/08/2026
+-- carimbou 167 julgados da planilha (sessões de 2023 a 2026), e eles só geram
+-- retorno se o voto ou o status mudar.
+create or replace function public.julgados_creg_sincronizar_retorno()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  destino text;
+  interessado_original text;
+begin
+  if new.atualizado_em is null then
+    return new;
+  end if;
+
+  -- Corrigir apenas metadados de um julgamento sem retorno não é uma nova
+  -- decisão. Isso preserva o histórico importado e as correções administrativas.
+  if tg_op = 'UPDATE' then
+    if old.voto is not distinct from new.voto
+       and old.status is not distinct from new.status
+       and old.unidade_vista is not distinct from new.unidade_vista
+       and not exists (select 1 from public.acervo_creg a
+                        where a.retorno_julgado_id = new.id) then
+      return new;
+    end if;
+  end if;
+
+  -- Vista e Retirado valem pelos dois lados: um só dos campos com esse rótulo
+  -- e o outro com rótulo diferente é incoerente. Um campo ainda em branco não
+  -- é: a decisão está pela metade, a linha continua pendente na página de
+  -- julgados e o retorno só nasce quando os dois campos baterem.
+  if (new.voto in ('Vista', 'Retirado') or new.status in ('Vista', 'Retirado'))
+     and new.voto <> new.status then
+    raise exception 'Processo %: voto % e status % não combinam. Vista e Retirado exigem voto e status iguais.',
+      new.num_processo, new.voto, new.status
+      using errcode = '22023';
+  end if;
+
+  if new.voto = 'Vista' then
+    if coalesce(new.unidade_vista, '') not in ('CREG1', 'CREG2', 'CREG3', 'CREG4') then
+      raise exception 'Processo %: voto Vista exige unidade de destino (CREG1 a CREG4).',
+        new.num_processo
+        using errcode = '22023';
+    end if;
+    destino := new.unidade_vista;
+  elsif new.voto = 'Retirado' then
+    if coalesce(new.unidade, '') !~ '^CREG[1-4]$' then
+      raise exception 'Processo %: voto Retirado exige unidade atual CREG1 a CREG4, e o processo não tem distribuição no acervo.',
+        new.num_processo
+        using errcode = '22023';
+    end if;
+    destino := new.unidade;
+  end if;
+
+  if destino is not null and new.status = new.voto then
+    select a.interessado into interessado_original
+      from public.acervo_creg a where a.id = new.acervo_id;
+
+    -- Retirado pode ser registrado antes da sessão. O retorno vale a partir da
+    -- gravação, e não da data futura: com dias negativos o processo cairia fora
+    -- de todas as faixas do painel.
+    insert into public.acervo_creg
+      (num_processo, unidade, data_distribuicao, assunto, recurso,
+       interessado, origem, retorno_julgado_id)
+    values
+      (new.num_processo, destino, least(new.data_sessao, current_date), new.assunto,
+       new.recurso, interessado_original, 'retorno', new.id)
+    on conflict on constraint acervo_creg_retorno_unico do update
+      set num_processo = excluded.num_processo,
+          unidade = excluded.unidade,
+          data_distribuicao = excluded.data_distribuicao,
+          assunto = excluded.assunto,
+          recurso = excluded.recurso,
+          interessado = coalesce(excluded.interessado, acervo_creg.interessado);
+  else
+    -- Desfazer uma decisão provisória remove apenas o retorno que ela criou;
+    -- a distribuição original e o julgamento continuam preservados.
+    delete from public.acervo_creg a where a.retorno_julgado_id = new.id;
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.julgados_creg_sincronizar_retorno()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists julgados_creg_retorno on public.julgados_creg;
+create trigger julgados_creg_retorno
+  after insert or update of num_processo, voto, status, unidade_vista, data_sessao, unidade,
+                            assunto, recurso, acervo_id, atualizado_em
+  on public.julgados_creg
+  for each row execute function public.julgados_creg_sincronizar_retorno();
 
 -- ── CREG · Diligências ───────────────────────────────────────────────────────
 -- Espelho de uma planilha que a equipe da AGR mantém à mão e publica na web.
@@ -1314,7 +1629,8 @@ begin
       from public.acervo_creg a
      where not exists (select 1 from public.julgados_creg j
                         where j.num_processo = a.num_processo
-                          and j.data_sessao >= a.data_distribuicao)
+                          and j.data_sessao >= a.data_distribuicao
+                          and j.id is distinct from a.retorno_julgado_id)
      order by a.num_processo, a.data_distribuicao desc, a.id desc
   ),
 
@@ -1414,7 +1730,8 @@ begin
       from public.acervo_creg a
      where not exists (select 1 from public.julgados_creg j
                         where j.num_processo = a.num_processo
-                          and j.data_sessao >= a.data_distribuicao)
+                          and j.data_sessao >= a.data_distribuicao
+                          and j.id is distinct from a.retorno_julgado_id)
      order by a.num_processo, a.data_distribuicao desc, a.id desc
   )
   select p.num_processo,
@@ -2419,9 +2736,11 @@ security definer
 set search_path = ''
 as $$
 declare
-  editaveis  constant text[] := array['voto', 'status', 'data_sessao', 'pauta'];
+  editaveis  constant text[] := array['voto', 'status', 'data_sessao', 'pauta',
+                                      'cadeira_vista'];
   observados constant text[] := array['voto', 'status', 'data_sessao', 'pauta',
-                                      'acervo_id', 'relator', 'defesa', 'data_distribuicao'];
+                                      'cadeira_vista', 'acervo_id', 'relator', 'defesa',
+                                      'data_distribuicao'];
   antes  public.julgados_cj%rowtype;
   depois public.julgados_cj%rowtype;
   delta  jsonb;
@@ -2456,6 +2775,13 @@ begin
     raise exception 'numero de pauta invalido: %', p_campos ->> 'pauta' using errcode = '22023';
   end if;
 
+  if p_campos ? 'cadeira_vista' and nullif(p_campos ->> 'cadeira_vista', '') is not null
+     and not exists (select 1 from public.cadeiras_cj c
+                      where c.cadeira = p_campos ->> 'cadeira_vista' and c.ate is null) then
+    raise exception 'cadeira da vista fora do permitido: %', p_campos ->> 'cadeira_vista'
+      using errcode = '22023';
+  end if;
+
   -- for update: duas correções simultâneas não gravam a mesma foto anterior.
   select * into antes from public.julgados_cj where id = p_id for update;
   if not found then
@@ -2475,6 +2801,16 @@ begin
                               then (p_campos ->> 'data_sessao')::date else j.data_sessao end,
            pauta       = case when p_campos ? 'pauta'
                               then nullif(p_campos ->> 'pauta', '')::int else j.pauta end,
+           -- A cadeira só existe com voto Vista (julgados_cj_cadeira_vista_valida):
+           -- corrigir o voto para outro rótulo leva a cadeira junto.
+           cadeira_vista = case
+                             when (case when p_campos ? 'voto'
+                                        then nullif(p_campos ->> 'voto', '') else j.voto end)
+                                  is distinct from 'Vista' then null
+                             when p_campos ? 'cadeira_vista'
+                               then nullif(p_campos ->> 'cadeira_vista', '')
+                             else j.cadeira_vista
+                           end,
            atualizado_em  = now(),
            atualizado_por = public.auth_email()
      where j.id = p_id
@@ -2504,10 +2840,11 @@ security definer
 set search_path = ''
 as $$
 declare
-  editaveis  constant text[] := array['voto', 'status', 'data_sessao', 'pauta'];
+  editaveis  constant text[] := array['voto', 'status', 'data_sessao', 'pauta',
+                                      'unidade_vista'];
   observados constant text[] := array['voto', 'status', 'data_sessao', 'pauta',
-                                      'acervo_id', 'unidade', 'assunto', 'recurso',
-                                      'data_distribuicao'];
+                                      'unidade_vista', 'acervo_id', 'unidade', 'assunto',
+                                      'recurso', 'data_distribuicao'];
   antes  public.julgados_creg%rowtype;
   depois public.julgados_creg%rowtype;
   delta  jsonb;
@@ -2545,6 +2882,12 @@ begin
     raise exception 'numero de pauta invalido: %', p_campos ->> 'pauta' using errcode = '22023';
   end if;
 
+  if p_campos ? 'unidade_vista' and nullif(p_campos ->> 'unidade_vista', '') is not null
+     and p_campos ->> 'unidade_vista' not in ('CREG1', 'CREG2', 'CREG3', 'CREG4') then
+    raise exception 'destino da vista fora do permitido: %', p_campos ->> 'unidade_vista'
+      using errcode = '22023';
+  end if;
+
   select * into antes from public.julgados_creg where id = p_id for update;
   if not found then
     raise exception 'julgado % nao encontrado', p_id using errcode = '22023';
@@ -2563,6 +2906,16 @@ begin
                               then (p_campos ->> 'data_sessao')::date else k.data_sessao end,
            pauta       = case when p_campos ? 'pauta'
                               then nullif(p_campos ->> 'pauta', '')::int else k.pauta end,
+           -- O destino só existe com voto Vista (julgados_creg_unidade_vista_valida):
+           -- corrigir o voto para outro rótulo leva o destino junto.
+           unidade_vista = case
+                             when (case when p_campos ? 'voto'
+                                        then nullif(p_campos ->> 'voto', '') else k.voto end)
+                                  is distinct from 'Vista' then null
+                             when p_campos ? 'unidade_vista'
+                               then nullif(p_campos ->> 'unidade_vista', '')
+                             else k.unidade_vista
+                           end,
            atualizado_em  = now(),
            atualizado_por = public.auth_email()
      where k.id = p_id
@@ -2744,6 +3097,14 @@ begin
     raise exception 'distribuicao % nao encontrada', p_id using errcode = '22023';
   end if;
 
+  -- O retorno de Vista/Retirado é derivado do julgamento, e o gatilho
+  -- julgados_cj_retorno o reescreve na próxima correção dele. Editado ou
+  -- apagado por aqui, voltaria sem aviso: quem corrige é o julgado.
+  if antes.origem = 'retorno' then
+    raise exception 'distribuicao de retorno (Vista/Retirado) vem do julgado %: corrija o julgado',
+      antes.retorno_julgado_id using errcode = '22023';
+  end if;
+
   begin
     update public.acervo_cj a
        set relator = case when p_campos ? 'relator'
@@ -2856,6 +3217,14 @@ begin
   select * into antes from public.acervo_creg where id = p_id for update;
   if not found then
     raise exception 'distribuicao % nao encontrada', p_id using errcode = '22023';
+  end if;
+
+  -- O retorno de Vista/Retirado é derivado do julgamento, e o gatilho
+  -- julgados_creg_retorno o reescreve na próxima correção dele. Editado ou
+  -- apagado por aqui, voltaria sem aviso: quem corrige é o julgado.
+  if antes.origem = 'retorno' then
+    raise exception 'distribuicao de retorno (Vista/Retirado) vem do julgado %: corrija o julgado',
+      antes.retorno_julgado_id using errcode = '22023';
   end if;
 
   begin
@@ -3347,6 +3716,14 @@ begin
     raise exception 'distribuicao % nao encontrada', p_id using errcode = '22023';
   end if;
 
+  -- O retorno de Vista/Retirado é derivado do julgamento, e o gatilho
+  -- julgados_cj_retorno o reescreve na próxima correção dele. Editado ou
+  -- apagado por aqui, voltaria sem aviso: quem corrige é o julgado.
+  if antes.origem = 'retorno' then
+    raise exception 'distribuicao de retorno (Vista/Retirado) vem do julgado %: corrija o julgado',
+      antes.retorno_julgado_id using errcode = '22023';
+  end if;
+
   for vinculado in
     select * from public.julgados_cj j where j.acervo_id = p_id order by j.id for update
   loop
@@ -3398,6 +3775,14 @@ begin
   select * into antes from public.acervo_creg where id = p_id for update;
   if not found then
     raise exception 'distribuicao % nao encontrada', p_id using errcode = '22023';
+  end if;
+
+  -- O retorno de Vista/Retirado é derivado do julgamento, e o gatilho
+  -- julgados_creg_retorno o reescreve na próxima correção dele. Editado ou
+  -- apagado por aqui, voltaria sem aviso: quem corrige é o julgado.
+  if antes.origem = 'retorno' then
+    raise exception 'distribuicao de retorno (Vista/Retirado) vem do julgado %: corrija o julgado',
+      antes.retorno_julgado_id using errcode = '22023';
   end if;
 
   for vinculado in
