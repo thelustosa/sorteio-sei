@@ -3420,7 +3420,7 @@ const PROCESSOS_SESSAO = [
     atualizado_por: null, atualizado_em: null }
 ];
 const SORTEIOS = [{ data_distribuicao: '2026-06-18', sorteado_em: null, origem: 'sorteio',
-                    processos: 1, destinos: ['CJ3'] }];
+                    processos: 1, destinos: ['CJ3'], quem: null }];
 const PROCESSOS_ACERVO = [
   // `decisao` é o texto que a tabela mostra (com o legado de `recurso` quando a
   // defesa é nula) e `defesa` é a coluna booleana que o formulário edita: são
@@ -3514,6 +3514,33 @@ test('cada aba consulta a sua propria porta do banco', async () => {
   // ausência de coluna fixa e o formato tabular que a auditoria mantém.
   assert.equal(page.document.getElementById('painelTable').dataset.visao, 'auditoria',
     'a auditoria não vira cartão nem ganha coluna de ações fixa');
+});
+
+test('Distribuições mostra o autor persistido e um traço nos registros sem autor, em CJ e CREG', async () => {
+  for (const [orgao, destino, email] of [
+    ['CJ', 'CJ3', 'terezinha@goias.gov.br'],
+    ['CREG', 'CREG2', 'alberto@goias.gov.br']
+  ]) {
+    const page = adminPage({ api: apiDoPainel([], {
+      'rpc/admin_sorteios': [
+        { data_distribuicao: '2026-09-25', sorteado_em: '2026-09-25T13:00:00Z',
+          origem: 'sorteio', processos: 1, destinos: [destino], quem: email },
+        { data_distribuicao: '2024-04-11', sorteado_em: null,
+          origem: 'planilha', processos: 1, destinos: [destino], quem: null }
+      ]
+    }) });
+    await page.inicializarAdmin(new Set([orgao]));
+    page.botaoDeAba('sorteios').dispatch('click');
+    await wait();
+
+    const linhas = page.linhasDaTabela();
+    const quem = linhas[0].children.find(c => c.dataset.label === 'Quem');
+    assert.ok(quem.classList.contains('col-centro'), orgao);
+    assert.equal(quem.children[0].children.map(parte => parte.textContent).join(''), email, orgao);
+    assert.equal(quem.children[0].children[1].tagName, 'WBR',
+      'o e-mail pode quebrar antes do @ sem cortar o texto');
+    assert.equal(linhas[1].children.find(c => c.dataset.label === 'Quem').textContent, '—', orgao);
+  }
 });
 
 test('a meta de 45 dias agrupa os meses e deixa o prazo nao aferivel fora do percentual', async () => {

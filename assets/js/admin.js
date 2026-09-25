@@ -329,15 +329,26 @@ function botaoDeLinha(rotulo, aoClicar, { tom = 'secundario' } = {}) {
   return botao;
 }
 
+function emailComQuebra(quem) {
+  if (vazio(quem)) return '—';
+  // O endereço não tem espaço onde quebrar. Se a tela apertar, ele quebra
+  // primeiro antes do "@"; endereços mais longos ainda cabem na célula.
+  const email = document.createElement('span');
+  const arroba = String(quem).indexOf('@');
+  if (arroba > 0) {
+    const usuario = document.createElement('span');
+    usuario.textContent = quem.slice(0, arroba);
+    const dominio = document.createElement('span');
+    dominio.textContent = quem.slice(arroba);
+    email.append(usuario, document.createElement('wbr'), dominio);
+  } else email.textContent = quem;
+  return email;
+}
+
 function autoria(quem, quando) {
   const bloco = document.createElement('span');
   bloco.className = 'admin-autoria';
-  // O endereço não tem espaço onde quebrar. Se a tela apertar, ele quebra
-  // antes do "@", e nunca no meio de uma palavra.
-  const email = document.createElement('span');
-  const arroba = String(quem).indexOf('@');
-  if (arroba > 0) email.append(quem.slice(0, arroba), document.createElement('wbr'), quem.slice(arroba));
-  else email.textContent = quem;
+  const email = emailComQuebra(quem);
   const instante = document.createElement('span');
   instante.textContent = dataHoraBR(quando);
   bloco.append(email, instante);
@@ -770,7 +781,8 @@ function pintarSorteios(linhas) {
     { rotulo: 'Hora', eixo: 'centro' },
     { rotulo: 'Origem', eixo: 'centro' },
     { rotulo: 'Processos', eixo: 'centro' },
-    { rotulo: 'Destinos', eixo: 'centro' }
+    { rotulo: 'Destinos', eixo: 'centro' },
+    { rotulo: 'Quem', eixo: 'centro' }
   ];
 
   desenhar(colunas, filtradas.map(linha => [
@@ -790,7 +802,8 @@ function pintarSorteios(linhas) {
       : '—', 'td', 'historico-hora'),
     celula(badge(ORIGENS_LEGIVEIS[linha.origem] || ou(linha.origem), 'neutro')),
     celula(linha.processos, 'td', 'historico-numero'),
-    celula((linha.destinos || []).join(', '))
+    celula((linha.destinos || []).join(', ')),
+    celula(emailComQuebra(linha.quem), 'td', 'admin-quem')
   ]));
   painelStatus.textContent =
     `${plural(filtradas.length, 'distribuição registrada', 'distribuições registradas')}.`;
