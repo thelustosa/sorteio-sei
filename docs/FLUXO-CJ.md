@@ -456,7 +456,7 @@ redistribuir ou excluir a distribuição de retorno por lá é recusado: quem se
 corrige é o julgado.
 
 O histórico da planilha, com `atualizado_em` nulo, não gera retorno, e a
-migração `20260925140000` não faz backfill. Os Vista e Retirado com
+migração `20260925122119` não faz backfill. Os Vista e Retirado com
 `atualizado_em` preenchido são de 2024, carimbados em carga, e já passaram por
 sessões posteriores.
 
