@@ -2169,7 +2169,9 @@ function acervoPage(api, { imprimir = () => {}, colegiado = 'cj' } = {}) {
            recorteCampo, escolherRecorte, ...app };
 }
 
-const celulas = linha => linha.children.map(c => c.textContent);
+// Cabeçalho ordenável guarda o rótulo no <span> dentro do botão.
+const textoDaCelula = c => c.textContent || c.children[0]?.children?.[0]?.textContent || '';
+const celulas = linha => linha.children.map(textoDaCelula);
 
 test('acervo monta as colunas a partir dos relatores que o banco devolve', async () => {
   const page = acervoPage(async () => [
@@ -2672,6 +2674,50 @@ test('sem a consulta dos retornos, o card abre igual e sem destaque', async () =
   assert.equal(linhas[0].children[0].classList.contains('processo-vista'), false);
 });
 
+test('Distribuição, Dias passados e Tempo ordenam: crescente, decrescente, padrão', async () => {
+  // Fora de ordem de propósito: o padrão é a ordem que o banco devolveu.
+  const lista = [
+    { num_processo: '000000000003333', relator: 'CJ1', data_distribuicao: '2026-07-25', dias: 30 },
+    { num_processo: '000000000001111', relator: 'CJ1', data_distribuicao: '2026-06-29', dias: 56 },
+    { num_processo: '000000000002222', relator: 'CJ1', data_distribuicao: '2026-08-14', dias: 10 }
+  ];
+  const page = await acervoComDetalhe(() => lista);
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+  const tabela = () => page.document.getElementById('detalheTable');
+  const ordem = () => tabela().children[1].children.map(tr => tr.children[0].textContent.slice(-4));
+  const th = rotulo => tabela().children[0].children[0].children
+    .find(c => textoDaCelula(c) === rotulo);
+  const clicar = rotulo => th(rotulo).children[0].click();
+
+  assert.deepEqual(ordem(), ['3333', '1111', '2222']);
+  assert.equal(th('Nº do Processo').children.length, 0, 'só as três colunas de prazo ordenam');
+  assert.equal(th('Distribuição').getAttribute('aria-sort'), null);
+
+  clicar('Distribuição');
+  assert.deepEqual(ordem(), ['1111', '3333', '2222']);
+  assert.equal(th('Distribuição').getAttribute('aria-sort'), 'ascending');
+  assert.equal(page.document.activeElement, th('Distribuição').children[0],
+    'o foco volta ao cabeçalho redesenhado');
+
+  clicar('Distribuição');
+  assert.deepEqual(ordem(), ['2222', '3333', '1111']);
+  assert.equal(th('Distribuição').getAttribute('aria-sort'), 'descending');
+
+  clicar('Distribuição');
+  assert.deepEqual(ordem(), ['3333', '1111', '2222']);
+  assert.equal(th('Distribuição').getAttribute('aria-sort'), null);
+
+  // Outra coluna assume a ordem, e a anterior volta ao neutro.
+  clicar('Tempo');
+  assert.deepEqual(ordem(), ['2222', '3333', '1111']);
+  assert.equal(th('Tempo').getAttribute('aria-sort'), 'ascending');
+  assert.equal(th('Distribuição').getAttribute('aria-sort'), null);
+
+  // Abrir outro card começa do padrão.
+  await page.abrirDetalhe(celulaDe(page, 0, 1));
+  assert.deepEqual(ordem(), ['3333', '1111', '2222']);
+});
+
 // ── Tempo por extenso ────────────────────────────────────────────────────────
 // A coluna Tempo escreve o MESMO prazo que Dias passados mede. O intervalo é
 // contado no calendário, e é por isso que ele fecha com a data de distribuição
@@ -2719,7 +2765,7 @@ test('a coluna Tempo entra no cabeçalho e no Excel do card', async () => {
   await page.abrirDetalhe(celulaDe(page, 0, 1));
 
   const cabecalho = page.document.getElementById('detalheTable').children[0].children[0];
-  assert.deepEqual(cabecalho.children.map(c => c.textContent),
+  assert.deepEqual(cabecalho.children.map(textoDaCelula),
     ['Nº do Processo', 'Relator', 'Distribuição', 'Dias passados', 'Tempo'],
     'Tempo fica ao lado de Dias passados, que é o mesmo prazo em número');
 
