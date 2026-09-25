@@ -3471,21 +3471,22 @@ test('o seletor mostra so os orgaos que o usuario administra', async () => {
     'com um órgão só, o seletor não é escolha');
 });
 
-test('com os dois orgaos o seletor aparece e comeca pela Camara', async () => {
+test('com os dois orgaos o seletor aparece e comeca pelo Conselho', async () => {
   const chamadas = [];
   const page = adminPage({ api: apiDoPainel(chamadas) });
   await page.inicializarAdmin(new Set(['CJ', 'CREG']));
 
   assert.equal(page.document.getElementById('seletorOrgaoCard').hidden, false);
-  assert.equal(chamadas[0].corpo.p_colegiado, 'CJ');
-  assert.equal(page.document.getElementById('adminOrgaoAtual').textContent, 'Câmara de Julgamento',
+  assert.equal(chamadas[0].corpo.p_colegiado, 'CREG');
+  assert.equal(page.botaoDeOrgao('CREG').getAttribute('aria-pressed'), 'true');
+  assert.equal(page.document.getElementById('adminOrgaoAtual').textContent, 'Conselho Regulador',
     'o contexto do colegiado precisa continuar visível fora do seletor');
 
-  page.botaoDeOrgao('CREG').dispatch('click');
+  page.botaoDeOrgao('CJ').dispatch('click');
   await wait();
-  assert.equal(chamadas.at(-1).corpo.p_colegiado, 'CREG',
+  assert.equal(chamadas.at(-1).corpo.p_colegiado, 'CJ',
     'trocar de órgão tem de recarregar a lista pelo colegiado novo');
-  assert.equal(page.document.getElementById('adminOrgaoAtual').textContent, 'Conselho Regulador');
+  assert.equal(page.document.getElementById('adminOrgaoAtual').textContent, 'Câmara de Julgamento');
 });
 
 test('cada aba consulta a sua propria porta do banco', async () => {
@@ -3732,12 +3733,12 @@ test('tabela administrativa identifica o colegiado para dimensionar colunas excl
   await page.inicializarAdmin(new Set(['CJ', 'CREG']));
 
   const tabela = page.document.getElementById('painelTable');
-  assert.equal(tabela.dataset.orgao, 'CJ');
+  assert.equal(tabela.dataset.orgao, 'CREG');
 
-  page.botaoDeOrgao('CREG').dispatch('click');
+  page.botaoDeOrgao('CJ').dispatch('click');
   await wait();
-  assert.equal(tabela.dataset.orgao, 'CREG',
-    'o CREG precisa reservar espaço para a coluna adicional de interessado');
+  assert.equal(tabela.dataset.orgao, 'CJ',
+    'trocar de colegiado precisa atualizar as colunas da tabela');
 });
 
 test('pendencias e estados importantes aparecem como sinais visuais, nao como numeros soltos', async () => {

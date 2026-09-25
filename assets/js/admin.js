@@ -2122,5 +2122,5 @@ function inicializarAdmin(orgaosAdmin) {
   dialogo.addEventListener('close', () => { dialogoAtual = null; });
 
   painel.hidden = false;
-  return selecionarOrgao(administrados.has('CJ') ? 'CJ' : 'CREG');
+  return selecionarOrgao(administrados.has('CREG') ? 'CREG' : 'CJ');
 }
