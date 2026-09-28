@@ -3904,6 +3904,12 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
    'btnCancelarEdicao', 'btnFecharEdicao', 'btnFecharDetalhe'].forEach(id => document.add(id, 'button'));
   document.add('painelTable', 'table');
   document.add('detalheTable', 'table');
+  document.add('detalheUnidades', 'div');
+  document.add('detalheUnidadesTitulo', 'h3');
+  document.add('detalheUnidadesCard', 'aside');
+  document.add('detalhePrazoCard', 'aside');
+  document.add('detalhePrazoTitulo', 'h3');
+  document.add('detalhePrazo', 'ul');
   const cardDetalhe = document.add('detalheDialog', 'dialog');
   cardDetalhe.open = false;
   cardDetalhe.showModal = () => { cardDetalhe.open = true; };
@@ -4196,6 +4202,81 @@ test('cada contagem da meta abre o card so com os julgados dela', async () => {
   const linhas = doc.getElementById('detalheTable').children[1].children;
   assert.equal(linhas.length, 3, 'Julgados abre o período inteiro');
   assert.deepEqual(linhas.map(tr => tr.children.at(-1).children[0].textContent), ['Fora', 'Dentro', 'Sem prazo']);
+});
+
+test('card da meta conta os julgados por destino e filtra a lista por eles', async () => {
+  const julgado = (num, destino, meta_45) => ({ num_processo: num, destino,
+    data_distribuicao: '2026-01-05', data_sessao: '2026-02-05', dias: 31, meta_45 });
+  const PERIODO = [julgado('1', 'CREG10', true), julgado('2', 'CREG2', true), julgado('3', 'CREG3', true),
+    julgado('4', 'CREG3', true), julgado('5', null, true), julgado('6', 'CREG1', false)];
+  const page = adminPage({ api: apiDoPainel([], { 'rpc/admin_meta_45_processos': PERIODO }) });
+  await page.inicializarAdmin(new Set(['CREG']));
+  page.botaoDeAba('meta').dispatch('click');
+  await wait();
+
+  page.linhasDaTabela()[0].children[2].children[0].dispatch('click');
+  await wait();
+  const doc = page.document;
+  const opcoes = doc.getElementById('detalheUnidades').children;
+  const texto = botao => botao.children.slice(0, 2).map(c => c.textContent);
+  const apertadas = () => opcoes.filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.children[0].textContent);
+  const processos = () => doc.getElementById('detalheTable').children[1].children.map(tr => tr.children[0].textContent);
+  const resumo = () => doc.getElementById('detalheResumo').textContent;
+
+  assert.equal(doc.getElementById('detalheUnidadesTitulo').textContent, 'Julgados por unidade');
+  assert.deepEqual(opcoes.map(texto),
+    [['Total', '5'], ['CREG3', '2'], ['CREG2', '1'], ['CREG10', '1'], ['Sem unidade', '1']],
+    'Total primeiro; depois mais julgados; empate em ordem natural; só o recorte aberto (Dentro)');
+  assert.equal(opcoes[4].getAttribute('aria-label'), 'Sem unidade: 1 julgado');
+  assert.deepEqual(apertadas(), ['Total']);
+
+  opcoes[1].dispatch('click');
+  assert.deepEqual(processos(), ['3', '4']);
+  assert.deepEqual(apertadas(), ['CREG3']);
+  assert.equal(resumo(), 'Conselho Regulador · CREG3 · 2 de 5 julgados · sessões de 01/01/2026 a 30/04/2026');
+
+  opcoes[4].dispatch('click');
+  assert.deepEqual(processos(), ['5'], 'o destino ausente também filtra');
+
+  opcoes[4].dispatch('click');
+  assert.deepEqual(processos(), ['1', '2', '3', '4', '5'], 'apertar de novo volta à lista inteira');
+  assert.deepEqual(apertadas(), ['Total']);
+  assert.equal(resumo(), 'Conselho Regulador · 5 julgados · sessões de 01/01/2026 a 30/04/2026');
+
+  opcoes[2].dispatch('click');
+  opcoes[0].dispatch('click');
+  assert.equal(processos().length, 5, 'Total também volta à lista inteira');
+  assert.equal(doc.getElementById('detalhePrazoCard').hidden, true, 'prazo por unidade só no recorte Julgados');
+});
+
+test('card de prazo por destino so aparece em Julgados, com dentro e fora de cada um', async () => {
+  const julgado = (destino, meta_45) => ({ num_processo: '1', destino,
+    data_distribuicao: '2026-01-05', data_sessao: '2026-02-05', dias: 31, meta_45 });
+  const PERIODO = [julgado('CREG1', true), julgado('CREG1', true), julgado('CREG1', true), julgado('CREG1', false),
+    julgado('CREG1', null), julgado('CREG2', false), julgado('CREG3', null)];
+  const page = adminPage({ api: apiDoPainel([], { 'rpc/admin_meta_45_processos': PERIODO }) });
+  await page.inicializarAdmin(new Set(['CREG']));
+  page.botaoDeAba('meta').dispatch('click');
+  await wait();
+  const doc = page.document;
+  const card = doc.getElementById('detalhePrazoCard');
+
+  page.linhasDaTabela()[0].children[1].children[0].dispatch('click');
+  await wait();
+  assert.equal(card.hidden, false);
+  assert.equal(doc.getElementById('detalhePrazoTitulo').textContent, 'Prazo por unidade');
+  const itens = doc.getElementById('detalhePrazo').children.map(li => li.descendants()
+    .filter(no => no.className?.startsWith?.('admin-meta-prazo-') && !no.children.length)
+    .map(no => no.textContent));
+  assert.deepEqual(itens, [
+    ['CREG1', '1 sem prazo', '75,0% dentro', '25,0% fora'],
+    ['CREG2', '0,0% dentro', '100,0% fora'],
+    ['CREG3', 'Sem prazo aferível']
+  ], 'sem prazo fica fora do percentual; unidade só com sem prazo não ganha medidor');
+
+  page.linhasDaTabela()[0].children[2].children[0].dispatch('click');
+  await wait();
+  assert.equal(card.hidden, true, 'no recorte Dentro o card some');
 });
 
 test('filtro e resumo da meta nao aparecem fora dela nem sem julgado', async () => {

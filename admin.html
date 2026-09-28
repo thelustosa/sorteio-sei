@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=58b0a09d8b" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=da24202de8" />
   <script>
     (function () {
       try {
@@ -25,8 +25,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=58b0a09d8b"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=58b0a09d8b"></script>
+  <script defer src="assets/js/supabase.min.js?v=da24202de8"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=da24202de8"></script>
 </head>
 
 <body class="admin-page" data-page="admin">
@@ -322,26 +322,53 @@
       <!-- O card de processos do acervo e do histórico, com a mesma estrutura:
            cada contagem da aba Meta 45 abre os julgados por trás dela. Só
            consulta — sem exportar, que é função dos painéis de cada colegiado. -->
-      <dialog id="detalheDialog" class="detalhe-dialog" aria-labelledby="detalheTitulo">
-        <header class="detalhe-header">
-          <div class="detalhe-identidade">
-            <h2 id="detalheTitulo">Julgados</h2>
-            <p id="detalheResumo" class="detalhe-resumo"></p>
-          </div>
-          <div class="detalhe-acoes">
-            <button id="btnFecharDetalhe" class="nav-action detalhe-fechar" type="button" aria-label="Fechar">
-              <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
-                <path d="m6 6 8 8"></path><path d="m14 6-8 8"></path>
-              </svg>
-            </button>
-          </div>
-        </header>
+      <!-- Dois cards soltos sobre o fundo: o de processos e, no canto superior
+           direito, o das unidades, que filtra a lista. O <dialog> só os
+           posiciona — é transparente, e um clique no vão entre eles fecha. -->
+      <dialog id="detalheDialog" class="detalhe-dialog admin-meta-dialog" aria-labelledby="detalheTitulo">
+        <div class="detalhe-cartao">
+          <header class="detalhe-header">
+            <div class="detalhe-identidade">
+              <h2 id="detalheTitulo">Julgados</h2>
+              <!-- status: o filtro por unidade troca a lista em silêncio; é aqui
+                   que o leitor de tela ouve quantos julgados ficaram. -->
+              <p id="detalheResumo" class="detalhe-resumo" role="status"></p>
+            </div>
+            <div class="detalhe-acoes">
+              <button id="btnFecharDetalhe" class="nav-action detalhe-fechar" type="button" aria-label="Fechar">
+                <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+                  <path d="m6 6 8 8"></path><path d="m14 6-8 8"></path>
+                </svg>
+              </button>
+            </div>
+          </header>
 
-        <div id="detalheLoading" class="detalhe-loading" hidden></div>
-        <div id="detalheErro" class="load-error" role="alert" hidden><p></p></div>
+          <div id="detalheLoading" class="detalhe-loading" hidden></div>
+          <div id="detalheErro" class="load-error" role="alert" hidden><p></p></div>
 
-        <div id="detalheCorpo" class="detalhe-corpo">
-          <table id="detalheTable" class="detalhe-table admin-meta-detalhe"></table>
+          <div id="detalheCorpo" class="detalhe-corpo">
+            <table id="detalheTable" class="detalhe-table admin-meta-detalhe"></table>
+          </div>
+        </div>
+
+        <!-- A coluna da direita: o filtro por unidade e, só no recorte Julgados,
+             o prazo de cada unidade. -->
+        <div class="admin-meta-lateral">
+          <aside id="detalheUnidadesCard" class="admin-meta-unidades" aria-labelledby="detalheUnidadesTitulo">
+            <header class="admin-meta-lateral-header">
+              <h3 id="detalheUnidadesTitulo">Julgados por unidade</h3>
+              <p>Clique para filtrar a lista.</p>
+            </header>
+            <div id="detalheUnidades" class="admin-meta-filtro" role="group" aria-labelledby="detalheUnidadesTitulo"></div>
+          </aside>
+
+          <aside id="detalhePrazoCard" class="admin-meta-prazo" aria-labelledby="detalhePrazoTitulo" hidden>
+            <header class="admin-meta-lateral-header">
+              <h3 id="detalhePrazoTitulo">Prazo por unidade</h3>
+              <p>Sem prazo fica fora do percentual.</p>
+            </header>
+            <ul id="detalhePrazo" class="admin-meta-prazo-lista"></ul>
+          </aside>
         </div>
       </dialog>
     </div>

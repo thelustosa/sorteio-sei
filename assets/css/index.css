@@ -62,6 +62,7 @@
   --table-row-hover: rgba(0, 83, 75, 0.025);
   --shadow-panel: 0 12px 32px rgba(17, 39, 32, 0.09);
   --shadow-badge: 0 2px 6px rgba(17, 39, 32, 0.22);
+  --shadow-dialog: 0 24px 60px rgba(17, 39, 32, 0.28);
   --surface-subtle: #f8fbfa;
   --surface-control: #f4f7f6;
   --surface-historico: #f1f7f5;
@@ -1989,7 +1990,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   border-radius: var(--radius-card);
   background: var(--surface-raised);
   color: var(--text);
-  box-shadow: 0 24px 60px rgba(17, 39, 32, 0.28);
+  box-shadow: var(--shadow-dialog);
   overflow: hidden;
 }
 
@@ -2263,13 +2264,11 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 /* Seis colunas — duas delas de texto livre — não cabem em 390px por mais que se
    aperte o padding, e o overflow-x: hidden do corpo do card deixava as duas
    últimas fora de alcance. Rolar de lado dentro do card devolve o acesso a
-   elas. O da meta de 45 dias (admin), com cinco ou seis, precisa pelo mesmo
-   motivo. O do acervo já rola de lado em qualquer largura (regra acima); o que
-   ele ganha aqui é só a largura mínima, para as colunas não serem espremidas
+   elas. O do acervo e o da meta de 45 dias (admin) já rolam de lado em
+   qualquer largura; o que eles ganham aqui é só a largura mínima, para as colunas não serem espremidas
    até o ilegível em vez de oferecerem a barra. */
 @media screen and (max-width: 620px) {
-  .detalhe-corpo:has(> .historico-detalhe),
-  .detalhe-corpo:has(> .admin-meta-detalhe) { overflow-x: auto; }
+  .detalhe-corpo:has(> .historico-detalhe) { overflow-x: auto; }
   .detalhe-table.historico-detalhe,
   .detalhe-table.admin-meta-detalhe,
   .detalhe-table.acervo-processos { min-width: 520px; }
@@ -3932,6 +3931,210 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 /* No card, como no do histórico: com a coluna Meta são seis, e a largura fixa
    por igual cortava "Nº do Processo" — o número de 15 dígitos precisa da dele. */
 .detalhe-table.admin-meta-detalhe { table-layout: auto; font-variant-numeric: tabular-nums; }
+
+/* O card detalhado e, soltos na coluna da direita, o card por unidade (ou
+   relator) — quantos julgados couberam a cada uma, e cada linha filtra a lista
+   — e, só no recorte Julgados, o do prazo por unidade. São cards separados
+   sobre o fundo, e não um card com colunas: o <dialog> vira só a moldura que os
+   posiciona — transparente, sem sombra, sem recorte — e cada card leva a
+   superfície, o raio e a sombra de diálogo.
+
+   Os dois lados andam juntos na altura: a do mais alto, até o teto do card da
+   lista (52rem, ou a janela menos 4rem). Lista longa, os dois vão ao teto;
+   lista curta, o card da lista estica até a coluna. Topo e fundo alinham
+   sempre. */
+.detalhe-dialog.admin-meta-dialog {
+  width: min(64rem, calc(100vw - 2rem));
+  max-height: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.admin-meta-dialog[open] { flex-direction: row; align-items: stretch; gap: 16px; }
+.detalhe-cartao,
+.admin-meta-unidades,
+.admin-meta-prazo {
+  position: relative;
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+}
+/* A sombra vai num pseudo-elemento atrás de todos os cards (z-index: -1 no
+   contexto do <dialog>). No próprio card, a sombra longa dos da direita — que
+   vêm depois no HTML — era pintada por cima da borda direita da lista, uma
+   faixa cinza no vão. Por isso os cards não recortam o conteúdo (recortariam a
+   sombra junto): quem arredonda os cantos é a faixa verde, em cima, e o corpo
+   que rola, embaixo. */
+.detalhe-cartao::before,
+.admin-meta-unidades::before,
+.admin-meta-prazo::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  box-shadow: var(--shadow-dialog);
+  pointer-events: none;
+}
+.admin-meta-dialog .detalhe-header,
+.admin-meta-lateral-header { border-radius: var(--radius-card) var(--radius-card) 0 0; }
+.admin-meta-dialog .detalhe-corpo,
+.admin-meta-dialog .detalhe-loading,
+.admin-meta-filtro,
+.admin-meta-prazo-lista { border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.detalhe-cartao {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  max-height: min(52rem, calc(100vh - 4rem));
+}
+/* A coluna tem o mesmo teto da lista e reparte a altura entre os cards: o das
+   unidades fica com a própria altura, e o de prazo — o último — desce até o
+   fundo da lista. Sem o de prazo (recortes Dentro, Fora e Sem prazo), o das
+   unidades fica na própria altura, alinhado pelo topo: esticado sozinho até o
+   fundo, era um card meio vazio. Quando falta altura, quem cede é o de prazo, que rola
+   por dentro abaixo da faixa verde: o das unidades é o controle da lista e fica
+   inteiro enquanto couber em 62% da coluna — encolhendo os dois juntos, a
+   Câmara (cinco relatores e "Sem relator") rolava nos dois cards até em
+   1920 × 1080. A coluna não rola, e a sombra dos cards não é recortada. O piso
+   de cada card é a faixa mais uma linha. */
+.admin-meta-lateral {
+  display: flex;
+  flex: 0 0 17rem;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  max-height: min(52rem, calc(100vh - 4rem));
+}
+.admin-meta-unidades,
+.admin-meta-prazo { display: flex; flex-direction: column; min-height: 8.5rem; }
+.admin-meta-unidades { flex: 0 0 auto; max-height: 62%; }
+.admin-meta-prazo { flex: 1 1 auto; }
+.admin-meta-unidades:has(+ .admin-meta-prazo[hidden]) { max-height: none; }
+.admin-meta-filtro,
+.admin-meta-prazo-lista {
+  flex: 1 1 auto;
+  align-content: start;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* Com o card das unidades ao lado, a largura da lista depende da janela: a
+   barra de rolagem aparece só se faltar espaço, em vez de o overflow-x: hidden
+   do corpo esconder a última coluna (o selo Meta) sem caminho até ela. */
+.detalhe-corpo:has(.admin-meta-detalhe) { overflow-x: auto; }
+
+/* A mesma faixa verde do card da lista, com a mesma altura: título no degrau
+   do h2 de lá e uma linha de apoio no do resumo. */
+.admin-meta-lateral-header {
+  flex: none;
+  padding: 18px 20px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.admin-meta-lateral-header h3 { margin: 0; font-size: var(--text-lg); line-height: 1.25; }
+.admin-meta-lateral-header p { margin: 4px 0 0; color: var(--on-accent-muted); font-size: var(--text-sm); }
+.admin-meta-filtro { display: grid; gap: 2px; padding: 12px; }
+
+/* Cada opção: nome à esquerda, contagem à direita, e embaixo a parcela do
+   total numa barra fina. Apertada, veste o verde cheio da pílula de total da
+   tabela da meta — o mesmo sinal de "este é o recorte". */
+.admin-meta-opcao {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 6px 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.admin-meta-opcao:hover { border-color: var(--border); background: var(--accent-soft); }
+.admin-meta-opcao:active { transform: translateY(1px); }
+.admin-meta-opcao-nome { overflow-wrap: anywhere; }
+.admin-meta-opcao-total { font-weight: 700; font-variant-numeric: tabular-nums; }
+.admin-meta-opcao-barra {
+  grid-column: 1 / -1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft-strong);
+}
+.admin-meta-opcao-barra > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+
+/* Total abre a lista e se separa das unidades por um fio, não por outro card. */
+.admin-meta-opcao.is-total { position: relative; margin-bottom: 9px; font-weight: 700; }
+.admin-meta-opcao.is-total::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  bottom: -6px;
+  left: 10px;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.admin-meta-opcao[aria-pressed='true'] { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.admin-meta-opcao[aria-pressed='true']:hover { border-color: var(--accent-hover); background: var(--accent-hover); }
+.admin-meta-opcao[aria-pressed='true'] .admin-meta-opcao-barra { background: var(--on-accent-divider); }
+.admin-meta-opcao[aria-pressed='true'] .admin-meta-opcao-barra > span { background: var(--on-accent); }
+
+/* Prazo por unidade: nome (e, se houver, quantos ficaram sem prazo), o medidor
+   da coluna "% dentro da meta" e as duas parcelas nas pontas dele — dentro sob o
+   verde cheio, à esquerda; fora sob o trilho, à direita. */
+.admin-meta-prazo-lista { display: grid; gap: 12px; margin: 0; padding: 14px 20px 16px; list-style: none; }
+.admin-meta-prazo-item { display: grid; gap: 6px; font-size: var(--text-sm); }
+.admin-meta-prazo-topo { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.admin-meta-prazo-nome { overflow-wrap: anywhere; }
+.admin-meta-prazo-nota { color: var(--muted); font-size: var(--text-xs); }
+.admin-meta-prazo-partes { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+.admin-meta-prazo-dentro { color: var(--accent); font-weight: 700; }
+.admin-meta-prazo-fora { color: var(--muted-strong); }
+
+/* Abaixo de 960px a lista não cabe ao lado da coluna da direita sem espremer
+   as colunas (a 901px as seis do recorte Julgados passavam 37px da borda): a
+   coluna sobe para cima dela, e as opções viram uma fileira de chips — nome e
+   número, sem a barra, que numa fileira não compara nada. A dica "clique para
+   filtrar" sai: chip já se lê como botão. Com o card de prazo, as três peças
+   passam da tela: o diálogo inteiro rola, e a lista guarda uma altura mínima
+   para não ser espremida até sumir. */
+@media screen and (max-width: 960px) {
+  /* dvh: no celular, 100vh conta a barra de endereço como se não existisse, e o
+     fim da lista ficava atrás dela. O vh fica de reserva para navegador antigo. */
+  .detalhe-dialog.admin-meta-dialog { max-height: calc(100vh - 2rem); max-height: calc(100dvh - 2rem); }
+  .admin-meta-dialog[open] { flex-direction: column; align-items: stretch; gap: 12px; }
+  .detalhe-dialog.admin-meta-dialog { overflow-y: auto; }
+  .detalhe-cartao { flex: 1 0 auto; min-height: min(24rem, 70dvh); max-height: calc(100dvh - 2rem); }
+  /* A coluna se desfaz e cada card entra na fila do diálogo: o filtro, compacto,
+     sobe para cima da lista; o prazo desce para depois dela. Com os dois em
+     cima, o botão de fechar ficava a 600px do topo. */
+  .admin-meta-lateral { display: contents; }
+  .admin-meta-unidades { order: -1; }
+  .admin-meta-prazo { order: 1; }
+  /* Aqui quem rola é o diálogo: cada card volta à própria altura. */
+  .admin-meta-unidades,
+  .admin-meta-prazo,
+  .admin-meta-unidades:has(+ .admin-meta-prazo[hidden]) { flex: none; min-height: 0; max-height: none; }
+  .admin-meta-filtro,
+  .admin-meta-prazo-lista { overflow: visible; }
+  .admin-meta-lateral-header { padding: 14px 16px; }
+  .admin-meta-unidades .admin-meta-lateral-header p { display: none; }
+  .admin-meta-prazo-lista { gap: 14px; padding: 14px 16px 16px; }
+  .admin-meta-filtro { display: flex; flex-wrap: wrap; gap: 8px; }
+  .admin-meta-opcao { width: auto; border-color: var(--border); border-radius: var(--radius-pill); padding: 8px 14px; }
+  .admin-meta-opcao-barra { display: none; }
+  .admin-meta-opcao.is-total { margin-bottom: 0; }
+  .admin-meta-opcao.is-total::after { content: none; }
+}
 .admin-meta-periodo { display: grid; gap: 1px; justify-items: center; text-align: center; }
 .admin-meta-periodo span { color: var(--muted); font-size: var(--text-sm); }
 /* Medidor: o preenchimento é a parte dentro da meta; o trilho, do mesmo verde
@@ -4478,7 +4681,12 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .admin-aba,
   .admin-acao,
-  .admin-meta-contagem { transition: none; }
+  .admin-meta-contagem,
+  .admin-meta-opcao { transition: none; }
+  /* Aqui, e não na lista geral: aquela vem antes destas regras no arquivo e,
+     com a mesma especificidade, perderia para o :active delas. */
+  .admin-meta-contagem:active,
+  .admin-meta-opcao:active { transform: none; }
 }
 
 @media (pointer: coarse) {
