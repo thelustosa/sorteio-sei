@@ -186,6 +186,12 @@ const detalheLoading = document.getElementById('detalheLoading');
 const detalheErro = document.getElementById('detalheErro');
 const detalheCorpo = document.getElementById('detalheCorpo');
 const detalheTabela = document.getElementById('detalheTable');
+const detalheUnidades = document.getElementById('detalheUnidades');
+const detalheUnidadesTitulo = document.getElementById('detalheUnidadesTitulo');
+const detalheUnidadesCard = document.getElementById('detalheUnidadesCard');
+const detalhePrazoCard = document.getElementById('detalhePrazoCard');
+const detalhePrazoTitulo = document.getElementById('detalhePrazoTitulo');
+const detalhePrazo = document.getElementById('detalhePrazo');
 const btnFecharDetalhe = document.getElementById('btnFecharDetalhe');
 const edicaoImpactoLista = document.getElementById('edicaoImpactoLista');
 const edicaoErro = document.getElementById('edicaoErro');
@@ -1061,6 +1067,12 @@ async function abrirDetalheDaMeta(indice, recorte, meses, ano) {
   detalheTitulo.textContent = `${rotulo} · ${nomeDoPeriodo(indice, meses)} de ${ano}`;
   detalheResumo.textContent = 'Carregando…';
   detalheTabela.replaceChildren();
+  detalheUnidades.replaceChildren();
+  // Invisível, e não hidden: o card das unidades segura o lugar durante a
+  // busca, e o da lista não muda de largura quando os dados chegam.
+  detalheUnidadesCard.style.visibility = 'hidden';
+  detalhePrazoCard.hidden = true;
+  detalhePrazo.replaceChildren();
   detalheErro.hidden = true;
   detalheCorpo.hidden = true;
   detalheLoading.replaceChildren(criarIndicadorCarregamento('Carregando julgados…'));
@@ -1096,8 +1108,7 @@ const SELOS_DA_META = new Map([[true, ['Dentro', 'sucesso']], [false, ['Fora', '
 
 function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
   const vocabulario = VOCABULARIO[colegiado];
-  detalheResumo.textContent = [vocabulario.nome, plural(processos.length, 'julgado', 'julgados'),
-    `sessões de ${dataBR(de)} a ${dataBR(ate)}`].join(' · ');
+  const sessoes = `sessões de ${dataBR(de)} a ${dataBR(ate)}`;
 
   // Só a lista de todos os julgados mistura as três situações; nas outras a
   // coluna repetiria o título do card em cada linha.
@@ -1105,21 +1116,143 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
   const colunas = ['Nº do Processo', vocabulario.destino, 'Distribuição', 'Sessão', 'Dias',
     ...(comMeta ? ['Meta'] : [])];
 
-  const tbody = document.createElement('tbody');
-  processos.forEach(p => {
-    const tr = document.createElement('tr');
-    const numero = celula(p.num_processo, 'th');
-    numero.scope = 'row';
-    tr.append(numero, celula(ou(p.destino)), celula(dataBR(p.data_distribuicao)),
-      celula(dataBR(p.data_sessao)), celula(ou(p.dias)));
-    if (comMeta) {
-      const [texto, tom] = SELOS_DA_META.get(p.meta_45) || ['Sem prazo', 'neutro'];
-      tr.append(celula(badge(texto, tom)));
+  // `destino` null é a lista inteira. Filtrado, o resumo diz de quem é o
+  // recorte e quanto ele é do total, para o número no topo nunca contradizer
+  // as linhas à vista.
+  const pintarLista = destino => {
+    const lista = destino === null ? processos : processos.filter(p => ou(p.destino) === destino);
+    detalheResumo.textContent = (destino === null
+      ? [vocabulario.nome, plural(processos.length, 'julgado', 'julgados'), sessoes]
+      : [vocabulario.nome, destino, `${contagem(lista.length)} de ${plural(processos.length, 'julgado', 'julgados')}`,
+        sessoes]).join(' · ');
+
+    const tbody = document.createElement('tbody');
+    lista.forEach(p => {
+      const tr = document.createElement('tr');
+      const numero = celula(p.num_processo, 'th');
+      numero.scope = 'row';
+      tr.append(numero, celula(ou(p.destino)), celula(dataBR(p.data_distribuicao)),
+        celula(dataBR(p.data_sessao)), celula(ou(p.dias)));
+      if (comMeta) {
+        const [texto, tom] = SELOS_DA_META.get(p.meta_45) || ['Sem prazo', 'neutro'];
+        tr.append(celula(badge(texto, tom)));
+      }
+      tbody.appendChild(tr);
+    });
+    detalheTabela.replaceChildren(cabecalho(colunas), tbody);
+    equalizarColunas(detalheTabela);
+  };
+
+  pintarLista(null);
+  const grupos = agruparPorDestino(processos);
+  desenharPorDestino(processos, grupos, vocabulario.destino, pintarLista);
+  if (comMeta) desenharPrazoPorDestino(grupos, vocabulario.destino);
+}
+
+// Os julgados de cada unidade (ou relator), na ordem dos dois cards da coluna
+// da direita: mais julgados primeiro; empate na ordem natural (CREG2 antes de
+// CREG10), com o destino ausente depois de todos.
+function agruparPorDestino(processos) {
+  const grupos = new Map();
+  processos.forEach(p => grupos.set(ou(p.destino), [...(grupos.get(ou(p.destino)) || []), p]));
+  return [...grupos].sort(([a, x], [b, y]) =>
+    y.length - x.length || (a === '—') - (b === '—') || a.localeCompare(b, 'pt-BR', { numeric: true }));
+}
+
+// O card solto no canto superior direito, fora do card da lista: quantos
+// julgados do recorte couberam a cada unidade (ou relator), e cada uma filtra a
+// lista ao lado. Sai da mesma lista, então o Total bate com o resumo.
+//
+// Um grupo de botões com aria-pressed, de escolha única: Total é a lista
+// inteira, e apertar de novo a unidade escolhida também volta a ela. Os botões
+// não são redesenhados no clique, só o estado — o foco fica onde estava.
+function desenharPorDestino(processos, grupos, destino, pintarLista) {
+  const opcao = (nome, quantidade, valor) => {
+    const botao = document.createElement('button');
+    botao.type = 'button';
+    botao.className = valor === null ? 'admin-meta-opcao is-total' : 'admin-meta-opcao';
+    botao.setAttribute('aria-pressed', String(valor === null));
+    const rotulo = document.createElement('span');
+    rotulo.className = 'admin-meta-opcao-nome';
+    // Nos cards da coluna o destino ausente é um rótulo, não um valor de
+    // célula: "Sem unidade" diz o que o travessão da lista só sugere.
+    rotulo.textContent = valor === '—' ? `Sem ${destino.toLowerCase()}` : nome;
+    const numero = document.createElement('span');
+    numero.className = 'admin-meta-opcao-total';
+    numero.textContent = contagem(quantidade);
+    botao.append(rotulo, numero);
+    if (valor !== null) {
+      // A barra repete a parcela que o número já diz: só compara de relance.
+      const barra = document.createElement('span');
+      barra.className = 'admin-meta-opcao-barra';
+      barra.setAttribute('aria-hidden', 'true');
+      const preenchido = document.createElement('span');
+      preenchido.style.width = `${(quantidade / processos.length) * 100}%`;
+      barra.appendChild(preenchido);
+      botao.appendChild(barra);
     }
-    tbody.appendChild(tr);
-  });
-  detalheTabela.replaceChildren(cabecalho(colunas), tbody);
-  equalizarColunas(detalheTabela);
+    botao.setAttribute('aria-label', `${rotulo.textContent}: ${plural(quantidade, 'julgado', 'julgados')}`);
+    botao.addEventListener('click', () => {
+      const escolhido = valor !== null && botao.getAttribute('aria-pressed') === 'true' ? null : valor;
+      opcoes.forEach(([outro, v]) => outro.setAttribute('aria-pressed', String(v === escolhido)));
+      pintarLista(escolhido);
+      detalheCorpo.scrollTop = 0;
+    });
+    return [botao, valor];
+  };
+
+  const opcoes = [opcao('Total', processos.length, null),
+    ...grupos.map(([nome, lista]) => opcao(nome, lista.length, nome))];
+  detalheUnidadesTitulo.textContent = `Julgados por ${destino.toLowerCase()}`;
+  detalheUnidades.replaceChildren(...opcoes.map(([botao]) => botao));
+  detalheUnidadesCard.style.visibility = '';
+}
+
+// Só no recorte Julgados, o único que traz as três situações: quanto de cada
+// unidade saiu dentro e fora dos 45 dias. A conta é a do painel (taxaDentro):
+// sem prazo aferível fica fora do percentual e aparece à parte, só quando
+// existe. O medidor é o da coluna "% dentro da meta" — verde cheio é dentro, o
+// trilho é fora — e repete o que o texto já diz, por isso é aria-hidden.
+function desenharPrazoPorDestino(grupos, destino) {
+  const texto = (conteudo, classe) => {
+    const el = document.createElement('span');
+    el.className = classe;
+    el.textContent = conteudo;
+    return el;
+  };
+
+  detalhePrazoTitulo.textContent = `Prazo por ${destino.toLowerCase()}`;
+  detalhePrazo.replaceChildren(...grupos.map(([nome, lista]) => {
+    const conta = { dentro: 0, fora: 0, semPrazo: 0 };
+    lista.forEach(p => { conta[p.meta_45 === true ? 'dentro' : p.meta_45 === false ? 'fora' : 'semPrazo'] += 1; });
+    const taxa = taxaDentro(conta);
+
+    const item = document.createElement('li');
+    item.className = 'admin-meta-prazo-item';
+    const topo = document.createElement('div');
+    topo.className = 'admin-meta-prazo-topo';
+    topo.appendChild(texto(nome === '—' ? `Sem ${destino.toLowerCase()}` : nome, 'admin-meta-prazo-nome'));
+    if (conta.semPrazo && taxa !== null) topo.appendChild(texto(`${contagem(conta.semPrazo)} sem prazo`, 'admin-meta-prazo-nota'));
+    item.appendChild(topo);
+
+    if (taxa === null) {
+      item.appendChild(texto('Sem prazo aferível', 'admin-meta-prazo-nota'));
+      return item;
+    }
+    const medidor = document.createElement('span');
+    medidor.className = 'admin-meta-medidor';
+    medidor.setAttribute('aria-hidden', 'true');
+    const preenchido = document.createElement('span');
+    preenchido.style.width = `${taxa}%`;
+    medidor.appendChild(preenchido);
+    const partes = document.createElement('div');
+    partes.className = 'admin-meta-prazo-partes';
+    partes.append(texto(`${percentual(taxa)} dentro`, 'admin-meta-prazo-dentro'),
+      texto(`${percentual(100 - taxa)} fora`, 'admin-meta-prazo-fora'));
+    item.append(medidor, partes);
+    return item;
+  }));
+  detalhePrazoCard.hidden = false;
 }
 
 function pintarMeta(linhas) {
