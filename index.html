@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=f6045cb693" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=3f2bbbacb6" />
   <script>
     (function () {
       try {
@@ -35,8 +35,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./acervo-cj.html", "./acervo-creg.html", "./historico-cj.html", "./historico-creg.html", "./julgados-cj.html", "./julgados-creg.html", "./meta-45.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=f6045cb693"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=f6045cb693"></script>
+  <script defer src="assets/js/supabase.min.js?v=3f2bbbacb6"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=3f2bbbacb6"></script>
 </head>
 
 <body data-page="sorteio">
@@ -168,21 +168,6 @@
           </div>
         </section>
 
-        <!-- Para os papéis de consulta, que não entram no painel
-             administrativo: a Meta 45 dele mora aqui, na tela inicial. Para o
-             administrador ela continua sendo uma aba do painel. O colegiado
-             se escolhe dentro da página, como no painel. A cor é o degrau do
-             meio entre o acervo, acima, e o histórico, abaixo. -->
-        <section id="cardMeta45" class="selection-card selection-card-meta" aria-labelledby="metaSelectorTitle" data-consulta hidden>
-          <div class="selection-copy">
-            <h2 id="metaSelectorTitle">Meta de 45 dias</h2>
-            <p class="mode-description">Acompanhe os julgados dentro e fora do prazo de 45 dias, da distribuição à sessão.</p>
-          </div>
-          <div class="buttons-wrapper single-choice" role="group" aria-label="Indicador de prazo">
-            <a id="btnMeta45" class="mode-button mode-button-outline" href="./meta-45.html">Abrir painel Meta 45</a>
-          </div>
-        </section>
-
         <section class="selection-card selection-card-historico" aria-labelledby="historicoSelectorTitle" data-historico>
           <div class="selection-copy">
             <h2 id="historicoSelectorTitle">Histórico de sorteios</h2>
@@ -191,6 +176,20 @@
           <div class="buttons-wrapper" role="group" aria-label="Colegiado para consulta do histórico">
             <a id="btnHistoricoCreg" class="mode-button mode-button-outline" href="./historico-creg.html" data-orgao="CREG">Conselho Regulador (CREG)</a>
             <a id="btnHistoricoCj" class="mode-button mode-button-outline" href="./historico-cj.html" data-orgao="CJ">Câmara de Julgamento (CJ)</a>
+          </div>
+        </section>
+
+        <!-- Para os papéis de consulta, que não entram no painel
+             administrativo: a Meta 45 fica aqui, na tela inicial. Para o
+             administrador ela continua sendo uma aba do painel. O colegiado
+             se escolhe dentro da página, como no painel. -->
+        <section id="cardMeta45" class="selection-card selection-card-meta" aria-labelledby="metaSelectorTitle" data-consulta hidden>
+          <div class="selection-copy">
+            <h2 id="metaSelectorTitle">Meta de 45 dias</h2>
+            <p class="mode-description">Acompanhe os julgados dentro e fora do prazo de 45 dias, da distribuição à sessão.</p>
+          </div>
+          <div class="buttons-wrapper single-choice" role="group" aria-label="Indicador de prazo">
+            <a id="btnMeta45" class="mode-button mode-button-outline" href="./meta-45.html">Abrir painel Meta 45</a>
           </div>
         </section>
 

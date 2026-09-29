@@ -2338,7 +2338,7 @@ set search_path = ''
 as $$
 begin
   if (select auth.uid()) is null or nullif(public.auth_email(), '') is null then
-    raise exception 'autenticação exigida' using errcode = '28000';
+    raise exception 'autenticacao exigida' using errcode = '28000';
   end if;
 
   if coalesce(p_orgao, '') not in ('CJ', 'CREG') then
