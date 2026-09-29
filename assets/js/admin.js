@@ -192,6 +192,8 @@ const detalheUnidadesCard = document.getElementById('detalheUnidadesCard');
 const detalhePrazoCard = document.getElementById('detalhePrazoCard');
 const detalhePrazoTitulo = document.getElementById('detalhePrazoTitulo');
 const detalhePrazo = document.getElementById('detalhePrazo');
+const detalheLateral = document.getElementById('detalheLateral');
+const detalheCartao = document.getElementById('detalheCartao');
 const btnFecharDetalhe = document.getElementById('btnFecharDetalhe');
 const edicaoImpactoLista = document.getElementById('edicaoImpactoLista');
 const edicaoErro = document.getElementById('edicaoErro');
@@ -1072,6 +1074,12 @@ async function abrirDetalheDaMeta(indice, recorte, meses, ano) {
   // busca, e o da lista não muda de largura quando os dados chegam.
   detalheUnidadesCard.style.visibility = 'hidden';
   detalhePrazoCard.hidden = true;
+  // O arranjo e a trava de altura são da abertura anterior: sem voltar ao
+  // ponto de partida, o card carregava largo (lado a lado) e mudava de largura
+  // quando os dados chegavam — ou ficava largo e vazio se a busca falhasse.
+  detalheLateral.dataset.arranjo = 'coluna';
+  detalheLateral.dataset.densidade = '';
+  detalheCartao.style.minHeight = '';
   detalhePrazo.replaceChildren();
   detalheErro.hidden = true;
   detalheCorpo.hidden = true;
@@ -1120,11 +1128,20 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
   // recorte e quanto ele é do total, para o número no topo nunca contradizer
   // as linhas à vista.
   const pintarLista = destino => {
+    // Filtrar não muda o tamanho do diálogo: o card da lista guarda a altura
+    // que tinha com a lista inteira. Sem isso, uma unidade de poucos processos
+    // encolhia o card e o diálogo se recentralizava — no recorte Dentro, o
+    // botão recém-clicado saía de baixo do ponteiro e o de fechar descia 221px.
+    // O teto da janela vale sobre a trava, para ela não passar da tela quando
+    // a janela diminui.
+    if (destino !== null && detalheCartao.offsetHeight && !detalheCartao.style.minHeight) {
+      detalheCartao.style.minHeight = `min(${detalheCartao.offsetHeight}px, calc(100vh - 4rem))`;
+    }
     const lista = destino === null ? processos : processos.filter(p => ou(p.destino) === destino);
     detalheResumo.textContent = (destino === null
       ? [vocabulario.nome, plural(processos.length, 'julgado', 'julgados'), sessoes]
-      : [vocabulario.nome, destino, `${contagem(lista.length)} de ${plural(processos.length, 'julgado', 'julgados')}`,
-        sessoes]).join(' · ');
+      : [vocabulario.nome, rotuloDoDestino(destino, vocabulario.destino),
+        `${contagem(lista.length)} de ${plural(processos.length, 'julgado', 'julgados')}`, sessoes]).join(' · ');
 
     const tbody = document.createElement('tbody');
     lista.forEach(p => {
@@ -1147,14 +1164,52 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
   const grupos = agruparPorDestino(processos);
   desenharPorDestino(processos, grupos, vocabulario.destino, pintarLista);
   if (comMeta) desenharPrazoPorDestino(grupos, vocabulario.destino);
+  ajustarDensidade();
 }
+
+// A coluna da direita não rola: quando os cards não cabem na altura da lista
+// — a Câmara, com cinco relatores, rolava até em tela cheia —, eles descem os
+// degraus abaixo até caber (ver .admin-meta-lateral[data-densidade] e
+// [data-arranjo] no CSS). Só CSS não resolve: o que decide é quantas unidades
+// há junto com a altura da janela. Primeiro aperta o espaçamento, até o
+// degrau mínimo (números menores, sem a linha de apoio do card de prazo); se
+// nem assim couber e a janela for larga, põe os dois cards lado a lado, cada
+// um com a altura inteira. Na janela estreita, que não comporta o lado a lado,
+// o último recurso é tirar também a dica "Clique para filtrar a lista.". Parte
+// sempre do mais folgado, para a janela que cresce devolver o respiro.
+const DEGRAUS_APERTANDO = [['coluna', ''], ['coluna', 'compacta'], ['coluna', 'minima']];
+const DEGRAUS_EM_COLUNA = [...DEGRAUS_APERTANDO, ['coluna', 'minima-sem-dica']];
+const DEGRAUS_COM_LADO = [...DEGRAUS_APERTANDO, ['lado', ''], ['lado', 'compacta'], ['lado', 'minima']];
+// A lista precisa de ~620px para as seis colunas do recorte Julgados; somados
+// os dois cards de 17rem, os vãos e a margem da janela, dá 1240px.
+const LARGURA_LADO_A_LADO = 1240;
+
+function ajustarDensidade() {
+  const transborda = () => [detalheUnidades, detalhePrazo]
+    .some(corpo => corpo.scrollHeight > corpo.clientHeight + 1);
+  const larga = typeof window !== 'undefined' && window.innerWidth >= LARGURA_LADO_A_LADO;
+  const degraus = larga ? DEGRAUS_COM_LADO : DEGRAUS_EM_COLUNA;
+  for (const [arranjo, densidade] of degraus) {
+    detalheLateral.dataset.arranjo = arranjo;
+    detalheLateral.dataset.densidade = densidade;
+    if (!transborda()) return;
+  }
+}
+
+// Nos cards e no resumo o destino ausente é um rótulo, não um valor de
+// célula: "Sem unidade" diz o que o travessão da lista só sugere.
+const rotuloDoDestino = (nome, destino) => (nome === '—' ? `Sem ${destino.toLowerCase()}` : nome);
 
 // Os julgados de cada unidade (ou relator), na ordem dos dois cards da coluna
 // da direita: mais julgados primeiro; empate na ordem natural (CREG2 antes de
 // CREG10), com o destino ausente depois de todos.
 function agruparPorDestino(processos) {
   const grupos = new Map();
-  processos.forEach(p => grupos.set(ou(p.destino), [...(grupos.get(ou(p.destino)) || []), p]));
+  processos.forEach(p => {
+    const chave = ou(p.destino);
+    if (!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave).push(p);
+  });
   return [...grupos].sort(([a, x], [b, y]) =>
     y.length - x.length || (a === '—') - (b === '—') || a.localeCompare(b, 'pt-BR', { numeric: true }));
 }
@@ -1174,9 +1229,7 @@ function desenharPorDestino(processos, grupos, destino, pintarLista) {
     botao.setAttribute('aria-pressed', String(valor === null));
     const rotulo = document.createElement('span');
     rotulo.className = 'admin-meta-opcao-nome';
-    // Nos cards da coluna o destino ausente é um rótulo, não um valor de
-    // célula: "Sem unidade" diz o que o travessão da lista só sugere.
-    rotulo.textContent = valor === '—' ? `Sem ${destino.toLowerCase()}` : nome;
+    rotulo.textContent = valor === null ? nome : rotuloDoDestino(nome, destino);
     const numero = document.createElement('span');
     numero.className = 'admin-meta-opcao-total';
     numero.textContent = contagem(quantidade);
@@ -1231,7 +1284,7 @@ function desenharPrazoPorDestino(grupos, destino) {
     item.className = 'admin-meta-prazo-item';
     const topo = document.createElement('div');
     topo.className = 'admin-meta-prazo-topo';
-    topo.appendChild(texto(nome === '—' ? `Sem ${destino.toLowerCase()}` : nome, 'admin-meta-prazo-nome'));
+    topo.appendChild(texto(rotuloDoDestino(nome, destino), 'admin-meta-prazo-nome'));
     if (conta.semPrazo && taxa !== null) topo.appendChild(texto(`${contagem(conta.semPrazo)} sem prazo`, 'admin-meta-prazo-nota'));
     item.appendChild(topo);
 
@@ -2284,6 +2337,19 @@ function inicializarAdmin(orgaosAdmin) {
     repintarBusca();
   });
   btnFecharDetalhe.addEventListener('click', () => detalheDialog.close());
+  // Um ajuste por quadro: arrastando a janela, o navegador dispara dezenas de
+  // eventos por segundo, e cada ajuste mede o layout até seis vezes.
+  if (typeof window !== 'undefined') {
+    let densidadePendente = false;
+    window.addEventListener('resize', () => {
+      if (!detalheDialog.open || densidadePendente) return;
+      densidadePendente = true;
+      requestAnimationFrame(() => {
+        densidadePendente = false;
+        ajustarDensidade();
+      });
+    });
+  }
   // Clique no ::backdrop chega como clique no próprio dialog: fechar ali é o que
   // se espera de um card modal, e o <dialog> não faz isso sozinho.
   detalheDialog.addEventListener('click', evento => {

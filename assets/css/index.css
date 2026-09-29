@@ -3940,7 +3940,8 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
    superfície, o raio e a sombra de diálogo.
 
    Os dois lados andam juntos na altura: a do mais alto, até o teto do card da
-   lista (52rem, ou a janela menos 4rem). Lista longa, os dois vão ao teto;
+   lista (60rem, ou a janela menos 4rem — 8rem acima do card de detalhe das
+   outras telas, para a coluna da direita caber sem rolar em tela cheia). Lista longa, os dois vão ao teto;
    lista curta, o card da lista estica até a coluna. Topo e fundo alinham
    sempre. */
 .detalhe-dialog.admin-meta-dialog {
@@ -3988,14 +3989,18 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  max-height: min(52rem, calc(100vh - 4rem));
+  max-height: min(60rem, calc(100vh - 4rem));
 }
-/* A coluna tem o mesmo teto da lista e reparte a altura entre os cards: o das
-   unidades fica com a própria altura, e o de prazo — o último — desce até o
-   fundo da lista. Sem o de prazo (recortes Dentro, Fora e Sem prazo), o das
-   unidades fica na própria altura, alinhado pelo topo: esticado sozinho até o
-   fundo, era um card meio vazio. Quando falta altura, quem cede é o de prazo, que rola
-   por dentro abaixo da faixa verde: o das unidades é o controle da lista e fica
+/* A coluna tem o mesmo teto da lista e reparte a altura entre os cards: cada
+   um fica com o próprio conteúdo, e a sobra até o fundo da lista vai em partes
+   iguais para os dois — toda no de prazo, ele terminava com um vão branco que
+   o das unidades não tinha. Sem o de prazo (recortes Dentro, Fora e Sem
+   prazo), o das unidades fica na própria altura, alinhado pelo topo: esticado
+   sozinho até o fundo, era um card meio vazio. Quando falta altura, a coluna
+   não rola: ajustarDensidade() (admin.js) aperta o espaçamento e, havendo
+   largura, põe os dois cards lado a lado (ver [data-densidade] e
+   [data-arranjo], abaixo). Se nem assim couber, o último recurso é o de prazo
+   rolar por dentro abaixo da faixa verde: o das unidades é o controle da lista e fica
    inteiro enquanto couber em 62% da coluna — encolhendo os dois juntos, a
    Câmara (cinco relatores e "Sem relator") rolava nos dois cards até em
    1920 × 1080. A coluna não rola, e a sombra dos cards não é recortada. O piso
@@ -4006,13 +4011,13 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   flex-direction: column;
   gap: 16px;
   min-height: 0;
-  max-height: min(52rem, calc(100vh - 4rem));
+  max-height: min(60rem, calc(100vh - 4rem));
 }
 .admin-meta-unidades,
 .admin-meta-prazo { display: flex; flex-direction: column; min-height: 8.5rem; }
-.admin-meta-unidades { flex: 0 0 auto; max-height: 62%; }
+.admin-meta-unidades { flex: 1 0 auto; }
 .admin-meta-prazo { flex: 1 1 auto; }
-.admin-meta-unidades:has(+ .admin-meta-prazo[hidden]) { max-height: none; }
+.admin-meta-unidades:has(+ .admin-meta-prazo[hidden]) { flex-grow: 0; }
 .admin-meta-filtro,
 .admin-meta-prazo-lista {
   flex: 1 1 auto;
@@ -4038,17 +4043,22 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-meta-lateral-header p { margin: 4px 0 0; color: var(--on-accent-muted); font-size: var(--text-sm); }
 .admin-meta-filtro { display: grid; gap: 2px; padding: 12px; }
 
+/* O respiro de cada opção do card das unidades. É também o que o card de
+   prazo usa para chegar ao mesmo recuo até o texto (12px do corpo + 1px de
+   borda + este), então os dois cards mudam juntos. */
+.admin-meta-lateral { --opcao-respiro: 9px; }
+
 /* Cada opção: nome à esquerda, contagem à direita, e embaixo a parcela do
-   total numa barra fina. Apertada, veste o verde cheio da pílula de total da
-   tabela da meta — o mesmo sinal de "este é o recorte". */
+   total no mesmo medidor do card de prazo. Apertada, veste o verde cheio da
+   pílula de total da tabela da meta — o mesmo sinal de "este é o recorte". */
 .admin-meta-opcao {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  gap: 6px 12px;
+  gap: 8px 12px;
   width: 100%;
   min-height: 44px;
-  padding: 9px 10px;
+  padding: var(--opcao-respiro) 10px;
   border: 1px solid transparent;
   border-radius: var(--radius-control);
   background: none;
@@ -4061,10 +4071,12 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-meta-opcao:hover { border-color: var(--border); background: var(--accent-soft); }
 .admin-meta-opcao:active { transform: translateY(1px); }
 .admin-meta-opcao-nome { overflow-wrap: anywhere; }
-.admin-meta-opcao-total { font-weight: 700; font-variant-numeric: tabular-nums; }
+/* A contagem sobe um degrau: é o número que se procura em cada linha, como o
+   "% dentro" no card de prazo. */
+.admin-meta-opcao-total { font-size: var(--text-base); font-weight: 700; font-variant-numeric: tabular-nums; }
 .admin-meta-opcao-barra {
   grid-column: 1 / -1;
-  height: 4px;
+  height: 8px;
   overflow: hidden;
   border-radius: var(--radius-pill);
   background: var(--accent-soft-strong);
@@ -4072,7 +4084,9 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-meta-opcao-barra > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
 
 /* Total abre a lista e se separa das unidades por um fio, não por outro card. */
-.admin-meta-opcao.is-total { position: relative; margin-bottom: 9px; font-weight: 700; }
+/* Sem barra, o Total fica com a altura mínima de alvo (44px) maior que o
+   conteúdo nos degraus apertados: o texto vai para o meio, não para o topo. */
+.admin-meta-opcao.is-total { position: relative; align-content: center; margin-bottom: 9px; font-weight: 700; }
 .admin-meta-opcao.is-total::after {
   content: '';
   position: absolute;
@@ -4091,14 +4105,59 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 /* Prazo por unidade: nome (e, se houver, quantos ficaram sem prazo), o medidor
    da coluna "% dentro da meta" e as duas parcelas nas pontas dele — dentro sob o
    verde cheio, à esquerda; fora sob o trilho, à direita. */
-.admin-meta-prazo-lista { display: grid; gap: 12px; margin: 0; padding: 14px 20px 16px; list-style: none; }
+/* O respiro do corpo é o recuo que o card das unidades tem até o texto e a
+   barra (12px do corpo + 1px de borda + o respiro de cada botão; 23px dos
+   lados): assim o texto dos dois cards cai na mesma vertical e a sobra de
+   altura, repartida por igual, aparece igual nos dois. */
+.admin-meta-prazo-lista {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: calc(13px + var(--opcao-respiro)) 23px;
+  list-style: none;
+}
 .admin-meta-prazo-item { display: grid; gap: 6px; font-size: var(--text-sm); }
 .admin-meta-prazo-topo { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .admin-meta-prazo-nome { overflow-wrap: anywhere; }
 .admin-meta-prazo-nota { color: var(--muted); font-size: var(--text-xs); }
-.admin-meta-prazo-partes { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
-.admin-meta-prazo-dentro { color: var(--accent); font-weight: 700; }
+.admin-meta-prazo-partes { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+.admin-meta-prazo-dentro { color: var(--accent); font-size: var(--text-base); font-weight: 700; }
 .admin-meta-prazo-fora { color: var(--muted-strong); }
+
+/* Densidade da coluna, escolhida por ajustarDensidade() (admin.js) quando os
+   cards não cabem na altura da lista: primeiro aperta os vãos; depois tira a
+   linha de apoio da faixa de prazo e desce os números ao tamanho do texto. A barra
+   fica a mesma nos três degraus. */
+.admin-meta-lateral[data-densidade='compacta'] { --opcao-respiro: 6px; }
+.admin-meta-lateral[data-densidade='compacta'] .admin-meta-opcao { row-gap: 6px; }
+.admin-meta-lateral[data-densidade='compacta'] .admin-meta-prazo-lista { gap: 8px; }
+.admin-meta-lateral[data-densidade='compacta'] .admin-meta-prazo-item { gap: 4px; }
+.admin-meta-lateral[data-densidade^='minima'] { --opcao-respiro: 4px; }
+.admin-meta-lateral[data-densidade^='minima'] .admin-meta-opcao { row-gap: 4px; }
+.admin-meta-lateral[data-densidade^='minima'] .admin-meta-opcao.is-total { margin-bottom: 7px; }
+.admin-meta-lateral[data-densidade^='minima'] .admin-meta-opcao.is-total::after { bottom: -5px; }
+.admin-meta-lateral[data-densidade^='minima'] .admin-meta-opcao-total,
+.admin-meta-lateral[data-densidade^='minima'] .admin-meta-prazo-dentro { font-size: var(--text-sm); }
+/* Só o de prazo perde a linha de apoio: a do card das unidades é a única
+   indicação de que os botões filtram a lista, e a faixa dele segue com a mesma
+   altura da faixa da lista, ao lado. */
+.admin-meta-lateral[data-densidade^='minima'] .admin-meta-prazo .admin-meta-lateral-header { padding-block: 14px; }
+.admin-meta-lateral[data-densidade^='minima'] .admin-meta-prazo .admin-meta-lateral-header p { display: none; }
+/* Último recurso, só na janela estreita (sem lado a lado): a dica sai também. */
+.admin-meta-lateral[data-densidade='minima-sem-dica'] .admin-meta-unidades .admin-meta-lateral-header { padding-block: 14px; }
+.admin-meta-lateral[data-densidade='minima-sem-dica'] .admin-meta-unidades .admin-meta-lateral-header p { display: none; }
+.admin-meta-lateral[data-densidade^='minima'] .admin-meta-prazo-lista { gap: 4px; padding-block: 12px; }
+.admin-meta-lateral[data-densidade^='minima'] .admin-meta-prazo-item { gap: 2px; }
+
+/* Lado a lado: quando os dois cards empilhados não cabem na altura da lista
+   nem no degrau mínimo (telas HD, 125% e 720p), cada um ganha a altura
+   inteira e o diálogo alarga pela largura de mais um card. Os dois ficam com
+   a altura do mais alto, alinhados pelo topo, e não esticados até o fundo da
+   lista: esticados, sobrava branco de até 470px dentro deles. Só com a janela
+   larga o bastante para a lista manter as seis colunas (LARGURA_LADO_A_LADO). */
+.detalhe-dialog.admin-meta-dialog:has(.admin-meta-lateral[data-arranjo='lado']) { width: min(82rem, calc(100vw - 2rem)); }
+.admin-meta-lateral[data-arranjo='lado'] { flex-direction: row; flex-basis: calc(34rem + 16px); align-self: flex-start; }
+.admin-meta-lateral[data-arranjo='lado'] > * { flex: 1 1 0; min-width: 0; }
 
 /* Abaixo de 960px a lista não cabe ao lado da coluna da direita sem espremer
    as colunas (a 901px as seis do recorte Julgados passavam 37px da borda): a

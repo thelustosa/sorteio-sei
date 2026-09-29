@@ -3910,6 +3910,8 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
   document.add('detalhePrazoCard', 'aside');
   document.add('detalhePrazoTitulo', 'h3');
   document.add('detalhePrazo', 'ul');
+  document.add('detalheLateral', 'div');
+  document.add('detalheCartao', 'div');
   const cardDetalhe = document.add('detalheDialog', 'dialog');
   cardDetalhe.open = false;
   cardDetalhe.showModal = () => { cardDetalhe.open = true; };
@@ -4237,6 +4239,8 @@ test('card da meta conta os julgados por destino e filtra a lista por eles', asy
 
   opcoes[4].dispatch('click');
   assert.deepEqual(processos(), ['5'], 'o destino ausente também filtra');
+  assert.equal(resumo(), 'Conselho Regulador · Sem unidade · 1 de 5 julgados · sessões de 01/01/2026 a 30/04/2026',
+    'o resumo usa o rótulo do botão, não o travessão da célula');
 
   opcoes[4].dispatch('click');
   assert.deepEqual(processos(), ['1', '2', '3', '4', '5'], 'apertar de novo volta à lista inteira');
