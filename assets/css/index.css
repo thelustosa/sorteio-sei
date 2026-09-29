@@ -1180,10 +1180,14 @@ body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
 }
 .app-login-symbol svg { width: 32px; height: 32px; }
 
+/* A fonte dos dois títulos é do login, e não do lugar onde ele está: nas
+   telas que o põem num .card ela vinha de `.card h2`, e no painel e na Meta
+   45, que não usam .card, os títulos caíam na fonte de sistema. */
 #loginScreen.app-login .app-login-intro h2 {
   max-width: 17ch;
   margin: 0;
   color: var(--on-accent);
+  font-family: 'Montserrat', ui-sans-serif, sans-serif;
   font-size: clamp(1.45rem, 2.6vw, 1.85rem);
   letter-spacing: -.025em;
   line-height: 1.18;
@@ -1222,7 +1226,9 @@ body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
 .app-login-form-card h2 {
   margin: 7px 0 0;
   color: var(--text);
+  font-family: 'Montserrat', ui-sans-serif, sans-serif;
   font-size: var(--text-xl);
+  line-height: 1.25;
 }
 #loginScreen.app-login .app-login-form-card > p {
   margin: 8px 0 24px;
@@ -1366,14 +1372,17 @@ body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
 .app-login[data-login-art='admin'] .app-login-symbol { border-radius: var(--radius-card) var(--radius-card) 45% 45%; }
 #loginScreen.app-login[data-login-art='admin'] .app-login-intro h2 { max-width: 15ch; }
 
-/* Meta 45 do papel de consulta: a moldura do painel, na cor do card que a
-   leva da tela inicial. */
+/* Meta 45 do papel de consulta: uma tela de consulta como o acervo e o
+   histórico, na cor do card que a leva da tela inicial. O cronômetro vai num
+   círculo, a forma do próprio relógio. */
 #loginScreen.app-login[data-login-art='meta-45'] {
   --login-accent: var(--accent-meta-hover);
-  width: min(940px, 100%);
-  min-height: 390px;
+  width: min(960px, 100%);
   grid-template-columns: minmax(0, 1.05fr) minmax(340px, .95fr);
 }
+.app-login[data-login-art='meta-45'] .app-login-symbol { border-radius: 50%; }
+/* Sem o balanceamento, "vista" caía sozinha na segunda linha. */
+#loginScreen.app-login[data-login-art='meta-45'] .app-login-intro h2 { text-wrap: balance; }
 
 @media screen and (max-width: 760px) {
   #loginScreen.app-login,
@@ -4038,7 +4047,7 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 /* O período em andamento ainda recebe sessões: listrado, com legenda, para o
    número dele não ser lido como fechado. */
 .admin-meta-coluna-barra.is-parcial,
-.admin-meta-amostra-parcial {
+.admin-meta-amostra.admin-meta-amostra-parcial {
   background: repeating-linear-gradient(135deg, var(--accent) 0 1.5px, var(--accent-soft-strong) 1.5px 5px);
 }
 .admin-meta-coluna-valor {
@@ -4067,8 +4076,9 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   line-height: 1.2;
   white-space: nowrap;
 }
-.admin-meta-tendencia-legenda { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: var(--text-xs); }
-.admin-meta-amostra-parcial { width: 12px; height: 12px; border-radius: 4px; }
+.admin-meta-tendencia-legenda { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; color: var(--muted); font-size: var(--text-xs); }
+.admin-meta-legenda-item { display: inline-flex; align-items: center; gap: 6px; }
+.admin-meta-amostra { width: 12px; height: 12px; border-radius: 4px; background: var(--accent); }
 
 /* meta-45.html: a faixa verde já diz "Indicador de prazo", e a sobrancelha
    repetia a mesma frase logo abaixo. No painel ela fica: lá distingue a aba. */
@@ -4778,10 +4788,6 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   .admin-org-switcher { flex: 1 1 auto; }
   .admin-org-button { flex: 1 1 0; justify-content: center; }
   .admin-panel-hint { display: none; }
-  /* Na Meta a dica é a definição de "sem prazo aferível", que não está em
-     nenhum outro lugar da tela: ela fica, embaixo do status. */
-  .admin-panel:has(.admin-table[data-visao='meta']) .admin-panel-footer { flex-direction: column; align-items: flex-start; gap: 6px; }
-  .admin-panel:has(.admin-table[data-visao='meta']) .admin-panel-hint { display: block; text-align: left; }
 
   .admin-table[data-visao]:not([data-visao='auditoria']) {
     display: block;

@@ -598,7 +598,7 @@ function moldura() {
     definirVisaoTabela('meta');
     return tituloDoPainel('Julgados na meta de 45 dias',
       'Dias da distribuição até a sessão em que o processo foi julgado.',
-      DICA_DA_META,
+      '',
       'Indicador de prazo');
   }
   definirVisaoTabela('auditoria');
@@ -970,7 +970,6 @@ function agruparMeta(linhas, ano, meses) {
 
 // Sem prazo aferível fica fora do denominador: não é dentro nem fora.
 const taxaDentro = ({ dentro, fora }) => (dentro + fora ? (dentro / (dentro + fora)) * 100 : null);
-const DICA_DA_META = 'Sem prazo aferível — sem a data da distribuição, ou com a sessão antes dela — fica fora do percentual.';
 const percentual = taxa =>
   `${taxa.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 const contagem = n => Number(n).toLocaleString('pt-BR');
@@ -1510,14 +1509,21 @@ function pintarTendencia(periodos, taxaDoAno, meses, ano) {
 
   metaTendencia.replaceChildren(titulo, plot);
   if (temParcial) {
-    // Duas aparências de coluna pedem legenda: a listrada ainda recebe sessões.
+    // Duas aparências de coluna pedem legenda com as duas: a cheia já fechou,
+    // a listrada ainda recebe sessões.
     const legenda = document.createElement('p');
     legenda.className = 'admin-meta-tendencia-legenda';
-    const amostra = document.createElement('span');
-    amostra.className = 'admin-meta-amostra-parcial';
-    const texto = document.createElement('span');
-    texto.textContent = 'Período em andamento';
-    legenda.append(amostra, texto);
+    [['admin-meta-amostra', 'Período finalizado'],
+      ['admin-meta-amostra admin-meta-amostra-parcial', 'Período em andamento']].forEach(([classe, rotulo]) => {
+      const item = document.createElement('span');
+      item.className = 'admin-meta-legenda-item';
+      const amostra = document.createElement('span');
+      amostra.className = classe;
+      const texto = document.createElement('span');
+      texto.textContent = rotulo;
+      item.append(amostra, texto);
+      legenda.appendChild(item);
+    });
     metaTendencia.appendChild(legenda);
   }
   metaTendencia.hidden = false;
