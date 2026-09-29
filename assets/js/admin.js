@@ -1139,7 +1139,7 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
   const colunas = ['Nº do Processo', vocabulario.destino, 'Distribuição', 'Sessão', 'Dias',
     ...(comMeta ? ['Meta'] : [])];
 
-  const grupos = agruparPorDestino(processos);
+  const grupos = agruparPorDestino(processos, colegiado);
   // `destino` null é a lista inteira. Filtrado, o resumo diz de quem é o
   // recorte e quanto ele é do total, para o número no topo nunca contradizer
   // as linhas à vista.
@@ -1216,10 +1216,9 @@ function ajustarDensidade() {
 // célula: "Sem unidade" diz o que o travessão da lista só sugere.
 const rotuloDoDestino = (nome, destino) => (nome === '—' ? `Sem ${destino.toLowerCase()}` : nome);
 
-// Os julgados de cada unidade (ou relator), na ordem dos dois cards da coluna
-// da direita: mais julgados primeiro; empate na ordem natural (CREG2 antes de
-// CREG10), com o destino ausente depois de todos.
-function agruparPorDestino(processos) {
+// Nos dois cards, as unidades CREG seguem o número; as cadeiras da CJ seguem
+// a quantidade de julgados. Destino ausente fica por último em ambos.
+function agruparPorDestino(processos, colegiado) {
   const grupos = new Map();
   processos.forEach(p => {
     const chave = ou(p.destino);
@@ -1227,7 +1226,9 @@ function agruparPorDestino(processos) {
     grupos.get(chave).push(p);
   });
   return new Map([...grupos].sort(([a, x], [b, y]) =>
-    y.length - x.length || (a === '—') - (b === '—') || a.localeCompare(b, 'pt-BR', { numeric: true })));
+    (a === '—') - (b === '—')
+      || (colegiado === 'CREG' ? 0 : y.length - x.length)
+      || a.localeCompare(b, 'pt-BR', { numeric: true })));
 }
 
 // O card solto no canto superior direito, fora do card da lista: quantos
@@ -1320,8 +1321,15 @@ function desenharPrazoPorDestino(grupos, destino) {
     medidor.appendChild(preenchido);
     const partes = document.createElement('div');
     partes.className = 'admin-meta-prazo-partes';
-    partes.append(texto(`${percentual(taxa)} dentro`, 'admin-meta-prazo-dentro'),
-      texto(`${percentual(100 - taxa)} fora`, 'admin-meta-prazo-fora'));
+    const parcela = (taxaParcela, quantidade, situacao) => {
+      const parte = document.createElement('span');
+      parte.className = `admin-meta-prazo-${situacao}`;
+      parte.append(texto(`${percentual(taxaParcela)} ${situacao}`, 'admin-meta-prazo-percentual'),
+        texto(`${contagem(quantidade)} ${quantidade === 1 ? 'processo' : 'processos'}`, 'admin-meta-prazo-quantidade'));
+      return parte;
+    };
+    partes.append(parcela(taxa, conta.dentro, 'dentro'),
+      parcela(100 - taxa, conta.fora, 'fora'));
     item.append(medidor, partes);
     return item;
   }));

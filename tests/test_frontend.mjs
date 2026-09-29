@@ -4423,12 +4423,12 @@ test('card da meta conta os julgados por destino e filtra a lista por eles', asy
 
   assert.equal(doc.getElementById('detalheUnidadesTitulo').textContent, 'Julgados por unidade');
   assert.deepEqual(opcoes.map(texto),
-    [['Total', '5'], ['CREG3', '2'], ['CREG2', '1'], ['CREG10', '1'], ['Sem unidade', '1']],
-    'Total primeiro; depois mais julgados; empate em ordem natural; só o recorte aberto (Dentro)');
+    [['Total', '5'], ['CREG2', '1'], ['CREG3', '2'], ['CREG10', '1'], ['Sem unidade', '1']],
+    'Total primeiro; depois unidades em ordem numérica, inclusive CREG10; só o recorte aberto (Dentro)');
   assert.equal(opcoes[4].getAttribute('aria-label'), 'Sem unidade: 1 julgado');
   assert.deepEqual(apertadas(), ['Total']);
 
-  opcoes[1].dispatch('click');
+  opcoes[2].dispatch('click');
   assert.deepEqual(processos(), ['3', '4']);
   assert.deepEqual(apertadas(), ['CREG3']);
   assert.equal(resumo(), 'Conselho Regulador · CREG3 · 2 de 5 julgados · sessões de 01/01/2026 a 30/04/2026');
@@ -4521,7 +4521,8 @@ test('o card da meta fecha pelo fundo, mas nao ao soltar um arrasto nele', async
 test('card de prazo por destino so aparece em Julgados, com dentro e fora de cada um', async () => {
   const julgado = (destino, meta_45) => ({ num_processo: '1', destino,
     data_distribuicao: '2026-01-05', data_sessao: '2026-02-05', dias: 31, meta_45 });
-  const PERIODO = [julgado('CREG1', true), julgado('CREG1', true), julgado('CREG1', true), julgado('CREG1', false),
+  const PERIODO = [julgado('CREG4', true), julgado('CREG4', false),
+    julgado('CREG1', true), julgado('CREG1', true), julgado('CREG1', true), julgado('CREG1', false),
     julgado('CREG1', null), julgado('CREG2', false), julgado('CREG3', null)];
   const page = adminPage({ api: apiDoPainel([], { 'rpc/admin_meta_45_processos': PERIODO }) });
   await page.inicializarAdmin(new Set(['CREG']));
@@ -4534,13 +4535,16 @@ test('card de prazo por destino so aparece em Julgados, com dentro e fora de cad
   await wait();
   assert.equal(card.hidden, false);
   assert.equal(doc.getElementById('detalhePrazoTitulo').textContent, 'Prazo por unidade');
+  assert.deepEqual(doc.getElementById('detalheUnidades').children.map(botao => botao.children[0].textContent),
+    ['Total', 'CREG1', 'CREG2', 'CREG3', 'CREG4'], 'os dois cards seguem a ordem do CREG');
   const itens = doc.getElementById('detalhePrazo').children.map(li => li.descendants()
     .filter(no => no.className?.startsWith?.('admin-meta-prazo-') && !no.children.length)
     .map(no => no.textContent));
   assert.deepEqual(itens, [
-    ['CREG1', '1 sem prazo', '75,0% dentro', '25,0% fora'],
-    ['CREG2', '0,0% dentro', '100,0% fora'],
-    ['CREG3', 'Sem prazo aferível']
+    ['CREG1', '1 sem prazo', '75,0% dentro', '3 processos', '25,0% fora', '1 processo'],
+    ['CREG2', '0,0% dentro', '0 processos', '100,0% fora', '1 processo'],
+    ['CREG3', 'Sem prazo aferível'],
+    ['CREG4', '50,0% dentro', '1 processo', '50,0% fora', '1 processo']
   ], 'sem prazo fica fora do percentual; unidade só com sem prazo não ganha medidor');
 
   page.linhasDaTabela()[0].children[2].children[0].dispatch('click');
