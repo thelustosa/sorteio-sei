@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=da24202de8" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=7b2dff1d78" />
   <script>
     (function () {
       try {
@@ -25,8 +25,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=da24202de8"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=da24202de8"></script>
+  <script defer src="assets/js/supabase.min.js?v=7b2dff1d78"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=7b2dff1d78"></script>
 </head>
 
 <body class="admin-page" data-page="admin">
@@ -326,7 +326,7 @@
            direito, o das unidades, que filtra a lista. O <dialog> só os
            posiciona — é transparente, e um clique no vão entre eles fecha. -->
       <dialog id="detalheDialog" class="detalhe-dialog admin-meta-dialog" aria-labelledby="detalheTitulo">
-        <div class="detalhe-cartao">
+        <div id="detalheCartao" class="detalhe-cartao">
           <header class="detalhe-header">
             <div class="detalhe-identidade">
               <h2 id="detalheTitulo">Julgados</h2>
@@ -353,7 +353,7 @@
 
         <!-- A coluna da direita: o filtro por unidade e, só no recorte Julgados,
              o prazo de cada unidade. -->
-        <div class="admin-meta-lateral">
+        <div id="detalheLateral" class="admin-meta-lateral">
           <aside id="detalheUnidadesCard" class="admin-meta-unidades" aria-labelledby="detalheUnidadesTitulo">
             <header class="admin-meta-lateral-header">
               <h3 id="detalheUnidadesTitulo">Julgados por unidade</h3>
