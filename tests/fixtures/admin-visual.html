@@ -37,6 +37,16 @@
       frame.style.height = '920px';
       frame.style.boxShadow = '0 18px 50px rgba(17,39,32,.18)';
     }
+    const largura = Number(parametros.get('largura'));
+    if (largura >= 320 && largura <= 1920) {
+      document.body.style.display = 'grid';
+      document.body.style.placeItems = 'start center';
+      document.body.style.overflow = 'auto';
+      document.body.style.padding = '24px';
+      frame.style.width = `${largura}px`;
+      frame.style.height = '900px';
+      frame.style.boxShadow = '0 18px 50px rgba(17,39,32,.18)';
+    }
 
     // Densidade e formato dos dados reais da AGR: pautas na casa das dezenas,
     // sessões de 10 a 29 processos, e uma sessão recém-sincronizada em que voto,
@@ -81,6 +91,27 @@
       { ano: 2026, mes: 8, julgados: 73, dentro: 73, fora: 0, sem_prazo: 0 },
       { ano: 2026, mes: 9, julgados: 76, dentro: 76, fora: 0, sem_prazo: 0 }
     ];
+    // Exercita o card de prazo com o mesmo admin.js e o mesmo CSS da página.
+    // Inclui os volumes da captura, taxas extremas, sem prazo e milhar.
+    const casoPrazo = parametros.get('caso') || 'captura';
+    const distribuicaoPrazo = casoPrazo === 'milhar'
+      ? (orgao === 'CJ' ? [['CJ1', 1000, 0, 0], ['CJ2', 0, 1, 0], ['CJ3', 1, 1, 0], ['CJ4', 0, 0, 1], ['CJ5', 99, 1, 0]]
+        : [['CREG1', 1000, 0, 0], ['CREG2', 0, 1, 0], ['CREG3', 1, 1, 0], ['CREG4', 0, 0, 1]])
+      : casoPrazo === 'misto'
+        ? (orgao === 'CJ' ? [['CJ1', 3, 1, 1], ['CJ2', 0, 24, 0], ['CJ3', 10, 10, 0], ['CJ4', 0, 0, 1], ['CJ5', 19, 0, 0]]
+          : [['CREG1', 3, 1, 1], ['CREG2', 0, 24, 0], ['CREG3', 10, 10, 0], ['CREG4', 0, 0, 1]])
+        : (orgao === 'CJ' ? [['CJ1', 213, 0, 0], ['CJ2', 24, 0, 0], ['CJ3', 20, 0, 0], ['CJ4', 20, 0, 0], ['CJ5', 19, 0, 0]]
+          : [['CREG1', 53, 53, 0], ['CREG2', 43, 0, 0], ['CREG3', 115, 36, 0], ['CREG4', 145, 24, 0]]);
+    const META_PROCESSOS = [];
+    for (const [destino, dentro, fora, semPrazo] of parametros.get('view') === 'meta-prazo' ? distribuicaoPrazo : []) {
+      for (const [quantidade, meta_45] of [[dentro, true], [fora, false], [semPrazo, null]]) {
+        for (let i = 0; i < quantidade; i++) {
+          META_PROCESSOS.push({ num_processo: String(META_PROCESSOS.length + 1).padStart(15, '0'),
+            destino, data_distribuicao: '2026-08-01', data_sessao: '2026-09-01',
+            dias: meta_45 === null ? null : meta_45 ? 31 : 60, meta_45 });
+        }
+      }
+    }
 
     frame.addEventListener('load', () => {
       const win = frame.contentWindow;
@@ -99,6 +130,7 @@
         return estado;
       };
       win.alternarBotaoCarregando = () => {};
+      win.equalizarColunas = () => {};
       // Mesma semântica de assets/js/supabase.js: o texto continua sendo "CJ3" e
       // o nome do conselheiro só aparece no title e no aria-label. Reescrever o
       // texto aqui fazia a revisão visual mostrar uma coluna de relator que
@@ -126,7 +158,13 @@
         if (caminho === 'rpc/admin_sorteios') return SORTEIOS;
         if (caminho === 'rpc/admin_processos_acervo') return ACERVO;
         if (caminho === 'rpc/admin_auditoria') return AUDITORIA;
-        if (caminho === 'rpc/admin_meta_45') return META_45;
+        if (caminho === 'rpc/admin_meta_45') return parametros.get('view') === 'meta-prazo'
+          ? [{ ano: 2026, mes: 9, julgados: META_PROCESSOS.length,
+            dentro: META_PROCESSOS.filter(p => p.meta_45 === true).length,
+            fora: META_PROCESSOS.filter(p => p.meta_45 === false).length,
+            sem_prazo: META_PROCESSOS.filter(p => p.meta_45 === null).length }]
+          : META_45;
+        if (caminho === 'rpc/admin_meta_45_processos') return META_PROCESSOS;
         if (caminho === 'rpc/admin_julgados_do_acervo') return PROCESSOS.slice(0, 2);
         return { alterados: {}, propagados: [] };
       };
@@ -140,10 +178,11 @@
           await new Promise(resolve => setTimeout(resolve, 0));
         }
         const modo = parametros.get('view') || 'sessoes';
-        if (modo === 'sorteios' || modo === 'auditoria' || modo === 'meta') {
-          doc.querySelector(`[data-aba="${modo}"]`).click();
+        if (modo === 'sorteios' || modo === 'auditoria' || modo === 'meta' || modo === 'meta-prazo') {
+          doc.querySelector(`[data-aba="${modo === 'meta-prazo' ? 'meta' : modo}"]`).click();
           await new Promise(resolve => setTimeout(resolve, 0));
         }
+        if (modo === 'meta-prazo') doc.querySelector('.admin-meta-contagem.is-total').click();
         if (modo === 'processos' || modo === 'dialogo' || modo === 'confirmacao') {
           [...doc.querySelectorAll('.admin-acao')].find(botao => botao.textContent === 'Abrir sessão').click();
           await new Promise(resolve => setTimeout(resolve, 0));
