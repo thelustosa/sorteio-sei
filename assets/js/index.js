@@ -82,7 +82,10 @@ function inicializarSorteio() {
     return;
   }
   modeSelector.hidden = false;
-  modeSelectorTitle.focus();
+  // O papel de consulta não tem o card do sorteio: o foco vai ao do acervo.
+  (modeSelectorTitle.closest('[hidden]')
+    ? document.getElementById('acervoSelectorTitle')
+    : modeSelectorTitle).focus();
   avisarPendenciasDeJulgamento();
 }
 

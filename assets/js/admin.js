@@ -2305,6 +2305,9 @@ function inicializarAdmin(orgaosAdmin) {
   // Com um órgão só, o seletor não é escolha: é um botão preso numa opção.
   seletorOrgaoCard.hidden = administrados.size < 2;
 
+  // Abre na primeira aba da página: Sessões no painel, Meta 45 em meta-45.html,
+  // que traz só ela — é o mesmo módulo servindo o papel de consulta.
+  aba = abas.querySelector('[data-aba]').dataset.aba;
   abas.querySelectorAll('[data-aba]').forEach(botao => {
     botao.addEventListener('click', () => selecionarAba(botao.dataset.aba));
     botao.addEventListener('keydown', navegarAbas);
@@ -2366,18 +2369,21 @@ function inicializarAdmin(orgaosAdmin) {
   // arquivo também roda no escopo isolado dos testes, sem o global do navegador.
   if (typeof window !== 'undefined') window.addEventListener('resize', medirRolagem);
 
-  edicaoForm.addEventListener('submit', evento => {
-    evento.preventDefault();
-    avancar();
-  });
-  btnCancelar.addEventListener('click', () => dialogo.close());
-  btnFecharEdicao.addEventListener('click', () => dialogo.close());
-  // Clique no ::backdrop chega como clique no próprio dialog, e não há trabalho
-  // não salvo depois da confirmação — fechar ali é o que se espera de um modal.
-  dialogo.addEventListener('click', evento => {
-    if (evento.target === dialogo) dialogo.close();
-  });
-  dialogo.addEventListener('close', () => { dialogoAtual = null; });
+  // meta-45.html não corrige nada e não traz o dialog de edição.
+  if (dialogo) {
+    edicaoForm.addEventListener('submit', evento => {
+      evento.preventDefault();
+      avancar();
+    });
+    btnCancelar.addEventListener('click', () => dialogo.close());
+    btnFecharEdicao.addEventListener('click', () => dialogo.close());
+    // Clique no ::backdrop chega como clique no próprio dialog, e não há trabalho
+    // não salvo depois da confirmação — fechar ali é o que se espera de um modal.
+    dialogo.addEventListener('click', evento => {
+      if (evento.target === dialogo) dialogo.close();
+    });
+    dialogo.addEventListener('close', () => { dialogoAtual = null; });
+  }
 
   painel.hidden = false;
   return selecionarOrgao(administrados.has('CREG') ? 'CREG' : 'CJ');

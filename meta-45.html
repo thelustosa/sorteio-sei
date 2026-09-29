@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#00534b" />
+  <meta name="description"
+    content="Painel da meta de 45 dias do Sorteio de Processos SEI: julgados dentro e fora do prazo, da distribuição à sessão, nos colegiados da AGR." />
+  <title>Meta 45 — Sorteio de Processos SEI</title>
+  <link rel="preconnect" href="https://giipnmpfclfudkzflwsv.supabase.co" crossorigin />
+  <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
+  <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="icon" href="assets/img/favicon.png" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=580180a99e" />
+  <script>
+    (function () {
+      try {
+        if (sessionStorage.getItem('sorteio-sei.access-token') || localStorage.getItem('sorteio-sei.access-token')) {
+          document.documentElement.classList.add('has-session');
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <script type="speculationrules">
+    {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
+  </script>
+  <script defer src="assets/js/supabase.min.js?v=580180a99e"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=580180a99e"></script>
+</head>
+
+<body class="admin-page" data-page="meta-45">
+  <a class="skip-link" href="#conteudo-principal">Pular para o conteúdo principal</a>
+  <div class="page-header-wrapper">
+    <div class="container">
+      <header>
+        <div class="logo">
+          <img src="assets/img/logo_header.png" alt="Governo de Goiás" width="120" height="55" />
+        </div>
+        <div class="header-copy">
+          <p class="institution-name">Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</p>
+          <h1>Meta de 45 Dias</h1>
+          <p class="lead">Julgados dentro e fora do prazo de 45 dias, da distribuição à sessão.</p>
+        </div>
+      </header>
+    </div>
+  </div>
+
+  <nav class="green-bar" aria-label="Navegação do sistema">
+    <div class="container">
+      <span id="txtModo">Indicador de prazo</span>
+      <div class="nav-actions">
+        <a id="btnVoltarInicio" class="nav-action" href="./index.html" data-sessao hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15.5 10h-11"></path>
+            <path d="m8.5 6-4 4 4 4"></path>
+          </svg>
+          <span>Início</span>
+        </a>
+        <button id="btnVoltar" class="nav-action" type="button" hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15.5 10h-11"></path>
+            <path d="m8.5 6-4 4 4 4"></path>
+          </svg>
+          <span>Voltar</span>
+        </button>
+        <button id="btnSair" class="nav-action" type="button" hidden>
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"></path>
+            <path d="m11 7 3 3-3 3"></path>
+            <path d="M14 10H8"></path>
+          </svg>
+          <span>Sair</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="conteudo-principal" class="container admin-main pb-36" tabindex="-1">
+    <div class="admin-shell" data-login-only>
+      <section id="loginScreen" class="app-login" data-login-art="meta-45" aria-labelledby="loginTitulo">
+        <div class="app-login-intro">
+          <span class="app-login-eyebrow">Indicador de prazo</span>
+          <div class="app-login-symbol" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="16" cy="17" r="11"></circle>
+              <path d="M16 10.5V17l4 2.5M12.5 3h7"></path>
+            </svg>
+          </div>
+          <h2 id="loginTitulo">Prazo de julgamento à vista</h2>
+          <p>Acompanhe quantos julgados cada colegiado decidiu dentro da meta de 45 dias.</p>
+          <ul class="app-login-assurances">
+            <li><span aria-hidden="true">✓</span>Agrupamento por mês, trimestre ou semestre</li>
+            <li><span aria-hidden="true">✓</span>Cada contagem abre os processos por trás dela</li>
+          </ul>
+        </div>
+
+        <div class="app-login-form-card">
+          <span class="app-login-eyebrow">Identificação</span>
+          <h2>Entrar no painel</h2>
+          <p>Use suas credenciais institucionais.</p>
+          <form id="loginForm">
+            <label for="loginEmail">E-mail</label>
+            <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
+            <label for="loginSenha">Senha</label>
+            <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+            <label class="login-lembrar"><input id="loginLembrar" type="checkbox"> Lembrar-me neste computador</label>
+            <button id="btnEntrar" type="submit">Entrar</button>
+            <div id="loginErro" role="alert" aria-live="assertive"></div>
+          </form>
+        </div>
+      </section>
+
+      <div id="sessionLoading" class="session-loading admin-session-loading" data-sessao hidden></div>
+
+      <div id="adminPainel" class="admin-workspace" data-sessao hidden>
+        <section class="admin-commandbar" aria-label="Contexto do painel">
+          <div class="admin-command-context">
+            <span class="admin-command-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 20h16M6 17V9m4 8V9m4 8V9m4 8V9M3 7l9-4 9 4H3Z"></path>
+              </svg>
+            </span>
+            <div>
+              <span class="admin-context-label">Colegiado selecionado</span>
+              <strong id="adminOrgaoAtual">Carregando…</strong>
+            </div>
+          </div>
+
+          <div class="admin-command-actions">
+            <!-- Montado por admin.js apenas com os órgãos administrados. O nome
+                 completo do colegiado escolhido já está à esquerda, na mesma
+                 linha, então aqui fica só o código e o nome vai no aria-label. -->
+            <section id="seletorOrgaoCard" class="admin-org-switcher"
+              aria-labelledby="seletorOrgaoTitulo" hidden>
+              <h2 id="seletorOrgaoTitulo" class="visually-hidden">Trocar colegiado</h2>
+              <div id="seletorOrgao" role="group" aria-label="Colegiado a consultar">
+                <button class="admin-org-button" type="button" data-orgao-admin="CREG"
+                  aria-label="Conselho Regulador" hidden>
+                  <span class="admin-org-code">CREG</span>
+                </button>
+                <button class="admin-org-button" type="button" data-orgao-admin="CJ"
+                  aria-label="Câmara de Julgamento" hidden>
+                  <span class="admin-org-code">CJ</span>
+                </button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <!-- Uma aba só, e escondida: admin.js lê daqui qual aba abrir, e uma
+             lista de uma aba não é escolha. -->
+        <nav id="abas" class="admin-abas" role="tablist" aria-label="Áreas do painel" hidden>
+          <button id="abaMeta" class="admin-aba" type="button" role="tab" data-aba="meta"
+            aria-selected="true" aria-controls="painelConteudo" tabindex="0"><span>Meta 45</span></button>
+        </nav>
+
+        <section id="painelConteudo" class="admin-panel" role="tabpanel" aria-labelledby="abaMeta" tabindex="-1">
+          <header class="admin-panel-header">
+            <div class="admin-panel-heading">
+              <span id="painelEyebrow" class="admin-eyebrow">Indicador de prazo</span>
+              <h2 id="painelTitulo" tabindex="-1">Julgados na meta de 45 dias</h2>
+              <!-- Igual ao texto que admin.js grava na moldura da aba Meta. -->
+              <p id="painelDescricao">Dias da distribuição até a sessão em que o processo foi julgado. Sem prazo aferível: falta a data da distribuição, ou a sessão veio antes dela.</p>
+            </div>
+            <!-- Só na aba Meta 45. Trocar ano ou agrupamento repinta a tabela com
+                 a resposta já carregada, sem voltar ao banco. -->
+            <div id="metaFiltros" class="admin-meta-filtros" hidden>
+              <div class="admin-campo">
+                <label for="metaAno">Ano</label>
+                <select id="metaAno"></select>
+              </div>
+              <div class="admin-campo">
+                <label for="metaAgrupamento">Agrupar por</label>
+                <select id="metaAgrupamento">
+                  <option value="1">Mês</option>
+                  <option value="2">Bimestre</option>
+                  <option value="3">Trimestre</option>
+                  <option value="4" selected>Quadrimestre</option>
+                  <option value="6">Semestre</option>
+                </select>
+              </div>
+            </div>
+            <div id="painelBusca" class="admin-campo admin-busca" hidden>
+              <label id="buscaRotulo" for="buscaInput">Pesquisar</label>
+              <input id="buscaInput" type="text" autocomplete="off" size="25">
+            </div>
+          </header>
+
+          <dl id="metaResumo" class="admin-meta-resumo" hidden></dl>
+
+          <div id="painelCarregando" class="painel-carregando" hidden></div>
+          <div id="painelErro" class="load-error admin-state" role="alert" hidden>
+            <p></p>
+            <button id="btnTentarNovamente" class="button-secondary" type="button">Tentar novamente</button>
+            <p id="painelErroDetalhe" class="form-hint" hidden></p>
+          </div>
+          <div id="painelVazio" class="empty-state admin-state" role="status" hidden>
+            <div class="empty-state-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 7.5h16M4 12h16M4 16.5h9"></path>
+                <path d="M3 3.5h18a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z"></path>
+              </svg>
+            </div>
+            <div>
+              <h3 id="painelVazioTitulo">Nada para mostrar</h3>
+              <p id="painelVazioTexto"></p>
+            </div>
+          </div>
+
+          <!-- admin.js mede a rolagem real e esconde a dica, e tira a parada de
+               tabulação, quando a tabela cabe inteira na tela. -->
+          <p id="tabelaInstrucao" class="admin-scroll-hint" hidden>
+            Deslize horizontalmente para consultar todas as colunas.
+          </p>
+          <div class="table-scroll admin-table-wrap" role="region" aria-labelledby="painelTitulo"
+            aria-describedby="tabelaInstrucao" tabindex="-1">
+            <table id="painelTable" class="admin-table"></table>
+          </div>
+
+          <footer class="admin-panel-footer">
+            <div class="admin-panel-status" role="status" aria-live="polite" aria-atomic="true">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span id="painelStatus">Carregando…</span>
+            </div>
+            <span id="painelHint" class="admin-panel-hint">O percentual considera só os julgados com prazo aferível.</span>
+          </footer>
+        </section>
+      </div>
+
+      <!-- O card de processos do acervo e do histórico, com a mesma estrutura:
+           cada contagem da aba Meta 45 abre os julgados por trás dela. Só
+           consulta — sem exportar, que é função dos painéis de cada colegiado. -->
+      <!-- Dois cards soltos sobre o fundo: o de processos e, no canto superior
+           direito, o das unidades, que filtra a lista. O <dialog> só os
+           posiciona — é transparente, e um clique no vão entre eles fecha. -->
+      <dialog id="detalheDialog" class="detalhe-dialog admin-meta-dialog" aria-labelledby="detalheTitulo">
+        <div id="detalheCartao" class="detalhe-cartao">
+          <header class="detalhe-header">
+            <div class="detalhe-identidade">
+              <h2 id="detalheTitulo">Julgados</h2>
+              <!-- status: o filtro por unidade troca a lista em silêncio; é aqui
+                   que o leitor de tela ouve quantos julgados ficaram. -->
+              <p id="detalheResumo" class="detalhe-resumo" role="status"></p>
+            </div>
+            <div class="detalhe-acoes">
+              <button id="btnFecharDetalhe" class="nav-action detalhe-fechar" type="button" aria-label="Fechar">
+                <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+                  <path d="m6 6 8 8"></path><path d="m14 6-8 8"></path>
+                </svg>
+              </button>
+            </div>
+          </header>
+
+          <div id="detalheLoading" class="detalhe-loading" hidden></div>
+          <div id="detalheErro" class="load-error" role="alert" hidden><p></p></div>
+
+          <div id="detalheCorpo" class="detalhe-corpo">
+            <table id="detalheTable" class="detalhe-table admin-meta-detalhe"></table>
+          </div>
+        </div>
+
+        <!-- A coluna da direita: o filtro por unidade e, só no recorte Julgados,
+             o prazo de cada unidade. -->
+        <div id="detalheLateral" class="admin-meta-lateral">
+          <aside id="detalheUnidadesCard" class="admin-meta-unidades" aria-labelledby="detalheUnidadesTitulo">
+            <header class="admin-meta-lateral-header">
+              <h3 id="detalheUnidadesTitulo">Julgados por unidade</h3>
+              <p>Clique para filtrar a lista.</p>
+            </header>
+            <div id="detalheUnidades" class="admin-meta-filtro" role="group" aria-labelledby="detalheUnidadesTitulo"></div>
+          </aside>
+
+          <aside id="detalhePrazoCard" class="admin-meta-prazo" aria-labelledby="detalhePrazoTitulo" hidden>
+            <header class="admin-meta-lateral-header">
+              <h3 id="detalhePrazoTitulo">Prazo por unidade</h3>
+              <p>Sem prazo fica fora do percentual.</p>
+            </header>
+            <ul id="detalhePrazo" class="admin-meta-prazo-lista"></ul>
+          </aside>
+        </div>
+      </dialog>
+    </div>
+  </main>
+
+  <footer class="page-footer">
+    <div class="footer-container">
+      <div class="logo footer-logo">
+        <img src="assets/img/logo_footer.png" alt="Estado de Goiás" width="104" height="48" />
+      </div>
+      <p class="footer-info">
+        Somente consulta. Conta os julgados com status Julgado, pela data da sessão,
+        a partir das pautas publicadas pela AGR.
+      </p>
+      <div class="footer-meta">
+        <div class="footer-version">Versão 3.10.0</div>
+        <p class="footer-credit">Desenvolvido por <strong>Lucas Lustosa Coelho e Leonardo Ferreira Amichi</strong>.</p>
+      </div>
+    </div>
+  </footer>
+
+</body>
+
+</html>

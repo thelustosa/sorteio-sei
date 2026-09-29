@@ -1338,6 +1338,15 @@ body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
 .app-login[data-login-art='admin'] .app-login-symbol { border-radius: var(--radius-card) var(--radius-card) 45% 45%; }
 #loginScreen.app-login[data-login-art='admin'] .app-login-intro h2 { max-width: 15ch; }
 
+/* Meta 45 do papel de consulta: a moldura do painel, na cor do card que a
+   leva da tela inicial. */
+#loginScreen.app-login[data-login-art='meta-45'] {
+  --login-accent: var(--accent-historico-hover);
+  width: min(940px, 100%);
+  min-height: 390px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(340px, .95fr);
+}
+
 @media screen and (max-width: 760px) {
   #loginScreen.app-login,
   #loginScreen.app-login[data-login-art] {

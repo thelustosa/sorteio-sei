@@ -288,7 +288,8 @@ const loginsEspecificos = [
   ['historico-creg.html', 'historico-creg'],
   ['julgados-cj.html', 'julgados-cj'],
   ['julgados-creg.html', 'julgados-creg'],
-  ['admin.html', 'admin']
+  ['admin.html', 'admin'],
+  ['meta-45.html', 'meta-45']
 ];
 const titulosDosLogins = new Set();
 for (const [pagina, identidade] of loginsEspecificos) {
