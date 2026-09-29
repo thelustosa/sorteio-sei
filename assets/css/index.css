@@ -93,6 +93,13 @@
   --accent-historico: #16816e;
   --accent-historico-hover: #126b5c;
   --muted-historico: #466c61;
+  /* O quinto card, a Meta 45 do papel de consulta: um petróleo ao lado da
+     progressão de verdes, porque quem tem consulta num órgão e outro papel no
+     outro vê este card e o do histórico lado a lado. */
+  --accent-meta: #1b6b78;
+  --accent-meta-hover: #155662;
+  --muted-meta: #48666b;
+  --surface-meta: #eff5f6;
   --status-positive: #16816e;
   --status-positive-ring: rgba(22, 129, 110, 0.11);
   --on-accent-icon: #b8dbd1;
@@ -489,7 +496,8 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
    As quatro cores desta progressão são tokens em :root (--accent para o
    Sorteio, --accent-secondary para Registrar dados faltantes, --accent-acervo
    e --accent-historico para os outros dois) — nenhuma delas é um valor de
-   uso único, então nenhuma fica hardcoded aqui. */
+   uso único, então nenhuma fica hardcoded aqui. A Meta 45 do papel de
+   consulta fica fora da progressão, com o próprio par (--accent-meta). */
 .selection-card-sorteio { background: #ffffff; }
 .selection-card-sorteio .selection-copy h2 { color: var(--accent); }
 .selection-card-sorteio .mode-description { color: var(--muted); }
@@ -530,6 +538,20 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
 .selection-card-historico .mode-button-outline:hover {
   border-color: var(--accent-historico-hover);
   background: var(--accent-historico-hover);
+}
+
+.selection-card-meta { background: var(--surface-meta); }
+.selection-card-meta .selection-copy h2 { color: var(--accent-meta-hover); }
+.selection-card-meta .mode-description { color: var(--muted-meta); }
+.selection-card-meta .mode-button-outline {
+  border-color: var(--accent-meta);
+  background: var(--accent-meta);
+  color: var(--on-accent);
+}
+
+.selection-card-meta .mode-button-outline:hover {
+  border-color: var(--accent-meta-hover);
+  background: var(--accent-meta-hover);
 }
 .selection-card-records {
   border-color: var(--accent-hover-soft);
@@ -1341,7 +1363,7 @@ body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
 /* Meta 45 do papel de consulta: a moldura do painel, na cor do card que a
    leva da tela inicial. */
 #loginScreen.app-login[data-login-art='meta-45'] {
-  --login-accent: var(--accent-historico-hover);
+  --login-accent: var(--accent-meta-hover);
   width: min(940px, 100%);
   min-height: 390px;
   grid-template-columns: minmax(0, 1.05fr) minmax(340px, .95fr);
@@ -3998,7 +4020,10 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  max-height: min(60rem, calc(100vh - 4rem));
+  /* O teto também limita a trava de altura que admin.js põe no card ao
+     filtrar a lista: os dois leem a mesma variável. */
+  --teto-cartao: min(60rem, calc(100vh - 4rem));
+  max-height: var(--teto-cartao);
 }
 /* A coluna tem o mesmo teto da lista e reparte a altura entre os cards: cada
    um fica com o próprio conteúdo, e a sobra até o fundo da lista vai em partes
@@ -4181,7 +4206,7 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   .detalhe-dialog.admin-meta-dialog { max-height: calc(100vh - 2rem); max-height: calc(100dvh - 2rem); }
   .admin-meta-dialog[open] { flex-direction: column; align-items: stretch; gap: 12px; }
   .detalhe-dialog.admin-meta-dialog { overflow-y: auto; }
-  .detalhe-cartao { flex: 1 0 auto; min-height: min(24rem, 70dvh); max-height: calc(100dvh - 2rem); }
+  .detalhe-cartao { flex: 1 0 auto; min-height: min(24rem, 70dvh); --teto-cartao: calc(100dvh - 2rem); }
   /* A coluna se desfaz e cada card entra na fila do diálogo: o filtro, compacto,
      sobe para cima da lista; o prazo desce para depois dela. Com os dois em
      cima, o botão de fechar ficava a 600px do topo. */

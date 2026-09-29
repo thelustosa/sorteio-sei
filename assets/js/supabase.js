@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '580180a99e';
+const ASSET_VERSION = 'c18ade5452';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -452,46 +452,21 @@ async function apiPagina(caminho, opcoes) {
 
 const ORGAOS_CONHECIDOS = new Set(['CJ', 'CREG']);
 
-async function buscarOrgaosAutorizados() {
-  const linhas = await api('rpc/orgaos_autorizados', {
-    method: 'POST',
-    body: '{}'
-  });
+// Órgão e papel numa leitura só: a RLS de permissoes_usuario já devolve só as
+// linhas da própria pessoa. Eram três RPCs (autorizados, administrados,
+// consultados), e cada página esperava duas; agora o porteiro decide tudo com
+// uma resposta, e uma falha nela não deixa a tela pela metade.
+async function buscarPapeis() {
+  const linhas = await api('permissoes_usuario?select=orgao,papel', { paginar: false });
   // Um 200 com corpo ilegível vira null em api(). Sem esta checagem o conjunto
   // vazio resultante seria lido como "sem permissão", e um usuário autorizado
   // acabaria deslogado em vez de ver o erro com "Tentar novamente".
   if (!Array.isArray(linhas)) {
     throw new Error('Não foi possível verificar suas permissões de acesso.');
   }
-  return new Set(linhas
-    .map(linha => linha.orgao)
-    .filter(orgao => ORGAOS_CONHECIDOS.has(orgao)));
-}
-
-// O papel de administrador é consultado à parte, e só por quem precisa dele: a
-// página do painel e a inicial, que decide se mostra o link. As demais telas
-// seguem com uma consulta de permissão só, como antes.
-async function buscarOrgaosAdministrados() {
-  return buscarOrgaosDoPapel('rpc/orgaos_administrados');
-}
-
-// O papel de consulta vê só o acervo e a Meta 45. Quem descobre isso é o
-// bootstrap, nas páginas em que o papel muda o que aparece ou para onde ir.
-async function buscarOrgaosConsultados() {
-  return buscarOrgaosDoPapel('rpc/orgaos_consultados');
-}
-
-async function buscarOrgaosDoPapel(rpc) {
-  const linhas = await api(rpc, {
-    method: 'POST',
-    body: '{}'
-  });
-  if (!Array.isArray(linhas)) {
-    throw new Error('Não foi possível verificar suas permissões de acesso.');
-  }
-  return new Set(linhas
-    .map(linha => linha.orgao)
-    .filter(orgao => ORGAOS_CONHECIDOS.has(orgao)));
+  return new Map(linhas
+    .filter(linha => ORGAOS_CONHECIDOS.has(linha.orgao))
+    .map(linha => [linha.orgao, linha.papel]));
 }
 
 // Esconder o link é conveniência, não segurança: quem recusa é o banco, em toda

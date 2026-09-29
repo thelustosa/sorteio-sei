@@ -91,6 +91,18 @@ def usuario_so_le_a_propria_permissao(cur):
     assert cur.fetchall() == [(USUARIOS['alberto'], 'CREG')]
 
 
+# É a leitura com que bootstrap.js decide o porteiro de toda página: órgão e
+# papel numa consulta só, e só as linhas da própria pessoa.
+@teste
+def usuario_le_o_proprio_papel(cur):
+    for nome, esperado in [('consulta-cj', [('CJ', 'consulta')]),
+                           ('lucas', [('CJ', 'admin'), ('CREG', 'admin')]),
+                           ('alberto', [('CREG', 'operador')])]:
+        autenticar(cur, nome)
+        cur.execute('select orgao, papel from public.permissoes_usuario order by orgao')
+        assert cur.fetchall() == esperado, nome
+
+
 @teste
 def usuario_nao_altera_permissoes(cur):
     autenticar(cur, 'alberto')
