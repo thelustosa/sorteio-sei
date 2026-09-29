@@ -48,7 +48,7 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 
 ## Funcionalidades
 
-- **Autenticação e Controle de Acesso por Órgão**: o acesso ao sistema é restrito a servidores autorizados, com controle granular por órgão (`CREG`, `CJ` ou `ambos`) e papel de usuário (`admin` ou operador) gerenciados na tabela `permissoes_usuario`.
+- **Autenticação e Controle de Acesso por Órgão**: o acesso ao sistema é restrito a servidores autorizados, com controle granular por órgão (`CREG`, `CJ` ou `ambos`) e papel de usuário (`admin`, operador ou `consulta`) gerenciados na tabela `permissoes_usuario`.
   - A tela de login apresenta contexto visual e textual específico para o destino solicitado.
   - O menu inicial ajusta dinamicamente a exibição e o posicionamento dos botões conforme os órgãos autorizados para o usuário logado.
   - A segurança é garantida em duas camadas: controle de interface em `bootstrap.js` e validação no banco de dados via RPCs `SECURITY DEFINER` e políticas de Row Level Security (RLS) que consultam `orgaos_autorizados()`. As senhas são tratadas com segurança diretamente pelo Supabase Auth.
@@ -124,6 +124,7 @@ endereço não existe. Todo o resto está agrupado por natureza.
 ├── historico-cj.html       histórico de sorteios (Câmara)
 ├── historico-creg.html     histórico de sorteios (Conselho) — mesmo historico.js
 ├── admin.html              painel administrativo (os dois colegiados, seletor dentro)
+├── meta-45.html            Meta 45 do papel de consulta — mesmo admin.js, só a aba Meta
 ├── 404.html                página de endereço inexistente
 │
 ├── assets/
@@ -269,6 +270,8 @@ values
 
 - **`orgao`**: define o escopo de atuação do usuário (`'creg'`, `'cj'` ou `'ambos'`). Usuários restritos a um órgão só conseguem visualizar e operar os módulos daquele colegiado.
 - **`papel`**: o valor `'admin'` habilita o botão de acesso e a execução de rotinas privilegiadas no [Painel Administrativo](admin.html). Para operadores das secretarias executivas, use `'operador'`.
+  - O valor `'consulta'` dá acesso somente ao acervo de processos e à Meta 45, que para esse papel aparece na tela inicial ([meta-45.html](meta-45.html)) em vez do painel administrativo. O banco recusa a ele o sorteio, os julgados, o registro de votos, o histórico e as demais rotinas administrativas.
+    O órgão é o da própria linha: uma linha `('CJ', 'consulta')` dá o acervo e a Meta 45 só da Câmara, `('CREG', 'consulta')` só do Conselho, e as duas linhas dão os dois.
 
 Se o projeto migrar para um plano Pro ou superior, ative também **Prevent use
 of leaked passwords**; o recurso não está disponível no plano Free.

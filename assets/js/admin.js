@@ -145,6 +145,7 @@ const metaFiltros = document.getElementById('metaFiltros');
 const metaResumo = document.getElementById('metaResumo');
 const metaAno = document.getElementById('metaAno');
 const metaAgrupamento = document.getElementById('metaAgrupamento');
+const metaTendencia = document.getElementById('metaTendencia');
 const painelBusca = document.getElementById('painelBusca');
 const buscaRotulo = document.getElementById('buscaRotulo');
 const buscaInput = document.getElementById('buscaInput');
@@ -186,6 +187,14 @@ const detalheLoading = document.getElementById('detalheLoading');
 const detalheErro = document.getElementById('detalheErro');
 const detalheCorpo = document.getElementById('detalheCorpo');
 const detalheTabela = document.getElementById('detalheTable');
+const detalheUnidades = document.getElementById('detalheUnidades');
+const detalheUnidadesTitulo = document.getElementById('detalheUnidadesTitulo');
+const detalheUnidadesCard = document.getElementById('detalheUnidadesCard');
+const detalhePrazoCard = document.getElementById('detalhePrazoCard');
+const detalhePrazoTitulo = document.getElementById('detalhePrazoTitulo');
+const detalhePrazo = document.getElementById('detalhePrazo');
+const detalheLateral = document.getElementById('detalheLateral');
+const detalheCartao = document.getElementById('detalheCartao');
 const btnFecharDetalhe = document.getElementById('btnFecharDetalhe');
 const edicaoImpactoLista = document.getElementById('edicaoImpactoLista');
 const edicaoErro = document.getElementById('edicaoErro');
@@ -473,6 +482,7 @@ function medirRolagem() {
 
 function definirVisaoTabela(visao) {
   painelTabela.dataset.visao = visao;
+  delete painelTabela.dataset.colunas;
   painelTabela.dataset.orgao = orgao;
 }
 
@@ -534,6 +544,7 @@ function moldura() {
   // consulta, o resumo do colegiado anterior ao lado da tabela vazia mentiria.
   metaFiltros.hidden = true;
   metaResumo.hidden = true;
+  metaTendencia.hidden = true;
   // Fora dessas quatro telas — Meta e Auditoria — filtrar não é o que a tela
   // pede, e o campo some.
   painelBusca.hidden = true;
@@ -586,9 +597,8 @@ function moldura() {
   if (aba === 'meta') {
     definirVisaoTabela('meta');
     return tituloDoPainel('Julgados na meta de 45 dias',
-      'Dias da distribuição até a sessão em que o processo foi julgado. Sem prazo aferível: '
-        + 'falta a data da distribuição, ou a sessão veio antes dela.',
-      'O percentual considera só os julgados com prazo aferível.',
+      'Dias da distribuição até a sessão em que o processo foi julgado.',
+      '',
       'Indicador de prazo');
   }
   definirVisaoTabela('auditoria');
@@ -968,18 +978,20 @@ const nomeDoPeriodo = (indice, meses) => (meses === 1
   ? MESES[indice][0].toUpperCase() + MESES[indice].slice(1)
   : `${indice + 1}º ${PERIODOS[meses][0]}`);
 
+// O período corrente ainda recebe sessões: o percentual dele vai mudar.
+function emAndamento(indice, meses, ano) {
+  const hoje = hojeISO();
+  return Number(hoje.slice(0, 4)) === ano && Math.floor((Number(hoje.slice(5, 7)) - 1) / meses) === indice;
+}
+
 function celulaDoPeriodo({ indice }, meses, ano) {
   const inicio = indice * meses;
   const nome = document.createElement('strong');
   nome.textContent = nomeDoPeriodo(indice, meses);
 
-  // O período corrente ainda recebe sessões: o percentual dele vai mudar.
-  const hoje = hojeISO();
   const apoio = [];
   if (meses > 1) apoio.push(`${MESES[inicio].slice(0, 3)}–${MESES[inicio + meses - 1].slice(0, 3)}`);
-  if (Number(hoje.slice(0, 4)) === ano && Math.floor((Number(hoje.slice(5, 7)) - 1) / meses) === indice) {
-    apoio.push('em andamento');
-  }
+  if (emAndamento(indice, meses, ano)) apoio.push('em andamento');
 
   const bloco = document.createElement('div');
   bloco.className = 'admin-meta-periodo';
@@ -1034,7 +1046,7 @@ function celulaDaContagem(periodo, recorte, meses, ano) {
 
   const botao = document.createElement('button');
   botao.type = 'button';
-  botao.className = recorte === 'julgados' ? 'admin-meta-contagem is-total' : 'admin-meta-contagem';
+  botao.className = `admin-meta-contagem is-${recorte === 'semPrazo' ? 'sem-prazo' : recorte === 'julgados' ? 'total' : recorte}`;
   botao.textContent = contagem(quantidade);
   botao.setAttribute('aria-label', `${RECORTES_META[recorte].rotulo} em ${nomeDoPeriodo(periodo.indice, meses)}`
     + ` de ${ano}: ver ${plural(quantidade, 'processo', 'processos')}`);
@@ -1061,6 +1073,18 @@ async function abrirDetalheDaMeta(indice, recorte, meses, ano) {
   detalheTitulo.textContent = `${rotulo} · ${nomeDoPeriodo(indice, meses)} de ${ano}`;
   detalheResumo.textContent = 'Carregando…';
   detalheTabela.replaceChildren();
+  detalheUnidades.replaceChildren();
+  // Invisível, e não hidden: o card das unidades segura o lugar durante a
+  // busca, e o da lista não muda de largura quando os dados chegam.
+  detalheUnidadesCard.style.visibility = 'hidden';
+  detalhePrazoCard.hidden = true;
+  // O arranjo e a trava de altura são da abertura anterior: sem voltar ao
+  // ponto de partida, o card carregava largo (lado a lado) e mudava de largura
+  // quando os dados chegavam — ou ficava largo e vazio se a busca falhasse.
+  detalheLateral.dataset.arranjo = 'coluna';
+  detalheLateral.dataset.densidade = '';
+  detalheCartao.style.minHeight = '';
+  detalhePrazo.replaceChildren();
   detalheErro.hidden = true;
   detalheCorpo.hidden = true;
   detalheLoading.replaceChildren(criarIndicadorCarregamento('Carregando julgados…'));
@@ -1092,12 +1116,22 @@ async function abrirDetalheDaMeta(indice, recorte, meses, ano) {
   desenharDetalheDaMeta((processos || []).filter(filtro), recorte, colegiado, de, ate);
 }
 
-const SELOS_DA_META = new Map([[true, ['Dentro', 'sucesso']], [false, ['Fora', 'alerta']]]);
+// Dentro é o verde cheio de sucesso; Fora, o teal do canal de atenção em
+// contorno — preenchidos, os dois eram verdes vizinhos. Sem prazo é ausência de
+// dado (falta a distribuição), e ausência não vira selo: sai texto neutro.
+const SELOS_DA_META = new Map([[true, ['Dentro', 'sucesso']], [false, ['Fora', 'fora']]]);
+function seloDaMeta(meta45) {
+  const selo = SELOS_DA_META.get(meta45);
+  if (selo) return badge(...selo);
+  const texto = document.createElement('span');
+  texto.className = 'admin-meta-sem-prazo';
+  texto.textContent = 'Sem prazo';
+  return texto;
+}
 
 function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
   const vocabulario = VOCABULARIO[colegiado];
-  detalheResumo.textContent = [vocabulario.nome, plural(processos.length, 'julgado', 'julgados'),
-    `sessões de ${dataBR(de)} a ${dataBR(ate)}`].join(' · ');
+  const sessoes = `sessões de ${dataBR(de)} a ${dataBR(ate)}`;
 
   // Só a lista de todos os julgados mistura as três situações; nas outras a
   // coluna repetiria o título do card em cada linha.
@@ -1105,21 +1139,193 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
   const colunas = ['Nº do Processo', vocabulario.destino, 'Distribuição', 'Sessão', 'Dias',
     ...(comMeta ? ['Meta'] : [])];
 
-  const tbody = document.createElement('tbody');
-  processos.forEach(p => {
-    const tr = document.createElement('tr');
-    const numero = celula(p.num_processo, 'th');
-    numero.scope = 'row';
-    tr.append(numero, celula(ou(p.destino)), celula(dataBR(p.data_distribuicao)),
-      celula(dataBR(p.data_sessao)), celula(ou(p.dias)));
-    if (comMeta) {
-      const [texto, tom] = SELOS_DA_META.get(p.meta_45) || ['Sem prazo', 'neutro'];
-      tr.append(celula(badge(texto, tom)));
+  const grupos = agruparPorDestino(processos);
+  // `destino` null é a lista inteira. Filtrado, o resumo diz de quem é o
+  // recorte e quanto ele é do total, para o número no topo nunca contradizer
+  // as linhas à vista.
+  const pintarLista = destino => {
+    // Filtrar não muda o tamanho do diálogo: o card da lista guarda a altura
+    // que tinha com a lista inteira. Sem isso, uma unidade de poucos processos
+    // encolhia o card e o diálogo se recentralizava — no recorte Dentro, o
+    // botão recém-clicado saía de baixo do ponteiro e o de fechar descia 221px.
+    // O teto do card (--teto-cartao, o mesmo do max-height no CSS) vale
+    // sobre a trava, para ela não passar da tela quando a janela diminui.
+    if (destino !== null && detalheCartao.offsetHeight && !detalheCartao.style.minHeight) {
+      detalheCartao.style.minHeight = `min(${detalheCartao.offsetHeight}px, var(--teto-cartao))`;
     }
-    tbody.appendChild(tr);
+    const lista = destino === null ? processos : grupos.get(destino);
+    detalheResumo.textContent = (destino === null
+      ? [vocabulario.nome, plural(processos.length, 'julgado', 'julgados'), sessoes]
+      : [vocabulario.nome, rotuloDoDestino(destino, vocabulario.destino),
+        `${contagem(lista.length)} de ${plural(processos.length, 'julgado', 'julgados')}`, sessoes]).join(' · ');
+
+    const tbody = document.createElement('tbody');
+    lista.forEach(p => {
+      const tr = document.createElement('tr');
+      const numero = celula(p.num_processo, 'th');
+      numero.scope = 'row';
+      // Os dias que passaram de 45 levam a cor de Fora: a coluna se lê de
+      // relance em todo recorte, mesmo sem a coluna Meta.
+      tr.append(numero, celula(ou(p.destino)), celula(dataBR(p.data_distribuicao)),
+        celula(dataBR(p.data_sessao)), celula(ou(p.dias), 'td', p.meta_45 === false ? 'admin-meta-dias-fora' : ''));
+      if (comMeta) tr.append(celula(seloDaMeta(p.meta_45)));
+      tbody.appendChild(tr);
+    });
+    detalheTabela.replaceChildren(cabecalho(colunas), tbody);
+    equalizarColunas(detalheTabela);
+  };
+
+  pintarLista(null);
+  desenharPorDestino(processos.length, grupos, vocabulario.destino, pintarLista);
+  if (comMeta) desenharPrazoPorDestino(grupos, vocabulario.destino);
+  ajustarDensidade();
+}
+
+// A coluna da direita não rola: quando os cards não cabem na altura da lista
+// — a Câmara, com cinco relatores, rolava até em tela cheia —, eles descem os
+// degraus abaixo até caber (ver .admin-meta-lateral[data-densidade] e
+// [data-arranjo] no CSS). Só CSS não resolve: o que decide é quantas unidades
+// há junto com a altura da janela. Primeiro aperta o espaçamento, até o
+// degrau mínimo (números menores, sem a linha de apoio do card de prazo); se
+// nem assim couber e a janela for larga, põe os dois cards lado a lado, cada
+// um com a altura inteira. Na janela estreita, que não comporta o lado a lado,
+// o último recurso é tirar também a dica "Clique para filtrar a lista.". Parte
+// sempre do mais folgado, para a janela que cresce devolver o respiro.
+const DEGRAUS_APERTANDO = [['coluna', ''], ['coluna', 'compacta'], ['coluna', 'minima']];
+const DEGRAUS_EM_COLUNA = [...DEGRAUS_APERTANDO, ['coluna', 'minima-sem-dica']];
+const DEGRAUS_COM_LADO = [...DEGRAUS_APERTANDO, ['lado', ''], ['lado', 'compacta'], ['lado', 'minima']];
+// A lista precisa de ~620px para as seis colunas do recorte Julgados; somados
+// os dois cards de 17rem, os vãos e a margem da janela, dá 1240px na fonte
+// padrão. Em rem, como as larguras que o limite protege: com a fonte do
+// navegador maior, os cards crescem e o limite cresce junto.
+const LARGURA_LADO_A_LADO = '(min-width: 77.5rem)';
+
+function ajustarDensidade() {
+  const transborda = () => [detalheUnidades, detalhePrazo]
+    .some(corpo => corpo.scrollHeight > corpo.clientHeight + 1);
+  const larga = typeof window !== 'undefined' && window.matchMedia(LARGURA_LADO_A_LADO).matches;
+  const degraus = larga ? DEGRAUS_COM_LADO : DEGRAUS_EM_COLUNA;
+  for (const [arranjo, densidade] of degraus) {
+    detalheLateral.dataset.arranjo = arranjo;
+    detalheLateral.dataset.densidade = densidade;
+    if (!transborda()) return;
+  }
+}
+
+// Nos cards e no resumo o destino ausente é um rótulo, não um valor de
+// célula: "Sem unidade" diz o que o travessão da lista só sugere.
+const rotuloDoDestino = (nome, destino) => (nome === '—' ? `Sem ${destino.toLowerCase()}` : nome);
+
+// Os julgados de cada unidade (ou relator), na ordem dos dois cards da coluna
+// da direita: mais julgados primeiro; empate na ordem natural (CREG2 antes de
+// CREG10), com o destino ausente depois de todos.
+function agruparPorDestino(processos) {
+  const grupos = new Map();
+  processos.forEach(p => {
+    const chave = ou(p.destino);
+    if (!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave).push(p);
   });
-  detalheTabela.replaceChildren(cabecalho(colunas), tbody);
-  equalizarColunas(detalheTabela);
+  return new Map([...grupos].sort(([a, x], [b, y]) =>
+    y.length - x.length || (a === '—') - (b === '—') || a.localeCompare(b, 'pt-BR', { numeric: true })));
+}
+
+// O card solto no canto superior direito, fora do card da lista: quantos
+// julgados do recorte couberam a cada unidade (ou relator), e cada uma filtra a
+// lista ao lado. Sai da mesma lista, então o Total bate com o resumo.
+//
+// Um grupo de botões com aria-pressed, de escolha única: Total é a lista
+// inteira, e apertar de novo a unidade escolhida também volta a ela. Os botões
+// não são redesenhados no clique, só o estado — o foco fica onde estava.
+function desenharPorDestino(total, grupos, destino, pintarLista) {
+  const opcao = (nome, quantidade, valor) => {
+    const botao = document.createElement('button');
+    botao.type = 'button';
+    botao.className = valor === null ? 'admin-meta-opcao is-total' : 'admin-meta-opcao';
+    botao.setAttribute('aria-pressed', String(valor === null));
+    const rotulo = document.createElement('span');
+    rotulo.className = 'admin-meta-opcao-nome';
+    rotulo.textContent = valor === null ? nome : rotuloDoDestino(nome, destino);
+    const numero = document.createElement('span');
+    numero.className = 'admin-meta-opcao-total';
+    numero.textContent = contagem(quantidade);
+    botao.append(rotulo, numero);
+    if (valor !== null) {
+      // A barra repete a parcela que o número já diz: só compara de relance.
+      const barra = document.createElement('span');
+      barra.className = 'admin-meta-opcao-barra';
+      barra.setAttribute('aria-hidden', 'true');
+      const preenchido = document.createElement('span');
+      preenchido.style.width = `${(quantidade / total) * 100}%`;
+      barra.appendChild(preenchido);
+      botao.appendChild(barra);
+    }
+    // Na Câmara o botão diz "CJ1": quem é o conselheiro vem no hover e no
+    // leitor de tela, como nas outras tabelas do painel.
+    rotularCadeira(botao, valor);
+    botao.setAttribute('aria-label',
+      `${botao.getAttribute('aria-label') || rotulo.textContent}: ${plural(quantidade, 'julgado', 'julgados')}`);
+    botao.addEventListener('click', () => {
+      const escolhido = valor !== null && botao.getAttribute('aria-pressed') === 'true' ? null : valor;
+      opcoes.forEach(([outro, v]) => outro.setAttribute('aria-pressed', String(v === escolhido)));
+      pintarLista(escolhido);
+      detalheCorpo.scrollTop = 0;
+    });
+    return [botao, valor];
+  };
+
+  const opcoes = [opcao('Total', total, null),
+    ...[...grupos].map(([nome, lista]) => opcao(nome, lista.length, nome))];
+  detalheUnidadesTitulo.textContent = `Julgados por ${destino.toLowerCase()}`;
+  detalheUnidades.replaceChildren(...opcoes.map(([botao]) => botao));
+  detalheUnidadesCard.style.visibility = '';
+}
+
+// Só no recorte Julgados, o único que traz as três situações: quanto de cada
+// unidade saiu dentro e fora dos 45 dias. A conta é a do painel (taxaDentro):
+// sem prazo aferível fica fora do percentual e aparece à parte, só quando
+// existe. O medidor é o da coluna "% dentro da meta" — verde cheio é dentro, o
+// trilho é fora — e repete o que o texto já diz, por isso é aria-hidden.
+function desenharPrazoPorDestino(grupos, destino) {
+  const texto = (conteudo, classe) => {
+    const el = document.createElement('span');
+    el.className = classe;
+    el.textContent = conteudo;
+    return el;
+  };
+
+  detalhePrazoTitulo.textContent = `Prazo por ${destino.toLowerCase()}`;
+  detalhePrazo.replaceChildren(...[...grupos].map(([nome, lista]) => {
+    const conta = { dentro: 0, fora: 0, semPrazo: 0 };
+    lista.forEach(p => { conta[p.meta_45 === true ? 'dentro' : p.meta_45 === false ? 'fora' : 'semPrazo'] += 1; });
+    const taxa = taxaDentro(conta);
+
+    const item = document.createElement('li');
+    item.className = 'admin-meta-prazo-item';
+    const topo = document.createElement('div');
+    topo.className = 'admin-meta-prazo-topo';
+    topo.appendChild(rotularCadeira(texto(rotuloDoDestino(nome, destino), 'admin-meta-prazo-nome'), nome));
+    if (conta.semPrazo && taxa !== null) topo.appendChild(texto(`${contagem(conta.semPrazo)} sem prazo`, 'admin-meta-prazo-nota'));
+    item.appendChild(topo);
+
+    if (taxa === null) {
+      item.appendChild(texto('Sem prazo aferível', 'admin-meta-prazo-nota'));
+      return item;
+    }
+    const medidor = document.createElement('span');
+    medidor.className = 'admin-meta-medidor';
+    medidor.setAttribute('aria-hidden', 'true');
+    const preenchido = document.createElement('span');
+    preenchido.style.width = `${taxa}%`;
+    medidor.appendChild(preenchido);
+    const partes = document.createElement('div');
+    partes.className = 'admin-meta-prazo-partes';
+    partes.append(texto(`${percentual(taxa)} dentro`, 'admin-meta-prazo-dentro'),
+      texto(`${percentual(100 - taxa)} fora`, 'admin-meta-prazo-fora'));
+    item.append(medidor, partes);
+    return item;
+  }));
+  detalhePrazoCard.hidden = false;
 }
 
 function pintarMeta(linhas) {
@@ -1152,43 +1358,175 @@ function repintarMeta() {
     fora: soma.fora + p.fora, semPrazo: soma.semPrazo + p.semPrazo
   }), { julgados: 0, dentro: 0, fora: 0, semPrazo: 0 });
 
-  // Dentro e Fora repartem os aferíveis, então os dois saem em percentual, com a
-  // contagem embaixo: com um em % e o outro em número, "100,0%" ao lado de "0"
-  // parecia medir coisas diferentes.
   const taxa = taxaDentro(total);
-  const julgados = n => `${contagem(n)} ${n === 1 ? 'julgado' : 'julgados'}`;
-  metaResumo.replaceChildren(...[
-    [`Julgados em ${ano}`, contagem(total.julgados), 'com status Julgado'],
-    ['Dentro da meta', taxa === null ? '—' : percentual(taxa), `${julgados(total.dentro)} em até 45 dias`],
-    ['Fora da meta', taxa === null ? '—' : percentual(100 - taxa), `${julgados(total.fora)} com mais de 45 dias`],
-    ['Sem prazo aferível', contagem(total.semPrazo), 'fora do percentual']
-  ].map(([rotulo, valor, apoio]) => {
-    const grupo = document.createElement('div');
-    const termo = document.createElement('dt');
-    termo.textContent = rotulo;
-    const dado = document.createElement('dd');
-    dado.textContent = valor;
-    const nota = document.createElement('dd');
-    nota.className = 'admin-meta-nota';
-    nota.textContent = apoio;
-    grupo.append(termo, dado, nota);
-    return grupo;
-  }));
-  metaResumo.hidden = false;
+  pintarResumoDaMeta(total, taxa, ano);
+  pintarTendencia(periodos, taxa, meses, ano);
 
+  // A coluna Sem prazo só entra quando o ano tem algum: zerada, ela tomava um
+  // sexto da largura para repetir o zero que o resumo já diz.
+  const recortes = ['julgados', 'dentro', 'fora', ...(total.semPrazo ? ['semPrazo'] : [])];
   desenhar([
     { rotulo: 'Período', eixo: 'centro' },
-    { rotulo: 'Julgados', eixo: 'centro' },
-    { rotulo: 'Dentro da meta', eixo: 'centro' },
-    { rotulo: 'Fora da meta', eixo: 'centro' },
-    { rotulo: 'Sem prazo aferível', eixo: 'centro' },
+    ...recortes.map(recorte => ({ rotulo: RECORTES_META[recorte].rotulo, eixo: 'centro' })),
     { rotulo: '% dentro da meta', eixo: 'centro' }
   ], periodos.map(periodo => [
     celulaDoPeriodo(periodo, meses, ano),
-    ...['julgados', 'dentro', 'fora', 'semPrazo'].map(recorte => celulaDaContagem(periodo, recorte, meses, ano)),
+    ...recortes.map(recorte => celulaDaContagem(periodo, recorte, meses, ano)),
     celulaDaTaxa(periodo)
   ]));
-  painelStatus.textContent = `${plural(periodos.length, ...PERIODOS[meses])} de ${ano}.`;
+  painelTabela.dataset.colunas = String(recortes.length + 2);
+
+  // O rodapé diz o trecho do ano que a tabela cobre — a contagem de períodos
+  // sozinha repetia o que as linhas já mostram. O período em andamento termina
+  // no mês corrente, e não no fim dele: setembro a dezembro ainda não houve.
+  const primeiroMes = periodos[0].indice * meses;
+  const ultimo = periodos.at(-1);
+  const ultimoMes = emAndamento(ultimo.indice, meses, ano)
+    ? Number(hojeISO().slice(5, 7)) - 1
+    : ultimo.indice * meses + meses - 1;
+  const trecho = primeiroMes === ultimoMes
+    ? `em ${MESES[primeiroMes]}` : `de ${MESES[primeiroMes]} a ${MESES[ultimoMes]}`;
+  painelStatus.textContent = `${plural(periodos.length, ...PERIODOS[meses])} de ${ano}, ${trecho}.`;
+}
+
+// A pergunta da tela é quanto saiu dentro dos 45 dias: ela é o número grande,
+// com a barra que reparte os aferíveis entre dentro e fora e as duas contagens
+// nas pontas. Julgados e sem prazo descem para uma linha de apoio.
+function pintarResumoDaMeta(total, taxa, ano) {
+  const grupo = (classe, rotulo, ...dados) => {
+    const div = document.createElement('div');
+    div.className = classe;
+    const termo = document.createElement('dt');
+    termo.textContent = rotulo;
+    div.append(termo, ...dados);
+    return div;
+  };
+  const dado = (texto, classe = '') => {
+    const dd = document.createElement('dd');
+    if (classe) dd.className = classe;
+    dd.textContent = texto;
+    return dd;
+  };
+  const julgados = n => `${contagem(n)} ${n === 1 ? 'julgado' : 'julgados'}`;
+
+  const divisao = document.createElement('dd');
+  divisao.className = 'admin-meta-divisao';
+  if (taxa !== null) {
+    // Repete as duas contagens escritas logo abaixo: é aria-hidden.
+    const barra = document.createElement('span');
+    barra.className = 'admin-meta-barra';
+    barra.setAttribute('aria-hidden', 'true');
+    const dentro = document.createElement('span');
+    dentro.style.width = `${taxa}%`;
+    barra.append(dentro, document.createElement('span'));
+    divisao.appendChild(barra);
+  }
+  const partes = document.createElement('span');
+  partes.className = 'admin-meta-partes';
+  const parte = (classe, texto) => {
+    const span = document.createElement('span');
+    span.className = classe;
+    span.textContent = texto;
+    return span;
+  };
+  partes.append(parte('admin-meta-parte-dentro', `${julgados(total.dentro)} em até 45 dias`),
+    parte('admin-meta-parte-fora', taxa === null ? `${julgados(total.fora)} com mais de 45 dias`
+      : `${julgados(total.fora)} fora · ${percentual(100 - taxa)}`));
+  divisao.appendChild(partes);
+
+  metaResumo.replaceChildren(
+    grupo('admin-meta-destaque', `Dentro da meta em ${ano}`,
+      dado(taxa === null ? '—' : percentual(taxa), 'admin-meta-taxa-ano'), divisao),
+    grupo('admin-meta-apoio', 'Julgados', dado(contagem(total.julgados)), dado('com status Julgado', 'admin-meta-nota')),
+    grupo('admin-meta-apoio', 'Sem prazo aferível', dado(contagem(total.semPrazo)), dado('fora do percentual', 'admin-meta-nota')));
+  metaResumo.hidden = false;
+}
+
+// A tendência que a tabela só dá lendo percentual por percentual: uma coluna
+// por período, do chão aos 100%, e a taxa do ano como linha de referência. A
+// tabela logo abaixo traz os mesmos números — ela é a versão acessível, e o
+// gráfico é aria-hidden. Com um período só não há o que comparar, e ele some.
+function pintarTendencia(periodos, taxaDoAno, meses, ano) {
+  const comTaxa = periodos.filter(periodo => taxaDentro(periodo) !== null);
+  if (comTaxa.length < 2) {
+    metaTendencia.hidden = true;
+    metaTendencia.replaceChildren();
+    return;
+  }
+
+  const titulo = document.createElement('p');
+  titulo.className = 'admin-meta-tendencia-titulo';
+  titulo.textContent = `% dentro da meta por ${PERIODOS[meses][0]}`;
+
+  const plot = document.createElement('div');
+  plot.className = 'admin-meta-plot';
+  // Mais de seis colunas não comportam um rótulo em cada topo: o valor aparece
+  // ao passar o ponteiro, e a tabela segue com todos.
+  if (periodos.length > 6) plot.dataset.denso = '';
+  ['100%', '50%', '0'].forEach((rotulo, indice) => {
+    const grade = document.createElement('span');
+    grade.className = 'admin-meta-grade';
+    grade.style.bottom = `${100 - indice * 50}%`;
+    grade.dataset.rotulo = rotulo;
+    plot.appendChild(grade);
+  });
+  const referencia = document.createElement('span');
+  referencia.className = 'admin-meta-referencia';
+  referencia.style.bottom = `${taxaDoAno}%`;
+  referencia.dataset.rotulo = `${ano}: ${percentual(taxaDoAno)}`;
+  plot.appendChild(referencia);
+
+  let temParcial = false;
+  const colunas = document.createElement('div');
+  colunas.className = 'admin-meta-colunas';
+  periodos.forEach(periodo => {
+    const taxa = taxaDentro(periodo);
+    const coluna = document.createElement('div');
+    coluna.className = 'admin-meta-coluna';
+    const trilho = document.createElement('div');
+    trilho.className = 'admin-meta-coluna-trilho';
+    if (taxa !== null) {
+      const barra = document.createElement('span');
+      barra.className = 'admin-meta-coluna-barra';
+      if (emAndamento(periodo.indice, meses, ano)) {
+        barra.classList.add('is-parcial');
+        temParcial = true;
+      }
+      barra.style.height = `${taxa}%`;
+      const valor = document.createElement('span');
+      valor.className = 'admin-meta-coluna-valor';
+      valor.textContent = percentual(taxa);
+      barra.appendChild(valor);
+      trilho.appendChild(barra);
+    }
+    const rotulo = document.createElement('span');
+    rotulo.className = 'admin-meta-coluna-rotulo';
+    rotulo.textContent = meses === 1 ? MESES[periodo.indice].slice(0, 3) : `${periodo.indice + 1}º`;
+    coluna.append(trilho, rotulo);
+    colunas.appendChild(coluna);
+  });
+  plot.appendChild(colunas);
+
+  metaTendencia.replaceChildren(titulo, plot);
+  if (temParcial) {
+    // Duas aparências de coluna pedem legenda com as duas: a cheia já fechou,
+    // a listrada ainda recebe sessões.
+    const legenda = document.createElement('p');
+    legenda.className = 'admin-meta-tendencia-legenda';
+    [['admin-meta-amostra', 'Período finalizado'],
+      ['admin-meta-amostra admin-meta-amostra-parcial', 'Período em andamento']].forEach(([classe, rotulo]) => {
+      const item = document.createElement('span');
+      item.className = 'admin-meta-legenda-item';
+      const amostra = document.createElement('span');
+      amostra.className = classe;
+      const texto = document.createElement('span');
+      texto.textContent = rotulo;
+      item.append(amostra, texto);
+      legenda.appendChild(item);
+    });
+    metaTendencia.appendChild(legenda);
+  }
+  metaTendencia.hidden = false;
 }
 
 function pintarAuditoria(pagina) {
@@ -2119,6 +2457,9 @@ function inicializarAdmin(orgaosAdmin) {
   // Com um órgão só, o seletor não é escolha: é um botão preso numa opção.
   seletorOrgaoCard.hidden = administrados.size < 2;
 
+  // Abre na primeira aba da página: Sessões no painel, Meta 45 em meta-45.html,
+  // que traz só ela — é o mesmo módulo servindo o papel de consulta.
+  aba = abas.querySelector('[data-aba]').dataset.aba;
   abas.querySelectorAll('[data-aba]').forEach(botao => {
     botao.addEventListener('click', () => selecionarAba(botao.dataset.aba));
     botao.addEventListener('keydown', navegarAbas);
@@ -2151,10 +2492,33 @@ function inicializarAdmin(orgaosAdmin) {
     repintarBusca();
   });
   btnFecharDetalhe.addEventListener('click', () => detalheDialog.close());
+  // Um ajuste por quadro: arrastando a janela, o navegador dispara dezenas de
+  // eventos por segundo, e cada ajuste mede o layout até seis vezes.
+  if (typeof window !== 'undefined') {
+    let densidadePendente = false;
+    window.addEventListener('resize', () => {
+      if (!detalheDialog.open || densidadePendente) return;
+      densidadePendente = true;
+      requestAnimationFrame(() => {
+        densidadePendente = false;
+        ajustarDensidade();
+      });
+    });
+  }
   // Clique no ::backdrop chega como clique no próprio dialog: fechar ali é o que
-  // se espera de um card modal, e o <dialog> não faz isso sozinho.
+  // se espera de um card modal, e o <dialog> não faz isso sozinho. Só fecha o
+  // clique que também COMEÇOU no dialog, e fora da barra de rolagem dele
+  // (abaixo de 960px quem rola é o diálogo): arrastar a barra, ou selecionar o
+  // número de um processo e soltar no vão entre os cards, também chega como
+  // clique no dialog.
+  let fecharNoClique = false;
+  detalheDialog.addEventListener('pointerdown', evento => {
+    const naBarra = evento.offsetX >= detalheDialog.clientWidth && evento.offsetX < detalheDialog.offsetWidth;
+    fecharNoClique = evento.target === detalheDialog && !naBarra;
+  });
   detalheDialog.addEventListener('click', evento => {
-    if (evento.target === detalheDialog) detalheDialog.close();
+    if (fecharNoClique && evento.target === detalheDialog) detalheDialog.close();
+    fecharNoClique = false;
   });
   // A auditoria é a única lista que não cabe numa consulta só. O botão pede a
   // página anterior pelo cursor que admin_auditoria já aceitava, e ACRESCENTA à
@@ -2167,18 +2531,21 @@ function inicializarAdmin(orgaosAdmin) {
   // arquivo também roda no escopo isolado dos testes, sem o global do navegador.
   if (typeof window !== 'undefined') window.addEventListener('resize', medirRolagem);
 
-  edicaoForm.addEventListener('submit', evento => {
-    evento.preventDefault();
-    avancar();
-  });
-  btnCancelar.addEventListener('click', () => dialogo.close());
-  btnFecharEdicao.addEventListener('click', () => dialogo.close());
-  // Clique no ::backdrop chega como clique no próprio dialog, e não há trabalho
-  // não salvo depois da confirmação — fechar ali é o que se espera de um modal.
-  dialogo.addEventListener('click', evento => {
-    if (evento.target === dialogo) dialogo.close();
-  });
-  dialogo.addEventListener('close', () => { dialogoAtual = null; });
+  // meta-45.html não corrige nada e não traz o dialog de edição.
+  if (dialogo) {
+    edicaoForm.addEventListener('submit', evento => {
+      evento.preventDefault();
+      avancar();
+    });
+    btnCancelar.addEventListener('click', () => dialogo.close());
+    btnFecharEdicao.addEventListener('click', () => dialogo.close());
+    // Clique no ::backdrop chega como clique no próprio dialog, e não há trabalho
+    // não salvo depois da confirmação — fechar ali é o que se espera de um modal.
+    dialogo.addEventListener('click', evento => {
+      if (evento.target === dialogo) dialogo.close();
+    });
+    dialogo.addEventListener('close', () => { dialogoAtual = null; });
+  }
 
   painel.hidden = false;
   return selecionarOrgao(administrados.has('CREG') ? 'CREG' : 'CJ');
