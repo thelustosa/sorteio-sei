@@ -272,6 +272,7 @@ values
 - **`papel`**: o valor `'admin'` habilita o botão de acesso e a execução de rotinas privilegiadas no [Painel Administrativo](admin.html). Para operadores das secretarias executivas, use `'operador'`.
   - O valor `'consulta'` dá acesso somente ao acervo de processos e à Meta 45, que para esse papel aparece na tela inicial ([meta-45.html](meta-45.html)) em vez do painel administrativo. O banco recusa a ele o sorteio, os julgados, o registro de votos, o histórico e as demais rotinas administrativas.
     O órgão é o da própria linha: uma linha `('CJ', 'consulta')` dá o acervo e a Meta 45 só da Câmara, `('CREG', 'consulta')` só do Conselho, e as duas linhas dão os dois.
+  - O valor `'consulta_historico'` dá as mesmas telas de `'consulta'` e também o histórico de sorteios, incluindo os processos de cada rodada. O órgão continua sendo definido por cada linha de permissão. Esse papel não libera sorteio, julgados, registro de votos nem painel administrativo.
 
 Se o projeto migrar para um plano Pro ou superior, ative também **Prevent use
 of leaked passwords**; o recurso não está disponível no plano Free.

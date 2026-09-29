@@ -23,6 +23,7 @@ USUARIOS = {
     'consulta': '00000000-0000-0000-0000-000000000016',
     'consulta-cj': '00000000-0000-0000-0000-000000000017',
     'consulta-creg': '00000000-0000-0000-0000-000000000018',
+    'consulta-historico': '00000000-0000-0000-0000-000000000019',
 }
 
 testes = []
@@ -67,6 +68,7 @@ def matriz_de_permissoes(cur):
         # A consulta continua autorizada nos dois órgãos: é o que a mantém
         # logada e abre o acervo. O que ela não passa é tem_acesso_orgao().
         'consulta': ['CJ', 'CREG'],
+        'consulta-historico': ['CJ', 'CREG'],
     }.items():
         autenticar(cur, nome)
         assert permissoes(cur) == esperado
@@ -342,6 +344,44 @@ def consulta_nao_entra_no_painel_administrativo(cur):
         deve_negar(cur, rpc)
 
 
+@teste
+def consulta_historico_so_amplia_as_duas_leituras(cur):
+    for rpc in ACERVO + META_45 + [
+        "select * from public.historico_sorteios('CJ')",
+        "select * from public.processos_sorteio('CJ', current_date, null)",
+        "select * from public.historico_sorteios('CREG')",
+        "select * from public.processos_sorteio('CREG', current_date, null)",
+    ]:
+        autenticar(cur, 'consulta-historico')
+        cur.execute(rpc)
+        cur.fetchall()
+        cur.connection.rollback()
+
+    autenticar(cur, 'consulta-historico')
+    cur.execute("select public.tem_acesso_orgao('CJ'), public.tem_acesso_orgao('CREG'), "
+                "public.tem_acesso_historico('CJ'), public.tem_acesso_historico('CREG')")
+    assert cur.fetchone() == (False, False, True, True)
+
+    for rpc in ["select public.registrar_votos('[]'::jsonb)",
+                "select public.registrar_votos_creg('[]'::jsonb)",
+                "select * from public.admin_sessoes('CJ')",
+                "select * from public.admin_sessoes('CREG')"]:
+        autenticar(cur, 'consulta-historico')
+        deve_negar(cur, rpc)
+
+    for tabela, destino in [('acervo_cj', 'relator'), ('acervo_creg', 'unidade')]:
+        autenticar(cur, 'consulta-historico')
+        deve_negar(cur, f"insert into public.{tabela} "
+                  f"(num_processo, {destino}, data_distribuicao, origem) "
+                  f"values ('202600029009923', '{'CJ1' if destino == 'relator' else 'CREG1'}', "
+                  "current_date, 'sorteio')")
+
+    for tabela in ['julgados_cj', 'julgados_creg']:
+        autenticar(cur, 'consulta-historico')
+        cur.execute(f'select num_processo from public.{tabela}')
+        assert cur.fetchall() == []
+
+
 # O órgão da consulta é a própria linha de permissoes_usuario: quem só tem a
 # linha da CJ vê o acervo e a Meta da CJ, e o CREG fica fechado — e vice-versa.
 @teste
@@ -388,7 +428,9 @@ def preparar_banco():
                     ('00000000-0000-0000-0000-000000000016', 'CJ', 'consulta'),
                     ('00000000-0000-0000-0000-000000000016', 'CREG', 'consulta'),
                     ('00000000-0000-0000-0000-000000000017', 'CJ', 'consulta'),
-                    ('00000000-0000-0000-0000-000000000018', 'CREG', 'consulta');
+                    ('00000000-0000-0000-0000-000000000018', 'CREG', 'consulta'),
+                    ('00000000-0000-0000-0000-000000000019', 'CJ', 'consulta_historico'),
+                    ('00000000-0000-0000-0000-000000000019', 'CREG', 'consulta_historico');
                   update public.permissoes_usuario set papel = 'admin'
                    where user_id = '00000000-0000-0000-0000-000000000013';""")
     PG.executar("""insert into public.julgados_cj

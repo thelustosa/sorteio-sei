@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '610a82687b';
+const ASSET_VERSION = 'f6045cb693';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -477,11 +477,9 @@ function aplicarVisibilidadeAdmin(orgaosAdmin, raiz = document) {
   });
 }
 
-// Na tela inicial, data-consulta é o card da Meta 45 — só do papel de
-// consulta — e data-pleno marca os caminhos que esse papel não usa (sorteio,
-// histórico, registro): eles ficam só com os órgãos em que o papel é outro, e
-// somem inteiros quando não sobra nenhum. De novo conveniência: quem recusa é
-// tem_acesso_orgao(), no banco.
+// Na tela inicial, data-consulta é o card da Meta 45. data-pleno marca os
+// caminhos de sorteio e julgados, restritos a operador e admin. O histórico
+// tem o próprio recorte, que inclui consulta_historico.
 function aplicarVisibilidadeConsulta(consultados, plenos, raiz = document) {
   raiz.querySelectorAll('[data-consulta]').forEach(elemento => {
     elemento.hidden = consultados.size === 0;
@@ -489,6 +487,13 @@ function aplicarVisibilidadeConsulta(consultados, plenos, raiz = document) {
   raiz.querySelectorAll('[data-pleno]').forEach(secao => {
     aplicarVisibilidadePorOrgao(plenos, secao);
     secao.hidden = plenos.size === 0;
+  });
+}
+
+function aplicarVisibilidadeHistorico(historicos, raiz = document) {
+  raiz.querySelectorAll('[data-historico]').forEach(secao => {
+    aplicarVisibilidadePorOrgao(historicos, secao);
+    secao.hidden = historicos.size === 0;
   });
 }
 
