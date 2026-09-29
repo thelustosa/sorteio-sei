@@ -70,7 +70,8 @@ class Postgres:
                           ('00000000-0000-0000-0000-000000000015', 'sem-acesso@goias.gov.br'),
                           ('00000000-0000-0000-0000-000000000016', 'consulta@goias.gov.br'),
                           ('00000000-0000-0000-0000-000000000017', 'consulta-cj@goias.gov.br'),
-                          ('00000000-0000-0000-0000-000000000018', 'consulta-creg@goias.gov.br');
+                          ('00000000-0000-0000-0000-000000000018', 'consulta-creg@goias.gov.br'),
+                          ('00000000-0000-0000-0000-000000000019', 'consulta-historico@goias.gov.br');
                         create function auth.uid() returns uuid language sql stable
                         set search_path = '' as $$
                           select (nullif(current_setting('request.jwt.claims', true), '')::jsonb

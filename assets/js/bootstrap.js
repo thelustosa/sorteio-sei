@@ -129,12 +129,14 @@ async function carregarPaginaAutenticada() {
     const comPapel = (...aceitos) => new Set([...papeis]
       .filter(([, papel]) => aceitos.includes(papel))
       .map(([orgao]) => orgao));
-    const consultados = comPapel('consulta');
+    const consultados = comPapel('consulta', 'consulta_historico');
     const administrados = comPapel('admin');
-    // Sorteio, julgados e histórico só abrem nos órgãos em que o papel não é
-    // de consulta; o acervo abre em todos.
-    const plenos = new Set([...orgaos].filter(orgao => !consultados.has(orgao)));
-    const permitidos = paginaAtual.familia === 'acervo' ? orgaos : plenos;
+    const historicos = comPapel('operador', 'admin', 'consulta_historico');
+    // Sorteio e julgados exigem papel pleno. O histórico também aceita o
+    // papel de leitura ampliada; o acervo abre em qualquer órgão autorizado.
+    const plenos = comPapel('operador', 'admin');
+    const permitidos = paginaAtual.familia === 'acervo' ? orgaos
+      : paginaAtual.familia === 'historico' ? historicos : plenos;
 
     const destino = resolverDestinoPermitido(document.body.dataset.page, permitidos);
     if (destino) {
@@ -146,7 +148,7 @@ async function carregarPaginaAutenticada() {
     // seletor: o painel é do administrador; a Meta 45, do administrador e da
     // consulta, como meta_45_exigir() no banco. As demais não usam o argumento.
     const orgaosDaPagina = paginaAtual.exigeAdmin ? administrados
-      : paginaAtual.exigeConsulta ? comPapel('admin', 'consulta')
+      : paginaAtual.exigeConsulta ? comPapel('admin', 'consulta', 'consulta_historico')
         : null;
 
     // Quem tem acesso, só não àquela tela — a consulta num favorito de
@@ -161,6 +163,7 @@ async function carregarPaginaAutenticada() {
     aplicarVisibilidadePorOrgao(orgaos);
     aplicarVisibilidadeAdmin(administrados);
     aplicarVisibilidadeConsulta(consultados, plenos);
+    aplicarVisibilidadeHistorico(historicos);
 
     await carregarScript(src);
     // O card "Preparando…" segue a regra de todo indicador: ou não aparece,

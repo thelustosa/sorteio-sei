@@ -78,6 +78,7 @@ class Node {
     if (selector === '[data-admin]') return Object.hasOwn(this.dataset, 'admin');
     if (selector === '[data-consulta]') return Object.hasOwn(this.dataset, 'consulta');
     if (selector === '[data-pleno]') return Object.hasOwn(this.dataset, 'pleno');
+    if (selector === '[data-historico]') return Object.hasOwn(this.dataset, 'historico');
     if (selector === '[data-login-only]') return Object.hasOwn(this.dataset, 'loginOnly');
     if (selector === '[data-export-format]') return Object.hasOwn(this.dataset, 'exportFormat');
     if (selector === '[role="menuitem"]') return this.role === 'menuitem';
@@ -190,6 +191,7 @@ function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null, local = ne
       buscarPapeis: typeof buscarPapeis === 'function' ? buscarPapeis : undefined,
       aplicarVisibilidadePorOrgao: typeof aplicarVisibilidadePorOrgao === 'function' ? aplicarVisibilidadePorOrgao : undefined,
       aplicarVisibilidadeConsulta: typeof aplicarVisibilidadeConsulta === 'function' ? aplicarVisibilidadeConsulta : undefined,
+      aplicarVisibilidadeHistorico: typeof aplicarVisibilidadeHistorico === 'function' ? aplicarVisibilidadeHistorico : undefined,
       erroSemPermissao: typeof erroSemPermissao === 'function' ? erroSemPermissao : undefined,
       CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicador,
       alternarBotaoCarregando, redirecionarSemTransicao, mostrarErro, equalizarColunas, mostrarIndicador,
@@ -781,6 +783,28 @@ test('papel de consulta esconde os caminhos plenos e mostra o card da Meta 45', 
   assert.equal(pleno.hidden, false);
   assert.equal(botaoCj.hidden, false);
   assert.equal(meta.hidden, true);
+});
+
+test('papel de consulta_historico mostra os dois históricos sem abrir caminhos plenos', () => {
+  const page = supabaseApp(async () => {});
+  const historico = page.document.createElement('section');
+  historico.dataset.historico = '';
+  const grupo = page.document.createElement('div');
+  grupo.className = 'buttons-wrapper';
+  const creg = page.document.createElement('a');
+  creg.dataset.orgao = 'CREG';
+  const cj = page.document.createElement('a');
+  cj.dataset.orgao = 'CJ';
+  grupo.append(creg, cj);
+  historico.append(grupo);
+  page.document.body.append(historico);
+
+  page.aplicarVisibilidadeHistorico(new Set(['CJ', 'CREG']), page.document);
+  assert.equal(historico.hidden, false);
+  assert.equal(cj.hidden, false);
+  assert.equal(creg.hidden, false);
+  page.aplicarVisibilidadeHistorico(new Set(), page.document);
+  assert.equal(historico.hidden, true);
 });
 
 test('grupo com um colegiado só vira coluna única para centralizar o botão', () => {
@@ -1754,7 +1778,9 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
   admin = new Set(),
   aplicarVisibilidadeAdmin = () => {},
   consulta = new Set(),
+  consultaHistorico = new Set(),
   aplicarVisibilidadeConsulta = () => {},
+  aplicarVisibilidadeHistorico = () => {},
   // A moldura estática do painel (acervo, histórico), como está no HTML.
   comMoldura = false
 } = {}) {
@@ -1797,7 +1823,7 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
   const app = new Function('document', 'window', 'location', 'ASSET_VERSION', 'carregarScript',
     'criarIndicadorCarregamento', 'ligarLogin', 'buscarPapeis',
     'aplicarVisibilidadePorOrgao', 'erroSemPermissao', 'sair', 'redirecionarSemTransicao',
-    'aplicarVisibilidadeAdmin', 'mostrarIndicador', 'aguardarIndicador', 'aplicarVisibilidadeConsulta',
+    'aplicarVisibilidadeAdmin', 'mostrarIndicador', 'aguardarIndicador', 'aplicarVisibilidadeConsulta', 'aplicarVisibilidadeHistorico',
     `${source('bootstrap.js')}\nreturn {
       resolverDestinoPermitido: typeof resolverDestinoPermitido === 'function' ? resolverDestinoPermitido : undefined,
       carregarPaginaAutenticada
@@ -1806,10 +1832,12 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
     texto => { const estado = document.createElement('div'); estado.textContent = texto; return estado; },
     callback => { aoEntrar = callback; },
     async () => new Map([...await buscarOrgaos()].map(orgao =>
-      [orgao, consulta.has(orgao) ? 'consulta' : admin.has(orgao) ? 'admin' : 'operador'])),
+      [orgao, consultaHistorico.has(orgao) ? 'consulta_historico'
+        : consulta.has(orgao) ? 'consulta' : admin.has(orgao) ? 'admin' : 'operador'])),
     aplicarVisibilidade, erroPermissao,
     encerrarSessaoNoServidor, destino => location.replace(destino),
-    aplicarVisibilidadeAdmin, mostrarIndicador, aguardarIndicador, aplicarVisibilidadeConsulta);
+    aplicarVisibilidadeAdmin, mostrarIndicador, aguardarIndicador, aplicarVisibilidadeConsulta,
+    aplicarVisibilidadeHistorico);
 
   return { ...app, document, sessionLoading, moldura, loginScreen, loginErro, btnSair, iniciar: () => aoEntrar() };
 }
@@ -1963,6 +1991,31 @@ test('consulta que abre o histórico volta para a tela inicial, sem sair', async
   assert.deepEqual(destinos, ['./index.html']);
   assert.equal(scriptsCarregados, 0);
   assert.equal(encerrou, 0);
+});
+
+test('consulta_historico abre histórico e Meta 45 dos dois órgãos, mas não julgados', async () => {
+  const papel = { buscarOrgaos: async () => new Set(['CJ', 'CREG']),
+    consultaHistorico: new Set(['CJ', 'CREG']) };
+  for (const pagina of ['historico-cj', 'historico-creg', 'acervo-cj', 'acervo-creg']) {
+    let iniciou = 0;
+    const page = bootstrapPage(async () => { iniciou++; }, pagina, papel);
+    await page.iniciar();
+    assert.equal(iniciou, 1, pagina);
+  }
+
+  let recebidos;
+  const meta = bootstrapPage(async orgaos => { recebidos = orgaos; }, 'meta-45', papel);
+  await meta.iniciar();
+  assert.deepEqual([...recebidos].sort(), ['CJ', 'CREG']);
+
+  for (const pagina of ['julgados-cj', 'julgados-creg']) {
+    const destinos = [];
+    const page = bootstrapPage(async () => {}, pagina, {
+      ...papel, location: { replace(destino) { destinos.push(destino); } }
+    });
+    await page.iniciar();
+    assert.deepEqual(destinos, ['./index.html'], pagina);
+  }
 });
 
 // O órgão da página nem está entre os que ela pode abrir: sem plenos, não há

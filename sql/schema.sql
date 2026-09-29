@@ -58,11 +58,11 @@ alter table public.permissoes_usuario
   drop constraint if exists permissoes_usuario_papel_check;
 alter table public.permissoes_usuario
   add constraint permissoes_usuario_papel_check
-  check (papel in ('operador', 'admin', 'consulta'));
+  check (papel in ('operador', 'admin', 'consulta', 'consulta_historico'));
 
--- 'consulta' vê o acervo e a Meta 45, e mais nada: fica fora de toda porta
--- guardada por tem_acesso_orgao() — sorteio, julgados, votos e histórico. As
--- RPCs do painel do acervo usam tem_acesso_acervo(), que aceita qualquer papel.
+-- 'consulta' vê acervo e Meta 45; 'consulta_historico' também lê o histórico.
+-- Ambos ficam fora de tem_acesso_orgao(), que guarda sorteio, julgados e votos.
+-- As RPCs do acervo usam tem_acesso_acervo(), que aceita qualquer papel.
 create or replace function public.tem_acesso_orgao(p_orgao text)
 returns boolean
 language sql
@@ -74,7 +74,24 @@ as $$
     select 1 from public.permissoes_usuario p
      where p.user_id = (select auth.uid())
        and p.orgao = p_orgao
-       and p.papel <> 'consulta'
+       and p.papel in ('operador', 'admin')
+  )
+$$;
+
+-- O histórico é leitura. O papel de consulta_historico passa só por esta
+-- porta, sem herdar sorteio, julgados ou escrita de tem_acesso_orgao().
+create or replace function public.tem_acesso_historico(p_orgao text)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.permissoes_usuario p
+     where p.user_id = (select auth.uid())
+       and p.orgao = p_orgao
+       and p.papel in ('operador', 'admin', 'consulta_historico')
   )
 $$;
 
@@ -104,7 +121,7 @@ as $$
   select p.orgao
     from public.permissoes_usuario p
    where p.user_id = (select auth.uid())
-     and p.papel = 'consulta'
+     and p.papel in ('consulta', 'consulta_historico')
    order by p.orgao
 $$;
 
@@ -126,6 +143,8 @@ revoke all on function public.tem_acesso_orgao(text)
 revoke all on function public.orgaos_autorizados()
   from public, anon, service_role;
 grant execute on function public.tem_acesso_orgao(text) to authenticated;
+revoke all on function public.tem_acesso_historico(text) from public, anon, service_role;
+grant execute on function public.tem_acesso_historico(text) to authenticated;
 grant execute on function public.orgaos_autorizados() to authenticated;
 revoke all on function public.tem_acesso_acervo(text) from public, anon, service_role;
 revoke all on function public.orgaos_consultados() from public, anon, service_role;
@@ -1993,7 +2012,7 @@ begin
     raise exception 'colegiado desconhecido: %', p_colegiado using errcode = '22023';
   end if;
 
-  if not (select public.tem_acesso_orgao(p_colegiado)) then
+  if not (select public.tem_acesso_historico(p_colegiado)) then
     raise exception 'acesso ao orgao % nao autorizado', p_colegiado using errcode = '42501';
   end if;
 
@@ -2082,7 +2101,7 @@ begin
     raise exception 'colegiado desconhecido: %', p_colegiado using errcode = '22023';
   end if;
 
-  if not (select public.tem_acesso_orgao(p_colegiado)) then
+  if not (select public.tem_acesso_historico(p_colegiado)) then
     raise exception 'acesso ao orgao % nao autorizado', p_colegiado using errcode = '42501';
   end if;
 
@@ -2330,7 +2349,7 @@ begin
     select 1 from public.permissoes_usuario p
      where p.user_id = (select auth.uid())
        and p.orgao = p_orgao
-       and p.papel in ('admin', 'consulta')
+       and p.papel in ('admin', 'consulta', 'consulta_historico')
   ) then
     raise exception 'acesso a meta 45 do orgao % nao autorizado', p_orgao
       using errcode = '42501';
