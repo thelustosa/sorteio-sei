@@ -187,7 +187,7 @@ function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null, local = ne
   const app = new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'localStorage', 'fetch', 'apiSubstituta',
     `${codigo}\nreturn {
       autenticar, salvarSessao, restaurarSessao, encerrarSessao, revogarSessaoAtual, sair, api, ligarLogin,
-      buscarOrgaosAutorizados: typeof buscarOrgaosAutorizados === 'function' ? buscarOrgaosAutorizados : undefined,
+      buscarPapeis: typeof buscarPapeis === 'function' ? buscarPapeis : undefined,
       aplicarVisibilidadePorOrgao: typeof aplicarVisibilidadePorOrgao === 'function' ? aplicarVisibilidadePorOrgao : undefined,
       aplicarVisibilidadeConsulta: typeof aplicarVisibilidadeConsulta === 'function' ? aplicarVisibilidadeConsulta : undefined,
       erroSemPermissao: typeof erroSemPermissao === 'function' ? erroSemPermissao : undefined,
@@ -228,7 +228,7 @@ function paginaServidaComBundles(fetch) {
   const navegacoes = [];
   const app = new Function('document', 'window', 'navigator', 'location', 'sessionStorage', 'localStorage', 'fetch',
     `${scripts.map(caminho => readFileSync(new URL(`../${caminho}`, import.meta.url), 'utf8')).join('\n')}\nreturn {
-      buscarOrgaosAutorizados: typeof buscarOrgaosAutorizados === 'function' ? buscarOrgaosAutorizados : undefined,
+      buscarPapeis: typeof buscarPapeis === 'function' ? buscarPapeis : undefined,
       aplicarVisibilidadePorOrgao: typeof aplicarVisibilidadePorOrgao === 'function' ? aplicarVisibilidadePorOrgao : undefined,
       resolverDestinoPermitido: typeof resolverDestinoPermitido === 'function' ? resolverDestinoPermitido : undefined,
       carregarPaginaAutenticada
@@ -681,25 +681,27 @@ test('autenticação envia credenciais e devolve o par de tokens', async () => {
   });
 });
 
-test('consulta permissões no banco e aceita somente CJ e CREG sem duplicar', async () => {
+// Órgão e papel numa leitura só: o porteiro, o atalho do painel e os cards do
+// papel de consulta saem da mesma resposta.
+test('consulta permissões no banco com o papel e aceita somente CJ e CREG', async () => {
   const pedidos = [];
   const page = supabaseApp(async () => {}, {}, async (caminho, opcoes) => {
     pedidos.push([caminho, opcoes]);
-    return [{ orgao: 'CREG' }, { orgao: 'CJ' }, { orgao: 'CREG' }, { orgao: 'X' }];
+    return [{ orgao: 'CREG', papel: 'consulta' }, { orgao: 'CJ', papel: 'admin' }, { orgao: 'X', papel: 'admin' }];
   });
 
-  assert.equal(typeof page.buscarOrgaosAutorizados, 'function');
-  assert.deepEqual([...await page.buscarOrgaosAutorizados()].sort(), ['CJ', 'CREG']);
-  assert.equal(pedidos[0][0], 'rpc/orgaos_autorizados');
-  assert.equal(pedidos[0][1].method, 'POST');
-  assert.equal(pedidos[0][1].body, '{}');
+  assert.equal(typeof page.buscarPapeis, 'function');
+  assert.deepEqual([...await page.buscarPapeis()], [['CREG', 'consulta'], ['CJ', 'admin']]);
+  assert.equal(pedidos.length, 1, 'uma ida à rede, e não uma por papel');
+  assert.equal(pedidos[0][0], 'permissoes_usuario?select=orgao,papel');
+  assert.equal(pedidos[0][1].paginar, false);
 });
 
 test('consulta de permissões vazia nega todos os órgãos', async () => {
   const page = supabaseApp(async () => {}, {}, async () => []);
 
-  assert.equal(typeof page.buscarOrgaosAutorizados, 'function');
-  assert.deepEqual([...await page.buscarOrgaosAutorizados()], []);
+  assert.equal(typeof page.buscarPapeis, 'function');
+  assert.equal((await page.buscarPapeis()).size, 0);
 });
 
 test('resposta ilegível na consulta de permissões falha em vez de negar acesso', async () => {
@@ -708,8 +710,8 @@ test('resposta ilegível na consulta de permissões falha em vez de negar acesso
   // transporte; o erro leva à tela com "Tentar novamente".
   const page = supabaseApp(async () => {}, {}, async () => null);
 
-  assert.equal(typeof page.buscarOrgaosAutorizados, 'function');
-  await assert.rejects(() => page.buscarOrgaosAutorizados(),
+  assert.equal(typeof page.buscarPapeis, 'function');
+  await assert.rejects(() => page.buscarPapeis(),
     /não foi possível verificar suas permissões/i);
 });
 
@@ -717,8 +719,8 @@ test('falha ao consultar permissões é propagada', async () => {
   const falha = new Error('rede indisponível');
   const page = supabaseApp(async () => {}, {}, async () => { throw falha; });
 
-  assert.equal(typeof page.buscarOrgaosAutorizados, 'function');
-  await assert.rejects(() => page.buscarOrgaosAutorizados(), falha);
+  assert.equal(typeof page.buscarPapeis, 'function');
+  await assert.rejects(() => page.buscarPapeis(), falha);
 });
 
 test('visibilidade por permissões oculta somente os controles não autorizados', () => {
@@ -814,12 +816,12 @@ test('HTML servido executa os bundles minificados de autorização por órgão',
   const requisicoes = [];
   const page = paginaServidaComBundles(async (url, options) => {
     requisicoes.push({ url, options });
-    return { ok: true, status: 200, json: async () => [{ orgao: 'CREG' }] };
+    return { ok: true, status: 200, json: async () => [{ orgao: 'CREG', papel: 'operador' }] };
   });
 
-  assert.equal(typeof page.app.buscarOrgaosAutorizados, 'function');
-  assert.deepEqual([...await page.app.buscarOrgaosAutorizados()], ['CREG']);
-  assert.match(requisicoes[0].url, /\/rpc\/orgaos_autorizados$/);
+  assert.equal(typeof page.app.buscarPapeis, 'function');
+  assert.deepEqual([...await page.app.buscarPapeis()], [['CREG', 'operador']]);
+  assert.match(requisicoes[0].url, /\/permissoes_usuario\?select=orgao,papel$/);
   assert.equal(typeof page.app.aplicarVisibilidadePorOrgao, 'function');
   page.app.aplicarVisibilidadePorOrgao(new Set(['CREG']));
   assert.equal(page.controleCj.hidden, true);
@@ -1685,6 +1687,20 @@ test('avisa no card de pendências quando há julgados sem voto ou status', asyn
   assert.equal(badge.getAttribute('aria-label'), '3 sessões aguardando voto e status');
 });
 
+test('papel de consulta, sem o card de registro, não busca pendências', async () => {
+  const pedidos = [];
+  const page = indexPage({ api: async caminho => { pedidos.push(caminho); return []; } });
+  page.document.getElementById('cardRegistrarPendencias').hidden = true;
+  page.inicializarSorteio();
+  await wait();
+  assert.deepEqual(pedidos, []);
+
+  page.document.getElementById('cardRegistrarPendencias').hidden = false;
+  page.inicializarSorteio();
+  await wait();
+  assert.equal(pedidos.length, 2);
+});
+
 test('sem pendência, o card de julgamento fica sem aviso', async () => {
   const page = indexPage({ api: async () => [] });
   await page.avisarPendenciasDeJulgamento();
@@ -1733,11 +1749,11 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
   encerrarSessaoNoServidor = async () => {},
   carregar = async () => {},
   location = { replace() {} },
-  // O papel de administrador: só a tela inicial e o painel o consultam.
-  buscarAdmin = async () => new Set(),
+  // Os órgãos em que o papel é administrador ou consulta; nos outros de
+  // buscarOrgaos ele é operador. Chegam na mesma resposta da permissão.
+  admin = new Set(),
   aplicarVisibilidadeAdmin = () => {},
-  // O papel de consulta: fora do acervo e do painel, sai junto com a permissão.
-  buscarConsulta = async () => new Set(),
+  consulta = new Set(),
   aplicarVisibilidadeConsulta = () => {},
   // A moldura estática do painel (acervo, histórico), como está no HTML.
   comMoldura = false
@@ -1779,20 +1795,21 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
   };
 
   const app = new Function('document', 'window', 'location', 'ASSET_VERSION', 'carregarScript',
-    'criarIndicadorCarregamento', 'ligarLogin', 'buscarOrgaosAutorizados',
+    'criarIndicadorCarregamento', 'ligarLogin', 'buscarPapeis',
     'aplicarVisibilidadePorOrgao', 'erroSemPermissao', 'sair', 'redirecionarSemTransicao',
-    'buscarOrgaosAdministrados', 'aplicarVisibilidadeAdmin', 'mostrarIndicador', 'aguardarIndicador',
-    'buscarOrgaosConsultados', 'aplicarVisibilidadeConsulta',
+    'aplicarVisibilidadeAdmin', 'mostrarIndicador', 'aguardarIndicador', 'aplicarVisibilidadeConsulta',
     `${source('bootstrap.js')}\nreturn {
       resolverDestinoPermitido: typeof resolverDestinoPermitido === 'function' ? resolverDestinoPermitido : undefined,
       carregarPaginaAutenticada
     };`)(
     document, { [inicializadores[pagina]]: inicializar }, location, 'teste', carregar,
     texto => { const estado = document.createElement('div'); estado.textContent = texto; return estado; },
-    callback => { aoEntrar = callback; }, buscarOrgaos, aplicarVisibilidade, erroPermissao,
+    callback => { aoEntrar = callback; },
+    async () => new Map([...await buscarOrgaos()].map(orgao =>
+      [orgao, consulta.has(orgao) ? 'consulta' : admin.has(orgao) ? 'admin' : 'operador'])),
+    aplicarVisibilidade, erroPermissao,
     encerrarSessaoNoServidor, destino => location.replace(destino),
-    buscarAdmin, aplicarVisibilidadeAdmin, mostrarIndicador, aguardarIndicador,
-    buscarConsulta, aplicarVisibilidadeConsulta);
+    aplicarVisibilidadeAdmin, mostrarIndicador, aguardarIndicador, aplicarVisibilidadeConsulta);
 
   return { ...app, document, sessionLoading, moldura, loginScreen, loginErro, btnSair, iniciar: () => aoEntrar() };
 }
@@ -1891,7 +1908,7 @@ test('o módulo da página começa a descer junto com a consulta de permissões'
 });
 
 test('o painel administrativo não antecipa o módulo de quem pode não entrar', async () => {
-  const page = bootstrapPage(async () => {}, 'admin', { buscarAdmin: async () => new Set() });
+  const page = bootstrapPage(async () => {}, 'admin');
   await page.iniciar();
   assert.equal(page.document.head.children.filter(el => el.rel === 'preload').length, 0);
 });
@@ -1935,7 +1952,7 @@ test('consulta que abre o histórico volta para a tela inicial, sem sair', async
   let encerrou = 0;
   const page = bootstrapPage(async () => {}, 'historico-cj', {
     buscarOrgaos: async () => new Set(['CJ']),
-    buscarConsulta: async () => new Set(['CJ']),
+    consulta: new Set(['CJ']),
     encerrarSessaoNoServidor: async () => { encerrou++; },
     carregar: async () => { scriptsCarregados++; },
     location: { replace(destino) { destinos.push(destino); } }
@@ -1948,45 +1965,75 @@ test('consulta que abre o histórico volta para a tela inicial, sem sair', async
   assert.equal(encerrou, 0);
 });
 
-test('consulta abre o acervo sem consultar o papel', async () => {
-  let consultou = 0;
+// O órgão da página nem está entre os que ela pode abrir: sem plenos, não há
+// equivalente para onde mandar — mas a pessoa tem acesso, e sair() revogaria
+// a sessão de todas as abas.
+test('consulta que abre julgados do outro órgão volta para a tela inicial, sem sair', async () => {
+  for (const pagina of ['julgados-creg', 'historico-creg']) {
+    const destinos = [];
+    let encerrou = 0;
+    const page = bootstrapPage(async () => {}, pagina, {
+      buscarOrgaos: async () => new Set(['CJ']),
+      consulta: new Set(['CJ']),
+      encerrarSessaoNoServidor: async () => { encerrou++; },
+      location: { replace(destino) { destinos.push(destino); } }
+    });
+
+    await page.iniciar();
+
+    assert.deepEqual(destinos, ['./index.html'], pagina);
+    assert.equal(encerrou, 0, pagina);
+  }
+});
+
+test('consulta abre o acervo do próprio órgão', async () => {
   let iniciou = 0;
-  const page = bootstrapPage(async () => { iniciou++; }, 'acervo-cj', {
-    buscarConsulta: async () => { consultou++; return new Set(['CJ']); }
-  });
+  const page = bootstrapPage(async () => { iniciou++; }, 'acervo-cj', { consulta: new Set(['CJ']) });
 
   await page.iniciar();
 
   assert.equal(iniciou, 1);
-  assert.equal(consultou, 0);
 });
 
-test('a página da Meta 45 abre só para a consulta, com os órgãos dela', async () => {
+test('a página da Meta 45 abre para consulta e administrador, com os órgãos deles', async () => {
   let recebidos;
   const page = bootstrapPage(async orgaos => { recebidos = orgaos; }, 'meta-45', {
     buscarOrgaos: async () => new Set(['CJ', 'CREG']),
-    buscarConsulta: async () => new Set(['CREG'])
+    consulta: new Set(['CREG'])
   });
   await page.iniciar();
   assert.deepEqual([...recebidos], ['CREG']);
 
-  let scriptsCarregados = 0;
-  let encerrou = 0;
-  const negada = bootstrapPage(async () => {}, 'meta-45', {
-    buscarOrgaos: async () => new Set(['CJ']),
-    buscarConsulta: async () => new Set(),
-    encerrarSessaoNoServidor: async () => { encerrou++; },
-    carregar: async () => { scriptsCarregados++; }
+  // meta_45_exigir() aceita o administrador: um link para cá abre para ele.
+  const doAdmin = bootstrapPage(async orgaos => { recebidos = orgaos; }, 'meta-45', {
+    buscarOrgaos: async () => new Set(['CJ', 'CREG']),
+    admin: new Set(['CJ']),
+    consulta: new Set(['CREG'])
   });
-  const originalConsoleError = console.error;
-  console.error = () => {};
-  try {
-    await negada.iniciar();
-  } finally {
-    console.error = originalConsoleError;
+  await doAdmin.iniciar();
+  assert.deepEqual([...recebidos].sort(), ['CJ', 'CREG']);
+});
+
+// Operador que abre um link do painel ou da Meta tem acesso, só não àquela
+// tela: volta para a inicial, e a sessão continua de pé.
+test('operador que abre o painel ou a Meta 45 volta para a tela inicial, sem sair', async () => {
+  for (const pagina of ['meta-45', 'admin']) {
+    const destinos = [];
+    let scriptsCarregados = 0;
+    let encerrou = 0;
+    const page = bootstrapPage(async () => {}, pagina, {
+      buscarOrgaos: async () => new Set(['CJ']),
+      encerrarSessaoNoServidor: async () => { encerrou++; },
+      carregar: async () => { scriptsCarregados++; },
+      location: { replace(destino) { destinos.push(destino); } }
+    });
+
+    await page.iniciar();
+
+    assert.deepEqual(destinos, ['./index.html'], pagina);
+    assert.equal(scriptsCarregados, 0, pagina);
+    assert.equal(encerrou, 0, pagina);
   }
-  assert.equal(scriptsCarregados, 0);
-  assert.equal(encerrou, 1);
 });
 
 test('nega usuário sem órgãos, revoga a sessão e não carrega o módulo', async () => {
@@ -3990,7 +4037,9 @@ test('falha ao exportar a ata avisa dentro do próprio card', async () => {
 // pediu para mexer.
 // `botaoCarregando` é o alternarBotaoCarregando que a tela recebe. Mudo por
 // padrão; o de verdade, do supabase.js, entra onde o teste lê o rótulo do botão.
-function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando = () => {} } = {}) {
+// `meta45`: o DOM de meta-45.html — só a aba Meta, sem o dialog de edição e
+// sem o "Mais antigas" da auditoria.
+function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando = () => {}, meta45 = false } = {}) {
   const document = new Document();
   const avisos = [];
   const registrarAviso = (texto, tipo) => { avisos.push({ texto, tipo }); aviso(texto, tipo); };
@@ -3998,19 +4047,23 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
   ['seletorOrgaoCard', 'seletorOrgao', 'adminOrgaoAtual', 'abas', 'adminPainel', 'painelConteudo', 'painelTitulo',
    'painelDescricao', 'painelCarregando', 'painelErro', 'painelVazio', 'painelVazioTitulo',
    'painelVazioTexto', 'painelErroDetalhe', 'painelStatus', 'painelHint', 'tabelaInstrucao',
-   'edicaoResumo', 'edicaoTitulo', 'edicaoCampos',
-   'edicaoEtapaCampos', 'edicaoEtapaConfirmacao', 'edicaoDelta', 'edicaoImpacto',
-   'edicaoImpactoTitulo', 'edicaoImpactoLista', 'edicaoErro', 'edicaoEtapaRotulo',
    'painelEyebrow', 'metaFiltros', 'metaResumo', 'painelBusca', 'buscaRotulo',
-   'detalheTitulo', 'detalheResumo', 'detalheLoading', 'detalheErro', 'detalheCorpo',
-   'edicaoMotivoRotulo', 'edicaoMotivoOpcional', 'edicaoRevisaoTitulo', 'edicaoRevisaoTexto']
+   'detalheTitulo', 'detalheResumo', 'detalheLoading', 'detalheErro', 'detalheCorpo']
     .forEach(id => document.add(id, 'div'));
+  if (!meta45) {
+    ['edicaoResumo', 'edicaoTitulo', 'edicaoCampos',
+     'edicaoEtapaCampos', 'edicaoEtapaConfirmacao', 'edicaoDelta', 'edicaoImpacto',
+     'edicaoImpactoTitulo', 'edicaoImpactoLista', 'edicaoErro', 'edicaoEtapaRotulo',
+     'edicaoMotivoRotulo', 'edicaoMotivoOpcional', 'edicaoRevisaoTitulo', 'edicaoRevisaoTexto']
+      .forEach(id => document.add(id, 'div'));
+  }
   document.add('metaAno', 'select');
   // O <option selected> do admin.html: agrupar por quadrimestre.
   document.add('metaAgrupamento', 'select').value = '4';
   document.add('buscaInput', 'input');
-  ['btnTentarNovamente', 'btnMaisAntigas', 'btnVoltar', 'btnVoltarInicio', 'btnAvancarEdicao',
-   'btnCancelarEdicao', 'btnFecharEdicao', 'btnFecharDetalhe'].forEach(id => document.add(id, 'button'));
+  ['btnTentarNovamente', 'btnVoltar', 'btnVoltarInicio', 'btnFecharDetalhe',
+   ...(meta45 ? [] : ['btnMaisAntigas', 'btnAvancarEdicao', 'btnCancelarEdicao', 'btnFecharEdicao'])]
+    .forEach(id => document.add(id, 'button'));
   document.add('painelTable', 'table');
   document.add('detalheTable', 'table');
   document.add('detalheUnidades', 'div');
@@ -4025,25 +4078,29 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
   cardDetalhe.open = false;
   cardDetalhe.showModal = () => { cardDetalhe.open = true; };
   cardDetalhe.close = () => { cardDetalhe.open = false; };
-  document.add('edicaoMotivo', 'input');
 
-  const dialogo = document.add('edicaoDialog', 'dialog');
-  dialogo.aberto = false;
-  dialogo.showModal = () => { dialogo.aberto = true; };
-  dialogo.close = () => { dialogo.aberto = false; dialogo.dispatch('close'); };
+  let dialogo = null;
+  let form = null;
+  if (!meta45) {
+    document.add('edicaoMotivo', 'input');
+    dialogo = document.add('edicaoDialog', 'dialog');
+    dialogo.aberto = false;
+    dialogo.showModal = () => { dialogo.aberto = true; };
+    dialogo.close = () => { dialogo.aberto = false; dialogo.dispatch('close'); };
 
-  const form = document.add('edicaoForm', 'form');
-  // O <form> real resolve elements[nome]; aqui a busca é pelos descendentes,
-  // que é o que o navegador faz por baixo.
-  form.elements = new Proxy({}, {
-    get(_, nome) {
-      return document.getElementById('edicaoCampos')
-        .descendants().find(no => no.name === nome) || undefined;
-    }
-  });
+    form = document.add('edicaoForm', 'form');
+    // O <form> real resolve elements[nome]; aqui a busca é pelos descendentes,
+    // que é o que o navegador faz por baixo.
+    form.elements = new Proxy({}, {
+      get(_, nome) {
+        return document.getElementById('edicaoCampos')
+          .descendants().find(no => no.name === nome) || undefined;
+      }
+    });
+    document.getElementById('edicaoErro').appendChild(document.createElement('p'));
+  }
 
   document.getElementById('painelErro').appendChild(document.createElement('p'));
-  document.getElementById('edicaoErro').appendChild(document.createElement('p'));
 
   const seletor = document.getElementById('seletorOrgao');
   ['CREG', 'CJ'].forEach(orgao => {
@@ -4053,13 +4110,13 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
     seletor.appendChild(botao);
   });
   const abas = document.getElementById('abas');
-  ['sessoes', 'sorteios', 'meta', 'auditoria'].forEach(nome => {
+  (meta45 ? ['meta'] : ['sessoes', 'sorteios', 'meta', 'auditoria']).forEach(nome => {
     const botao = document.createElement('button');
     botao.id = `aba-${nome}`;
     botao.dataset.aba = nome;
     abas.appendChild(botao);
   });
-  document.body.append(seletor, abas, document.getElementById('edicaoCampos'));
+  document.body.append(seletor, abas, ...(meta45 ? [] : [document.getElementById('edicaoCampos')]));
 
   const app = new Function('document', 'api', 'aviso', 'criarIndicadorCarregamento',
     'alternarBotaoCarregando', 'rotularCadeira', 'mostrarErro', 'equalizarColunas',
@@ -4360,6 +4417,75 @@ test('card da meta conta os julgados por destino e filtra a lista por eles', asy
   opcoes[0].dispatch('click');
   assert.equal(processos().length, 5, 'Total também volta à lista inteira');
   assert.equal(doc.getElementById('detalhePrazoCard').hidden, true, 'prazo por unidade só no recorte Julgados');
+});
+
+// meta-45.html traz só a aba Meta: sem o dialog de edição, sem as outras abas
+// e sem o "Mais antigas". O painel tem de abrir nela sem tocar no que falta.
+test('o painel abre no DOM reduzido de meta-45.html, direto na Meta', async () => {
+  const chamadas = [];
+  const page = adminPage({ api: apiDoPainel(chamadas), meta45: true });
+  await page.inicializarAdmin(new Set(['CJ']));
+  await wait();
+
+  assert.equal(page.botaoDeAba('meta').getAttribute('aria-selected'), 'true');
+  assert.ok(chamadas.some(c => c.caminho === 'rpc/admin_meta_45'), 'a Meta carrega sem clicar na aba');
+  assert.ok(!chamadas.some(c => c.caminho === 'rpc/admin_sessoes'));
+});
+
+test('o dialog de detalhe de meta-45.html e o de admin.html sao o mesmo markup', () => {
+  const dialogo = arquivo => readFileSync(new URL(`../${arquivo}`, import.meta.url), 'utf8')
+    .replace(/\r\n/g, '\n').match(/<dialog id="detalheDialog"[\s\S]*?<\/dialog>/)[0];
+  assert.equal(dialogo('meta-45.html'), dialogo('admin.html'),
+    'ajuste nos cards da Meta 45 vale para as duas páginas');
+});
+
+// Na Câmara os botões dizem "CJ1": o conselheiro vem no hover e no leitor de
+// tela, como nas outras tabelas do painel.
+test('card da meta da Camara nomeia o conselheiro de cada cadeira', async () => {
+  const PERIODO = [{ num_processo: '1', destino: 'CJ1', data_distribuicao: '2026-01-05',
+    data_sessao: '2026-02-05', dias: 31, meta_45: true }];
+  const page = adminPage({ api: apiDoPainel([], { 'rpc/admin_meta_45_processos': PERIODO }) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('meta').dispatch('click');
+  await wait();
+  page.linhasDaTabela()[0].children[1].children[0].dispatch('click');
+  await wait();
+
+  const cj1 = page.document.getElementById('detalheUnidades').children[1];
+  assert.equal(cj1.title, CADEIRAS_CJ.CJ1);
+  assert.equal(cj1.getAttribute('aria-label'), `CJ1 — ${CADEIRAS_CJ.CJ1}: 1 julgado`);
+  const nome = page.document.getElementById('detalhePrazo').children[0].descendants()
+    .find(no => no.className === 'admin-meta-prazo-nome');
+  assert.equal(nome.title, CADEIRAS_CJ.CJ1);
+});
+
+// O clique no ::backdrop fecha; arrastar a partir de dentro de um card (uma
+// seleção que termina no vão) ou pela barra de rolagem do diálogo, não.
+test('o card da meta fecha pelo fundo, mas nao ao soltar um arrasto nele', async () => {
+  const PERIODO = [{ num_processo: '1', destino: 'CJ1', data_distribuicao: '2026-01-05',
+    data_sessao: '2026-02-05', dias: 31, meta_45: true }];
+  const page = adminPage({ api: apiDoPainel([], { 'rpc/admin_meta_45_processos': PERIODO }) });
+  await page.inicializarAdmin(new Set(['CJ']));
+  page.botaoDeAba('meta').dispatch('click');
+  await wait();
+  page.linhasDaTabela()[0].children[1].children[0].dispatch('click');
+  await wait();
+  const dialog = page.document.getElementById('detalheDialog');
+  const tabela = page.document.getElementById('detalheTable');
+
+  dialog.dispatch('pointerdown', { target: tabela });
+  dialog.dispatch('click', { target: dialog });
+  assert.equal(dialog.open, true, 'a seleção começou na lista');
+
+  dialog.clientWidth = 900;
+  dialog.offsetWidth = 915;
+  dialog.dispatch('pointerdown', { target: dialog, offsetX: 905 });
+  dialog.dispatch('click', { target: dialog });
+  assert.equal(dialog.open, true, 'a barra de rolagem do diálogo não fecha');
+
+  dialog.dispatch('pointerdown', { target: dialog, offsetX: -40 });
+  dialog.dispatch('click', { target: dialog });
+  assert.equal(dialog.open, false, 'o fundo fecha');
 });
 
 test('card de prazo por destino so aparece em Julgados, com dentro e fora de cada um', async () => {
@@ -5620,12 +5746,11 @@ test('o painel so entra em cena para quem tem papel de administrador', () => {
   const bootstrap = readFileSync(new URL('../assets/js/bootstrap.js', import.meta.url), 'utf8');
   assert.match(bootstrap, /exigeAdmin: true/,
     'admin.html precisa entrar por papel, e não por órgão');
-  assert.match(bootstrap, /if \(paginaAtual\.exigeAdmin\) \{[^}]*orgaosAdmin\.size === 0\) throw erroSemPermissao/s,
-    'sem papel de administrador, o módulo não pode carregar');
-  // No próprio painel a consulta é o porteiro, e buscar o módulo antes dela seria
-  // baixá-lo para quem não entra. Na tela inicial ela nem é aguardada (ver os
-  // dois testes seguintes).
-  assert.ok(bootstrap.indexOf('orgaosAdmin = await buscarOrgaosAdministrados')
+  assert.match(bootstrap, /paginaAtual\.exigeAdmin \? administrados/,
+    'o painel monta o seletor só com os órgãos que a pessoa administra');
+  // No próprio painel o papel é o porteiro, e buscar o módulo antes dele seria
+  // baixá-lo para quem não entra.
+  assert.ok(bootstrap.indexOf('orgaosDaPagina?.size === 0')
     < bootstrap.indexOf('await carregarScript('),
     'no painel o papel precisa ser verificado antes de baixar o módulo');
 
@@ -5643,43 +5768,21 @@ function telaInicialComAtalhoAdmin(inicializar, opcoes) {
   return page;
 }
 
-// Na tela inicial o papel de administrador decide só se um cartão aparece.
-// Aguardar a consulta — antes ou logo depois do download do script — segurava
-// "Preparando o sorteio…" até a resposta, e com a rede lenta isso era o
-// tempo-limite inteiro.
-test('a consulta do atalho administrativo nao segura a tela inicial', async () => {
-  let responder;
-  let iniciou = false;
+// O papel de administrador chega com a permissão, numa resposta só: o atalho
+// entra junto com os outros cartões, antes de a tela montar, sem uma segunda
+// consulta para esperar nem para falhar sozinha.
+test('o atalho administrativo sai da mesma consulta de permissao', async () => {
   const aplicados = [];
-  const page = telaInicialComAtalhoAdmin(async () => { iniciou = true; }, {
-    buscarAdmin: () => new Promise(resolve => { responder = resolve; }),
+  let aplicadoAntesDaTela = false;
+  const page = telaInicialComAtalhoAdmin(async () => { aplicadoAntesDaTela = aplicados.length === 1; }, {
+    buscarOrgaos: async () => new Set(['CJ', 'CREG']),
+    admin: new Set(['CJ']),
     aplicarVisibilidadeAdmin: orgaos => aplicados.push([...orgaos])
   });
 
   await page.iniciar();
-  assert.equal(iniciou, true, 'a tela inicial começa sem esperar a consulta de papel');
-  assert.equal(page.sessionLoading.hidden, true);
-  assert.deepEqual(aplicados, [], 'sem resposta, o atalho continua como nasceu: escondido');
-
-  responder(new Set(['CJ']));
-  await wait();
-  assert.deepEqual(aplicados, [['CJ']], 'o atalho aparece quando a resposta chega');
-});
-
-// Disparada depois da permissão, a resposta chegava com a tela já de pé, e o
-// cartão entrava sozinho acima da caixa, empurrando a tela para baixo.
-test('a consulta do atalho administrativo sai junto com a de permissao', async () => {
-  let responderPermissao;
-  let consultouPapel = false;
-  const page = telaInicialComAtalhoAdmin(async () => {}, {
-    buscarOrgaos: () => new Promise(resolve => { responderPermissao = resolve; }),
-    buscarAdmin: async () => { consultouPapel = true; return new Set(); }
-  });
-  const carregamento = page.iniciar();
-  await wait();
-  assert.equal(consultouPapel, true, 'o papel é consultado antes de a permissão responder');
-  responderPermissao(new Set(['CJ']));
-  await carregamento;
+  assert.deepEqual(aplicados, [['CJ']]);
+  assert.equal(aplicadoAntesDaTela, true);
 });
 
 // Voltar do acervo à tela inicial com a permissão em ~400ms mostrava
@@ -5693,23 +5796,6 @@ test('o indicador geral que chegou a aparecer fica o tempo minimo antes da tela'
   await page.iniciar();
   assert.ok(montouEm - inicio >= 590,
     `a tela montou ${montouEm - inicio}ms depois: o indicador saiu antes de ser lido`);
-});
-
-// Fora do painel a consulta decide só se um atalho aparece: uma falha ali não
-// pode derrubar a tela inicial inteira.
-test('falha na consulta do atalho administrativo so mantem o cartao escondido', async () => {
-  let iniciou = false;
-  const aplicados = [];
-  const page = telaInicialComAtalhoAdmin(async () => { iniciou = true; }, {
-    buscarAdmin: async () => { throw new Error('rpc indisponível'); },
-    aplicarVisibilidadeAdmin: orgaos => aplicados.push([...orgaos])
-  });
-
-  await page.iniciar();
-  await wait();
-  assert.equal(iniciou, true);
-  assert.equal(page.sessionLoading.hidden, true, 'a falha não vira erro de carregamento');
-  assert.deepEqual(aplicados, [[]]);
 });
 
 // Fechar a janela no meio da gravação e abrir outra deixava a espera da

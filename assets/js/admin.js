@@ -1124,6 +1124,7 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
   const colunas = ['Nº do Processo', vocabulario.destino, 'Distribuição', 'Sessão', 'Dias',
     ...(comMeta ? ['Meta'] : [])];
 
+  const grupos = agruparPorDestino(processos);
   // `destino` null é a lista inteira. Filtrado, o resumo diz de quem é o
   // recorte e quanto ele é do total, para o número no topo nunca contradizer
   // as linhas à vista.
@@ -1132,12 +1133,12 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
     // que tinha com a lista inteira. Sem isso, uma unidade de poucos processos
     // encolhia o card e o diálogo se recentralizava — no recorte Dentro, o
     // botão recém-clicado saía de baixo do ponteiro e o de fechar descia 221px.
-    // O teto da janela vale sobre a trava, para ela não passar da tela quando
-    // a janela diminui.
+    // O teto do card (--teto-cartao, o mesmo do max-height no CSS) vale
+    // sobre a trava, para ela não passar da tela quando a janela diminui.
     if (destino !== null && detalheCartao.offsetHeight && !detalheCartao.style.minHeight) {
-      detalheCartao.style.minHeight = `min(${detalheCartao.offsetHeight}px, calc(100vh - 4rem))`;
+      detalheCartao.style.minHeight = `min(${detalheCartao.offsetHeight}px, var(--teto-cartao))`;
     }
-    const lista = destino === null ? processos : processos.filter(p => ou(p.destino) === destino);
+    const lista = destino === null ? processos : grupos.get(destino);
     detalheResumo.textContent = (destino === null
       ? [vocabulario.nome, plural(processos.length, 'julgado', 'julgados'), sessoes]
       : [vocabulario.nome, rotuloDoDestino(destino, vocabulario.destino),
@@ -1161,8 +1162,7 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
   };
 
   pintarLista(null);
-  const grupos = agruparPorDestino(processos);
-  desenharPorDestino(processos, grupos, vocabulario.destino, pintarLista);
+  desenharPorDestino(processos.length, grupos, vocabulario.destino, pintarLista);
   if (comMeta) desenharPrazoPorDestino(grupos, vocabulario.destino);
   ajustarDensidade();
 }
@@ -1181,13 +1181,15 @@ const DEGRAUS_APERTANDO = [['coluna', ''], ['coluna', 'compacta'], ['coluna', 'm
 const DEGRAUS_EM_COLUNA = [...DEGRAUS_APERTANDO, ['coluna', 'minima-sem-dica']];
 const DEGRAUS_COM_LADO = [...DEGRAUS_APERTANDO, ['lado', ''], ['lado', 'compacta'], ['lado', 'minima']];
 // A lista precisa de ~620px para as seis colunas do recorte Julgados; somados
-// os dois cards de 17rem, os vãos e a margem da janela, dá 1240px.
-const LARGURA_LADO_A_LADO = 1240;
+// os dois cards de 17rem, os vãos e a margem da janela, dá 1240px na fonte
+// padrão. Em rem, como as larguras que o limite protege: com a fonte do
+// navegador maior, os cards crescem e o limite cresce junto.
+const LARGURA_LADO_A_LADO = '(min-width: 77.5rem)';
 
 function ajustarDensidade() {
   const transborda = () => [detalheUnidades, detalhePrazo]
     .some(corpo => corpo.scrollHeight > corpo.clientHeight + 1);
-  const larga = typeof window !== 'undefined' && window.innerWidth >= LARGURA_LADO_A_LADO;
+  const larga = typeof window !== 'undefined' && window.matchMedia(LARGURA_LADO_A_LADO).matches;
   const degraus = larga ? DEGRAUS_COM_LADO : DEGRAUS_EM_COLUNA;
   for (const [arranjo, densidade] of degraus) {
     detalheLateral.dataset.arranjo = arranjo;
@@ -1210,8 +1212,8 @@ function agruparPorDestino(processos) {
     if (!grupos.has(chave)) grupos.set(chave, []);
     grupos.get(chave).push(p);
   });
-  return [...grupos].sort(([a, x], [b, y]) =>
-    y.length - x.length || (a === '—') - (b === '—') || a.localeCompare(b, 'pt-BR', { numeric: true }));
+  return new Map([...grupos].sort(([a, x], [b, y]) =>
+    y.length - x.length || (a === '—') - (b === '—') || a.localeCompare(b, 'pt-BR', { numeric: true })));
 }
 
 // O card solto no canto superior direito, fora do card da lista: quantos
@@ -1221,7 +1223,7 @@ function agruparPorDestino(processos) {
 // Um grupo de botões com aria-pressed, de escolha única: Total é a lista
 // inteira, e apertar de novo a unidade escolhida também volta a ela. Os botões
 // não são redesenhados no clique, só o estado — o foco fica onde estava.
-function desenharPorDestino(processos, grupos, destino, pintarLista) {
+function desenharPorDestino(total, grupos, destino, pintarLista) {
   const opcao = (nome, quantidade, valor) => {
     const botao = document.createElement('button');
     botao.type = 'button';
@@ -1240,11 +1242,15 @@ function desenharPorDestino(processos, grupos, destino, pintarLista) {
       barra.className = 'admin-meta-opcao-barra';
       barra.setAttribute('aria-hidden', 'true');
       const preenchido = document.createElement('span');
-      preenchido.style.width = `${(quantidade / processos.length) * 100}%`;
+      preenchido.style.width = `${(quantidade / total) * 100}%`;
       barra.appendChild(preenchido);
       botao.appendChild(barra);
     }
-    botao.setAttribute('aria-label', `${rotulo.textContent}: ${plural(quantidade, 'julgado', 'julgados')}`);
+    // Na Câmara o botão diz "CJ1": quem é o conselheiro vem no hover e no
+    // leitor de tela, como nas outras tabelas do painel.
+    rotularCadeira(botao, valor);
+    botao.setAttribute('aria-label',
+      `${botao.getAttribute('aria-label') || rotulo.textContent}: ${plural(quantidade, 'julgado', 'julgados')}`);
     botao.addEventListener('click', () => {
       const escolhido = valor !== null && botao.getAttribute('aria-pressed') === 'true' ? null : valor;
       opcoes.forEach(([outro, v]) => outro.setAttribute('aria-pressed', String(v === escolhido)));
@@ -1254,8 +1260,8 @@ function desenharPorDestino(processos, grupos, destino, pintarLista) {
     return [botao, valor];
   };
 
-  const opcoes = [opcao('Total', processos.length, null),
-    ...grupos.map(([nome, lista]) => opcao(nome, lista.length, nome))];
+  const opcoes = [opcao('Total', total, null),
+    ...[...grupos].map(([nome, lista]) => opcao(nome, lista.length, nome))];
   detalheUnidadesTitulo.textContent = `Julgados por ${destino.toLowerCase()}`;
   detalheUnidades.replaceChildren(...opcoes.map(([botao]) => botao));
   detalheUnidadesCard.style.visibility = '';
@@ -1275,7 +1281,7 @@ function desenharPrazoPorDestino(grupos, destino) {
   };
 
   detalhePrazoTitulo.textContent = `Prazo por ${destino.toLowerCase()}`;
-  detalhePrazo.replaceChildren(...grupos.map(([nome, lista]) => {
+  detalhePrazo.replaceChildren(...[...grupos].map(([nome, lista]) => {
     const conta = { dentro: 0, fora: 0, semPrazo: 0 };
     lista.forEach(p => { conta[p.meta_45 === true ? 'dentro' : p.meta_45 === false ? 'fora' : 'semPrazo'] += 1; });
     const taxa = taxaDentro(conta);
@@ -1284,7 +1290,7 @@ function desenharPrazoPorDestino(grupos, destino) {
     item.className = 'admin-meta-prazo-item';
     const topo = document.createElement('div');
     topo.className = 'admin-meta-prazo-topo';
-    topo.appendChild(texto(rotuloDoDestino(nome, destino), 'admin-meta-prazo-nome'));
+    topo.appendChild(rotularCadeira(texto(rotuloDoDestino(nome, destino), 'admin-meta-prazo-nome'), nome));
     if (conta.semPrazo && taxa !== null) topo.appendChild(texto(`${contagem(conta.semPrazo)} sem prazo`, 'admin-meta-prazo-nota'));
     item.appendChild(topo);
 
@@ -2354,9 +2360,19 @@ function inicializarAdmin(orgaosAdmin) {
     });
   }
   // Clique no ::backdrop chega como clique no próprio dialog: fechar ali é o que
-  // se espera de um card modal, e o <dialog> não faz isso sozinho.
+  // se espera de um card modal, e o <dialog> não faz isso sozinho. Só fecha o
+  // clique que também COMEÇOU no dialog, e fora da barra de rolagem dele
+  // (abaixo de 960px quem rola é o diálogo): arrastar a barra, ou selecionar o
+  // número de um processo e soltar no vão entre os cards, também chega como
+  // clique no dialog.
+  let fecharNoClique = false;
+  detalheDialog.addEventListener('pointerdown', evento => {
+    const naBarra = evento.offsetX >= detalheDialog.clientWidth && evento.offsetX < detalheDialog.offsetWidth;
+    fecharNoClique = evento.target === detalheDialog && !naBarra;
+  });
   detalheDialog.addEventListener('click', evento => {
-    if (evento.target === detalheDialog) detalheDialog.close();
+    if (fecharNoClique && evento.target === detalheDialog) detalheDialog.close();
+    fecharNoClique = false;
   });
   // A auditoria é a única lista que não cabe numa consulta só. O botão pede a
   // página anterior pelo cursor que admin_auditoria já aceitava, e ACRESCENTA à

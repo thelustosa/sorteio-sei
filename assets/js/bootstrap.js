@@ -25,8 +25,9 @@ const PAGINAS = {
   // `exigeAdmin` — quem decide se ela abre é o papel, não a página.
   admin: { exigeAdmin: true, arquivo: 'admin.min.js', iniciar: 'inicializarAdmin', texto: 'Preparando o painel…' },
   // A Meta 45 do papel de consulta: o mesmo módulo do painel, numa página que
-  // só traz aquela aba. Quem decide se ela abre é o papel de consulta, como no
-  // painel é o de administrador; o administrador segue vendo a Meta lá dentro.
+  // só traz aquela aba. Quem decide se ela abre é o papel — consulta ou
+  // administrador, os dois que meta_45_exigir() aceita; o administrador chega
+  // à Meta pelo painel, mas um link para cá também abre para ele.
   'meta-45': { exigeConsulta: true, arquivo: 'admin.min.js', iniciar: 'inicializarAdmin', texto: 'Preparando o painel…' }
 };
 
@@ -116,39 +117,20 @@ async function carregarPaginaAutenticada() {
   const src = `assets/js/${paginaAtual.arquivo}?v=${ASSET_VERSION}`;
   anteciparScript(src);
 
-  // Fora do painel, a consulta de papel decide UMA coisa: se o atalho para o
-  // painel aparece na tela inicial. Sem o catch, uma falha nela — RPC
-  // indisponível, ambiente sem a migração aplicada — trocava a tela inicial
-  // inteira pelo erro de carregamento; sem resposta, o atalho fica escondido,
-  // que é o mesmo estado de quem não administra nada.
-  //
-  // Ela nunca é aguardada: esperá-la segurava "Preparando o sorteio…" no ar
-  // até a resposta, e com a rede lenta isso é o tempo-limite inteiro só para
-  // decidir se um cartão aparece. Mas ela sai JÁ, junto com a de permissão, e
-  // não depois dela: disparada tarde, a resposta chegava com a tela já de pé e
-  // o cartão entrava sozinho, acima da caixa, empurrando a tela para baixo.
-  // Saindo junto, ela quase sempre volta antes de a tela montar, e o cartão
-  // entra com os outros (o CSS o mantém fora enquanto o seletor não aparece).
-  if (!paginaAtual.exigeAdmin && document.querySelector('[data-admin]')) {
-    buscarOrgaosAdministrados()
-      .catch(() => new Set())
-      .then(orgaos => aplicarVisibilidadeAdmin(orgaos));
-  }
-
-  // O papel de consulta sai junto com a permissão, e não depois dela: ele muda
-  // o roteamento. Fica de fora onde não muda nada — o acervo, que ele também
-  // usa, e o painel, que ele não abre. Fora da página da Meta 45, uma falha
-  // aqui vale como "nenhum órgão de consulta": a tela fica como sempre foi, e
-  // quem recusa o que ela oferecer a mais é o banco.
-  let pedidoConsulta = paginaAtual.familia === 'acervo' || paginaAtual.exigeAdmin
-    ? Promise.resolve(new Set())
-    : buscarOrgaosConsultados();
-  if (!paginaAtual.exigeConsulta) pedidoConsulta = pedidoConsulta.catch(() => new Set());
-
   try {
-    const [orgaos, consultados] = await Promise.all([buscarOrgaosAutorizados(), pedidoConsulta]);
-    if (!(orgaos instanceof Set) || orgaos.size === 0) throw erroSemPermissao();
+    // Uma consulta só traz órgão e papel: o porteiro de toda página, o atalho
+    // do painel e os cards do papel de consulta saem da mesma resposta. Com
+    // uma consulta por papel, a tela inicial esperava duas, e a falha de uma
+    // delas mostrava ao papel de consulta os caminhos que o banco lhe recusa.
+    const papeis = await buscarPapeis();
+    if (!(papeis instanceof Map) || papeis.size === 0) throw erroSemPermissao();
 
+    const orgaos = new Set(papeis.keys());
+    const comPapel = (...aceitos) => new Set([...papeis]
+      .filter(([, papel]) => aceitos.includes(papel))
+      .map(([orgao]) => orgao));
+    const consultados = comPapel('consulta');
+    const administrados = comPapel('admin');
     // Sorteio, julgados e histórico só abrem nos órgãos em que o papel não é
     // de consulta; o acervo abre em todos.
     const plenos = new Set([...orgaos].filter(orgao => !consultados.has(orgao)));
@@ -159,35 +141,26 @@ async function carregarPaginaAutenticada() {
       redirecionarSemTransicao(destino);
       return;
     }
-    if (paginaAtual.orgao && !permitidos.has(paginaAtual.orgao)) {
-      // Consulta que abriu uma página que não é dela volta para a inicial, e
-      // não para o login: ela tem acesso, só não àquela tela.
-      if (orgaos.has(paginaAtual.orgao)) {
-        redirecionarSemTransicao('./index.html');
-        return;
-      }
-      throw erroSemPermissao();
+
+    // As páginas sem órgão fixo entram pelo papel, e os órgãos dele montam o
+    // seletor: o painel é do administrador; a Meta 45, do administrador e da
+    // consulta, como meta_45_exigir() no banco. As demais não usam o argumento.
+    const orgaosDaPagina = paginaAtual.exigeAdmin ? administrados
+      : paginaAtual.exigeConsulta ? comPapel('admin', 'consulta')
+        : null;
+
+    // Quem tem acesso, só não àquela tela — a consulta num favorito de
+    // julgados, o operador num link do painel —, volta para a inicial. O login
+    // seria errado: sair() revoga a sessão de todas as abas e diz que a pessoa
+    // não tem acesso nenhum.
+    if ((paginaAtual.orgao && !permitidos.has(paginaAtual.orgao)) || orgaosDaPagina?.size === 0) {
+      redirecionarSemTransicao('./index.html');
+      return;
     }
 
     aplicarVisibilidadePorOrgao(orgaos);
+    aplicarVisibilidadeAdmin(administrados);
     aplicarVisibilidadeConsulta(consultados, plenos);
-
-    // O papel de administrador custa uma consulta a mais, então só é buscado
-    // onde muda alguma coisa: no próprio painel, e na tela inicial, que decide
-    // se mostra o link para ele. As outras páginas seguem com uma consulta só.
-    let orgaosAdmin = new Set();
-    if (paginaAtual.exigeConsulta) {
-      // Mesmo porteiro do painel, com o papel de consulta no lugar do de
-      // administrador; os órgãos dele montam o seletor da página.
-      if (consultados.size === 0) throw erroSemPermissao();
-      orgaosAdmin = consultados;
-    } else if (paginaAtual.exigeAdmin) {
-      // Aqui a consulta é o porteiro da página: ela vem ANTES do download, para
-      // não buscar o módulo do painel de quem não pode abri-lo.
-      orgaosAdmin = await buscarOrgaosAdministrados();
-      if (orgaosAdmin.size === 0) throw erroSemPermissao();
-      aplicarVisibilidadeAdmin(orgaosAdmin);
-    }
 
     await carregarScript(src);
     // O card "Preparando…" segue a regra de todo indicador: ou não aparece,
@@ -204,7 +177,7 @@ async function carregarPaginaAutenticada() {
     // O painel recebe os órgãos que pode administrar — é o que monta o seletor,
     // e é dado que só o bootstrap tem. As demais telas ignoram o argumento:
     // quem escolhe o colegiado nelas é o data-colegiado do <body>.
-    const inicializacao = window[paginaAtual.iniciar](orgaosAdmin);
+    const inicializacao = window[paginaAtual.iniciar](orgaosDaPagina);
     sessionLoading.hidden = true;
     sessionLoading.replaceChildren();
     await inicializacao;

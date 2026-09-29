@@ -86,7 +86,9 @@ function inicializarSorteio() {
   (modeSelectorTitle.closest('[hidden]')
     ? document.getElementById('acervoSelectorTitle')
     : modeSelectorTitle).focus();
-  avisarPendenciasDeJulgamento();
+  // Para o papel de consulta o card de registro fica escondido, e o banco não
+  // lhe devolve julgado algum: seriam duas idas à rede por nada.
+  if (!document.getElementById('cardRegistrarPendencias').hidden) avisarPendenciasDeJulgamento();
 }
 
 // Mesmo filtro que julgados.js usa pra achar o que falta
