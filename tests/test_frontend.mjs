@@ -4540,6 +4540,11 @@ test('card de prazo por destino so aparece em Julgados, com dentro e fora de cad
   const itens = doc.getElementById('detalhePrazo').children.map(li => li.descendants()
     .filter(no => no.className?.startsWith?.('admin-meta-prazo-') && !no.children.length)
     .map(no => no.textContent));
+  const linhas = doc.getElementById('detalhePrazo').children[0].descendants()
+    .find(no => no.className === 'admin-meta-prazo-partes').children;
+  assert.deepEqual(linhas.map(linha => [linha.tagName, ...linha.children.map(campo => campo.tagName)]),
+    [['DIV', 'DIV', 'DIV'], ['DIV', 'DIV', 'DIV']],
+    'percentual e quantidade são blocos separados mesmo se o CSS não carregar');
   assert.deepEqual(itens, [
     ['CREG1', '1 sem prazo', '75,0% dentro', '3 processos', '25,0% fora', '1 processo'],
     ['CREG2', '0,0% dentro', '0 processos', '100,0% fora', '1 processo'],

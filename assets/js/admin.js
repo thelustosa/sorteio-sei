@@ -1322,10 +1322,15 @@ function desenharPrazoPorDestino(grupos, destino) {
     const partes = document.createElement('div');
     partes.className = 'admin-meta-prazo-partes';
     const parcela = (taxaParcela, quantidade, situacao) => {
-      const parte = document.createElement('span');
+      const parte = document.createElement('div');
       parte.className = `admin-meta-prazo-${situacao}`;
-      parte.append(texto(`${percentual(taxaParcela)} ${situacao}`, 'admin-meta-prazo-percentual'),
-        texto(`${contagem(quantidade)} ${quantidade === 1 ? 'processo' : 'processos'}`, 'admin-meta-prazo-quantidade'));
+      const percentualParcela = document.createElement('div');
+      percentualParcela.className = 'admin-meta-prazo-percentual';
+      percentualParcela.textContent = `${percentual(taxaParcela)} ${situacao}`;
+      const quantidadeParcela = document.createElement('div');
+      quantidadeParcela.className = 'admin-meta-prazo-quantidade';
+      quantidadeParcela.textContent = `${contagem(quantidade)} ${quantidade === 1 ? 'processo' : 'processos'}`;
+      parte.append(percentualParcela, quantidadeParcela);
       return parte;
     };
     partes.append(parcela(taxa, conta.dentro, 'dentro'),
