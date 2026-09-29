@@ -20,6 +20,9 @@ colors:
   meta-green-hover: "#0f6a5c"
   meta-muted: "#496c62"
   surface-meta: "#f4f9f7"
+  success-soft: "rgba(22, 129, 110, 0.1)"
+  success-border: "rgba(22, 129, 110, 0.24)"
+  success-text: "#0b6656"
   alert-red: "#b42318"
   alert-red-soft: "rgba(180, 35, 24, 0.1)"
   positive-green: "#16816e"
@@ -63,6 +66,12 @@ typography:
     fontWeight: 700
     lineHeight: 1.2
     letterSpacing: "normal"
+  figure:
+    fontFamily: "Montserrat, ui-sans-serif, sans-serif"
+    fontSize: "clamp(2.75rem, 4.2vw, 3.5rem)"
+    fontWeight: 700
+    lineHeight: 1
+    letterSpacing: "-0.03em"
   numeral:
     fontFamily: "ui-monospace, 'SFMono-Regular', Consolas, monospace"
     fontSize: "0.875rem"
@@ -70,6 +79,7 @@ typography:
     lineHeight: 1.4
     letterSpacing: "0.015em"
 rounded:
+  mark: "4px"
   sm: "8px"
   lg: "12px"
   pill: "999px"
@@ -141,6 +151,7 @@ A paleta é quase monocromática: um verde institucional para ação e identidad
 - **Verde do Histórico** (`#16816e`): mesmo papel, para o card "Histórico de sorteios". É a mesma progressão de verde que o README descreve — cada um dos quatro cards da tela inicial tem seu próprio tom, do neutro ao mais saturado.
 - **Verde do Histórico (hover)** (`#126b5c`) / **texto de apoio** (`#466c61`, a descrição do card).
 - **Verde da Meta** (`#117565`, hover `#0f6a5c`, apoio `#496c62`, fundo `#f4f9f7`): o card "Meta de 45 dias", que só o papel de consulta vê na tela inicial, e a moldura do login de `meta-45.html`. O card fica entre o Acervo e o Histórico, e cada valor é a média do par vizinho: é o degrau do meio da mesma progressão de verdes, sem salto de matiz. Um petróleo à parte foi tentado e recusado, porque quebrava o degradê com o card do Acervo logo acima.
+- **Verde de Sucesso — fundo, borda e texto** (`--success-soft` / `--success-border` / `--success-text`, `rgba(22,129,110,.1)` / `.24` / `#0b6656`): o preenchimento de "deu certo" — o selo de status Julgado e, na Meta 45, a pílula e o selo Dentro. Eram `rgba` soltos no seletor do selo.
 - **Vermelho de Alerta** (`#b42318`): erro, validação bloqueada, ação destrutiva. Nunca usado para ênfase neutra — só quando algo está de fato errado.
 - **Verde Positivo** (`#16816e`): cor isolada do `.status-dot` no painel do acervo — um indicador de 8px que sinaliza estado saudável. Coincide em valor com o Verde do Histórico, mas é um uso à parte (o indicador, nunca um card) — nunca usado em botão ou texto de ação.
 
@@ -178,6 +189,7 @@ A paleta é quase monocromática: um verde institucional para ação e identidad
 - **Title** (700, 1.125rem, 1.25): o `<h1>` do cabeçalho institucional — a identidade da página, deliberadamente mais discreta que o Headline abaixo dela.
 - **Body** (400, 1rem, 1.5): texto corrido padrão do `<body>`.
 - **Label** (700, 0.8125rem–0.875rem, 1.2–1.3): a família de texto estrutural pequeno e sempre em negrito — rótulo de botão, badge, campo de formulário (0,8125rem) e os rótulos de navegação como `#txtModo`/`.institution-name` (0,875rem, um degrau acima, mesma função).
+- **Figure** (700, `clamp(2.75rem, 4.2vw, 3.5rem)`, 1): o número em destaque de um painel — hoje só a taxa do ano na Meta 45, "73,4% dentro da meta". Um por tela, em Texto Principal e nunca na cor da barra ao lado; é a resposta da tela, e por isso o maior texto dela.
 - **Numeral** (monoespaçada de sistema, 700, 0.875rem): o número de processo SEI nas tabelas. Quinze dígitos que a pessoa compara linha a linha só se leem rápido com avanço fixo, e é o único lugar do projeto onde uma quarta família de fonte se justifica.
 
 ### Named Rules
@@ -351,7 +363,7 @@ e o indicador dentro dela, nunca um spinner solto sobre página em branco.
 
 ## Shapes
 
-Três raios cobrem o sistema inteiro: `8px` (controles — botão, input, select, chip de navegação), `12px` (cards, tabelas, painéis, diálogos) e `999px` (pill — badges, chips de filtro, botões grandes de seleção de modo). Bordas são sempre 1px e sempre a Borda Institucional tingida de verde (ver Colors) — nunca uma borda mais grossa ou de cor neutra pura. `50%` para um elemento circular (avatar de ícone, marcador) não é um quarto degrau: é forma, não raio.
+Três raios cobrem o sistema inteiro: `8px` (controles — botão, input, select, chip de navegação), `12px` (cards, tabelas, painéis, diálogos) e `999px` (pill — badges, chips de filtro, botões grandes de seleção de modo). A exceção é a marca de gráfico: a coluna da tendência da Meta 45 e a amostra da legenda dela têm `4px` no topo, e base reta — é a ponta do dado, não um componente. Bordas são sempre 1px e sempre a Borda Institucional tingida de verde (ver Colors) — nunca uma borda mais grossa ou de cor neutra pura. `50%` para um elemento circular (avatar de ícone, marcador) não é um quarto degrau: é forma, não raio.
 
 ### Named Rules
 **The Three Radii Rule.** Use `var(--radius-control)`, `var(--radius-card)` ou `var(--radius-pill)`, nunca um pixel solto. O painel administrativo chegou a renderizar nove raios numa tela — e o mais usado, `7px`, em catorze elementos, ficava a um pixel do degrau do sistema: perto demais para alguém notar de propósito, longe demais para alguma coisa casar. Um valor a um ou dois pixels de um degrau existente é sempre erro, nunca decisão.
@@ -370,6 +382,7 @@ Três raios cobrem o sistema inteiro: `8px` (controles — botão, input, select
 
 ### Badges / Pills
 - **Filter Pill** (`.pill`): chip de seleção/exclusão de unidade — fundo Verde Institucional (soft), texto verde; estado `.excluded` inverte para fundo vermelho sólido com texto riscado, o único lugar do sistema onde vermelho vira fundo em vez de texto/borda.
+- **Contagem da Meta 45** (`.admin-meta-contagem`): cada recorte com a sua pílula — Julgados em verde sólido, Dentro preenchida no Verde de Sucesso, Fora em contorno no Teal dos Pendentes e Sem prazo no neutro. Dentro e Fora mudam de forma além de cor: são verdes vizinhos, e preenchidos iguais não se separavam de relance. No card de detalhe vale o mesmo — selo Dentro preenchido, selo Fora em contorno, os dias acima de 45 em teal e negrito — e "Sem prazo" sai como texto neutro, não selo: é falta da data de distribuição, e ausência não vira selo.
 - **Count Badge** (`.unidade-badge`): pill estática com contagem, fundo Verde Institucional sólido, texto branco.
 - **Pending Badge** (`.pendencias-badge`): pill flutuante (posição absoluta no canto do card) com contagem de sessões pendentes — fundo Teal dos Pendentes, texto branco; o card em que vive ganha uma borda/glow que pulsa sem parar enquanto houver pendência. Some sozinha: a checagem roda uma vez por carregamento da página, então o pulso só volta a aparecer se ainda houver algo pendente na próxima vez que a tela abrir.
 
@@ -387,6 +400,7 @@ Três raios cobrem o sistema inteiro: `8px` (controles — botão, input, select
 - **Layout das listas:** as listas administrativas (sessões, distribuições, auditoria) usam `table-layout: fixed` e trilhos declarados por visão, para as datas caírem num ritmo regular. Ações vem imediatamente depois do identificador da linha (`Data` ou `Processo`), nunca isolada na borda direita.
 - **Cards de detalhe:** o card do acervo, o do histórico, o da Meta 45 e os detalhes "Abrir sessão" e "Abrir distribuição" do painel administrativo seguem The Equal Gutter Rule, abaixo: layout automático, tudo centralizado — cabeçalho e dado no mesmo eixo, inclusive Assunto e Interessado —, e cada coluna com o próprio conteúdo mais a mesma folga. Valor curto não quebra linha ("Auto de Infração", "Sem recurso"); quebra só o texto corrido (Interessado, o assunto por extenso do Conselho), o rótulo do cabeçalho, e — entre 961px e ~1250px, antes de a tabela rolar — o selo mais longo e o e-mail da autoria, este antes do "@" (`<wbr>`), nunca no meio da palavra. As quatro ações do painel formam uma grade 2 × 2, igual em toda linha.
 - **Largura dos cards:** fixa por tipo, nunca pelo conteúdo — um card que crescesse quando os dados chegam saltaria de lado logo depois do indicador. 46rem para o histórico da Câmara; 64rem para a Meta 45, somando dois cards soltos sobre o fundo: o de processos e, no canto superior direito, um card de 17rem por unidade (ou relator), com a mesma faixa verde — Total e cada unidade com a contagem (um degrau acima, `--text-base`) e a parcela no mesmo medidor de 8px do card de prazo; apertada (`aria-pressed`), a opção veste o verde cheio e filtra a lista. Só no recorte Julgados, um terceiro card abaixo dele, "Prazo por unidade": o medidor da coluna "% dentro da meta" por unidade, com a parcela dentro (verde, negrito) e a fora nas pontas; sem prazo aferível fica fora do percentual, como no painel. Ali o `<dialog>` é só a moldura transparente que os posiciona, e os dois lados andam juntos na altura — a do mais alto, até o teto do card da lista —, com topo sempre alinhado e, no recorte Julgados, fundo também: os dois cards descem até o fundo da lista repartindo a sobra por igual, com o mesmo recuo interno até o texto (nos outros recortes o das unidades fica na própria altura), e a coluna não rola: quando falta altura, `ajustarDensidade()` desce degraus — espaçamento compacto, depois mínimo (números menores, sem a linha de apoio do card de prazo) e, com a janela a partir de 77.5rem de largura (1240px na fonte padrão), os dois cards lado a lado na altura do mais alto; na janela estreita, o último recurso tira também a dica "Clique para filtrar a lista.". Filtrar não muda o tamanho do diálogo: o card da lista guarda a altura da lista inteira (limitada pelo mesmo teto do card, `--teto-cartao`), e cada abertura volta ao arranjo em coluna. O teto da Meta é 60rem, 8rem acima do card de detalhe das outras telas, para caber em tela cheia. Cada card leva a sombra de diálogo num `::before` com `z-index: -1`, atrás de todos: no próprio card, a sombra dos da direita pintava uma faixa cinza sobre a borda da lista. Abaixo de 960px o card das unidades sobe para cima da lista como fileira de chips, o de prazo desce para depois dela, e o diálogo inteiro rola; acima disso, a lista rola de lado se faltar espaço, em vez de esconder a coluna Meta; 60rem para o acervo; 64rem para o histórico do Conselho, que traz a razão social. No celular o card rola de lado com um piso (520px; 680px no acervo e 720px no histórico do Conselho), e a folga é repartida sobre esse piso.
+- **Painel da Meta 45:** a resposta da tela vem antes da tabela — a taxa do ano no degrau Figure, com a barra que reparte os aferíveis (verde cheio dentro, trilho fora, 2px de superfície entre as partes) e as duas contagens nas pontas; julgados e sem prazo descem para uma linha de apoio. Ao lado, a tendência: uma coluna por período, de 0 a 100%, com a taxa do ano como referência. As colunas seguem as regras de gráfico — até 24px, topo arredondado de 4px e base reta, grade em fio recessiva, rótulos em tinta de texto e nunca na cor da barra, valor no topo até seis colunas e só ao passar o ponteiro acima disso. O período em andamento é listrado a 135°, com legenda, para não ser lido como fechado; é a única listra do sistema, e tem motivo. O gráfico é `aria-hidden`: a tabela abaixo, com os mesmos números, é a versão acessível. A coluna Sem prazo só entra quando o ano tem algum, e a regra do sem prazo aferível mora num lugar só, a dica do rodapé, que na Meta continua visível no celular.
 - **Alinhamento — eixos consistentes:** nas listas-resumo, cabeçalhos e valores são centralizados para reforçar os trilhos equidistantes. O eixo sempre vale para o `th` e o `td` juntos. `white-space: nowrap` fica restrito a valores curtos que realmente não devem partir, como data/hora e identificador.
 - **Density:** cada família de tabela (`#processTable`, `#julgadosTable`, `.acervo-table`, `.historico-table`, `.detalhe-table`) ajusta sua própria largura mínima e comportamento de coluna — não há uma tabela genérica única.
 

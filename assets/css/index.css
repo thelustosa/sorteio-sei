@@ -101,6 +101,11 @@
   --muted-meta: #496c62;
   --surface-meta: #f4f9f7;
   --status-positive: #16816e;
+  /* O verde de "dentro da meta" e de "Julgado": fundo, borda e texto do selo
+     de sucesso e da pílula Dentro, que eram rgba soltos no seletor. */
+  --success-soft: rgba(22, 129, 110, 0.1);
+  --success-border: rgba(22, 129, 110, 0.24);
+  --success-text: #0b6656;
   --status-positive-ring: rgba(22, 129, 110, 0.11);
   --on-accent-icon: #b8dbd1;
   --on-accent-rule: rgba(255, 255, 255, 0.18);
@@ -3907,20 +3912,168 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-meta-filtros select { background: var(--surface-raised); }
 .admin-busca { flex: 0 0 auto; width: fit-content; max-width: 100%; }
 .admin-busca input { width: auto; max-width: 100%; }
-/* O gap de 1px sobre o fundo de borda desenha as divisórias em qualquer número
-   de colunas: quatro no desktop, duas no celular. */
+/* O quadro da Meta: a taxa do ano em destaque, à esquerda, e a tendência por
+   período, à direita. Sem a tendência (um período só), o resumo ocupa a
+   largura. Só ganha borda com algo visível dentro — durante a consulta os dois
+   estão escondidos, e a moldura vazia sobraria como uma linha solta. */
+.admin-meta-quadro:has(> :not([hidden])) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+}
+.admin-meta-quadro:has(> .admin-meta-tendencia:not([hidden])) {
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+}
+
+/* A resposta da tela é um número: quanto saiu dentro dos 45 dias. Ele é o
+   único grande; julgados e sem prazo descem para a linha de apoio. */
 .admin-meta-resumo {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1px;
+  grid-template-columns: repeat(2, max-content);
+  align-content: start;
+  gap: 20px 40px;
   margin: 0;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--border-subtle);
+  padding: 24px 26px;
 }
-.admin-meta-resumo > div { display: grid; align-content: start; gap: 3px; padding: 16px 24px; background: var(--surface-raised); }
 .admin-meta-resumo dt { color: var(--muted-strong); font-size: var(--text-sm); font-weight: 700; }
-.admin-meta-resumo dd { margin: 0; color: var(--text); font-size: var(--text-xl); font-weight: 700; line-height: 1.2; }
-.admin-meta-resumo dd.admin-meta-nota { color: var(--muted); font-size: var(--text-sm); font-weight: 400; line-height: 1.4; }
+.admin-meta-resumo dd { margin: 0; }
+.admin-meta-destaque { display: grid; grid-column: 1 / -1; gap: 6px; }
+.admin-meta-taxa-ano {
+  color: var(--text);
+  font-family: 'Montserrat', ui-sans-serif, sans-serif;
+  font-size: clamp(2.75rem, 4.2vw, 3.5rem);
+  font-weight: 700;
+  letter-spacing: -.03em;
+  line-height: 1;
+}
+.admin-meta-divisao { display: grid; gap: 8px; max-width: 30rem; margin-top: 6px; }
+/* O mesmo medidor da coluna "% dentro da meta", maior: o verde cheio é dentro,
+   o trilho é fora. Duas partes com um vão de 2px da superfície entre elas. */
+.admin-meta-barra {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+}
+.admin-meta-barra > span { display: block; background: var(--accent); }
+.admin-meta-barra > span + span { flex: 1 1 0; background: var(--accent-soft-strong); }
+.admin-meta-partes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.admin-meta-parte-dentro { color: var(--text); font-weight: 700; }
+.admin-meta-parte-fora { color: var(--muted-strong); }
+.admin-meta-apoio { display: grid; align-content: start; gap: 2px; }
+.admin-meta-apoio dd:not(.admin-meta-nota) { color: var(--text); font-size: var(--text-lg); font-weight: 700; line-height: 1.2; }
+.admin-meta-resumo dd.admin-meta-nota { color: var(--muted); font-size: var(--text-sm); line-height: 1.4; }
+
+/* Tendência: uma coluna por período, do chão aos 100%, com a taxa do ano como
+   referência. Colunas de até 24px com topo arredondado e base reta; grade em
+   fio, recessiva; rótulos em tinta de texto, nunca na cor da barra. A tabela
+   abaixo é a versão acessível dos mesmos números — o gráfico é aria-hidden. */
+.admin-meta-tendencia {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 24px 26px 18px;
+  border-left: 1px solid var(--border-subtle);
+}
+.admin-meta-tendencia-titulo { margin: 0; color: var(--muted-strong); font-size: var(--text-sm); font-weight: 700; }
+.admin-meta-plot {
+  position: relative;
+  height: 128px;
+  /* À direita, o vão do rótulo da referência ("2026: 73,4%"), que mora fora
+     do gráfico. */
+  margin: 18px 88px 26px 34px;
+}
+.admin-meta-grade { position: absolute; right: 0; left: 0; height: 1px; background: var(--border-subtle); }
+.admin-meta-grade::before {
+  position: absolute;
+  top: -0.65em;
+  right: calc(100% + 8px);
+  color: var(--muted);
+  content: attr(data-rotulo);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+/* A referência passa atrás das colunas, e o rótulo fica fora do gráfico, à
+   direita: dentro, ele disputava lugar com o valor da última coluna. */
+.admin-meta-referencia {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  left: 0;
+  border-top: 1px solid var(--muted-strong);
+  pointer-events: none;
+}
+.admin-meta-referencia::after {
+  position: absolute;
+  top: -0.65em;
+  left: calc(100% + 8px);
+  color: var(--muted-strong);
+  content: attr(data-rotulo);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.admin-meta-colunas { position: absolute; z-index: 2; inset: 0; display: flex; }
+.admin-meta-coluna { position: relative; display: flex; flex: 1 1 0; flex-direction: column; align-items: center; }
+.admin-meta-coluna-trilho { display: flex; flex: 1 1 auto; align-items: flex-end; justify-content: center; width: 100%; }
+.admin-meta-coluna-barra {
+  position: relative;
+  width: min(24px, 60%);
+  border-radius: 4px 4px 0 0;
+  background: var(--accent);
+  transition: background-color 140ms ease;
+}
+.admin-meta-coluna:hover .admin-meta-coluna-barra:not(.is-parcial) { background: var(--accent-hover); }
+/* O período em andamento ainda recebe sessões: listrado, com legenda, para o
+   número dele não ser lido como fechado. */
+.admin-meta-coluna-barra.is-parcial,
+.admin-meta-amostra-parcial {
+  background: repeating-linear-gradient(135deg, var(--accent) 0 1.5px, var(--accent-soft-strong) 1.5px 5px);
+}
+.admin-meta-coluna-valor {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+/* O valor mora sobre a superfície: quando o topo da coluna encosta na taxa do
+   ano, a linha de referência passa por trás dele, não pelo meio do número. */
+.admin-meta-coluna-valor { padding: 0 3px; background: var(--surface-raised); }
+/* Mais de seis colunas: o valor só ao passar o ponteiro sobre a faixa inteira
+   do período, que é o alvo — maior que a própria barra. */
+.admin-meta-plot[data-denso] .admin-meta-coluna-valor { opacity: 0; transition: opacity 120ms ease; }
+.admin-meta-plot[data-denso] .admin-meta-coluna:hover .admin-meta-coluna-valor { opacity: 1; }
+.admin-meta-coluna-rotulo {
+  position: absolute;
+  top: calc(100% + 6px);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.admin-meta-tendencia-legenda { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: var(--text-xs); }
+.admin-meta-amostra-parcial { width: 12px; height: 12px; border-radius: 4px; }
+
+/* meta-45.html: a faixa verde já diz "Indicador de prazo", e a sobrancelha
+   repetia a mesma frase logo abaixo. No painel ela fica: lá distingue a aba. */
+body[data-page='meta-45'] #painelEyebrow { display: none; }
+body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
 
 .admin-table[data-visao='meta'] { min-width: 800px; }
 .admin-table[data-visao='meta'] thead th:nth-child(1) { width: 18%; }
@@ -3929,6 +4082,12 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-table[data-visao='meta'] thead th:nth-child(4) { width: 16%; }
 .admin-table[data-visao='meta'] thead th:nth-child(5) { width: 16%; }
 .admin-table[data-visao='meta'] thead th:nth-child(6) { width: 20%; }
+/* Sem a coluna Sem prazo, quando o ano não tem nenhum. */
+.admin-table[data-visao='meta'][data-colunas='5'] thead th:nth-child(1) { width: 20%; }
+.admin-table[data-visao='meta'][data-colunas='5'] thead th:nth-child(2) { width: 16%; }
+.admin-table[data-visao='meta'][data-colunas='5'] thead th:nth-child(3),
+.admin-table[data-visao='meta'][data-colunas='5'] thead th:nth-child(4) { width: 20%; }
+.admin-table[data-visao='meta'][data-colunas='5'] thead th:nth-child(5) { width: 24%; }
 .admin-table[data-visao='meta'] thead th:first-child,
 .admin-table[data-visao='meta'] tbody td:first-child { padding-inline: 16px; }
 .admin-table[data-visao='meta'] thead th:last-child,
@@ -3959,6 +4118,20 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 .admin-meta-contagem:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .admin-meta-contagem.is-total { background: var(--accent); color: var(--on-accent); }
 .admin-meta-contagem.is-total:hover { border-color: var(--accent-hover); background: var(--accent-hover); }
+/* Cada recorte com a sua cor, e Dentro e Fora também com a sua forma: Dentro
+   preenchido no verde de sucesso, Fora em contorno no teal do canal de
+   atenção. Os dois são verdes vizinhos, e preenchidos iguais não se separavam
+   de relance. Sem prazo fica no neutro. */
+.admin-meta-contagem.is-dentro { border-color: var(--success-border); background: var(--success-soft); color: var(--success-text); }
+.admin-meta-contagem.is-dentro:hover { border-color: var(--status-positive); background: var(--success-soft); }
+.admin-meta-contagem.is-fora { border-color: var(--accent-secondary); background: var(--surface-raised); color: var(--accent-secondary-text); }
+.admin-meta-contagem.is-fora:hover { border-color: var(--accent-secondary-hover); background: var(--accent-secondary-soft); }
+.admin-meta-contagem.is-sem-prazo { border-color: var(--border-subtle); background: var(--surface-control); color: var(--muted); }
+.admin-meta-contagem.is-sem-prazo:hover { border-color: var(--border); background: var(--surface-control); }
+/* No card: os dias que passaram de 45 levam a cor de Fora; sem prazo é
+   ausência de dado, texto neutro e não selo. */
+.detalhe-table td.admin-meta-dias-fora { color: var(--accent-secondary-text); font-weight: 700; }
+.admin-meta-sem-prazo { color: var(--muted); font-size: var(--text-sm); }
 .admin-table td.admin-meta-zero { color: var(--muted); }
 /* No card, como no do histórico: com a coluna Meta são seis, e a largura fixa
    por igual cortava "Nº do Processo" — o número de 15 dígitos precisa da dele. */
@@ -4407,7 +4580,9 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   line-height: 1.2;
   white-space: nowrap;
 }
-.admin-badge-sucesso { border-color: rgba(22,129,110,.22); background: rgba(22,129,110,.09); color: #0b6656; }
+.admin-badge-sucesso { border-color: var(--success-border); background: var(--success-soft); color: var(--success-text); }
+/* Fora da meta: o teal do canal de atenção em contorno, como a pílula Fora. */
+.admin-badge-fora { border-color: var(--accent-secondary); background: var(--surface-raised); color: var(--accent-secondary-text); }
 /* Pendência é exatamente o caso que a One Alert Color Rule nomeia para o Teal
    dos Pendentes — era o único lugar do painel com uma família âmbar própria. */
 .admin-badge-alerta {
@@ -4603,6 +4778,10 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   .admin-org-switcher { flex: 1 1 auto; }
   .admin-org-button { flex: 1 1 0; justify-content: center; }
   .admin-panel-hint { display: none; }
+  /* Na Meta a dica é a definição de "sem prazo aferível", que não está em
+     nenhum outro lugar da tela: ela fica, embaixo do status. */
+  .admin-panel:has(.admin-table[data-visao='meta']) .admin-panel-footer { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .admin-panel:has(.admin-table[data-visao='meta']) .admin-panel-hint { display: block; text-align: left; }
 
   .admin-table[data-visao]:not([data-visao='auditoria']) {
     display: block;
@@ -4711,8 +4890,10 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   .admin-dialog .detalhe-corpo { padding: 20px 18px 0; }
   .admin-campos { grid-template-columns: 1fr; gap: 13px; }
   .admin-dialog-actions { margin-inline: -18px; padding: 13px 18px; }
-  .admin-meta-resumo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .admin-meta-resumo > div { padding: 14px 18px; }
+  .admin-meta-quadro:has(> .admin-meta-tendencia:not([hidden])) { grid-template-columns: minmax(0, 1fr); }
+  .admin-meta-resumo { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; padding: 20px 18px; }
+  .admin-meta-divisao { max-width: none; }
+  .admin-meta-tendencia { padding: 20px 18px 16px; border-top: 1px solid var(--border-subtle); border-left: 0; }
 }
 
 @media screen and (max-width: 480px) {
@@ -4769,6 +4950,7 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   .admin-panel .admin-table[data-visao='meta'] tbody tr { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-panel .admin-table[data-visao='meta'] tbody td:not(.col-acoes) { display: block; }
   .admin-panel .admin-table[data-visao='meta'] tbody td:not(.col-acoes)::before { margin-bottom: 2px; }
+  .admin-panel .admin-table[data-visao='meta'] tbody td:first-child::before { display: none; }
   .admin-panel .admin-table[data-visao='meta'] .admin-meta-periodo { justify-items: start; text-align: left; }
 }
 
@@ -4776,7 +4958,9 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   .admin-aba,
   .admin-acao,
   .admin-meta-contagem,
-  .admin-meta-opcao { transition: none; }
+  .admin-meta-opcao,
+  .admin-meta-coluna-barra,
+  .admin-meta-coluna-valor { transition: none; }
   /* Aqui, e não na lista geral: aquela vem antes destas regras no arquivo e,
      com a mesma especificidade, perderia para o :active delas. */
   .admin-meta-contagem:active,
