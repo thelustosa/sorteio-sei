@@ -21,6 +21,8 @@ USUARIOS = {
     'sec-agr': '00000000-0000-0000-0000-000000000014',
     'sem-acesso': '00000000-0000-0000-0000-000000000015',
     'consulta': '00000000-0000-0000-0000-000000000016',
+    'consulta-cj': '00000000-0000-0000-0000-000000000017',
+    'consulta-creg': '00000000-0000-0000-0000-000000000018',
 }
 
 testes = []
@@ -328,6 +330,26 @@ def consulta_nao_entra_no_painel_administrativo(cur):
         deve_negar(cur, rpc)
 
 
+# O órgão da consulta é a própria linha de permissoes_usuario: quem só tem a
+# linha da CJ vê o acervo e a Meta da CJ, e o CREG fica fechado — e vice-versa.
+@teste
+def consulta_so_ve_o_proprio_orgao(cur):
+    for nome, orgao, outro in [('consulta-cj', 'CJ', 'CREG'), ('consulta-creg', 'CREG', 'CJ')]:
+        autenticar(cur, nome)
+        cur.execute('select orgao from public.orgaos_consultados()')
+        assert [linha[0] for linha in cur.fetchall()] == [orgao]
+        assert permissoes(cur) == [orgao]
+
+        for rpc in ACERVO + META_45:
+            autenticar(cur, nome)
+            if f"'{outro}'" in rpc or rpc.split('(')[0].endswith(outro.lower()):
+                deve_negar(cur, rpc)
+            else:
+                cur.execute(rpc)
+                cur.fetchall()
+                cur.connection.rollback()
+
+
 @teste
 def meta_45_continua_fechada_para_o_operador(cur):
     for rpc in META_45:
@@ -352,7 +374,9 @@ def preparar_banco():
                     ('00000000-0000-0000-0000-000000000014', 'CREG');""")
     PG.executar("""insert into public.permissoes_usuario (user_id, orgao, papel) values
                     ('00000000-0000-0000-0000-000000000016', 'CJ', 'consulta'),
-                    ('00000000-0000-0000-0000-000000000016', 'CREG', 'consulta');
+                    ('00000000-0000-0000-0000-000000000016', 'CREG', 'consulta'),
+                    ('00000000-0000-0000-0000-000000000017', 'CJ', 'consulta'),
+                    ('00000000-0000-0000-0000-000000000018', 'CREG', 'consulta');
                   update public.permissoes_usuario set papel = 'admin'
                    where user_id = '00000000-0000-0000-0000-000000000013';""")
     PG.executar("""insert into public.julgados_cj
