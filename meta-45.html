@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=c57ddea972" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=70085357c6" />
   <script>
     (function () {
       try {
@@ -25,8 +25,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=c57ddea972"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=c57ddea972"></script>
+  <script defer src="assets/js/supabase.min.js?v=70085357c6"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=70085357c6"></script>
 </head>
 
 <body class="admin-page" data-page="meta-45">
@@ -161,7 +161,7 @@
               <span id="painelEyebrow" class="admin-eyebrow">Indicador de prazo</span>
               <h2 id="painelTitulo" tabindex="-1">Julgados na meta de 45 dias</h2>
               <!-- Igual ao texto que admin.js grava na moldura da aba Meta. -->
-              <p id="painelDescricao">Dias da distribuição até a sessão em que o processo foi julgado. Sem prazo aferível: falta a data da distribuição, ou a sessão veio antes dela.</p>
+              <p id="painelDescricao">Dias da distribuição até a sessão em que o processo foi julgado.</p>
             </div>
             <!-- Só na aba Meta 45. Trocar ano ou agrupamento repinta a tabela com
                  a resposta já carregada, sem voltar ao banco. -->
@@ -187,7 +187,12 @@
             </div>
           </header>
 
-          <dl id="metaResumo" class="admin-meta-resumo" hidden></dl>
+          <!-- O resumo e a tendência do ano, lado a lado: a taxa em destaque à
+               esquerda e as colunas por período à direita. -->
+          <div class="admin-meta-quadro">
+            <dl id="metaResumo" class="admin-meta-resumo" hidden></dl>
+            <div id="metaTendencia" class="admin-meta-tendencia" aria-hidden="true" hidden></div>
+          </div>
 
           <div id="painelCarregando" class="painel-carregando" hidden></div>
           <div id="painelErro" class="load-error admin-state" role="alert" hidden>
@@ -223,7 +228,7 @@
               <span class="status-dot" aria-hidden="true"></span>
               <span id="painelStatus">Carregando…</span>
             </div>
-            <span id="painelHint" class="admin-panel-hint">O percentual considera só os julgados com prazo aferível.</span>
+            <span id="painelHint" class="admin-panel-hint">Sem prazo aferível — sem a data da distribuição, ou com a sessão antes dela — fica fora do percentual.</span>
           </footer>
         </section>
       </div>

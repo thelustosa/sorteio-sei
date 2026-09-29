@@ -145,6 +145,7 @@ const metaFiltros = document.getElementById('metaFiltros');
 const metaResumo = document.getElementById('metaResumo');
 const metaAno = document.getElementById('metaAno');
 const metaAgrupamento = document.getElementById('metaAgrupamento');
+const metaTendencia = document.getElementById('metaTendencia');
 const painelBusca = document.getElementById('painelBusca');
 const buscaRotulo = document.getElementById('buscaRotulo');
 const buscaInput = document.getElementById('buscaInput');
@@ -481,6 +482,7 @@ function medirRolagem() {
 
 function definirVisaoTabela(visao) {
   painelTabela.dataset.visao = visao;
+  delete painelTabela.dataset.colunas;
   painelTabela.dataset.orgao = orgao;
 }
 
@@ -542,6 +544,7 @@ function moldura() {
   // consulta, o resumo do colegiado anterior ao lado da tabela vazia mentiria.
   metaFiltros.hidden = true;
   metaResumo.hidden = true;
+  metaTendencia.hidden = true;
   // Fora dessas quatro telas — Meta e Auditoria — filtrar não é o que a tela
   // pede, e o campo some.
   painelBusca.hidden = true;
@@ -594,9 +597,8 @@ function moldura() {
   if (aba === 'meta') {
     definirVisaoTabela('meta');
     return tituloDoPainel('Julgados na meta de 45 dias',
-      'Dias da distribuição até a sessão em que o processo foi julgado. Sem prazo aferível: '
-        + 'falta a data da distribuição, ou a sessão veio antes dela.',
-      'O percentual considera só os julgados com prazo aferível.',
+      'Dias da distribuição até a sessão em que o processo foi julgado.',
+      DICA_DA_META,
       'Indicador de prazo');
   }
   definirVisaoTabela('auditoria');
@@ -968,6 +970,7 @@ function agruparMeta(linhas, ano, meses) {
 
 // Sem prazo aferível fica fora do denominador: não é dentro nem fora.
 const taxaDentro = ({ dentro, fora }) => (dentro + fora ? (dentro / (dentro + fora)) * 100 : null);
+const DICA_DA_META = 'Sem prazo aferível — sem a data da distribuição, ou com a sessão antes dela — fica fora do percentual.';
 const percentual = taxa =>
   `${taxa.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 const contagem = n => Number(n).toLocaleString('pt-BR');
@@ -976,18 +979,20 @@ const nomeDoPeriodo = (indice, meses) => (meses === 1
   ? MESES[indice][0].toUpperCase() + MESES[indice].slice(1)
   : `${indice + 1}º ${PERIODOS[meses][0]}`);
 
+// O período corrente ainda recebe sessões: o percentual dele vai mudar.
+function emAndamento(indice, meses, ano) {
+  const hoje = hojeISO();
+  return Number(hoje.slice(0, 4)) === ano && Math.floor((Number(hoje.slice(5, 7)) - 1) / meses) === indice;
+}
+
 function celulaDoPeriodo({ indice }, meses, ano) {
   const inicio = indice * meses;
   const nome = document.createElement('strong');
   nome.textContent = nomeDoPeriodo(indice, meses);
 
-  // O período corrente ainda recebe sessões: o percentual dele vai mudar.
-  const hoje = hojeISO();
   const apoio = [];
   if (meses > 1) apoio.push(`${MESES[inicio].slice(0, 3)}–${MESES[inicio + meses - 1].slice(0, 3)}`);
-  if (Number(hoje.slice(0, 4)) === ano && Math.floor((Number(hoje.slice(5, 7)) - 1) / meses) === indice) {
-    apoio.push('em andamento');
-  }
+  if (emAndamento(indice, meses, ano)) apoio.push('em andamento');
 
   const bloco = document.createElement('div');
   bloco.className = 'admin-meta-periodo';
@@ -1042,7 +1047,7 @@ function celulaDaContagem(periodo, recorte, meses, ano) {
 
   const botao = document.createElement('button');
   botao.type = 'button';
-  botao.className = recorte === 'julgados' ? 'admin-meta-contagem is-total' : 'admin-meta-contagem';
+  botao.className = `admin-meta-contagem is-${recorte === 'semPrazo' ? 'sem-prazo' : recorte === 'julgados' ? 'total' : recorte}`;
   botao.textContent = contagem(quantidade);
   botao.setAttribute('aria-label', `${RECORTES_META[recorte].rotulo} em ${nomeDoPeriodo(periodo.indice, meses)}`
     + ` de ${ano}: ver ${plural(quantidade, 'processo', 'processos')}`);
@@ -1112,7 +1117,18 @@ async function abrirDetalheDaMeta(indice, recorte, meses, ano) {
   desenharDetalheDaMeta((processos || []).filter(filtro), recorte, colegiado, de, ate);
 }
 
-const SELOS_DA_META = new Map([[true, ['Dentro', 'sucesso']], [false, ['Fora', 'alerta']]]);
+// Dentro é o verde cheio de sucesso; Fora, o teal do canal de atenção em
+// contorno — preenchidos, os dois eram verdes vizinhos. Sem prazo é ausência de
+// dado (falta a distribuição), e ausência não vira selo: sai texto neutro.
+const SELOS_DA_META = new Map([[true, ['Dentro', 'sucesso']], [false, ['Fora', 'fora']]]);
+function seloDaMeta(meta45) {
+  const selo = SELOS_DA_META.get(meta45);
+  if (selo) return badge(...selo);
+  const texto = document.createElement('span');
+  texto.className = 'admin-meta-sem-prazo';
+  texto.textContent = 'Sem prazo';
+  return texto;
+}
 
 function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
   const vocabulario = VOCABULARIO[colegiado];
@@ -1149,12 +1165,11 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
       const tr = document.createElement('tr');
       const numero = celula(p.num_processo, 'th');
       numero.scope = 'row';
+      // Os dias que passaram de 45 levam a cor de Fora: a coluna se lê de
+      // relance em todo recorte, mesmo sem a coluna Meta.
       tr.append(numero, celula(ou(p.destino)), celula(dataBR(p.data_distribuicao)),
-        celula(dataBR(p.data_sessao)), celula(ou(p.dias)));
-      if (comMeta) {
-        const [texto, tom] = SELOS_DA_META.get(p.meta_45) || ['Sem prazo', 'neutro'];
-        tr.append(celula(badge(texto, tom)));
-      }
+        celula(dataBR(p.data_sessao)), celula(ou(p.dias), 'td', p.meta_45 === false ? 'admin-meta-dias-fora' : ''));
+      if (comMeta) tr.append(celula(seloDaMeta(p.meta_45)));
       tbody.appendChild(tr);
     });
     detalheTabela.replaceChildren(cabecalho(colunas), tbody);
@@ -1344,43 +1359,168 @@ function repintarMeta() {
     fora: soma.fora + p.fora, semPrazo: soma.semPrazo + p.semPrazo
   }), { julgados: 0, dentro: 0, fora: 0, semPrazo: 0 });
 
-  // Dentro e Fora repartem os aferíveis, então os dois saem em percentual, com a
-  // contagem embaixo: com um em % e o outro em número, "100,0%" ao lado de "0"
-  // parecia medir coisas diferentes.
   const taxa = taxaDentro(total);
-  const julgados = n => `${contagem(n)} ${n === 1 ? 'julgado' : 'julgados'}`;
-  metaResumo.replaceChildren(...[
-    [`Julgados em ${ano}`, contagem(total.julgados), 'com status Julgado'],
-    ['Dentro da meta', taxa === null ? '—' : percentual(taxa), `${julgados(total.dentro)} em até 45 dias`],
-    ['Fora da meta', taxa === null ? '—' : percentual(100 - taxa), `${julgados(total.fora)} com mais de 45 dias`],
-    ['Sem prazo aferível', contagem(total.semPrazo), 'fora do percentual']
-  ].map(([rotulo, valor, apoio]) => {
-    const grupo = document.createElement('div');
-    const termo = document.createElement('dt');
-    termo.textContent = rotulo;
-    const dado = document.createElement('dd');
-    dado.textContent = valor;
-    const nota = document.createElement('dd');
-    nota.className = 'admin-meta-nota';
-    nota.textContent = apoio;
-    grupo.append(termo, dado, nota);
-    return grupo;
-  }));
-  metaResumo.hidden = false;
+  pintarResumoDaMeta(total, taxa, ano);
+  pintarTendencia(periodos, taxa, meses, ano);
 
+  // A coluna Sem prazo só entra quando o ano tem algum: zerada, ela tomava um
+  // sexto da largura para repetir o zero que o resumo já diz.
+  const recortes = ['julgados', 'dentro', 'fora', ...(total.semPrazo ? ['semPrazo'] : [])];
   desenhar([
     { rotulo: 'Período', eixo: 'centro' },
-    { rotulo: 'Julgados', eixo: 'centro' },
-    { rotulo: 'Dentro da meta', eixo: 'centro' },
-    { rotulo: 'Fora da meta', eixo: 'centro' },
-    { rotulo: 'Sem prazo aferível', eixo: 'centro' },
+    ...recortes.map(recorte => ({ rotulo: RECORTES_META[recorte].rotulo, eixo: 'centro' })),
     { rotulo: '% dentro da meta', eixo: 'centro' }
   ], periodos.map(periodo => [
     celulaDoPeriodo(periodo, meses, ano),
-    ...['julgados', 'dentro', 'fora', 'semPrazo'].map(recorte => celulaDaContagem(periodo, recorte, meses, ano)),
+    ...recortes.map(recorte => celulaDaContagem(periodo, recorte, meses, ano)),
     celulaDaTaxa(periodo)
   ]));
-  painelStatus.textContent = `${plural(periodos.length, ...PERIODOS[meses])} de ${ano}.`;
+  painelTabela.dataset.colunas = String(recortes.length + 2);
+
+  // O rodapé diz o trecho do ano que a tabela cobre — a contagem de períodos
+  // sozinha repetia o que as linhas já mostram. O período em andamento termina
+  // no mês corrente, e não no fim dele: setembro a dezembro ainda não houve.
+  const primeiroMes = periodos[0].indice * meses;
+  const ultimo = periodos.at(-1);
+  const ultimoMes = emAndamento(ultimo.indice, meses, ano)
+    ? Number(hojeISO().slice(5, 7)) - 1
+    : ultimo.indice * meses + meses - 1;
+  const trecho = primeiroMes === ultimoMes
+    ? `em ${MESES[primeiroMes]}` : `de ${MESES[primeiroMes]} a ${MESES[ultimoMes]}`;
+  painelStatus.textContent = `${plural(periodos.length, ...PERIODOS[meses])} de ${ano}, ${trecho}.`;
+}
+
+// A pergunta da tela é quanto saiu dentro dos 45 dias: ela é o número grande,
+// com a barra que reparte os aferíveis entre dentro e fora e as duas contagens
+// nas pontas. Julgados e sem prazo descem para uma linha de apoio.
+function pintarResumoDaMeta(total, taxa, ano) {
+  const grupo = (classe, rotulo, ...dados) => {
+    const div = document.createElement('div');
+    div.className = classe;
+    const termo = document.createElement('dt');
+    termo.textContent = rotulo;
+    div.append(termo, ...dados);
+    return div;
+  };
+  const dado = (texto, classe = '') => {
+    const dd = document.createElement('dd');
+    if (classe) dd.className = classe;
+    dd.textContent = texto;
+    return dd;
+  };
+  const julgados = n => `${contagem(n)} ${n === 1 ? 'julgado' : 'julgados'}`;
+
+  const divisao = document.createElement('dd');
+  divisao.className = 'admin-meta-divisao';
+  if (taxa !== null) {
+    // Repete as duas contagens escritas logo abaixo: é aria-hidden.
+    const barra = document.createElement('span');
+    barra.className = 'admin-meta-barra';
+    barra.setAttribute('aria-hidden', 'true');
+    const dentro = document.createElement('span');
+    dentro.style.width = `${taxa}%`;
+    barra.append(dentro, document.createElement('span'));
+    divisao.appendChild(barra);
+  }
+  const partes = document.createElement('span');
+  partes.className = 'admin-meta-partes';
+  const parte = (classe, texto) => {
+    const span = document.createElement('span');
+    span.className = classe;
+    span.textContent = texto;
+    return span;
+  };
+  partes.append(parte('admin-meta-parte-dentro', `${julgados(total.dentro)} em até 45 dias`),
+    parte('admin-meta-parte-fora', taxa === null ? `${julgados(total.fora)} com mais de 45 dias`
+      : `${julgados(total.fora)} fora · ${percentual(100 - taxa)}`));
+  divisao.appendChild(partes);
+
+  metaResumo.replaceChildren(
+    grupo('admin-meta-destaque', `Dentro da meta em ${ano}`,
+      dado(taxa === null ? '—' : percentual(taxa), 'admin-meta-taxa-ano'), divisao),
+    grupo('admin-meta-apoio', 'Julgados', dado(contagem(total.julgados)), dado('com status Julgado', 'admin-meta-nota')),
+    grupo('admin-meta-apoio', 'Sem prazo aferível', dado(contagem(total.semPrazo)), dado('fora do percentual', 'admin-meta-nota')));
+  metaResumo.hidden = false;
+}
+
+// A tendência que a tabela só dá lendo percentual por percentual: uma coluna
+// por período, do chão aos 100%, e a taxa do ano como linha de referência. A
+// tabela logo abaixo traz os mesmos números — ela é a versão acessível, e o
+// gráfico é aria-hidden. Com um período só não há o que comparar, e ele some.
+function pintarTendencia(periodos, taxaDoAno, meses, ano) {
+  const comTaxa = periodos.filter(periodo => taxaDentro(periodo) !== null);
+  if (comTaxa.length < 2) {
+    metaTendencia.hidden = true;
+    metaTendencia.replaceChildren();
+    return;
+  }
+
+  const titulo = document.createElement('p');
+  titulo.className = 'admin-meta-tendencia-titulo';
+  titulo.textContent = `% dentro da meta por ${PERIODOS[meses][0]}`;
+
+  const plot = document.createElement('div');
+  plot.className = 'admin-meta-plot';
+  // Mais de seis colunas não comportam um rótulo em cada topo: o valor aparece
+  // ao passar o ponteiro, e a tabela segue com todos.
+  if (periodos.length > 6) plot.dataset.denso = '';
+  ['100%', '50%', '0'].forEach((rotulo, indice) => {
+    const grade = document.createElement('span');
+    grade.className = 'admin-meta-grade';
+    grade.style.bottom = `${100 - indice * 50}%`;
+    grade.dataset.rotulo = rotulo;
+    plot.appendChild(grade);
+  });
+  const referencia = document.createElement('span');
+  referencia.className = 'admin-meta-referencia';
+  referencia.style.bottom = `${taxaDoAno}%`;
+  referencia.dataset.rotulo = `${ano}: ${percentual(taxaDoAno)}`;
+  plot.appendChild(referencia);
+
+  let temParcial = false;
+  const colunas = document.createElement('div');
+  colunas.className = 'admin-meta-colunas';
+  periodos.forEach(periodo => {
+    const taxa = taxaDentro(periodo);
+    const coluna = document.createElement('div');
+    coluna.className = 'admin-meta-coluna';
+    const trilho = document.createElement('div');
+    trilho.className = 'admin-meta-coluna-trilho';
+    if (taxa !== null) {
+      const barra = document.createElement('span');
+      barra.className = 'admin-meta-coluna-barra';
+      if (emAndamento(periodo.indice, meses, ano)) {
+        barra.classList.add('is-parcial');
+        temParcial = true;
+      }
+      barra.style.height = `${taxa}%`;
+      const valor = document.createElement('span');
+      valor.className = 'admin-meta-coluna-valor';
+      valor.textContent = percentual(taxa);
+      barra.appendChild(valor);
+      trilho.appendChild(barra);
+    }
+    const rotulo = document.createElement('span');
+    rotulo.className = 'admin-meta-coluna-rotulo';
+    rotulo.textContent = meses === 1 ? MESES[periodo.indice].slice(0, 3) : `${periodo.indice + 1}º`;
+    coluna.append(trilho, rotulo);
+    colunas.appendChild(coluna);
+  });
+  plot.appendChild(colunas);
+
+  metaTendencia.replaceChildren(titulo, plot);
+  if (temParcial) {
+    // Duas aparências de coluna pedem legenda: a listrada ainda recebe sessões.
+    const legenda = document.createElement('p');
+    legenda.className = 'admin-meta-tendencia-legenda';
+    const amostra = document.createElement('span');
+    amostra.className = 'admin-meta-amostra-parcial';
+    const texto = document.createElement('span');
+    texto.textContent = 'Período em andamento';
+    legenda.append(amostra, texto);
+    metaTendencia.appendChild(legenda);
+  }
+  metaTendencia.hidden = false;
 }
 
 function pintarAuditoria(pagina) {

@@ -4047,7 +4047,7 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
   ['seletorOrgaoCard', 'seletorOrgao', 'adminOrgaoAtual', 'abas', 'adminPainel', 'painelConteudo', 'painelTitulo',
    'painelDescricao', 'painelCarregando', 'painelErro', 'painelVazio', 'painelVazioTitulo',
    'painelVazioTexto', 'painelErroDetalhe', 'painelStatus', 'painelHint', 'tabelaInstrucao',
-   'painelEyebrow', 'metaFiltros', 'metaResumo', 'painelBusca', 'buscaRotulo',
+   'painelEyebrow', 'metaFiltros', 'metaResumo', 'metaTendencia', 'painelBusca', 'buscaRotulo',
    'detalheTitulo', 'detalheResumo', 'detalheLoading', 'detalheErro', 'detalheCorpo']
     .forEach(id => document.add(id, 'div'));
   if (!meta45) {
@@ -4298,8 +4298,8 @@ test('a meta de 45 dias agrupa os meses e deixa o prazo nao aferivel fora do per
   const periodo = linha => linha.children[0].children[0].children[0].textContent;
   // As contagens diferentes de zero são pílulas: o número está no botão.
   const valores = linha => linha.children.slice(1, 5).map(c => c.children[0]?.textContent ?? c.textContent);
-  const taxa = linha => linha.children[5].children[0].children.at(-1)?.textContent
-    ?? linha.children[5].children[0].textContent;
+  const taxa = linha => linha.children.at(-1).children[0].children.at(-1)?.textContent
+    ?? linha.children.at(-1).children[0].textContent;
 
   let linhas = page.linhasDaTabela();
   assert.deepEqual(linhas.map(periodo), ['1º quadrimestre', '2º quadrimestre']);
@@ -4308,12 +4308,30 @@ test('a meta de 45 dias agrupa os meses e deixa o prazo nao aferivel fora do per
   assert.deepEqual(valores(linhas[1]), ['6', '6', '0', '0']);
   assert.equal(taxa(linhas[1]), '100,0%');
 
+  // A taxa do ano é o número em destaque; julgados e sem prazo, a linha de apoio.
   const resumo = doc.getElementById('metaResumo');
   assert.equal(resumo.hidden, false);
-  assert.deepEqual(resumo.children.map(grupo => grupo.children[1].textContent),
-    ['20', '73,7%', '26,3%', '1']);
-  assert.equal(resumo.children[2].children[2].textContent, '5 julgados com mais de 45 dias');
-  assert.equal(doc.getElementById('painelStatus').textContent, '2 quadrimestres de 2026.');
+  const [destaque, julgados, semPrazo] = resumo.children;
+  assert.equal(destaque.children[0].textContent, 'Dentro da meta em 2026');
+  assert.equal(destaque.children[1].textContent, '73,7%', '14 de 19 aferíveis');
+  const partes = destaque.descendants().filter(no => no.className?.startsWith?.('admin-meta-parte-'));
+  assert.deepEqual(partes.map(no => no.textContent), ['14 julgados em até 45 dias', '5 julgados fora · 26,3%']);
+  assert.deepEqual([julgados, semPrazo].map(grupo => grupo.children[1].textContent), ['20', '1']);
+  assert.match(doc.getElementById('painelStatus').textContent, /^2 quadrimestres de 2026, de janeiro a \S+\.$/,
+    'o rodapé diz o trecho do ano que a tabela cobre');
+
+  // A tendência: uma coluna por período, na altura da taxa, e a do ano como
+  // referência. Ela repete a tabela, que é a versão acessível.
+  const tendencia = doc.getElementById('metaTendencia');
+  assert.equal(tendencia.hidden, false);
+  const barras = tendencia.descendants().filter(no => no.className?.startsWith?.('admin-meta-coluna-barra'));
+  assert.deepEqual(barras.map(b => Math.round(parseFloat(b.style.height) * 10) / 10), [61.5, 100]);
+  const referencia = tendencia.descendants().find(no => no.className === 'admin-meta-referencia');
+  assert.equal(referencia.dataset.rotulo, '2026: 73,7%');
+
+  // O ano tem sem prazo: a coluna aparece.
+  assert.ok(doc.getElementById('painelTable').children[0].descendants()
+    .some(no => no.textContent === 'Sem prazo aferível'));
 
   const consultas = chamadas.length;
   const agrupamento = doc.getElementById('metaAgrupamento');
@@ -4327,6 +4345,11 @@ test('a meta de 45 dias agrupa os meses e deixa o prazo nao aferivel fora do per
   linhas = page.linhasDaTabela();
   assert.deepEqual(linhas.map(periodo), ['Novembro']);
   assert.equal(taxa(linhas[0]), '100,0%');
+  // Nenhum sem prazo em 2025: a coluna sai, e as larguras seguem as cinco.
+  assert.equal(linhas[0].children.length, 5);
+  assert.equal(doc.getElementById('painelTable').dataset.colunas, '5');
+  assert.equal(doc.getElementById('metaTendencia').hidden, true, 'um período só não tem tendência');
+  assert.equal(doc.getElementById('painelStatus').textContent, '1 mês de 2025, em novembro.');
   assert.equal(chamadas.length, consultas, 'trocar ano ou agrupamento não volta ao banco');
 });
 
@@ -4349,8 +4372,10 @@ test('cada contagem da meta abre o card so com os julgados dela', async () => {
   const [primeiro, vazio] = page.linhasDaTabela();
   assert.equal(vazio.children[3].children.length, 0, 'zero não abre card: fica texto, sem pílula');
 
+  // Cada recorte com a sua pílula: Dentro preenchida, Fora em contorno.
   const fora = primeiro.children[3].children[0];
-  assert.equal(fora.className, 'admin-meta-contagem');
+  assert.equal(fora.className, 'admin-meta-contagem is-fora');
+  assert.equal(primeiro.children[2].children[0].className, 'admin-meta-contagem is-dentro');
   assert.equal(primeiro.children[1].children[0].className, 'admin-meta-contagem is-total');
   fora.dispatch('click');
   await wait();
@@ -4370,6 +4395,11 @@ test('cada contagem da meta abre o card so com os julgados dela', async () => {
   const linhas = doc.getElementById('detalheTable').children[1].children;
   assert.equal(linhas.length, 3, 'Julgados abre o período inteiro');
   assert.deepEqual(linhas.map(tr => tr.children.at(-1).children[0].textContent), ['Fora', 'Dentro', 'Sem prazo']);
+  assert.deepEqual(linhas.map(tr => tr.children.at(-1).children[0].className),
+    ['admin-badge admin-badge-fora', 'admin-badge admin-badge-sucesso', 'admin-meta-sem-prazo'],
+    'sem prazo é ausência de dado: texto, e não selo');
+  assert.deepEqual(linhas.map(tr => tr.children[4].className), ['admin-meta-dias-fora', '', ''],
+    'só os dias acima de 45 levam a cor de Fora');
 });
 
 test('card da meta conta os julgados por destino e filtra a lista por eles', async () => {
