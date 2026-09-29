@@ -16,10 +16,10 @@ colors:
   historico-green: "#16816e"
   historico-green-hover: "#126b5c"
   historico-muted: "#466c61"
-  meta-petrol: "#1b6b78"
-  meta-petrol-hover: "#155662"
-  meta-muted: "#48666b"
-  surface-meta: "#eff5f6"
+  meta-green: "#117565"
+  meta-green-hover: "#0f6a5c"
+  meta-muted: "#496c62"
+  surface-meta: "#f4f9f7"
   alert-red: "#b42318"
   alert-red-soft: "rgba(180, 35, 24, 0.1)"
   positive-green: "#16816e"
@@ -140,7 +140,7 @@ A paleta é quase monocromática: um verde institucional para ação e identidad
 - **Verde do Acervo (hover)** (`#095548`) / **texto de apoio** (`#4c6c63`, a descrição do card).
 - **Verde do Histórico** (`#16816e`): mesmo papel, para o card "Histórico de sorteios". É a mesma progressão de verde que o README descreve — cada um dos quatro cards da tela inicial tem seu próprio tom, do neutro ao mais saturado.
 - **Verde do Histórico (hover)** (`#126b5c`) / **texto de apoio** (`#466c61`, a descrição do card).
-- **Petróleo da Meta** (`#1b6b78`, hover `#155662`, apoio `#48666b`, fundo `#eff5f6`): o card "Meta de 45 dias", que só o papel de consulta vê na tela inicial, e a moldura do login de `meta-45.html`. Fica fora da progressão de verdes de propósito: quem tem consulta num órgão e outro papel no outro vê este card ao lado do histórico, e com a cor dele os dois se liam como um só.
+- **Verde da Meta** (`#117565`, hover `#0f6a5c`, apoio `#496c62`, fundo `#f4f9f7`): o card "Meta de 45 dias", que só o papel de consulta vê na tela inicial, e a moldura do login de `meta-45.html`. O card fica entre o Acervo e o Histórico, e cada valor é a média do par vizinho: é o degrau do meio da mesma progressão de verdes, sem salto de matiz. Um petróleo à parte foi tentado e recusado, porque quebrava o degradê com o card do Acervo logo acima.
 - **Vermelho de Alerta** (`#b42318`): erro, validação bloqueada, ação destrutiva. Nunca usado para ênfase neutra — só quando algo está de fato errado.
 - **Verde Positivo** (`#16816e`): cor isolada do `.status-dot` no painel do acervo — um indicador de 8px que sinaliza estado saudável. Coincide em valor com o Verde do Histórico, mas é um uso à parte (o indicador, nunca um card) — nunca usado em botão ou texto de ação.
 
