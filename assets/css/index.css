@@ -93,13 +93,13 @@
   --accent-historico: #16816e;
   --accent-historico-hover: #126b5c;
   --muted-historico: #466c61;
-  /* O quinto card, a Meta 45 do papel de consulta: um petróleo ao lado da
-     progressão de verdes, porque quem tem consulta num órgão e outro papel no
-     outro vê este card e o do histórico lado a lado. */
-  --accent-meta: #1b6b78;
-  --accent-meta-hover: #155662;
-  --muted-meta: #48666b;
-  --surface-meta: #eff5f6;
+  /* O quinto card, a Meta 45 do papel de consulta, fica entre o acervo e o
+     histórico na tela inicial e é o degrau do meio entre os dois: cada valor
+     é a média do par vizinho, e a progressão segue sem salto de matiz. */
+  --accent-meta: #117565;
+  --accent-meta-hover: #0f6a5c;
+  --muted-meta: #496c62;
+  --surface-meta: #f4f9f7;
   --status-positive: #16816e;
   --status-positive-ring: rgba(22, 129, 110, 0.11);
   --on-accent-icon: #b8dbd1;
@@ -497,7 +497,8 @@ p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(-
    Sorteio, --accent-secondary para Registrar dados faltantes, --accent-acervo
    e --accent-historico para os outros dois) — nenhuma delas é um valor de
    uso único, então nenhuma fica hardcoded aqui. A Meta 45 do papel de
-   consulta fica fora da progressão, com o próprio par (--accent-meta). */
+   consulta, entre o acervo e o histórico, é o degrau do meio da mesma
+   progressão, com o próprio par (--accent-meta). */
 .selection-card-sorteio { background: #ffffff; }
 .selection-card-sorteio .selection-copy h2 { color: var(--accent); }
 .selection-card-sorteio .mode-description { color: var(--muted); }
