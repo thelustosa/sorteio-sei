@@ -49,6 +49,20 @@ revoke all privileges on table public.permissoes_usuario
   from anon, authenticated;
 grant select on public.permissoes_usuario to authenticated;
 
+-- O papel mora aqui, e não junto do painel administrativo, porque
+-- tem_acesso_orgao() logo abaixo já o lê (ver "Papel do usuário").
+alter table public.permissoes_usuario
+  add column if not exists papel text not null default 'operador';
+
+alter table public.permissoes_usuario
+  drop constraint if exists permissoes_usuario_papel_check;
+alter table public.permissoes_usuario
+  add constraint permissoes_usuario_papel_check
+  check (papel in ('operador', 'admin', 'consulta'));
+
+-- 'consulta' vê o acervo e a Meta 45, e mais nada: fica fora de toda porta
+-- guardada por tem_acesso_orgao() — sorteio, julgados, votos e histórico. As
+-- RPCs do painel do acervo usam tem_acesso_acervo(), que aceita qualquer papel.
 create or replace function public.tem_acesso_orgao(p_orgao text)
 returns boolean
 language sql
@@ -60,7 +74,38 @@ as $$
     select 1 from public.permissoes_usuario p
      where p.user_id = (select auth.uid())
        and p.orgao = p_orgao
+       and p.papel <> 'consulta'
   )
+$$;
+
+create or replace function public.tem_acesso_acervo(p_orgao text)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.permissoes_usuario p
+     where p.user_id = (select auth.uid())
+       and p.orgao = p_orgao
+  )
+$$;
+
+-- É o que o front consulta para levar a Meta 45 à tela inicial e esconder o
+-- que a consulta não usa, como faz com orgaos_administrados().
+create or replace function public.orgaos_consultados()
+returns table (orgao text)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select p.orgao
+    from public.permissoes_usuario p
+   where p.user_id = (select auth.uid())
+     and p.papel = 'consulta'
+   order by p.orgao
 $$;
 
 create or replace function public.orgaos_autorizados()
@@ -82,6 +127,10 @@ revoke all on function public.orgaos_autorizados()
   from public, anon, service_role;
 grant execute on function public.tem_acesso_orgao(text) to authenticated;
 grant execute on function public.orgaos_autorizados() to authenticated;
+revoke all on function public.tem_acesso_acervo(text) from public, anon, service_role;
+revoke all on function public.orgaos_consultados() from public, anon, service_role;
+grant execute on function public.tem_acesso_acervo(text) to authenticated;
+grant execute on function public.orgaos_consultados() to authenticated;
 
 create table if not exists public.acervo_cj (
   id                bigint generated always as identity primary key,
@@ -705,7 +754,7 @@ begin
     raise exception 'autenticação exigida' using errcode = '28000';
   end if;
 
-  if not (select public.tem_acesso_orgao('CJ')) then
+  if not (select public.tem_acesso_acervo('CJ')) then
     raise exception 'acesso ao orgao CJ nao autorizado' using errcode = '42501';
   end if;
 
@@ -816,7 +865,7 @@ begin
     raise exception 'autenticação exigida' using errcode = '28000';
   end if;
 
-  if not (select public.tem_acesso_orgao('CJ')) then
+  if not (select public.tem_acesso_acervo('CJ')) then
     raise exception 'acesso ao orgao CJ nao autorizado' using errcode = '42501';
   end if;
 
@@ -1596,7 +1645,7 @@ begin
     raise exception 'autenticação exigida' using errcode = '28000';
   end if;
 
-  if not (select public.tem_acesso_orgao('CREG')) then
+  if not (select public.tem_acesso_acervo('CREG')) then
     raise exception 'acesso ao orgao CREG nao autorizado' using errcode = '42501';
   end if;
 
@@ -1711,7 +1760,7 @@ begin
     raise exception 'autenticação exigida' using errcode = '28000';
   end if;
 
-  if not (select public.tem_acesso_orgao('CREG')) then
+  if not (select public.tem_acesso_acervo('CREG')) then
     raise exception 'acesso ao orgao CREG nao autorizado' using errcode = '42501';
   end if;
 
@@ -1785,7 +1834,7 @@ begin
   end if;
 
   if p_colegiado not in ('CJ', 'CREG')
-     or not (select public.tem_acesso_orgao(p_colegiado)) then
+     or not (select public.tem_acesso_acervo(p_colegiado)) then
     raise exception 'acesso ao orgao % nao autorizado', p_colegiado using errcode = '42501';
   end if;
 
@@ -2140,20 +2189,14 @@ grant execute on function public.ping() to anon, authenticated;
 -- Uma coluna, e não uma tabela nova. A chave primária (user_id, orgao) não
 -- muda, e as linhas existentes nascem 'operador': migrar não promove ninguém.
 --
--- tem_acesso_orgao() continua idêntica — qualquer papel dá acesso ao órgão —,
--- então todas as policies e RPCs anteriores seguem valendo sem alteração. O
--- papel só é consultado pelas portas administrativas.
+-- Operador e administrador passam igual por tem_acesso_orgao(); a diferença
+-- entre os dois só é consultada pelas portas administrativas. O terceiro papel,
+-- 'consulta', é o único que tem_acesso_orgao() recusa. A coluna e o check estão
+-- no topo, junto de permissoes_usuario.
 --
 -- Por que não representar como orgao = 'CJ:ADMIN': o check da coluna e o
 -- retorno de orgaos_autorizados() são consumidos por bootstrap.js, pelas
 -- policies e pelos testes de acesso. Um valor composto contaminaria os três.
-alter table public.permissoes_usuario
-  add column if not exists papel text not null default 'operador';
-
-alter table public.permissoes_usuario
-  drop constraint if exists permissoes_usuario_papel_check;
-alter table public.permissoes_usuario
-  add constraint permissoes_usuario_papel_check check (papel in ('operador', 'admin'));
 
 create or replace function public.e_admin_orgao(p_orgao text)
 returns boolean
@@ -2265,6 +2308,36 @@ begin
 end;
 $$;
 
+-- Porteiro da Meta 45: as mesmas três recusas, mas o painel de prazo abre
+-- também para o papel de consulta, que não passa por admin_exigir().
+create or replace function public.meta_45_exigir(p_orgao text)
+returns void
+language plpgsql
+stable
+security invoker
+set search_path = ''
+as $$
+begin
+  if (select auth.uid()) is null or nullif(public.auth_email(), '') is null then
+    raise exception 'autenticação exigida' using errcode = '28000';
+  end if;
+
+  if coalesce(p_orgao, '') not in ('CJ', 'CREG') then
+    raise exception 'colegiado desconhecido: %', p_orgao using errcode = '22023';
+  end if;
+
+  if not exists (
+    select 1 from public.permissoes_usuario p
+     where p.user_id = (select auth.uid())
+       and p.orgao = p_orgao
+       and p.papel in ('admin', 'consulta')
+  ) then
+    raise exception 'acesso a meta 45 do orgao % nao autorizado', p_orgao
+      using errcode = '42501';
+  end if;
+end;
+$$;
+
 -- Allowlist. Campo fora dela é 22023, e não silêncio: pedir para alterar
 -- `relator` numa correção de julgado é engano de quem chamou, não um no-op.
 create or replace function public.admin_validar_campos(p_campos jsonb, p_permitidos text[])
@@ -2335,6 +2408,9 @@ $$;
 revoke all on function public.admin_exigir(text)
   from public, anon, service_role;
 grant execute on function public.admin_exigir(text) to authenticated;
+revoke all on function public.meta_45_exigir(text)
+  from public, anon, service_role;
+grant execute on function public.meta_45_exigir(text) to authenticated;
 revoke all on function public.admin_validar_campos(jsonb, text[])
   from public, anon, authenticated, service_role;
 revoke all on function public.admin_delta(jsonb, jsonb, text[])
@@ -2706,7 +2782,7 @@ security definer
 set search_path = ''
 as $$
 begin
-  perform public.admin_exigir(p_colegiado);
+  perform public.meta_45_exigir(p_colegiado);
 
   return query
   with linhas as (
@@ -2743,7 +2819,7 @@ security definer
 set search_path = ''
 as $$
 begin
-  perform public.admin_exigir(p_colegiado);
+  perform public.meta_45_exigir(p_colegiado);
 
   -- Mesmo recorte de admin_meta_45 (status 'Julgado', período pela sessão):
   -- se os dois divergirem, o card abre um número diferente do que a célula

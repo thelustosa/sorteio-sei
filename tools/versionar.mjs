@@ -23,7 +23,7 @@ export const FONTES = [
 export const PAGINAS = ['index.html', 'julgados-cj.html', 'julgados-creg.html',
                         'acervo-cj.html', 'acervo-creg.html',
                         'historico-cj.html', 'historico-creg.html',
-                        'admin.html', '404.html'];
+                        'admin.html', 'meta-45.html', '404.html'];
 
 const ler = caminho => readFileSync(join(RAIZ, caminho), 'utf8');
 // Zera a própria versão antes de hashear, senão o valor gravado mudaria o hash
