@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=70085357c6" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=2708d921d9" />
   <script>
     (function () {
       try {
@@ -25,11 +25,11 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=70085357c6"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=70085357c6"></script>
+  <script defer src="assets/js/supabase.min.js?v=2708d921d9"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=2708d921d9"></script>
 </head>
 
-<body class="admin-page" data-page="meta-45">
+<body data-page="meta-45">
   <a class="skip-link" href="#conteudo-principal">Pular para o conteúdo principal</a>
   <div class="page-header-wrapper">
     <div class="container">
@@ -96,16 +96,16 @@
         </div>
 
         <div class="app-login-form-card">
-          <span class="app-login-eyebrow">Identificação</span>
-          <h2>Entrar no painel</h2>
-          <p>Use suas credenciais institucionais.</p>
+          <span class="app-login-eyebrow">Consulta protegida</span>
+          <h2>Acessar a Meta 45</h2>
+          <p>Entre para acompanhar os julgados dentro e fora do prazo.</p>
           <form id="loginForm">
             <label for="loginEmail">E-mail</label>
             <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
             <label for="loginSenha">Senha</label>
             <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
             <label class="login-lembrar"><input id="loginLembrar" type="checkbox"> Lembrar-me neste computador</label>
-            <button id="btnEntrar" type="submit">Entrar</button>
+            <button id="btnEntrar" type="submit">Consultar a meta</button>
             <div id="loginErro" role="alert" aria-live="assertive"></div>
           </form>
         </div>
@@ -228,7 +228,7 @@
               <span class="status-dot" aria-hidden="true"></span>
               <span id="painelStatus">Carregando…</span>
             </div>
-            <span id="painelHint" class="admin-panel-hint">Sem prazo aferível — sem a data da distribuição, ou com a sessão antes dela — fica fora do percentual.</span>
+            <span id="painelHint" class="admin-panel-hint"></span>
           </footer>
         </section>
       </div>
