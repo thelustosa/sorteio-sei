@@ -76,6 +76,8 @@ class Node {
     if (selector === '[data-orgao-admin]') return Object.hasOwn(this.dataset, 'orgaoAdmin');
     if (selector === '[data-aba]') return Object.hasOwn(this.dataset, 'aba');
     if (selector === '[data-admin]') return Object.hasOwn(this.dataset, 'admin');
+    if (selector === '[data-consulta]') return Object.hasOwn(this.dataset, 'consulta');
+    if (selector === '[data-pleno]') return Object.hasOwn(this.dataset, 'pleno');
     if (selector === '[data-login-only]') return Object.hasOwn(this.dataset, 'loginOnly');
     if (selector === '[data-export-format]') return Object.hasOwn(this.dataset, 'exportFormat');
     if (selector === '[role="menuitem"]') return this.role === 'menuitem';
@@ -187,6 +189,7 @@ function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null, local = ne
       autenticar, salvarSessao, restaurarSessao, encerrarSessao, revogarSessaoAtual, sair, api, ligarLogin,
       buscarOrgaosAutorizados: typeof buscarOrgaosAutorizados === 'function' ? buscarOrgaosAutorizados : undefined,
       aplicarVisibilidadePorOrgao: typeof aplicarVisibilidadePorOrgao === 'function' ? aplicarVisibilidadePorOrgao : undefined,
+      aplicarVisibilidadeConsulta: typeof aplicarVisibilidadeConsulta === 'function' ? aplicarVisibilidadeConsulta : undefined,
       erroSemPermissao: typeof erroSemPermissao === 'function' ? erroSemPermissao : undefined,
       CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicador,
       alternarBotaoCarregando, redirecionarSemTransicao, mostrarErro, equalizarColunas, mostrarIndicador,
@@ -736,6 +739,46 @@ test('visibilidade por permissões oculta somente os controles não autorizados'
   page.aplicarVisibilidadePorOrgao(new Set(['CJ', 'CREG']), page.document);
   assert.equal(controleCreg.hidden, false);
   assert.equal(controleCj.hidden, false);
+});
+
+// Papel de consulta: na tela inicial ele vê o acervo e a Meta 45. Sorteio,
+// histórico e registro (data-pleno) ficam só com os órgãos em que o papel é
+// outro, e somem quando não sobra nenhum.
+test('papel de consulta esconde os caminhos plenos e mostra o card da Meta 45', () => {
+  const page = supabaseApp(async () => {});
+  assert.equal(typeof page.aplicarVisibilidadeConsulta, 'function');
+  const pleno = page.document.createElement('section');
+  pleno.dataset.pleno = '';
+  const grupo = page.document.createElement('div');
+  grupo.className = 'buttons-wrapper';
+  const botaoCreg = page.document.createElement('button');
+  botaoCreg.dataset.orgao = 'CREG';
+  const botaoCj = page.document.createElement('button');
+  botaoCj.dataset.orgao = 'CJ';
+  grupo.append(botaoCreg, botaoCj);
+  pleno.append(grupo);
+  const meta = page.document.createElement('section');
+  meta.dataset.consulta = '';
+  meta.hidden = true;
+  page.document.body.append(pleno, meta);
+
+  // Só consulta: o caminho pleno some inteiro e a Meta aparece.
+  page.aplicarVisibilidadeConsulta(new Set(['CJ', 'CREG']), new Set(), page.document);
+  assert.equal(pleno.hidden, true);
+  assert.equal(meta.hidden, false);
+
+  // Consulta na CJ, operador no CREG: o caminho pleno fica só com o CREG.
+  page.aplicarVisibilidadeConsulta(new Set(['CJ']), new Set(['CREG']), page.document);
+  assert.equal(pleno.hidden, false);
+  assert.equal(botaoCreg.hidden, false);
+  assert.equal(botaoCj.hidden, true);
+  assert.equal(meta.hidden, false);
+
+  // Sem consulta: tudo como sempre, e a Meta fica no painel administrativo.
+  page.aplicarVisibilidadeConsulta(new Set(), new Set(['CJ', 'CREG']), page.document);
+  assert.equal(pleno.hidden, false);
+  assert.equal(botaoCj.hidden, false);
+  assert.equal(meta.hidden, true);
 });
 
 test('grupo com um colegiado só vira coluna única para centralizar o botão', () => {
@@ -1693,6 +1736,9 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
   // O papel de administrador: só a tela inicial e o painel o consultam.
   buscarAdmin = async () => new Set(),
   aplicarVisibilidadeAdmin = () => {},
+  // O papel de consulta: fora do acervo e do painel, sai junto com a permissão.
+  buscarConsulta = async () => new Set(),
+  aplicarVisibilidadeConsulta = () => {},
   // A moldura estática do painel (acervo, histórico), como está no HTML.
   comMoldura = false
 } = {}) {
@@ -1728,13 +1774,15 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
     'acervo-cj': 'inicializarAcervo',
     'acervo-creg': 'inicializarAcervo',
     'historico-cj': 'inicializarHistorico',
-    'historico-creg': 'inicializarHistorico'
+    'historico-creg': 'inicializarHistorico',
+    'meta-45': 'inicializarAdmin'
   };
 
   const app = new Function('document', 'window', 'location', 'ASSET_VERSION', 'carregarScript',
     'criarIndicadorCarregamento', 'ligarLogin', 'buscarOrgaosAutorizados',
     'aplicarVisibilidadePorOrgao', 'erroSemPermissao', 'sair', 'redirecionarSemTransicao',
     'buscarOrgaosAdministrados', 'aplicarVisibilidadeAdmin', 'mostrarIndicador', 'aguardarIndicador',
+    'buscarOrgaosConsultados', 'aplicarVisibilidadeConsulta',
     `${source('bootstrap.js')}\nreturn {
       resolverDestinoPermitido: typeof resolverDestinoPermitido === 'function' ? resolverDestinoPermitido : undefined,
       carregarPaginaAutenticada
@@ -1743,7 +1791,8 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
     texto => { const estado = document.createElement('div'); estado.textContent = texto; return estado; },
     callback => { aoEntrar = callback; }, buscarOrgaos, aplicarVisibilidade, erroPermissao,
     encerrarSessaoNoServidor, destino => location.replace(destino),
-    buscarAdmin, aplicarVisibilidadeAdmin, mostrarIndicador, aguardarIndicador);
+    buscarAdmin, aplicarVisibilidadeAdmin, mostrarIndicador, aguardarIndicador,
+    buscarConsulta, aplicarVisibilidadeConsulta);
 
   return { ...app, document, sessionLoading, moldura, loginScreen, loginErro, btnSair, iniciar: () => aoEntrar() };
 }
@@ -1878,6 +1927,66 @@ test('redireciona URL proibida sem carregar seu módulo', async () => {
 
   assert.deepEqual(destinos, ['./historico-creg.html']);
   assert.equal(scriptsCarregados, 0);
+});
+
+test('consulta que abre o histórico volta para a tela inicial, sem sair', async () => {
+  const destinos = [];
+  let scriptsCarregados = 0;
+  let encerrou = 0;
+  const page = bootstrapPage(async () => {}, 'historico-cj', {
+    buscarOrgaos: async () => new Set(['CJ']),
+    buscarConsulta: async () => new Set(['CJ']),
+    encerrarSessaoNoServidor: async () => { encerrou++; },
+    carregar: async () => { scriptsCarregados++; },
+    location: { replace(destino) { destinos.push(destino); } }
+  });
+
+  await page.iniciar();
+
+  assert.deepEqual(destinos, ['./index.html']);
+  assert.equal(scriptsCarregados, 0);
+  assert.equal(encerrou, 0);
+});
+
+test('consulta abre o acervo sem consultar o papel', async () => {
+  let consultou = 0;
+  let iniciou = 0;
+  const page = bootstrapPage(async () => { iniciou++; }, 'acervo-cj', {
+    buscarConsulta: async () => { consultou++; return new Set(['CJ']); }
+  });
+
+  await page.iniciar();
+
+  assert.equal(iniciou, 1);
+  assert.equal(consultou, 0);
+});
+
+test('a página da Meta 45 abre só para a consulta, com os órgãos dela', async () => {
+  let recebidos;
+  const page = bootstrapPage(async orgaos => { recebidos = orgaos; }, 'meta-45', {
+    buscarOrgaos: async () => new Set(['CJ', 'CREG']),
+    buscarConsulta: async () => new Set(['CREG'])
+  });
+  await page.iniciar();
+  assert.deepEqual([...recebidos], ['CREG']);
+
+  let scriptsCarregados = 0;
+  let encerrou = 0;
+  const negada = bootstrapPage(async () => {}, 'meta-45', {
+    buscarOrgaos: async () => new Set(['CJ']),
+    buscarConsulta: async () => new Set(),
+    encerrarSessaoNoServidor: async () => { encerrou++; },
+    carregar: async () => { scriptsCarregados++; }
+  });
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    await negada.iniciar();
+  } finally {
+    console.error = originalConsoleError;
+  }
+  assert.equal(scriptsCarregados, 0);
+  assert.equal(encerrou, 1);
 });
 
 test('nega usuário sem órgãos, revoga a sessão e não carrega o módulo', async () => {

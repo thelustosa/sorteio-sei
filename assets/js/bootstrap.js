@@ -23,7 +23,11 @@ const PAGINAS = {
   // colegiados e traz o seletor dentro dele. Por isso não entra por `orgao`,
   // que é o que redireciona quem abre a URL do colegiado errado, e sim por
   // `exigeAdmin` — quem decide se ela abre é o papel, não a página.
-  admin: { exigeAdmin: true, arquivo: 'admin.min.js', iniciar: 'inicializarAdmin', texto: 'Preparando o painel…' }
+  admin: { exigeAdmin: true, arquivo: 'admin.min.js', iniciar: 'inicializarAdmin', texto: 'Preparando o painel…' },
+  // A Meta 45 do papel de consulta: o mesmo módulo do painel, numa página que
+  // só traz aquela aba. Quem decide se ela abre é o papel de consulta, como no
+  // painel é o de administrador; o administrador segue vendo a Meta lá dentro.
+  'meta-45': { exigeConsulta: true, arquivo: 'admin.min.js', iniciar: 'inicializarAdmin', texto: 'Preparando o painel…' }
 };
 
 const DESTINOS = {
@@ -79,7 +83,7 @@ function recolherMoldura() {
 // baixa — quem executa continua sendo o carregarScript, depois do porteiro. O
 // painel fica de fora: lá a consulta decide se o módulo é baixado.
 function anteciparScript(src) {
-  if (scriptAntecipado || paginaAtual.exigeAdmin) return;
+  if (scriptAntecipado || paginaAtual.exigeAdmin || paginaAtual.exigeConsulta) return;
   scriptAntecipado = true;
   const link = document.createElement('link');
   link.rel = 'preload';
@@ -131,24 +135,53 @@ async function carregarPaginaAutenticada() {
       .then(orgaos => aplicarVisibilidadeAdmin(orgaos));
   }
 
+  // O papel de consulta sai junto com a permissão, e não depois dela: ele muda
+  // o roteamento. Fica de fora onde não muda nada — o acervo, que ele também
+  // usa, e o painel, que ele não abre. Fora da página da Meta 45, uma falha
+  // aqui vale como "nenhum órgão de consulta": a tela fica como sempre foi, e
+  // quem recusa o que ela oferecer a mais é o banco.
+  let pedidoConsulta = paginaAtual.familia === 'acervo' || paginaAtual.exigeAdmin
+    ? Promise.resolve(new Set())
+    : buscarOrgaosConsultados();
+  if (!paginaAtual.exigeConsulta) pedidoConsulta = pedidoConsulta.catch(() => new Set());
+
   try {
-    const orgaos = await buscarOrgaosAutorizados();
+    const [orgaos, consultados] = await Promise.all([buscarOrgaosAutorizados(), pedidoConsulta]);
     if (!(orgaos instanceof Set) || orgaos.size === 0) throw erroSemPermissao();
 
-    const destino = resolverDestinoPermitido(document.body.dataset.page, orgaos);
+    // Sorteio, julgados e histórico só abrem nos órgãos em que o papel não é
+    // de consulta; o acervo abre em todos.
+    const plenos = new Set([...orgaos].filter(orgao => !consultados.has(orgao)));
+    const permitidos = paginaAtual.familia === 'acervo' ? orgaos : plenos;
+
+    const destino = resolverDestinoPermitido(document.body.dataset.page, permitidos);
     if (destino) {
       redirecionarSemTransicao(destino);
       return;
     }
-    if (paginaAtual.orgao && !orgaos.has(paginaAtual.orgao)) throw erroSemPermissao();
+    if (paginaAtual.orgao && !permitidos.has(paginaAtual.orgao)) {
+      // Consulta que abriu uma página que não é dela volta para a inicial, e
+      // não para o login: ela tem acesso, só não àquela tela.
+      if (orgaos.has(paginaAtual.orgao)) {
+        redirecionarSemTransicao('./index.html');
+        return;
+      }
+      throw erroSemPermissao();
+    }
 
     aplicarVisibilidadePorOrgao(orgaos);
+    aplicarVisibilidadeConsulta(consultados, plenos);
 
     // O papel de administrador custa uma consulta a mais, então só é buscado
     // onde muda alguma coisa: no próprio painel, e na tela inicial, que decide
     // se mostra o link para ele. As outras páginas seguem com uma consulta só.
     let orgaosAdmin = new Set();
-    if (paginaAtual.exigeAdmin) {
+    if (paginaAtual.exigeConsulta) {
+      // Mesmo porteiro do painel, com o papel de consulta no lugar do de
+      // administrador; os órgãos dele montam o seletor da página.
+      if (consultados.size === 0) throw erroSemPermissao();
+      orgaosAdmin = consultados;
+    } else if (paginaAtual.exigeAdmin) {
       // Aqui a consulta é o porteiro da página: ela vem ANTES do download, para
       // não buscar o módulo do painel de quem não pode abri-lo.
       orgaosAdmin = await buscarOrgaosAdministrados();

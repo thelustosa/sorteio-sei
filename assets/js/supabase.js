@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '7b2dff1d78';
+const ASSET_VERSION = '580180a99e';
 const TEMPO_LIMITE_REDE = 20000;
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
@@ -472,7 +472,17 @@ async function buscarOrgaosAutorizados() {
 // página do painel e a inicial, que decide se mostra o link. As demais telas
 // seguem com uma consulta de permissão só, como antes.
 async function buscarOrgaosAdministrados() {
-  const linhas = await api('rpc/orgaos_administrados', {
+  return buscarOrgaosDoPapel('rpc/orgaos_administrados');
+}
+
+// O papel de consulta vê só o acervo e a Meta 45. Quem descobre isso é o
+// bootstrap, nas páginas em que o papel muda o que aparece ou para onde ir.
+async function buscarOrgaosConsultados() {
+  return buscarOrgaosDoPapel('rpc/orgaos_consultados');
+}
+
+async function buscarOrgaosDoPapel(rpc) {
+  const linhas = await api(rpc, {
     method: 'POST',
     body: '{}'
   });
@@ -489,6 +499,21 @@ async function buscarOrgaosAdministrados() {
 function aplicarVisibilidadeAdmin(orgaosAdmin, raiz = document) {
   raiz.querySelectorAll('[data-admin]').forEach(elemento => {
     elemento.hidden = orgaosAdmin.size === 0;
+  });
+}
+
+// Na tela inicial, data-consulta é o card da Meta 45 — só do papel de
+// consulta — e data-pleno marca os caminhos que esse papel não usa (sorteio,
+// histórico, registro): eles ficam só com os órgãos em que o papel é outro, e
+// somem inteiros quando não sobra nenhum. De novo conveniência: quem recusa é
+// tem_acesso_orgao(), no banco.
+function aplicarVisibilidadeConsulta(consultados, plenos, raiz = document) {
+  raiz.querySelectorAll('[data-consulta]').forEach(elemento => {
+    elemento.hidden = consultados.size === 0;
+  });
+  raiz.querySelectorAll('[data-pleno]').forEach(secao => {
+    aplicarVisibilidadePorOrgao(plenos, secao);
+    secao.hidden = plenos.size === 0;
   });
 }
 
