@@ -136,7 +136,7 @@ btnVoltar.addEventListener('click', () => {
   sortearBtn.hidden = true;
   processSetupHint.hidden = false;
   sortControls.hidden = false;
-  txtModo.textContent = 'Sorteio de processos';
+  txtModo.textContent = 'Sorteio de processos e Acervo';
   clearRows();
   
   // Resetar visualização de resultados

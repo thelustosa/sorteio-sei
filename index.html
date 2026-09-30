@@ -7,12 +7,12 @@
   <meta name="theme-color" content="#00534b" />
   <meta name="description"
     content="Distribuição de processos SEI por sorteio eletrônico da AGR, com repartição igualitária por assunto e registro auditável." />
-  <title>Sorteio de Processos SEI</title>
+  <title>Sorteio de Processos SEI e Acervo</title>
   <link rel="preconnect" href="https://giipnmpfclfudkzflwsv.supabase.co" crossorigin />
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=7dec1355ee" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=ada5c559ff" />
   <script>
     (function () {
       try {
@@ -35,8 +35,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./acervo-cj.html", "./acervo-creg.html", "./historico-cj.html", "./historico-creg.html", "./julgados-cj.html", "./julgados-creg.html", "./meta-45.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=7dec1355ee"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=7dec1355ee"></script>
+  <script defer src="assets/js/supabase.min.js?v=ada5c559ff"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=ada5c559ff"></script>
 </head>
 
 <body data-page="sorteio">
@@ -49,7 +49,7 @@
         </div>
         <div class="header-copy">
           <p class="institution-name">Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos</p>
-          <h1>Sorteio de Processos SEI</h1>
+          <h1>Sorteio de Processos SEI e Acervo</h1>
           <p class="lead">Sorteio, acervo, histórico e registro de julgamentos dos colegiados da AGR.</p>
         </div>
       </header>
@@ -58,7 +58,7 @@
 
   <nav class="green-bar" aria-label="Navegação do sistema">
     <div class="container">
-      <span id="txtModo">Sorteio de processos</span>
+      <span id="txtModo">Sorteio de processos e Acervo</span>
       <div class="nav-actions">
         <button id="btnVoltar" class="nav-action" type="button" hidden>
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -110,32 +110,32 @@
     <div class="card login-host">
       <section id="loginScreen" class="app-login" data-login-art="sorteio" aria-labelledby="loginTitulo">
         <div class="app-login-intro">
-          <span class="app-login-eyebrow">Nova distribuição</span>
+          <span class="app-login-eyebrow">Colegiados da AGR</span>
           <div class="app-login-symbol" aria-hidden="true">
             <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="16" cy="6" r="3"></circle><circle cx="7" cy="24" r="3"></circle><circle cx="25" cy="24" r="3"></circle>
               <path d="M14 8.5 8.5 21M18 8.5 23.5 21M10 24h12"></path>
             </svg>
           </div>
-          <h2 id="loginTitulo">Distribuição justa, resultado auditável</h2>
-          <p>Prepare um novo sorteio entre as unidades do colegiado com equilíbrio e rastreabilidade.</p>
+          <h2 id="loginTitulo">Sorteio, acervo e registro de julgamentos</h2>
+          <p>Distribuição equilibrada de processos, acompanhamento do acervo, histórico de rodadas e registro de decisões dos colegiados da AGR.</p>
           <ul class="app-login-assurances">
-            <li><span aria-hidden="true">✓</span>Balanceamento por quantidade e assunto</li>
-            <li><span aria-hidden="true">✓</span>Resultado registrado com autor e horário</li>
+            <li><span aria-hidden="true">✓</span>Sorteio eletrônico balanceado e auditável</li>
+            <li><span aria-hidden="true">✓</span>Consulta de acervo, histórico e julgamentos</li>
           </ul>
         </div>
 
         <div class="app-login-form-card">
           <span class="app-login-eyebrow">Identificação institucional</span>
-          <h2>Entrar para sortear</h2>
-          <p>Use suas credenciais para iniciar uma distribuição.</p>
+          <h2>Acessar o sistema</h2>
+          <p>Use suas credenciais institucionais para continuar.</p>
           <form id="loginForm">
             <label for="loginEmail">E-mail</label>
             <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
             <label for="loginSenha">Senha</label>
             <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
             <label class="login-lembrar"><input id="loginLembrar" type="checkbox"> Lembrar-me neste computador</label>
-            <button id="btnEntrar" type="submit">Acessar sorteio</button>
+            <button id="btnEntrar" type="submit">Acessar sistema</button>
             <div class="login-rodape">
               <div class="login-ajuda">
                 <button id="btnEsqueci" type="button" class="link-acao">Esqueci minha senha</button>
