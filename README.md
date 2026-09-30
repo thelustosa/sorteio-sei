@@ -52,7 +52,7 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
   - A tela de login apresenta contexto visual e textual específico para o destino solicitado.
   - O menu inicial ajusta dinamicamente a exibição e o posicionamento dos botões conforme os órgãos autorizados para o usuário logado.
   - A segurança é garantida em duas camadas: controle de interface em `bootstrap.js` e validação no banco de dados via RPCs `SECURITY DEFINER` e políticas de Row Level Security (RLS) que consultam `orgaos_autorizados()`. As senhas são tratadas com segurança diretamente pelo Supabase Auth.
-  - **Senha provisória**: as contas nascem com uma senha padrão que precisa ser trocada. Quem entra com ela é levado a um popup para definir a própria senha antes de acessar o sistema. O sistema sabe que a senha é a provisória por uma marca em `app_metadata.senha_provisoria`, que só aparece na resposta do login — depois de a senha ser provada — e é apagada pelo próprio banco quando a senha muda (migração `20260930111200_marca_senha_provisoria.sql`). A marca é ligada uma vez por `sql/marcar_senha_provisoria.sql`, e a sessão lembrada também passa pela troca: a renovação do token lê a marca de novo. Para redefinir a senha de uma conta (quem esqueceu, ou quem passou do prazo), use `sql/redefinir_senha_provisoria.sql`, e não o painel: o gatilho apagaria a marca junto. A senha provisória em si nunca fica no repositório.
+  - **Senha provisória**: as contas nascem com uma senha padrão que precisa ser trocada. Quem entra com ela é levado a um popup para definir a própria senha antes de acessar o sistema. O sistema sabe que a senha é a provisória por uma marca em `app_metadata.senha_provisoria`, que só aparece na resposta do login — depois de a senha ser provada — e é apagada pelo próprio banco quando a senha muda (migração `20260930111200_marca_senha_provisoria.sql`). A marca é ligada uma vez por `sql/marcar_senha_provisoria.sql`, e a sessão lembrada também passa pela troca: a renovação do token lê a marca de novo. Para redefinir a senha de quem a esqueceu, use `sql/redefinir_senha_provisoria.sql`, e não o painel: o gatilho apagaria a marca junto. A senha provisória em si nunca fica no repositório.
 - **Geração Dinâmica de Linhas**: Permite definir a quantidade inicial de processos a serem cadastrados na tabela (de 1 a 500 processos).
 - **Inserção e Exclusão Flexíveis**: 
   - Adicione novas linhas a qualquer momento utilizando o botão **Adicionar linha** sem perder os dados já preenchidos.
@@ -566,18 +566,17 @@ O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) repete essas v
 ### Atualização 3.11.0
 
 Troca obrigatória da senha provisória e "Esqueci minha senha" em todas as telas
-de login. **Antes** de publicar o frontend, aplique
-`20260930111200_marca_senha_provisoria.sql` (o gatilho que apaga a marca quando
-a senha muda) e rode uma vez `sql/marcar_senha_provisoria.sql` — nessa ordem:
-sem o gatilho, a marca nunca sairia depois da troca. Confira antes, na consulta
-do passo 1 do script, que nenhuma conta tem hash de custo 04 ou acima de 10.
+de login. A migração `20260930111200_marca_senha_provisoria.sql` (o gatilho que
+apaga a marca quando a senha muda) e `sql/marcar_senha_provisoria.sql` já foram
+aplicados em produção, nessa ordem: sem o gatilho, a marca nunca sairia depois
+da troca. Nenhuma conta tem hash de custo 04 ou acima de 10.
 
 A partir daí, quem entra com a senha provisória — pelo login ou por uma sessão
 lembrada, na próxima renovação do token — só segue depois de definir a própria.
-Para redefinir a senha de uma conta (quem esqueceu, ou quem passou do prazo),
-use `sql/redefinir_senha_provisoria.sql`, e não o painel do Supabase: o gatilho
-apagaria a marca junto. O comunicado aos usuários está em
-`docs/COMUNICADO-TROCA-SENHA.md`.
+Não há prazo para a troca: a marca só sai quando a pessoa define a própria
+senha. Para redefinir a senha de quem a esqueceu, use
+`sql/redefinir_senha_provisoria.sql`, e não o painel do Supabase: o gatilho
+apagaria a marca junto.
 
 A migração `papel_acervo_historico` foi renomeada para
 `20260930104112_papel_acervo_historico.sql`, a versão com que foi aplicada no

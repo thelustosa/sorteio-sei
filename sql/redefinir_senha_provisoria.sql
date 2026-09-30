@@ -1,7 +1,7 @@
 -- Redefine a senha de UMA conta para uma provisória e liga a marca de troca
--- obrigatória. É o caminho do "Esqueci minha senha" e da redefinição de quem
--- passou do prazo. Rode no SQL Editor trocando os dois valores entre <>, e não
--- salve o arquivo com eles: o repositório é público.
+-- obrigatória. É o caminho do "Esqueci minha senha". Rode no SQL Editor
+-- trocando os dois valores entre <>, e não salve o arquivo com eles: o
+-- repositório é público.
 --
 -- Por que não pelo painel ou pela Admin API: o gatilho da migração
 -- 20260930111200 apaga a marca em qualquer escrita da senha, porque não sabe
