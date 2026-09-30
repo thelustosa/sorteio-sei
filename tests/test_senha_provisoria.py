@@ -87,6 +87,38 @@ def conta_sem_app_metadata_nao_quebra_a_troca(cur):
     assert app_metadata(cur, ANA) == {}
 
 
+def redefinir(cur, email, senha):
+    # A transação é do teste: o begin/commit do script ficam de fora.
+    sql = ((RAIZ / 'sql' / 'redefinir_senha_provisoria.sql').read_text(encoding='utf-8')
+           .replace('<SENHA PROVISÓRIA>', senha).replace('<email@goias.gov.br>', email)
+           .replace('begin;', '').replace('commit;', ''))
+    cur.execute(sql)
+
+
+@teste
+def redefinicao_pelo_administrador_deixa_a_marca_ligada(cur):
+    # "Esqueci minha senha" e o fim do prazo: a senha que o administrador define
+    # é conhecida por ele, e a pessoa precisa passar pela troca de novo.
+    redefinir_marcas(cur)
+    cur.execute("update auth.users set encrypted_password = 'hash-novo' where id = %s", (ANA,))
+    assert 'senha_provisoria' not in app_metadata(cur, ANA)
+    cur.execute('delete from auth.sessions')
+    cur.execute('insert into auth.sessions (id, user_id) values (gen_random_uuid(), %s), (gen_random_uuid(), %s)',
+                (ANA, BIA))
+
+    # O e-mail vem do banco: outro teste o troca.
+    redefinir(cur, banco.uma(cur, 'select email from auth.users where id = %s', (ANA,)), 'provisoria-de-teste')
+
+    assert app_metadata(cur, ANA) == {'provider': 'email', 'senha_provisoria': True}, app_metadata(cur, ANA)
+    hash_ = banco.uma(cur, 'select encrypted_password from auth.users where id = %s', (ANA,))
+    assert hash_.startswith('$2a$10$'), f'custo 10: o login não regrava o hash (e não apaga a marca): {hash_}'
+    assert banco.uma(cur, 'select extensions.crypt(%s, %s) = %s', ('provisoria-de-teste', hash_, hash_)), hash_
+    assert banco.uma(cur, 'select count(*) from auth.sessions where user_id = %s', (ANA,)) == 0, \
+        'as sessões abertas com a senha antiga caem'
+    assert banco.uma(cur, 'select count(*) from auth.sessions where user_id = %s', (BIA,)) == 1, \
+        'e só as dessa conta'
+
+
 @teste
 def funcao_do_gatilho_nao_e_chamavel_pelos_papeis_da_api(cur):
     for papel in ('anon', 'authenticated'):
@@ -101,7 +133,10 @@ def funcao_do_gatilho_nao_e_chamavel_pelos_papeis_da_api(cur):
 
 
 def preparar_banco():
-    PG.executar('create schema if not exists public;')
+    PG.executar("""create schema if not exists public;
+                   create schema if not exists extensions;
+                   create extension if not exists pgcrypto schema extensions;
+                   create table if not exists auth.sessions (id uuid primary key, user_id uuid not null);""")
     PG.rodar_arquivo(RAIZ / 'supabase' / 'migrations' / '20260930111200_marca_senha_provisoria.sql')
 
 

@@ -4046,6 +4046,9 @@ grant execute on function public.admin_auditoria(text, int, bigint) to authentic
 -- se estiver ligada, pede a nova senha antes de entrar. Quem a liga é
 -- sql/marcar_senha_provisoria.sql; quem a desliga é este gatilho, ao trocar a
 -- senha por qualquer caminho. Mora em app_metadata, que o usuário não edita.
+-- O gatilho não sabe quem escreveu a senha: a redefinição pelo administrador
+-- passa por sql/redefinir_senha_provisoria.sql, que liga a marca numa escrita
+-- separada, depois da senha.
 create or replace function public.limpar_marca_senha_provisoria()
 returns trigger
 language plpgsql

@@ -17,7 +17,8 @@ própria senha **até [PRAZO]**.
 **Como trocar (leva menos de um minuto):**
 
 1. Entre no sistema como sempre, com o seu e-mail institucional e a senha provisória.
-2. Vai abrir uma janela pedindo a nova senha. Escolha uma com 8 caracteres ou mais, diferente da provisória, e confirme.
+   Se o sistema já abre direto para você ("Lembrar-me"), use-o normalmente: a mesma janela aparece em seguida.
+2. Vai abrir uma janela pedindo a nova senha. Escolha uma com 8 a 72 caracteres, diferente da provisória, e confirme.
 3. Pronto: você já entra no sistema. Nas próximas vezes, use a nova senha.
 
 A senha provisória deixa de funcionar assim que a troca é feita. Não é preciso se

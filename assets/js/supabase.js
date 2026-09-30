@@ -8,11 +8,12 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = 'dbce10adc4';
+const ASSET_VERSION = '7dec1355ee';
 const TEMPO_LIMITE_REDE = 20000;
 // "Esqueci minha senha": não há recuperação por e-mail, e a resposta é a mesma
 // para qualquer endereço digitado — a tela nunca confirma se ele existe.
 const MENSAGEM_SENHA_PERDIDA = 'Entre em contato com o Lucas Lustosa pelo ramal 6504 para recuperar a senha.';
+const MENSAGEM_TROCA_OBRIGATORIA = 'Troque a senha provisória para entrar.';
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
 // teste compara as duas listas), e mora aqui — e não na página do sorteio —
@@ -108,15 +109,17 @@ function encerrarSessao() {
   document.documentElement?.classList?.remove('has-session');
 }
 
-async function revogarSessaoAtual() {
-  if (!accessToken) return;
+// Sem argumento, a sessão desta aba; o popup da senha provisória passa o token
+// de uma sessão que ainda não foi salva.
+async function revogarSessaoAtual(token = accessToken) {
+  if (!token) return;
 
   const resp = await fetchComTimeout(`${baseUrl()}/auth/v1/logout?scope=local`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${accessToken}`
+      Authorization: `Bearer ${token}`
     }
   });
 
@@ -201,14 +204,27 @@ async function autenticar(email, senha) {
   return dados;
 }
 
+// O payload do JWT. Token ilegível devolve {}.
+function dadosDoToken(token) {
+  try {
+    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) || {};
+  } catch (_) {
+    return {};
+  }
+}
+
 // O `sub` do JWT é o id do usuário. Token ilegível devolve ''; os do Supabase
 // sempre trazem o `sub`.
 function usuarioDoToken(token) {
-  try {
-    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub || '';
-  } catch (_) {
-    return '';
-  }
+  return dadosDoToken(token).sub || '';
+}
+
+function pedirTokens(refresh) {
+  return fetchComTimeout(`${baseUrl()}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY },
+    body: JSON.stringify({ refresh_token: refresh })
+  });
 }
 
 async function executarRenovacao() {
@@ -238,11 +254,7 @@ async function executarRenovacao() {
       { status: 401 });
   }
 
-  const resp = await fetchComTimeout(`${baseUrl()}/auth/v1/token?grant_type=refresh_token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY },
-    body: JSON.stringify({ refresh_token: refreshToken })
-  });
+  const resp = await pedirTokens(refreshToken);
   const dados = await resp.json().catch(() => ({}));
 
   // Só a recusa do token (4xx) é sessão morta, e só ela vira 401 — que o
@@ -262,6 +274,15 @@ async function executarRenovacao() {
   // quando a resposta traz apenas um access token e atualiza os dois quando
   // recebe o novo par.
   salvarSessao(dados);
+
+  // A renovação lê a conta de novo: quem ficou com a sessão aberta ou lembrada
+  // desde antes da marca também passa pela troca, e não só quem digita a senha.
+  const sessao = await exigirSenhaPropria(dados);
+  if (!sessao) {
+    encerrarSessao();
+    throw Object.assign(new Error(MENSAGEM_TROCA_OBRIGATORIA), { status: 401 });
+  }
+  if (sessao !== dados) salvarSessao(sessao);
 }
 
 function renovarSessao() {
@@ -552,11 +573,18 @@ window.addEventListener('pagereveal', evento => {
 
 // Regra da senha nova, usada pelo popup do login para conta com senha provisória.
 const TAMANHO_MINIMO_SENHA = 8;
+// O bcrypt só lê 72 bytes, e o GoTrue recusa o que passar disso com um erro que
+// a tela não saberia explicar. Letra acentuada ocupa dois bytes.
+const TAMANHO_MAXIMO_SENHA = 72;
 
 // Devolve o campo a corrigir e a mensagem, ou null. Nenhuma mensagem depende do
-// e-mail informado.
+// e-mail informado. `atual` vazio (sessão restaurada, sem a senha em mãos) deixa
+// a comparação para o servidor, que responde same_password.
 function validarNovaSenha(atual, nova, confirmacao) {
   if (nova.length < TAMANHO_MINIMO_SENHA) return ['nova', `A nova senha deve ter ${TAMANHO_MINIMO_SENHA} caracteres ou mais.`];
+  if (new TextEncoder().encode(nova).length > TAMANHO_MAXIMO_SENHA) {
+    return ['nova', `A nova senha é longa demais: use até ${TAMANHO_MAXIMO_SENHA} caracteres (letras acentuadas contam como dois).`];
+  }
   if (nova === atual) return ['nova', 'A nova senha deve ser diferente da senha atual.'];
   if (nova !== confirmacao) return ['confirmacao', 'A confirmação não é igual à nova senha.'];
   return null;
@@ -582,20 +610,45 @@ async function gravarNovaSenha(token, nova) {
   throw new Error('Não foi possível trocar a senha. Tente novamente.');
 }
 
-// Encerra no servidor uma sessão que só existiu para a troca. Falhar aqui não
-// desfaz nada: o token expira sozinho.
-function revogarToken(token) {
-  return fetchComTimeout(`${baseUrl()}/auth/v1/logout?scope=local`, {
-    method: 'POST',
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
-  }).catch(() => {});
+// O fetch diz "sem rede" de um jeito em cada navegador: Chrome, Firefox e Safari.
+const ERRO_DE_REDE = /^(Failed to fetch|NetworkError when attempting to fetch resource\.|Load failed)$/;
+
+function mensagemDoErro(err) {
+  return ERRO_DE_REDE.test(err.message)
+    ? 'Não foi possível conectar ao servidor. Verifique sua conexão com a internet.'
+    : err.message;
 }
 
 // A conta foi marcada como "senha provisória" no banco (ver a migração
-// 20260930111200). A marca vem na resposta do login, depois de a senha ser
-// provada — nenhuma tela a consulta antes disso.
+// 20260930111200). A marca vem na resposta do login e na da renovação, depois
+// de a senha (ou o refresh token) ser provada — nenhuma tela a consulta antes.
 function senhaProvisoria(sessao) {
   return sessao?.user?.app_metadata?.senha_provisoria === true;
+}
+
+// O JWT guardado traz o app_metadata de quando foi emitido. Serve de pista para
+// a sessão restaurada; quem confirma é a renovação, que lê a conta de novo.
+function tokenComMarca(token) {
+  return dadosDoToken(token).app_metadata?.senha_provisoria === true;
+}
+
+// Conta com a senha provisória só segue depois de definir a própria: no login e
+// na renovação da sessão. Devolve a sessão com que seguir — uma nova, emitida
+// depois da troca, porque o token em mãos ainda traz a marca e faria a próxima
+// página pedir a troca de novo — ou null se a pessoa desistiu; nesse caso a
+// sessão é encerrada no servidor.
+async function exigirSenhaPropria(sessao, atual = '') {
+  if (!senhaProvisoria(sessao)) return sessao;
+  if (!(await pedirNovaSenha(sessao, atual))) {
+    // Falhar aqui não desfaz nada: o token expira sozinho.
+    await revogarSessaoAtual(sessao.access_token).catch(() => {});
+    return null;
+  }
+  // ponytail: sem rede logo depois da troca, segue com o token antigo; a página
+  // seguinte pede a troca mais uma vez, até a renovação trazer a conta sem marca.
+  const resp = await pedirTokens(sessao.refresh_token).catch(() => null);
+  const nova = resp?.ok ? await resp.json().catch(() => null) : null;
+  return nova?.access_token ? nova : sessao;
 }
 
 // Popups de aviso. Um <dialog> nativo: o modo modal já traz Escape, foco preso e
@@ -625,27 +678,35 @@ function criarDialogAviso(idTitulo, titulo, tracados) {
   cabecalho.id = idTitulo;
   cabecalho.textContent = titulo;
   dialog.append(marca, cabecalho);
-  manterModal(dialog);
   return dialog;
 }
 
+// Abre o <dialog> como modal e o mantém modal enquanto estiver aberto.
 // Reinserir o nó de um <dialog> aberto no DOM o tira da camada superior sem
 // fechá-lo — o que acontece quando um script de fora (extensão de gerenciador de
 // senhas, por exemplo) mexe na página. Ele continua `open`, mas deixa de ser
 // modal: cai como caixa absoluta no fim da página, que no <body> flex vira o
-// topo, atrás da barra verde e sem fundo escurecido nem foco preso. Aqui ele
-// volta a ser modal. Tirar o atributo `open` antes de showModal() não dispara o
-// evento `close`, que os popups tratam como desistência.
-function manterModal(dialog) {
+// topo, atrás da barra verde e sem fundo escurecido nem foco preso. O vigia o
+// devolve à camada superior. Ele não se desliga quando o nó sai do documento —
+// a extensão pode devolvê-lo numa tarefa seguinte —, só quando o popup fecha:
+// fechado, não há o que vigiar, e o documento inteiro deixa de ser observado.
+function abrirModal(dialog) {
+  dialog.showModal();
   if (typeof MutationObserver !== 'function') return;
   const vigia = new MutationObserver(() => {
-    if (!dialog.isConnected) return vigia.disconnect();
-    if (dialog.open && !dialog.matches(':modal')) {
+    if (dialog.isConnected && dialog.open && !dialog.matches(':modal')) {
       dialog.removeAttribute('open');
       dialog.showModal();
     }
   });
   vigia.observe(document.documentElement, { childList: true, subtree: true });
+  // Quem reabre o popup no próprio `close` (o da senha provisória) o mantém
+  // aberto, e o vigia continua.
+  dialog.addEventListener('close', function desligar() {
+    if (dialog.open) return;
+    vigia.disconnect();
+    dialog.removeEventListener('close', desligar);
+  });
 }
 
 let dialogSenhaPerdida = null;
@@ -663,13 +724,20 @@ function mostrarSenhaPerdida() {
     fechar.textContent = 'Entendi';
     fechar.addEventListener('click', () => dialog.close());
 
-    // Clique no fundo escurecido fecha; clique dentro do card, não.
-    dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
+    // Clique no fundo escurecido fecha; clique dentro do card, não. O alvo
+    // sozinho não separa os dois: o clique na margem interna do card também tem
+    // o <dialog> como alvo. O que separa é cair fora do retângulo dele — e um
+    // clique de teclado nunca tem o <dialog> como alvo.
+    dialog.addEventListener('click', e => {
+      if (e.target !== dialog) return;
+      const r = dialog.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dialog.close();
+    });
     dialog.append(texto, fechar);
     document.body.appendChild(dialog);
     dialogSenhaPerdida = dialog;
   }
-  if (!dialogSenhaPerdida.open) dialogSenhaPerdida.showModal();
+  if (!dialogSenhaPerdida.open) abrirModal(dialogSenhaPerdida);
 }
 
 function criarCampoSenha(id, rotulo) {
@@ -687,10 +755,9 @@ function criarCampoSenha(id, rotulo) {
   return { grupo, input };
 }
 
-// Popup do login para conta com senha provisória: a pessoa acabou de entrar com
-// ela e só segue depois de definir a própria. Escape e o fundo não dispensam a
-// troca; "Voltar ao login" desiste. Resolve true quando a senha foi gravada e
-// false se a pessoa desistiu.
+// Popup para conta com senha provisória: a pessoa só segue depois de definir a
+// própria. Escape e o fundo não dispensam a troca; "Voltar ao login" desiste.
+// Resolve true quando a senha foi gravada e false se a pessoa desistiu.
 function pedirNovaSenha(sessao, atual) {
   return new Promise(resolve => {
     const dialog = criarDialogAviso('tituloNovaSenha', 'Defina sua nova senha', [
@@ -698,7 +765,7 @@ function pedirNovaSenha(sessao, atual) {
       'M8 11V8a4 4 0 0 1 8 0v3'
     ]);
     const texto = document.createElement('p');
-    texto.textContent = 'Você entrou com a senha provisória. Escolha uma senha só sua para continuar.';
+    texto.textContent = 'Sua conta ainda usa a senha provisória. Escolha uma senha só sua para continuar.';
 
     const form = document.createElement('form');
     const nova = criarCampoSenha('novaSenhaLogin', 'Nova senha');
@@ -734,14 +801,22 @@ function pedirNovaSenha(sessao, atual) {
     form.append(usuario, nova.grupo, confirmacao.grupo, erro, acoes);
     dialog.append(texto, form);
 
+    // Só encerrar() fecha o popup. `closedby="none"` pede ao navegador que o
+    // Escape não o feche, e o preventDefault do `cancel` faz o mesmo onde não há
+    // `closedby`. Mas o Chrome deixa o Escape passar quando não houve clique ou
+    // tecla desde a última vez (o `cancel` chega com cancelable=false): fechado
+    // assim, o popup reabre — senão ficaria fora da tela e ainda no documento,
+    // com os ids repetidos no próximo.
+    let encerrado = false;
     const encerrar = ok => {
+      encerrado = true;
       resolve(ok);
-      if (dialog.open) dialog.close();
+      dialog.close();
       setTimeout(() => dialog.remove(), 400);
     };
+    dialog.setAttribute('closedby', 'none');
     dialog.addEventListener('cancel', e => e.preventDefault());
-    // Fechado por qualquer outro caminho, conta como desistência.
-    dialog.addEventListener('close', () => resolve(false));
+    dialog.addEventListener('close', () => { if (!encerrado && dialog.isConnected) dialog.showModal(); });
     desistir.addEventListener('click', () => encerrar(false));
     form.addEventListener('submit', async e => {
       e.preventDefault();
@@ -756,21 +831,23 @@ function pedirNovaSenha(sessao, atual) {
         return;
       }
 
+      // Desistir no meio da gravação revogaria o token junto com a troca, e a
+      // tela poderia pedir a provisória que já não vale: a saída espera.
       alternarBotaoCarregando(salvar, true, 'Salvando…');
+      desistir.disabled = true;
       try {
         await gravarNovaSenha(sessao.access_token, nova.input.value);
         encerrar(true);
       } catch (err) {
-        erro.textContent = err.message === 'Failed to fetch'
-          ? 'Não foi possível conectar ao servidor. Verifique sua conexão com a internet.'
-          : err.message;
+        erro.textContent = mensagemDoErro(err);
       } finally {
         alternarBotaoCarregando(salvar, false);
+        desistir.disabled = false;
       }
     });
 
     document.body.appendChild(dialog);
-    dialog.showModal();
+    abrirModal(dialog);
   });
 }
 
@@ -784,17 +861,26 @@ function ligarLogin(aoEntrar) {
   const btnEntrar = document.getElementById('btnEntrar');
   const btnSair = document.getElementById('btnSair');
   document.getElementById('btnEsqueci')?.addEventListener('click', mostrarSenhaPerdida);
+  // Troca desistida ou sessão guardada que já não vale: de volta ao login, com o
+  // foco no campo. O popup devolveria o foco ao botão Entrar, desabilitado
+  // durante o login, e ele cairia no <body>.
+  const voltarAoLogin = mensagem => {
+    loginScreen.hidden = false;
+    btnSair.hidden = true;
+    loginErro.textContent = mensagem;
+    (loginEmail.value ? loginSenha : loginEmail).focus();
+  };
   loginForm.addEventListener('submit', async e => {
     e.preventDefault();
     loginErro.textContent = '';
     alternarBotaoCarregando(btnEntrar, true, 'Entrando…');
 
     try {
-      const sessao = await autenticar(loginEmail.value.trim(), loginSenha.value);
       // Conta ainda com a senha provisória: define a própria antes de entrar.
-      if (senhaProvisoria(sessao) && !(await pedirNovaSenha(sessao, loginSenha.value))) {
-        await revogarToken(sessao.access_token);
-        loginErro.textContent = 'Troque a senha provisória para entrar.';
+      const sessao = await exigirSenhaPropria(
+        await autenticar(loginEmail.value.trim(), loginSenha.value), loginSenha.value);
+      if (!sessao) {
+        voltarAoLogin(MENSAGEM_TROCA_OBRIGATORIA);
         return;
       }
       salvarSessao(sessao, Boolean(loginLembrar?.checked));
@@ -803,9 +889,7 @@ function ligarLogin(aoEntrar) {
       btnSair.hidden = false;
       await aoEntrar();
     } catch (err) {
-      loginErro.textContent = err.message === 'Failed to fetch'
-        ? 'Não foi possível conectar ao servidor. Verifique sua conexão com a internet.'
-        : err.message;
+      loginErro.textContent = mensagemDoErro(err);
     } finally {
       alternarBotaoCarregando(btnEntrar, false);
     }
@@ -828,7 +912,19 @@ function ligarLogin(aoEntrar) {
   if (restaurarSessao()) {
     loginScreen.hidden = true;
     btnSair.hidden = false;
-    Promise.resolve(aoEntrar()).catch(err => {
+    // Token guardado com a marca: a renovação lê a conta de novo antes da
+    // página. Se a marca continua, pede a troca; se já saiu (a senha foi trocada
+    // em outro lugar), segue. Só a recusa (401) volta ao login: com o servidor
+    // de autenticação instável, a página segue e a próxima renovação confere.
+    const conferir = tokenComMarca(accessToken)
+      ? renovarSessao().catch(err => { if (err.status === 401) throw err; })
+      : Promise.resolve();
+    conferir.then(() => aoEntrar()).catch(err => {
+      if (err.status === 401) {
+        encerrarSessao();
+        voltarAoLogin(err.message === MENSAGEM_TROCA_OBRIGATORIA ? err.message : 'A sessão expirou. Entre novamente.');
+        return;
+      }
       aviso(`Não foi possível restaurar os dados da página (${err.message}).`, 'erro');
       console.error(err);
     });

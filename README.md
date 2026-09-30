@@ -52,7 +52,7 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
   - A tela de login apresenta contexto visual e textual específico para o destino solicitado.
   - O menu inicial ajusta dinamicamente a exibição e o posicionamento dos botões conforme os órgãos autorizados para o usuário logado.
   - A segurança é garantida em duas camadas: controle de interface em `bootstrap.js` e validação no banco de dados via RPCs `SECURITY DEFINER` e políticas de Row Level Security (RLS) que consultam `orgaos_autorizados()`. As senhas são tratadas com segurança diretamente pelo Supabase Auth.
-  - **Senha provisória**: as contas nascem com uma senha padrão que precisa ser trocada. Quem entra com ela é levado a um popup para definir a própria senha antes de acessar o sistema. O sistema sabe que a senha é a provisória por uma marca em `app_metadata.senha_provisoria`, que só aparece na resposta do login — depois de a senha ser provada — e é apagada pelo próprio banco quando a senha muda (migração `20260930111200_marca_senha_provisoria.sql`). A marca é ligada uma vez por `sql/marcar_senha_provisoria.sql`. A senha provisória em si nunca fica no repositório.
+  - **Senha provisória**: as contas nascem com uma senha padrão que precisa ser trocada. Quem entra com ela é levado a um popup para definir a própria senha antes de acessar o sistema. O sistema sabe que a senha é a provisória por uma marca em `app_metadata.senha_provisoria`, que só aparece na resposta do login — depois de a senha ser provada — e é apagada pelo próprio banco quando a senha muda (migração `20260930111200_marca_senha_provisoria.sql`). A marca é ligada uma vez por `sql/marcar_senha_provisoria.sql`, e a sessão lembrada também passa pela troca: a renovação do token lê a marca de novo. Para redefinir a senha de uma conta (quem esqueceu, ou quem passou do prazo), use `sql/redefinir_senha_provisoria.sql`, e não o painel: o gatilho apagaria a marca junto. A senha provisória em si nunca fica no repositório.
 - **Geração Dinâmica de Linhas**: Permite definir a quantidade inicial de processos a serem cadastrados na tabela (de 1 a 500 processos).
 - **Inserção e Exclusão Flexíveis**: 
   - Adicione novas linhas a qualquer momento utilizando o botão **Adicionar linha** sem perder os dados já preenchidos.
@@ -104,7 +104,7 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 
 O visual foi desenvolvido com base na identidade visual institucional do portal do **Estado de Goiás**:
 - **Paleta de Cores**: Uso do verde institucional (`#00534b`) como cor principal de realce e botões, fundo de tela branco, painel interno em tom de verde menta claro (`#E9F5EC`) e tokens de cores temáticas para cada card de serviço.
-- **Rodapé Institucional**: Banner verde com logotipo oficial do Estado de Goiás, versão atual da aplicação (Versão 3.10.0), créditos aos desenvolvedores (**Lucas Lustosa Coelho e Leonardo Ferreira Amichi**) e informações de integridade e auditoria do sorteio.
+- **Rodapé Institucional**: Banner verde com logotipo oficial do Estado de Goiás, versão atual da aplicação (Versão 3.11.0), créditos aos desenvolvedores (**Lucas Lustosa Coelho e Leonardo Ferreira Amichi**) e informações de integridade e auditoria do sorteio.
 - **Tipografia**: Títulos e elementos de destaque em **Montserrat**, complementados pela tipografia nativa do sistema operacional para o corpo de texto.
 - **Acessibilidade e Usabilidade**: Gestão de foco nativo, semântica ARIA completa, alto contraste, suporte a `prefers-reduced-motion` e atalhos por teclado (Escape para fechar modais, setas para navegar abas).
 
@@ -153,6 +153,7 @@ endereço não existe. Todo o resto está agrupado por natureza.
 ├── sql/                      tudo que roda no SQL Editor do Supabase
 │   ├── schema.sql            tabelas, gatilho, função de registro e RLS
 │   ├── marcar_senha_provisoria.sql  liga a marca de senha provisória nas contas (rodar uma vez)
+│   ├── redefinir_senha_provisoria.sql  redefine UMA conta para senha provisória, com a marca
 │   ├── verificacao_cj.sql    conferência de consistência da CJ — só lê
 │   ├── verificacao_creg.sql  a mesma conferência para o CREG — só lê
 │   ├── rederivar_cj.sql      religa ao acervo os julgados que entraram sem ele
@@ -561,6 +562,26 @@ node tests/test_assets.mjs
 Não necessitam de Docker nem de banco de dados: exercitam a aleatoriedade uniforme do sorteio (Fisher-Yates sem viés), a navegação e interface do usuário (cards dinâmicos, modais, exportações em `.docx`, `.xlsx` e `.pdf`, autenticação contextual), além da integridade de minificação, lazy loading e versão de cache por hash.
 
 O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) repete essas verificações em todo push e pull request, validando sintaxe JavaScript (`node --check`), suítes Node.js, testes PostgreSQL/Python e garantindo que os arquivos `.min.*` estejam devidamente regenerados e alinhados ao versionador.
+
+### Atualização 3.11.0
+
+Troca obrigatória da senha provisória e "Esqueci minha senha" em todas as telas
+de login. **Antes** de publicar o frontend, aplique
+`20260930111200_marca_senha_provisoria.sql` (o gatilho que apaga a marca quando
+a senha muda) e rode uma vez `sql/marcar_senha_provisoria.sql` — nessa ordem:
+sem o gatilho, a marca nunca sairia depois da troca. Confira antes, na consulta
+do passo 1 do script, que nenhuma conta tem hash de custo 04 ou acima de 10.
+
+A partir daí, quem entra com a senha provisória — pelo login ou por uma sessão
+lembrada, na próxima renovação do token — só segue depois de definir a própria.
+Para redefinir a senha de uma conta (quem esqueceu, ou quem passou do prazo),
+use `sql/redefinir_senha_provisoria.sql`, e não o painel do Supabase: o gatilho
+apagaria a marca junto. O comunicado aos usuários está em
+`docs/COMUNICADO-TROCA-SENHA.md`.
+
+A migração `papel_acervo_historico` foi renomeada para
+`20260930104112_papel_acervo_historico.sql`, a versão com que foi aplicada no
+banco; o histórico local e o remoto voltam a coincidir.
 
 ### Atualização 3.10.0
 
