@@ -11,7 +11,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=4f59aa5d13" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=7dec1355ee" />
   <script>
     (function () {
       try {
@@ -34,8 +34,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=4f59aa5d13"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=4f59aa5d13"></script>
+  <script defer src="assets/js/supabase.min.js?v=7dec1355ee"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=7dec1355ee"></script>
 </head>
 
 <body class="dashboard-page" data-page="acervo-cj" data-colegiado="cj">
@@ -137,7 +137,12 @@
             <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
             <label class="login-lembrar"><input id="loginLembrar" type="checkbox"> Lembrar-me neste computador</label>
             <button id="btnEntrar" type="submit">Consultar acervo</button>
-            <div id="loginErro" role="alert" aria-live="assertive"></div>
+            <div class="login-rodape">
+              <div class="login-ajuda">
+                <button id="btnEsqueci" type="button" class="link-acao">Esqueci minha senha</button>
+              </div>
+              <div id="loginErro" role="alert" aria-live="assertive"></div>
+            </div>
           </form>
         </div>
       </section>
@@ -245,7 +250,7 @@
       </div>
       <p class="footer-info">Painel institucional para acompanhamento do acervo da Câmara de Julgamento.</p>
       <div class="footer-meta">
-        <div class="footer-version">Versão 3.10.0</div>
+        <div class="footer-version">Versão 3.11.0</div>
         <p class="footer-credit">Desenvolvido por <strong>Lucas Lustosa Coelho e Leonardo Ferreira Amichi</strong>.</p>
       </div>
     </div>

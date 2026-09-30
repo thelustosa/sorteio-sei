@@ -59,7 +59,9 @@ class Postgres:
                         create schema auth;
                         create table auth.users (
                           id uuid primary key,
-                          email text not null unique
+                          email text not null unique,
+                          encrypted_password text,
+                          raw_app_meta_data jsonb default '{}'::jsonb
                         );
                         insert into auth.users (id, email) values
                           ('00000000-0000-0000-0000-000000000001', 'secretaria@goias.gov.br'),
