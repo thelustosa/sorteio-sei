@@ -4040,3 +4040,30 @@ grant execute on function public.admin_excluir_distribuicao_creg(bigint, text) t
 grant execute on function public.admin_excluir_distribuicao_e_julgados_cj(bigint, text) to authenticated;
 grant execute on function public.admin_excluir_distribuicao_e_julgados_creg(bigint, text) to authenticated;
 grant execute on function public.admin_auditoria(text, int, bigint) to authenticated;
+
+-- Marca "senha provisória" das contas do Supabase Auth (migração 20260930111200).
+-- A tela de login lê raw_app_meta_data.senha_provisoria na resposta do login e,
+-- se estiver ligada, pede a nova senha antes de entrar. Quem a liga é
+-- sql/marcar_senha_provisoria.sql; quem a desliga é este gatilho, ao trocar a
+-- senha por qualquer caminho. Mora em app_metadata, que o usuário não edita.
+create or replace function public.limpar_marca_senha_provisoria()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  new.raw_app_meta_data := coalesce(new.raw_app_meta_data, '{}'::jsonb) - 'senha_provisoria';
+  return new;
+end;
+$$;
+
+revoke all on function public.limpar_marca_senha_provisoria()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists limpar_marca_senha_provisoria on auth.users;
+create trigger limpar_marca_senha_provisoria
+  before update of encrypted_password on auth.users
+  for each row
+  when (old.encrypted_password is distinct from new.encrypted_password)
+  execute function public.limpar_marca_senha_provisoria();
