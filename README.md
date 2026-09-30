@@ -52,6 +52,7 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
   - A tela de login apresenta contexto visual e textual específico para o destino solicitado.
   - O menu inicial ajusta dinamicamente a exibição e o posicionamento dos botões conforme os órgãos autorizados para o usuário logado.
   - A segurança é garantida em duas camadas: controle de interface em `bootstrap.js` e validação no banco de dados via RPCs `SECURITY DEFINER` e políticas de Row Level Security (RLS) que consultam `orgaos_autorizados()`. As senhas são tratadas com segurança diretamente pelo Supabase Auth.
+  - **Senha provisória**: as contas nascem com uma senha padrão que precisa ser trocada. Quem entra com ela é levado a um popup para definir a própria senha antes de acessar o sistema. O sistema sabe que a senha é a provisória por uma marca em `app_metadata.senha_provisoria`, que só aparece na resposta do login — depois de a senha ser provada — e é apagada pelo próprio banco quando a senha muda (migração `20260930111200_marca_senha_provisoria.sql`). A marca é ligada uma vez por `sql/marcar_senha_provisoria.sql`. A senha provisória em si nunca fica no repositório.
 - **Geração Dinâmica de Linhas**: Permite definir a quantidade inicial de processos a serem cadastrados na tabela (de 1 a 500 processos).
 - **Inserção e Exclusão Flexíveis**: 
   - Adicione novas linhas a qualquer momento utilizando o botão **Adicionar linha** sem perder os dados já preenchidos.
@@ -151,6 +152,7 @@ endereço não existe. Todo o resto está agrupado por natureza.
 │
 ├── sql/                      tudo que roda no SQL Editor do Supabase
 │   ├── schema.sql            tabelas, gatilho, função de registro e RLS
+│   ├── marcar_senha_provisoria.sql  liga a marca de senha provisória nas contas (rodar uma vez)
 │   ├── verificacao_cj.sql    conferência de consistência da CJ — só lê
 │   ├── verificacao_creg.sql  a mesma conferência para o CREG — só lê
 │   ├── rederivar_cj.sql      religa ao acervo os julgados que entraram sem ele

@@ -8,8 +8,11 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '4f59aa5d13';
+const ASSET_VERSION = '4229df6914';
 const TEMPO_LIMITE_REDE = 20000;
+// "Esqueci minha senha": não há recuperação por e-mail, e a resposta é a mesma
+// para qualquer endereço digitado — a tela nunca confirma se ele existe.
+const MENSAGEM_SENHA_PERDIDA = 'Entre em contato com o Lucas Lustosa pelo ramal 6504 para recuperar a senha.';
 
 // Quem ocupa cada cadeira da CJ. Espelha a tabela cadeiras_cj do banco (um
 // teste compara as duas listas), e mora aqui — e não na página do sorteio —
@@ -519,7 +522,8 @@ function erroSemPermissao() {
 }
 
 // Liga o formulário de login padrão da página. Chama aoEntrar() quando der certo.
-// Depende dos ids loginScreen/loginForm/loginEmail/loginSenha/loginErro/btnEntrar/btnSair.
+// Depende dos ids loginScreen/loginForm/loginEmail/loginSenha/loginErro/btnEntrar/btnSair;
+// btnEsqueci é opcional.
 // Um `location.replace` não é uma troca de página que a pessoa pediu: é uma
 // correção de rota — bootstrap.js manda quem só tem um colegiado para a tela do
 // colegiado certo. Animar isso como navegação daria a uma parada técnica a mesma
@@ -546,6 +550,210 @@ window.addEventListener('pagereveal', evento => {
   if (pular) evento.viewTransition?.skipTransition();
 });
 
+// Regra da senha nova, usada pelo popup do login para conta com senha provisória.
+const TAMANHO_MINIMO_SENHA = 8;
+
+// Devolve o campo a corrigir e a mensagem, ou null. Nenhuma mensagem depende do
+// e-mail informado.
+function validarNovaSenha(atual, nova, confirmacao) {
+  if (nova.length < TAMANHO_MINIMO_SENHA) return ['nova', `A nova senha deve ter ${TAMANHO_MINIMO_SENHA} caracteres ou mais.`];
+  if (nova === atual) return ['nova', 'A nova senha deve ser diferente da senha atual.'];
+  if (nova !== confirmacao) return ['confirmacao', 'A confirmação não é igual à nova senha.'];
+  return null;
+}
+
+// Grava a nova senha da sessão que `token` representa (PUT /auth/v1/user).
+async function gravarNovaSenha(token, nova) {
+  const resp = await fetchComTimeout(`${baseUrl()}/auth/v1/user`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ password: nova })
+  });
+  if (resp.ok) return;
+
+  const dados = await resp.json().catch(() => ({}));
+  const codigo = dados.error_code || '';
+  if (codigo === 'same_password') throw new Error('A nova senha deve ser diferente da senha atual.');
+  if (codigo === 'weak_password') throw new Error('A nova senha é fraca demais. Escolha outra, com letras e números.');
+  throw new Error('Não foi possível trocar a senha. Tente novamente.');
+}
+
+// Encerra no servidor uma sessão que só existiu para a troca. Falhar aqui não
+// desfaz nada: o token expira sozinho.
+function revogarToken(token) {
+  return fetchComTimeout(`${baseUrl()}/auth/v1/logout?scope=local`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
+  }).catch(() => {});
+}
+
+// A conta foi marcada como "senha provisória" no banco (ver a migração
+// 20260930111200). A marca vem na resposta do login, depois de a senha ser
+// provada — nenhuma tela a consulta antes disso.
+function senhaProvisoria(sessao) {
+  return sessao?.user?.app_metadata?.senha_provisoria === true;
+}
+
+// Popups de aviso. Um <dialog> nativo: o modo modal já traz Escape, foco preso e
+// devolução do foco ao botão que o abriu. Criados no primeiro uso; o de "esqueci"
+// é reaproveitado, para que a animação de saída tenha o que animar.
+function criarDialogAviso(idTitulo, titulo, tracados) {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'vista-dialog aviso-dialog';
+  dialog.setAttribute('aria-labelledby', idTitulo);
+
+  const icone = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  for (const [nome, valor] of [['viewBox', '0 0 24 24'], ['fill', 'none'], ['stroke', 'currentColor'],
+    ['stroke-width', '1.8'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round']]) {
+    icone.setAttribute(nome, valor);
+  }
+  for (const d of tracados) {
+    const tracado = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    tracado.setAttribute('d', d);
+    icone.appendChild(tracado);
+  }
+  const marca = document.createElement('span');
+  marca.className = 'aviso-dialog-icone';
+  marca.setAttribute('aria-hidden', 'true');
+  marca.appendChild(icone);
+
+  const cabecalho = document.createElement('h2');
+  cabecalho.id = idTitulo;
+  cabecalho.textContent = titulo;
+  dialog.append(marca, cabecalho);
+  return dialog;
+}
+
+let dialogSenhaPerdida = null;
+
+function mostrarSenhaPerdida() {
+  if (!dialogSenhaPerdida) {
+    const dialog = criarDialogAviso('tituloSenhaPerdida', 'Esqueceu a senha?', [
+      'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z'
+    ]);
+    const texto = document.createElement('p');
+    texto.textContent = MENSAGEM_SENHA_PERDIDA;
+    const fechar = document.createElement('button');
+    fechar.type = 'button';
+    fechar.className = 'button-primary';
+    fechar.textContent = 'Entendi';
+    fechar.addEventListener('click', () => dialog.close());
+
+    // Clique no fundo escurecido fecha; clique dentro do card, não.
+    dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
+    dialog.append(texto, fechar);
+    document.body.appendChild(dialog);
+    dialogSenhaPerdida = dialog;
+  }
+  if (!dialogSenhaPerdida.open) dialogSenhaPerdida.showModal();
+}
+
+function criarCampoSenha(id, rotulo) {
+  const grupo = document.createElement('div');
+  grupo.className = 'campo';
+  const label = document.createElement('label');
+  label.htmlFor = id;
+  label.textContent = rotulo;
+  const input = document.createElement('input');
+  input.id = id;
+  input.type = 'password';
+  input.setAttribute('autocomplete', 'new-password');
+  input.required = true;
+  grupo.append(label, input);
+  return { grupo, input };
+}
+
+// Popup do login para conta com senha provisória: a pessoa acabou de entrar com
+// ela e só segue depois de definir a própria. Escape e o fundo não dispensam a
+// troca; "Voltar ao login" desiste. Resolve true quando a senha foi gravada e
+// false se a pessoa desistiu.
+function pedirNovaSenha(sessao, atual) {
+  return new Promise(resolve => {
+    const dialog = criarDialogAviso('tituloNovaSenha', 'Defina sua nova senha', [
+      'M6 11h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1Z',
+      'M8 11V8a4 4 0 0 1 8 0v3'
+    ]);
+    const texto = document.createElement('p');
+    texto.textContent = 'Você entrou com a senha provisória. Escolha uma senha só sua para continuar.';
+
+    const form = document.createElement('form');
+    const nova = criarCampoSenha('novaSenhaLogin', 'Nova senha');
+    const dica = document.createElement('p');
+    dica.id = 'dicaNovaSenhaLogin';
+    dica.className = 'campo-dica';
+    dica.textContent = `Mínimo de ${TAMANHO_MINIMO_SENHA} caracteres, diferente da atual.`;
+    nova.input.setAttribute('aria-describedby', 'dicaNovaSenhaLogin');
+    nova.grupo.appendChild(dica);
+    const confirmacao = criarCampoSenha('confirmaSenhaLogin', 'Confirmar nova senha');
+
+    const erro = document.createElement('div');
+    erro.className = 'aviso-dialog-erro';
+    erro.setAttribute('role', 'alert');
+    const salvar = document.createElement('button');
+    salvar.type = 'submit';
+    salvar.className = 'button-primary';
+    salvar.textContent = 'Salvar e entrar';
+    const desistir = document.createElement('button');
+    desistir.type = 'button';
+    desistir.className = 'button-secondary';
+    desistir.textContent = 'Voltar ao login';
+    const acoes = document.createElement('div');
+    acoes.className = 'aviso-dialog-acoes';
+    acoes.append(salvar, desistir);
+    // Campo de usuário oculto: é o que liga a senha nova ao e-mail no gerenciador
+    // de senhas do navegador, que a salva (ou atualiza) por ele.
+    const usuario = document.createElement('input');
+    usuario.type = 'text';
+    usuario.hidden = true;
+    usuario.value = sessao.user?.email || '';
+    usuario.setAttribute('autocomplete', 'username');
+    form.append(usuario, nova.grupo, confirmacao.grupo, erro, acoes);
+    dialog.append(texto, form);
+
+    const encerrar = ok => {
+      resolve(ok);
+      if (dialog.open) dialog.close();
+      setTimeout(() => dialog.remove(), 400);
+    };
+    dialog.addEventListener('cancel', e => e.preventDefault());
+    // Fechado por qualquer outro caminho, conta como desistência.
+    dialog.addEventListener('close', () => resolve(false));
+    desistir.addEventListener('click', () => encerrar(false));
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      erro.textContent = '';
+      [nova.input, confirmacao.input].forEach(c => c.removeAttribute('aria-invalid'));
+      const invalida = validarNovaSenha(atual, nova.input.value, confirmacao.input.value);
+      if (invalida) {
+        erro.textContent = invalida[1];
+        const campo = invalida[0] === 'nova' ? nova.input : confirmacao.input;
+        campo.setAttribute('aria-invalid', 'true');
+        campo.focus();
+        return;
+      }
+
+      alternarBotaoCarregando(salvar, true, 'Salvando…');
+      try {
+        await gravarNovaSenha(sessao.access_token, nova.input.value);
+        encerrar(true);
+      } catch (err) {
+        erro.textContent = err.message === 'Failed to fetch'
+          ? 'Não foi possível conectar ao servidor. Verifique sua conexão com a internet.'
+          : err.message;
+      } finally {
+        alternarBotaoCarregando(salvar, false);
+      }
+    });
+
+    document.body.appendChild(dialog);
+    dialog.showModal();
+  });
+}
+
 function ligarLogin(aoEntrar) {
   const loginScreen = document.getElementById('loginScreen');
   const loginForm = document.getElementById('loginForm');
@@ -555,14 +763,21 @@ function ligarLogin(aoEntrar) {
   const loginErro = document.getElementById('loginErro');
   const btnEntrar = document.getElementById('btnEntrar');
   const btnSair = document.getElementById('btnSair');
+  document.getElementById('btnEsqueci')?.addEventListener('click', mostrarSenhaPerdida);
   loginForm.addEventListener('submit', async e => {
     e.preventDefault();
     loginErro.textContent = '';
     alternarBotaoCarregando(btnEntrar, true, 'Entrando…');
 
     try {
-      salvarSessao(await autenticar(loginEmail.value.trim(), loginSenha.value),
-        Boolean(loginLembrar?.checked));
+      const sessao = await autenticar(loginEmail.value.trim(), loginSenha.value);
+      // Conta ainda com a senha provisória: define a própria antes de entrar.
+      if (senhaProvisoria(sessao) && !(await pedirNovaSenha(sessao, loginSenha.value))) {
+        await revogarToken(sessao.access_token);
+        loginErro.textContent = 'Troque a senha provisória para entrar.';
+        return;
+      }
+      salvarSessao(sessao, Boolean(loginLembrar?.checked));
       loginForm.reset();
       loginScreen.hidden = true;
       btnSair.hidden = false;
