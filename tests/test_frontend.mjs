@@ -6499,3 +6499,27 @@ test('popup volta a ser modal se um script de fora reinserir o nó, sem contar c
     delete globalThis.MutationObserver;
   }
 });
+
+test('o erro do login não muda o tamanho do card: sai do fluxo nas duas colunas e vem depois dos links', () => {
+  const ler = arquivo => readFileSync(new URL(`../${arquivo}`, import.meta.url), 'utf8');
+  const css = ler('assets/css/index.css');
+
+  // O bloco verde centraliza o conteúdo na altura da linha: se o card crescesse
+  // com a mensagem, ele desceria junto (medido: 15px com uma linha, 25px com duas).
+  const duasColunas = css.match(/@media screen and \(min-width: 761px\)\s*\{([^@]*?)\n\}/)?.[1] ?? '';
+  assert.match(duasColunas, /#loginScreen\.app-login #loginErro\s*\{[^}]*position:\s*absolute[^}]*top:\s*100%/s,
+    'nas duas colunas o erro fica fora do fluxo, no respiro inferior do card');
+  assert.match(duasColunas, /\.app-login-form-card\s*\{\s*padding-bottom:\s*\d+px/,
+    'e o respiro inferior tem espaço para duas linhas');
+  assert.match(duasColunas, /\.login-rodape\s*\{\s*position:\s*relative/);
+
+  // Ordem visual = ordem do DOM: o erro vem depois da ajuda, senão o layout
+  // empilhado (que o mantém no fluxo) o poria entre o botão e os links.
+  for (const pagina of ['index.html', 'admin.html']) {
+    const html = ler(pagina);
+    assert.ok(html.indexOf('class="login-ajuda"') < html.indexOf('id="loginErro"'), pagina);
+  }
+
+  // Popup de senha: topo fixo, para os campos não se recentralizarem com o erro.
+  assert.match(css, /\.aviso-dialog\s*\{[^}]*margin-block:\s*clamp\(1rem, 12vh, 6rem\) auto/s);
+});

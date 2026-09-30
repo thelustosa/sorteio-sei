@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = 'a849d85917';
+const ASSET_VERSION = '3afc6034ef';
 const TEMPO_LIMITE_REDE = 20000;
 // "Esqueci minha senha": não há recuperação por e-mail, e a resposta é a mesma
 // para qualquer endereço digitado — a tela nunca confirma se ele existe.
