@@ -1261,13 +1261,30 @@ body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
   cursor: pointer;
 }
 
-/* Rodapé do login: erro e ajuda ("Esqueci minha senha", troca da senha
-   provisória). O erro só ocupa altura quando tem texto — a linha reservada de
-   20px deixava um vão de 40px entre o botão e os links. Continua na árvore de
-   acessibilidade (não é display:none), então o leitor de tela ainda o anuncia. */
+/* Rodapé do login: ajuda ("Esqueci minha senha") e, depois dela, o erro.
+   O erro não pode mudar o tamanho do card: o bloco verde da esquerda centraliza o
+   conteúdo na altura da linha, então um card que crescesse 20 ou 40px empurraria
+   o bloco junto (medido: 15px com uma linha de erro, 25px com duas). Nas duas
+   colunas, o erro sai do fluxo e ocupa o respiro inferior do card — que existe
+   de qualquer jeito e cabe duas linhas. Empilhado (celular), o card cresce para
+   baixo e nada acima se mexe, então o erro fica no fluxo. Nos dois casos ele
+   segue na árvore de acessibilidade, e o leitor de tela o anuncia. */
 .login-rodape { display: flex; flex-direction: column; }
 .login-rodape #loginErro { min-height: 0; }
 .login-rodape #loginErro:not(:empty) { padding: 2px 0 6px; }
+@media screen and (min-width: 761px) {
+  #loginScreen.app-login .app-login-form-card { padding-bottom: 62px; }
+  #loginScreen.app-login #loginForm,
+  #loginScreen.app-login .login-rodape { position: relative; }
+  #loginScreen.app-login #loginErro {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    min-height: 0;
+    padding-top: 4px;
+  }
+}
 .login-ajuda { display: flex; justify-content: center; }
 .link-acao {
   display: inline-flex;
@@ -1296,6 +1313,10 @@ body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
 .aviso-dialog {
   display: grid;
   width: min(23rem, calc(100vw - 2rem));
+  /* Topo fixo, e não centralizado: quando o erro entra, o card cresce para baixo
+     e os campos ficam onde estavam. */
+  margin-block: clamp(1rem, 12vh, 6rem) auto;
+  max-height: calc(100dvh - clamp(1rem, 12vh, 6rem) - 1rem);
   justify-items: start;
   gap: 8px;
   padding: 24px;
