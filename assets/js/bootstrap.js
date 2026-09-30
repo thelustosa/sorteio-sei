@@ -131,7 +131,7 @@ async function carregarPaginaAutenticada() {
       .map(([orgao]) => orgao));
     const consultados = comPapel('consulta', 'consulta_historico');
     const administrados = comPapel('admin');
-    const historicos = comPapel('operador', 'admin', 'consulta_historico');
+    const historicos = comPapel('operador', 'admin', 'consulta_historico', 'acervo_historico');
     // Sorteio e julgados exigem papel pleno. O histórico também aceita o
     // papel de leitura ampliada; o acervo abre em qualquer órgão autorizado.
     const plenos = comPapel('operador', 'admin');
