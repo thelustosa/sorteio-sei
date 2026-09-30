@@ -6512,6 +6512,7 @@ test('o erro do login não muda o tamanho do card: sai do fluxo nas duas colunas
   assert.match(duasColunas, /\.app-login-form-card\s*\{\s*padding-bottom:\s*\d+px/,
     'e o respiro inferior tem espaço para duas linhas');
   assert.match(duasColunas, /\.login-rodape\s*\{\s*position:\s*relative/);
+  assert.match(css, /\.login-rodape #loginErro\s*\{[^}]*text-align:\s*center/, 'o erro fica centralizado, como o link de ajuda');
 
   // Ordem visual = ordem do DOM: o erro vem depois da ajuda, senão o layout
   // empilhado (que o mantém no fluxo) o poria entre o botão e os links.
