@@ -97,8 +97,8 @@ def redefinir(cur, email, senha):
 
 @teste
 def redefinicao_pelo_administrador_deixa_a_marca_ligada(cur):
-    # "Esqueci minha senha" e o fim do prazo: a senha que o administrador define
-    # é conhecida por ele, e a pessoa precisa passar pela troca de novo.
+    # "Esqueci minha senha": a senha que o administrador define é conhecida por
+    # ele, e a pessoa precisa passar pela troca de novo.
     redefinir_marcas(cur)
     cur.execute("update auth.users set encrypted_password = 'hash-novo' where id = %s", (ANA,))
     assert 'senha_provisoria' not in app_metadata(cur, ANA)

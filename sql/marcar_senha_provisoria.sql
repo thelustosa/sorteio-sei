@@ -21,5 +21,6 @@ update auth.users
 -- 3) Acompanhe quem ainda não trocou (a marca some sozinha a cada troca):
 --    select email from auth.users where raw_app_meta_data ? 'senha_provisoria' order by email;
 --
--- Depois do prazo, redefina as contas que continuarem na lista com
--- sql/redefinir_senha_provisoria.sql — não pelo painel: o gatilho apagaria a marca.
+-- Não há prazo: quem continua na lista passa pelo popup no próximo acesso. Para
+-- redefinir a senha de quem a esqueceu, use sql/redefinir_senha_provisoria.sql —
+-- não o painel: o gatilho apagaria a marca.
