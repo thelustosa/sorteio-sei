@@ -101,12 +101,7 @@ def funcao_do_gatilho_nao_e_chamavel_pelos_papeis_da_api(cur):
 
 
 def preparar_banco():
-    # O auth.users do banco de teste só tem id e e-mail; a marca e a senha vivem
-    # nestas duas colunas do auth.users de verdade.
-    PG.executar("""alter table auth.users
-                     add column encrypted_password text,
-                     add column raw_app_meta_data jsonb default '{}'::jsonb;
-                   create schema if not exists public;""")
+    PG.executar('create schema if not exists public;')
     PG.rodar_arquivo(RAIZ / 'supabase' / 'migrations' / '20260930111200_marca_senha_provisoria.sql')
 
 
