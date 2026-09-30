@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = '4229df6914';
+const ASSET_VERSION = 'a849d85917';
 const TEMPO_LIMITE_REDE = 20000;
 // "Esqueci minha senha": não há recuperação por e-mail, e a resposta é a mesma
 // para qualquer endereço digitado — a tela nunca confirma se ele existe.
@@ -625,7 +625,27 @@ function criarDialogAviso(idTitulo, titulo, tracados) {
   cabecalho.id = idTitulo;
   cabecalho.textContent = titulo;
   dialog.append(marca, cabecalho);
+  manterModal(dialog);
   return dialog;
+}
+
+// Reinserir o nó de um <dialog> aberto no DOM o tira da camada superior sem
+// fechá-lo — o que acontece quando um script de fora (extensão de gerenciador de
+// senhas, por exemplo) mexe na página. Ele continua `open`, mas deixa de ser
+// modal: cai como caixa absoluta no fim da página, que no <body> flex vira o
+// topo, atrás da barra verde e sem fundo escurecido nem foco preso. Aqui ele
+// volta a ser modal. Tirar o atributo `open` antes de showModal() não dispara o
+// evento `close`, que os popups tratam como desistência.
+function manterModal(dialog) {
+  if (typeof MutationObserver !== 'function') return;
+  const vigia = new MutationObserver(() => {
+    if (!dialog.isConnected) return vigia.disconnect();
+    if (dialog.open && !dialog.matches(':modal')) {
+      dialog.removeAttribute('open');
+      dialog.showModal();
+    }
+  });
+  vigia.observe(document.documentElement, { childList: true, subtree: true });
 }
 
 let dialogSenhaPerdida = null;
