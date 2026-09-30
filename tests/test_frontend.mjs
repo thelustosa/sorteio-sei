@@ -4113,6 +4113,7 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
   document.add('metaAno', 'select');
   // O <option selected> do admin.html: agrupar por quadrimestre.
   document.add('metaAgrupamento', 'select').value = '4';
+  document.add('metaPeriodo', 'select');
   document.add('buscaInput', 'input');
   ['btnTentarNovamente', 'btnVoltar', 'btnVoltarInicio', 'btnFecharDetalhe',
    ...(meta45 ? [] : ['btnMaisAntigas', 'btnAvancarEdicao', 'btnCancelarEdicao', 'btnFecharEdicao'])]
@@ -4386,12 +4387,26 @@ test('a meta de 45 dias agrupa os meses e deixa o prazo nao aferivel fora do per
   assert.ok(doc.getElementById('painelTable').children[0].descendants()
     .some(no => no.textContent === 'Sem prazo aferível'));
 
+  // Escolher um período troca o resumo por ele; a tendência e a tabela seguem com o ano.
+  const seletor = doc.getElementById('metaPeriodo');
+  assert.deepEqual(seletor.children.map(o => o.textContent), ['Ano todo', '1º quadrimestre', '2º quadrimestre']);
+  seletor.value = '0';
+  seletor.dispatch('change');
+  const [alvo, apoio] = resumo.children;
+  assert.equal(alvo.children[0].textContent, 'Dentro da meta 1º quadrimestre de 2026');
+  assert.equal(alvo.children[1].textContent, '61,5%');
+  assert.equal(apoio.children[1].textContent, '14');
+  assert.equal(seletor.value, '0', 'trocar o período não o reinicia');
+  assert.equal(doc.getElementById('painelTable').children[1].children.length, 2);
+
   const consultas = chamadas.length;
   const agrupamento = doc.getElementById('metaAgrupamento');
   agrupamento.value = '1';
   agrupamento.dispatch('change');
   linhas = page.linhasDaTabela();
   assert.deepEqual(linhas.map(periodo), ['Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho']);
+  assert.equal(seletor.value, '', 'trocar o agrupamento volta ao ano todo');
+  assert.equal(resumo.children[0].children[0].textContent, 'Dentro da meta em 2026');
 
   ano.value = '2025';
   ano.dispatch('change');

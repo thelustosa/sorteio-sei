@@ -145,6 +145,7 @@ const metaFiltros = document.getElementById('metaFiltros');
 const metaResumo = document.getElementById('metaResumo');
 const metaAno = document.getElementById('metaAno');
 const metaAgrupamento = document.getElementById('metaAgrupamento');
+const metaPeriodo = document.getElementById('metaPeriodo');
 const metaTendencia = document.getElementById('metaTendencia');
 const painelBusca = document.getElementById('painelBusca');
 const buscaRotulo = document.getElementById('buscaRotulo');
@@ -1362,7 +1363,9 @@ function pintarMeta(linhas) {
   repintarMeta();
 }
 
-function repintarMeta() {
+// `manterPeriodo`: só a troca do próprio seletor de período o preserva; ano e
+// agrupamento mudam o que cada índice significa, então voltam para o ano todo.
+function repintarMeta(manterPeriodo = false) {
   const ano = Number(metaAno.value);
   const meses = Number(metaAgrupamento.value);
   const periodos = agruparMeta(metaLinhas, ano, meses);
@@ -1372,7 +1375,20 @@ function repintarMeta() {
   }), { julgados: 0, dentro: 0, fora: 0, semPrazo: 0 });
 
   const taxa = taxaDentro(total);
-  pintarResumoDaMeta(total, taxa, ano);
+  const escolhido = manterPeriodo ? metaPeriodo.value : '';
+  metaPeriodo.replaceChildren(...[['', 'Ano todo'],
+    ...periodos.map(p => [String(p.indice), nomeDoPeriodo(p.indice, meses)])].map(([valor, texto]) => {
+    const opcao = document.createElement('option');
+    opcao.value = valor;
+    opcao.textContent = texto;
+    return opcao;
+  }));
+  metaPeriodo.value = escolhido;
+  const recorte = periodos.find(p => String(p.indice) === escolhido);
+  // O resumo segue o período escolhido; a tendência ao lado mostra todos e
+  // mantém a taxa do ano como referência.
+  pintarResumoDaMeta(recorte ?? total, taxaDentro(recorte ?? total),
+    recorte ? `${nomeDoPeriodo(recorte.indice, meses)} de ${ano}` : `em ${ano}`);
   pintarTendencia(periodos, taxa, meses, ano);
 
   // A coluna Sem prazo só entra quando o ano tem algum: zerada, ela tomava um
@@ -1405,7 +1421,7 @@ function repintarMeta() {
 // A pergunta da tela é quanto saiu dentro dos 45 dias: ela é o número grande,
 // com a barra que reparte os aferíveis entre dentro e fora e as duas contagens
 // nas pontas. Julgados e sem prazo descem para uma linha de apoio.
-function pintarResumoDaMeta(total, taxa, ano) {
+function pintarResumoDaMeta(total, taxa, recorte) {
   const grupo = (classe, rotulo, ...dados) => {
     const div = document.createElement('div');
     div.className = classe;
@@ -1448,7 +1464,7 @@ function pintarResumoDaMeta(total, taxa, ano) {
   divisao.appendChild(partes);
 
   metaResumo.replaceChildren(
-    grupo('admin-meta-destaque', `Dentro da meta em ${ano}`,
+    grupo('admin-meta-destaque', `Dentro da meta ${recorte}`,
       dado(taxa === null ? '—' : percentual(taxa), 'admin-meta-taxa-ano'), divisao),
     grupo('admin-meta-apoio', 'Julgados', dado(contagem(total.julgados)), dado('com status Julgado', 'admin-meta-nota')),
     grupo('admin-meta-apoio', 'Sem prazo aferível', dado(contagem(total.semPrazo)), dado('fora do percentual', 'admin-meta-nota')));
@@ -2487,8 +2503,9 @@ function inicializarAdmin(orgaosAdmin) {
     abrirComFoco();
   });
   btnTentarNovamente.addEventListener('click', () => abrirComFoco());
-  metaAno.addEventListener('change', repintarMeta);
-  metaAgrupamento.addEventListener('change', repintarMeta);
+  metaAno.addEventListener('change', () => repintarMeta());
+  metaAgrupamento.addEventListener('change', () => repintarMeta());
+  metaPeriodo.addEventListener('change', () => repintarMeta(true));
   // Filtra a lista já carregada a cada tecla, sem nova consulta — todas as
   // telas recebem as linhas de uma vez (api paginar:true). O mesmo campo muda
   // de alvo conforme a tela: pauta/data na lista, número do processo dentro
