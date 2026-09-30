@@ -1261,6 +1261,120 @@ body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
   cursor: pointer;
 }
 
+/* Rodapé do login: ajuda ("Esqueci minha senha") e, depois dela, o erro.
+   O erro não pode mudar o tamanho do card: o bloco verde da esquerda centraliza o
+   conteúdo na altura da linha, então um card que crescesse 20 ou 40px empurraria
+   o bloco junto (medido: 15px com uma linha de erro, 25px com duas). Nas duas
+   colunas, o erro ocupa o respiro inferior do card: ele tem altura mínima de
+   duas linhas, tirada do padding de baixo, e com uma ou duas linhas o card não
+   muda de tamanho. Uma terceira linha (erro longo repassado pelo servidor) faz
+   o card crescer, em vez de ser cortada pelo overflow do #loginScreen.
+   Empilhado (celular), o card cresce para baixo e nada acima se mexe, então o
+   erro não reserva espaço. `width > 760px`, e não `min-width: 761px`: com zoom
+   a largura pode ser fracionária, e entre 760 e 761 nenhuma das duas regras
+   valeria. */
+.login-rodape { display: flex; flex-direction: column; }
+.login-rodape #loginErro { min-height: 0; text-align: center; }
+.login-rodape #loginErro:not(:empty) { padding: 2px 0 6px; }
+@media screen and (width > 760px) {
+  #loginScreen.app-login .app-login-form-card { padding-bottom: 16px; }
+  #loginScreen.app-login #loginErro { min-height: calc(2lh + 4px); padding: 4px 0 0; }
+}
+.login-ajuda { display: flex; justify-content: center; }
+.link-acao {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-base);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.link-acao:hover { color: var(--accent-hover); }
+
+/* Campo com rótulo (popup "Defina sua nova senha"): rótulo a 6px do campo. */
+.campo { display: grid; gap: 6px; }
+
+/* Aviso em popup ("Esqueci minha senha"): <dialog> modal com entrada em 260ms
+   e saída em 140ms — sai mais rápido do que entra. A saída só anima porque
+   `display` e `overlay` também transicionam (allow-discrete); onde o navegador
+   não sabe fazer isso, o card apenas aparece e some sem animação. */
+.aviso-dialog {
+  display: grid;
+  width: min(23rem, calc(100vw - 2rem));
+  /* Topo fixo, e não centralizado: quando o erro entra, o card cresce para baixo
+     e os campos ficam onde estavam. */
+  margin-block: clamp(1rem, 12vh, 6rem) auto;
+  max-height: calc(100dvh - clamp(1rem, 12vh, 6rem) - 1rem);
+  justify-items: start;
+  gap: 8px;
+  padding: 24px;
+  box-shadow: var(--shadow-dialog);
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  transition: opacity 140ms ease-in, transform 140ms ease-in,
+    overlay 140ms allow-discrete, display 140ms allow-discrete;
+}
+.aviso-dialog:not([open]) { display: none; }
+.aviso-dialog[open] {
+  opacity: 1;
+  transform: none;
+  transition-duration: 260ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+@starting-style {
+  .aviso-dialog[open] { opacity: 0; transform: translateY(12px) scale(0.98); }
+}
+.aviso-dialog::backdrop {
+  background: rgb(17 39 32 / 45%);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 140ms ease-in, overlay 140ms allow-discrete, display 140ms allow-discrete;
+}
+.aviso-dialog[open]::backdrop { opacity: 1; transition-duration: 260ms; }
+@starting-style {
+  .aviso-dialog[open]::backdrop { opacity: 0; }
+}
+.aviso-dialog-icone {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: var(--accent-soft-strong);
+  color: var(--accent);
+  place-items: center;
+}
+.aviso-dialog-icone svg { width: 22px; height: 22px; }
+.aviso-dialog h2 { margin: 0; }
+.aviso-dialog p { margin: 0 0 12px; color: var(--muted); line-height: 1.5; }
+.aviso-dialog button { width: 100%; }
+/* Popup "Defina sua nova senha": formulário dentro do aviso. */
+.aviso-dialog form { display: grid; width: 100%; gap: 16px; padding: 0; }
+.aviso-dialog p.campo-dica { margin: 0; font-size: var(--text-sm); line-height: 1.4; }
+.aviso-dialog input[aria-invalid='true'] { border-color: var(--danger); }
+.aviso-dialog-erro { color: var(--danger); font-size: var(--text-base); font-weight: 700; }
+.aviso-dialog-erro:empty { margin-block: -8px; }
+.aviso-dialog-acoes { display: grid; gap: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Sem deslocamento nem escala: o aviso só muda de opacidade, que continua
+     marcando que algo aconteceu. */
+  .aviso-dialog { transform: none; transition-duration: 100ms; }
+  .aviso-dialog[open] { transition-duration: 100ms; }
+  .aviso-dialog::backdrop { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  @starting-style {
+    .aviso-dialog[open] { transform: none; }
+  }
+}
+
 /* Sorteio: a rede triangular remete ao balanceamento entre destinos. */
 .app-login[data-login-art='sorteio'] .app-login-symbol { border-radius: 50%; }
 
