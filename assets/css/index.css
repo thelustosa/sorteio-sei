@@ -1261,6 +1261,104 @@ body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
   cursor: pointer;
 }
 
+/* Rodapé do login: erro e ajuda ("Esqueci minha senha", troca da senha
+   provisória). O erro só ocupa altura quando tem texto — a linha reservada de
+   20px deixava um vão de 40px entre o botão e os links. Continua na árvore de
+   acessibilidade (não é display:none), então o leitor de tela ainda o anuncia. */
+.login-rodape { display: flex; flex-direction: column; }
+.login-rodape #loginErro { min-height: 0; }
+.login-rodape #loginErro:not(:empty) { padding: 2px 0 6px; }
+.login-ajuda { display: flex; justify-content: center; }
+.link-acao {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-base);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.link-acao:hover { color: var(--accent-hover); }
+
+/* Campo com rótulo (popup "Defina sua nova senha"): rótulo a 6px do campo. */
+.campo { display: grid; gap: 6px; }
+
+/* Aviso em popup ("Esqueci minha senha"): <dialog> modal com entrada em 260ms
+   e saída em 140ms — sai mais rápido do que entra. A saída só anima porque
+   `display` e `overlay` também transicionam (allow-discrete); onde o navegador
+   não sabe fazer isso, o card apenas aparece e some sem animação. */
+.aviso-dialog {
+  display: grid;
+  width: min(23rem, calc(100vw - 2rem));
+  justify-items: start;
+  gap: 8px;
+  padding: 24px;
+  box-shadow: var(--shadow-dialog);
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  transition: opacity 140ms ease-in, transform 140ms ease-in,
+    overlay 140ms allow-discrete, display 140ms allow-discrete;
+}
+.aviso-dialog:not([open]) { display: none; }
+.aviso-dialog[open] {
+  opacity: 1;
+  transform: none;
+  transition-duration: 260ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+@starting-style {
+  .aviso-dialog[open] { opacity: 0; transform: translateY(12px) scale(0.98); }
+}
+.aviso-dialog::backdrop {
+  background: rgb(17 39 32 / 45%);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 140ms ease-in, overlay 140ms allow-discrete, display 140ms allow-discrete;
+}
+.aviso-dialog[open]::backdrop { opacity: 1; transition-duration: 260ms; }
+@starting-style {
+  .aviso-dialog[open]::backdrop { opacity: 0; }
+}
+.aviso-dialog-icone {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: var(--accent-soft-strong);
+  color: var(--accent);
+  place-items: center;
+}
+.aviso-dialog-icone svg { width: 22px; height: 22px; }
+.aviso-dialog h2 { margin: 0; }
+.aviso-dialog p { margin: 0 0 12px; color: var(--muted); line-height: 1.5; }
+.aviso-dialog button { width: 100%; }
+/* Popup "Defina sua nova senha": formulário dentro do aviso. */
+.aviso-dialog form { display: grid; width: 100%; gap: 16px; padding: 0; }
+.aviso-dialog p.campo-dica { margin: 0; font-size: var(--text-sm); line-height: 1.4; }
+.aviso-dialog input[aria-invalid='true'] { border-color: var(--danger); }
+.aviso-dialog-erro { color: var(--danger); font-size: var(--text-base); font-weight: 700; }
+.aviso-dialog-erro:empty { margin-block: -8px; }
+.aviso-dialog-acoes { display: grid; gap: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Sem deslocamento nem escala: o aviso só muda de opacidade, que continua
+     marcando que algo aconteceu. */
+  .aviso-dialog { transform: none; transition-duration: 100ms; }
+  .aviso-dialog[open] { transition-duration: 100ms; }
+  .aviso-dialog::backdrop { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  @starting-style {
+    .aviso-dialog[open] { transform: none; }
+  }
+}
+
 /* Sorteio: a rede triangular remete ao balanceamento entre destinos. */
 .app-login[data-login-art='sorteio'] .app-login-symbol { border-radius: 50%; }
 

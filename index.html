@@ -12,7 +12,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=4f59aa5d13" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=4229df6914" />
   <script>
     (function () {
       try {
@@ -35,8 +35,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./acervo-cj.html", "./acervo-creg.html", "./historico-cj.html", "./historico-creg.html", "./julgados-cj.html", "./julgados-creg.html", "./meta-45.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=4f59aa5d13"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=4f59aa5d13"></script>
+  <script defer src="assets/js/supabase.min.js?v=4229df6914"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=4229df6914"></script>
 </head>
 
 <body data-page="sorteio">
@@ -136,7 +136,12 @@
             <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
             <label class="login-lembrar"><input id="loginLembrar" type="checkbox"> Lembrar-me neste computador</label>
             <button id="btnEntrar" type="submit">Acessar sorteio</button>
-            <div id="loginErro" role="alert" aria-live="assertive"></div>
+            <div class="login-rodape">
+              <div id="loginErro" role="alert" aria-live="assertive"></div>
+              <div class="login-ajuda">
+                <button id="btnEsqueci" type="button" class="link-acao">Esqueci minha senha</button>
+              </div>
+            </div>
           </form>
         </div>
       </section>

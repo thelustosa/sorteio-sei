@@ -6288,3 +6288,174 @@ test('excluir so fica vermelho sob o ponteiro ou o foco, e a confirmacao usa os 
     /\.admin-table\[data-visao\^='processos-'\] \.admin-acoes\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(2, auto\)/s,
     'os quatro botões de Ações ficam numa grade 2 × 2');
 });
+
+// ---- "Esqueci minha senha" e os logins ----
+
+const MENSAGEM_SENHA_PERDIDA = 'Entre em contato com o Lucas Lustosa pelo ramal 6504 para recuperar a senha.';
+
+test('"Esqueci minha senha" abre um popup com o contato e não cita o e-mail', () => {
+  const dialogos = doc => doc.body.descendants().filter(n => n.tagName === 'DIALOG');
+  const app = supabaseApp(async () => {});
+  ['loginScreen', 'loginEmail', 'loginSenha', 'loginErro'].forEach(id => app.document.add(id, 'div'));
+  app.document.add('loginForm', 'form');
+  app.document.add('btnEntrar', 'button');
+  app.document.add('btnSair', 'button');
+  const esqueci = app.document.add('btnEsqueci', 'button');
+  app.ligarLogin(async () => {});
+
+  esqueci.dispatch('click');
+  const [dialog] = dialogos(app.document);
+  assert.equal(dialog.open, true, 'abre como modal');
+  assert.match(dialog.className, /aviso-dialog/);
+  assert.equal(dialog.descendants().find(n => n.tagName === 'P').textContent, MENSAGEM_SENHA_PERDIDA);
+  assert.equal(app.document.getElementById('loginErro').textContent, '',
+    'a mensagem não vai para a área de erro do formulário');
+
+  // Fecha pelo botão e reabre o mesmo card, em vez de empilhar outro.
+  dialog.descendants().find(n => n.tagName === 'BUTTON').dispatch('click');
+  assert.equal(dialog.open, false);
+  esqueci.dispatch('click');
+  assert.equal(dialogos(app.document).length, 1);
+  assert.equal(dialog.open, true);
+
+  // Clique no fundo escurecido fecha; clique no conteúdo do card, não.
+  dialog.descendants().find(n => n.tagName === 'P').dispatch('click', { target: dialog.descendants()[1] });
+  assert.equal(dialog.open, true);
+  dialog.dispatch('click', { target: dialog });
+  assert.equal(dialog.open, false);
+});
+
+test('as telas de login oferecem só "Esqueci minha senha": a troca é o popup do login', () => {
+  const html = arquivo => readFileSync(new URL(`../${arquivo}`, import.meta.url), 'utf8');
+  for (const pagina of ['index.html', 'admin.html']) {
+    assert.match(html(pagina), /<button id="btnEsqueci"[^>]*>Esqueci minha senha<\/button>/, pagina);
+    assert.doesNotMatch(html(pagina), /trocar-senha/, `${pagina} não aponta mais para uma página de troca`);
+  }
+});
+
+// ---- Login com senha provisória: popup "Defina sua nova senha" ----
+
+// Login de uma conta marcada no banco como "senha provisória" (app_metadata).
+function loginProvisorio({ marcada = true, putStatus = 200 } = {}) {
+  const chamadas = [];
+  const fetch = async (url, options) => {
+    chamadas.push({ url, options, corpo: options.body ? JSON.parse(options.body) : null });
+    if (/grant_type=password/.test(url)) {
+      return { ok: true, status: 200, json: async () => ({
+        access_token: 'token-da-troca', refresh_token: 'r',
+        user: { app_metadata: marcada ? { senha_provisoria: true } : { provider: 'email' } }
+      }) };
+    }
+    if (/\/auth\/v1\/user$/.test(url)) return { ok: putStatus === 200, status: putStatus, json: async () => ({}) };
+    return { ok: true, status: 204, json: async () => ({}) };
+  };
+  const app = supabaseApp(fetch);
+  ['loginScreen', 'loginErro', 'loginEmail', 'loginSenha'].forEach(id => app.document.add(id, 'div'));
+  app.document.getElementById('loginEmail').value = 'ana@example.org';
+  app.document.getElementById('loginSenha').value = 'provisoria-fake-1';
+  const form = app.document.add('loginForm', 'form');
+  form.reset = () => {};
+  app.document.add('btnEntrar', 'button').textContent = 'Entrar';
+  app.document.add('btnSair', 'button');
+  let entrou = 0;
+  app.ligarLogin(async () => { entrou++; });
+
+  const dialog = () => app.document.body.descendants().find(n => n.tagName === 'DIALOG');
+  const achar = (tag, texto) => dialog().descendants().find(n =>
+    n.tagName === tag && (!texto || n.textContent === texto));
+  return { app, chamadas, entrou: () => entrou, dialog, achar,
+    async entrar() { form.dispatch('submit'); await wait(); await wait(); },
+    async salvar(nova, confirmacao = nova) {
+      dialog().descendants().find(n => n.id === 'novaSenhaLogin').value = nova;
+      dialog().descendants().find(n => n.id === 'confirmaSenhaLogin').value = confirmacao;
+      achar('FORM').dispatch('submit');
+      await wait(); await wait();
+    },
+    erro: () => app.document.getElementById('loginErro').textContent,
+    tokens: () => app.storage.size + app.local.size };
+}
+
+test('conta marcada como provisória abre o popup e não entra antes da troca', async () => {
+  const t = loginProvisorio();
+  await t.entrar();
+
+  assert.equal(t.dialog().open, true);
+  assert.equal(t.achar('H2').textContent, 'Defina sua nova senha');
+  assert.equal(t.entrou(), 0, 'a tela não abre enquanto a senha é a provisória');
+  assert.equal(t.tokens(), 0, 'e nenhum token é gravado');
+  assert.equal(t.app.document.getElementById('loginScreen').hidden, false);
+});
+
+test('popup grava a nova senha com o token do login e então entra', async () => {
+  const t = loginProvisorio();
+  await t.entrar();
+  await t.salvar('nova-fake-4567');
+
+  const put = t.chamadas.find(c => /\/auth\/v1\/user$/.test(c.url));
+  assert.equal(put.options.method, 'PUT');
+  assert.deepEqual(put.corpo, { password: 'nova-fake-4567' });
+  assert.equal(put.options.headers.Authorization, 'Bearer token-da-troca');
+  assert.equal(t.entrou(), 1);
+  assert.equal(t.app.storage.get('sorteio-sei.access-token'), 'token-da-troca');
+  assert.equal(t.app.document.getElementById('loginScreen').hidden, true);
+  assert.equal(t.dialog().open, false);
+});
+
+test('popup valida no navegador e não envia nada enquanto a senha for inválida', async () => {
+  const t = loginProvisorio();
+  await t.entrar();
+  const chamadasAntes = t.chamadas.length;
+
+  for (const [nova, confirmacao, trecho] of [
+    ['curta', 'curta', /8 caracteres/],
+    ['provisoria-fake-1', 'provisoria-fake-1', /diferente da senha atual/],
+    ['nova-fake-4567', 'outra-fake-999', /confirmação/]
+  ]) {
+    await t.salvar(nova, confirmacao);
+    assert.match(t.dialog().descendants().find(n => n.className === 'aviso-dialog-erro').textContent, trecho);
+  }
+  assert.equal(t.chamadas.length, chamadasAntes, 'nada vai à rede');
+  assert.equal(t.entrou(), 0);
+  assert.equal(t.dialog().open, true);
+});
+
+test('falha ao gravar mantém o popup aberto com a mensagem do erro', async () => {
+  const t = loginProvisorio({ putStatus: 422 });
+  await t.entrar();
+  await t.salvar('nova-fake-4567');
+
+  assert.match(t.dialog().descendants().find(n => n.className === 'aviso-dialog-erro').textContent,
+    /Não foi possível trocar a senha/);
+  assert.equal(t.dialog().open, true);
+  assert.equal(t.entrou(), 0);
+});
+
+test('desistir do popup revoga a sessão e fica no login com aviso', async () => {
+  const t = loginProvisorio();
+  await t.entrar();
+  t.achar('BUTTON', 'Voltar ao login').dispatch('click');
+  await wait(); await wait();
+
+  const logout = t.chamadas.find(c => /\/auth\/v1\/logout/.test(c.url));
+  assert.equal(logout.options.headers.Authorization, 'Bearer token-da-troca');
+  assert.match(t.erro(), /Troque a senha provisória para entrar/);
+  assert.equal(t.entrou(), 0);
+  assert.equal(t.tokens(), 0);
+});
+
+test('Escape não dispensa o popup da senha provisória', async () => {
+  const t = loginProvisorio();
+  await t.entrar();
+  let cancelado = false;
+  t.dialog().dispatch('cancel', { preventDefault() { cancelado = true; } });
+  assert.equal(cancelado, true, 'o cancelamento nativo é barrado');
+});
+
+test('conta sem a marca entra direto, sem popup', async () => {
+  const t = loginProvisorio({ marcada: false });
+  await t.entrar();
+
+  assert.equal(t.dialog(), undefined);
+  assert.equal(t.entrou(), 1);
+  assert.equal(t.app.storage.get('sorteio-sei.access-token'), 'token-da-troca');
+});
