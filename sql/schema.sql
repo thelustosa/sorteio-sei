@@ -58,9 +58,10 @@ alter table public.permissoes_usuario
   drop constraint if exists permissoes_usuario_papel_check;
 alter table public.permissoes_usuario
   add constraint permissoes_usuario_papel_check
-  check (papel in ('operador', 'admin', 'consulta', 'consulta_historico'));
+  check (papel in ('operador', 'admin', 'consulta', 'consulta_historico', 'acervo_historico'));
 
--- 'consulta' vê acervo e Meta 45; 'consulta_historico' também lê o histórico.
+-- 'consulta' vê acervo e Meta 45; 'consulta_historico' também lê o histórico;
+-- 'acervo_historico' vê acervo e histórico, sem a Meta 45.
 -- Ambos ficam fora de tem_acesso_orgao(), que guarda sorteio, julgados e votos.
 -- As RPCs do acervo usam tem_acesso_acervo(), que aceita qualquer papel.
 create or replace function public.tem_acesso_orgao(p_orgao text)
@@ -91,7 +92,7 @@ as $$
     select 1 from public.permissoes_usuario p
      where p.user_id = (select auth.uid())
        and p.orgao = p_orgao
-       and p.papel in ('operador', 'admin', 'consulta_historico')
+       and p.papel in ('operador', 'admin', 'consulta_historico', 'acervo_historico')
   )
 $$;
 
