@@ -1270,7 +1270,7 @@ body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
    baixo e nada acima se mexe, então o erro fica no fluxo. Nos dois casos ele
    segue na árvore de acessibilidade, e o leitor de tela o anuncia. */
 .login-rodape { display: flex; flex-direction: column; }
-.login-rodape #loginErro { min-height: 0; }
+.login-rodape #loginErro { min-height: 0; text-align: center; }
 .login-rodape #loginErro:not(:empty) { padding: 2px 0 6px; }
 @media screen and (min-width: 761px) {
   #loginScreen.app-login .app-login-form-card { padding-bottom: 62px; }
