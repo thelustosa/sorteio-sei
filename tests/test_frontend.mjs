@@ -96,8 +96,14 @@ class Node {
     if (!this.events.has(type)) this.events.set(type, []);
     this.events.get(type).push(listener);
   }
+  removeEventListener(type, listener) {
+    const ouvintes = this.events.get(type) || [];
+    if (ouvintes.includes(listener)) ouvintes.splice(ouvintes.indexOf(listener), 1);
+  }
+  // Uma cópia da lista, como no navegador: um ouvinte que se remove durante o
+  // disparo não faz o seguinte ser pulado.
   dispatch(type, event = {}) {
-    return this.events.get(type)?.map(listener => listener({ target: this, preventDefault() {}, ...event })) || [];
+    return [...(this.events.get(type) || [])].map(listener => listener({ target: this, preventDefault() {}, ...event }));
   }
   click() {
     if (this.disabled) return;
@@ -6318,38 +6324,97 @@ test('"Esqueci minha senha" abre um popup com o contato e não cita o e-mail', (
   assert.equal(dialogos(app.document).length, 1);
   assert.equal(dialog.open, true);
 
-  // Clique no fundo escurecido fecha; clique no conteúdo do card, não.
+  // Clique no fundo escurecido fecha; clique no conteúdo do card, não — nem na
+  // margem interna, que também tem o <dialog> como alvo.
+  dialog.getBoundingClientRect = () => ({ left: 100, right: 468, top: 80, bottom: 320 });
   dialog.descendants().find(n => n.tagName === 'P').dispatch('click', { target: dialog.descendants()[1] });
   assert.equal(dialog.open, true);
-  dialog.dispatch('click', { target: dialog });
-  assert.equal(dialog.open, false);
+  dialog.dispatch('click', { target: dialog, clientX: 112, clientY: 90 });
+  assert.equal(dialog.open, true, 'clique no padding do card não fecha');
+  dialog.dispatch('click', { target: dialog, clientX: 40, clientY: 90 });
+  assert.equal(dialog.open, false, 'clique fora do card fecha');
 });
 
-test('as telas de login oferecem só "Esqueci minha senha": a troca é o popup do login', () => {
+test('"Esqueci minha senha" só vigia o documento enquanto o popup está aberto', () => {
+  const vigias = [];
+  globalThis.MutationObserver = class {
+    constructor(callback) { this.callback = callback; vigias.push(this); }
+    observe() { this.ligado = true; }
+    disconnect() { this.ligado = false; }
+  };
+  try {
+    const app = supabaseApp(async () => {});
+    ['loginScreen', 'loginEmail', 'loginSenha', 'loginErro'].forEach(id => app.document.add(id, 'div'));
+    app.document.add('loginForm', 'form');
+    app.document.add('btnEntrar', 'button');
+    app.document.add('btnSair', 'button');
+    const esqueci = app.document.add('btnEsqueci', 'button');
+    app.ligarLogin(async () => {});
+
+    esqueci.dispatch('click');
+    const dialog = app.document.body.descendants().find(n => n.tagName === 'DIALOG');
+    assert.equal(vigias.filter(v => v.ligado).length, 1);
+    dialog.close();
+    assert.equal(vigias.filter(v => v.ligado).length, 0, 'fechado, nada observa o documento');
+    esqueci.dispatch('click');
+    dialog.close();
+    assert.equal(vigias.filter(v => v.ligado).length, 0, 'e reabrir não acumula vigias');
+  } finally {
+    delete globalThis.MutationObserver;
+  }
+});
+
+test('todas as telas de login oferecem "Esqueci minha senha", com o erro depois dele', () => {
   const html = arquivo => readFileSync(new URL(`../${arquivo}`, import.meta.url), 'utf8');
-  for (const pagina of ['index.html', 'admin.html']) {
+  for (const pagina of ['index.html', 'admin.html', 'acervo-cj.html', 'acervo-creg.html', 'historico-cj.html',
+    'historico-creg.html', 'julgados-cj.html', 'julgados-creg.html', 'meta-45.html']) {
     assert.match(html(pagina), /<button id="btnEsqueci"[^>]*>Esqueci minha senha<\/button>/, pagina);
     assert.doesNotMatch(html(pagina), /trocar-senha/, `${pagina} não aponta mais para uma página de troca`);
+    // Ordem visual = ordem do DOM: o erro vem depois da ajuda, senão o layout
+    // empilhado o poria entre o botão e o link.
+    assert.ok(html(pagina).indexOf('class="login-ajuda"') < html(pagina).indexOf('id="loginErro"'), pagina);
   }
 });
 
 // ---- Login com senha provisória: popup "Defina sua nova senha" ----
 
+// Resposta do servidor de auth com a conta marcada (ou não) no app_metadata.
+const sessaoDeAuth = (access, refresh, marcada) => ({
+  access_token: access, refresh_token: refresh,
+  user: { email: 'ana@example.org', app_metadata: marcada ? { provider: 'email', senha_provisoria: true } : { provider: 'email' } }
+});
+// Access token cujo payload traz o app_metadata, como o do Supabase.
+const tokenDaConta = (nome, marcada) => `cabecalho.${Buffer.from(JSON.stringify({
+  sub: 'ana', email: 'ana@example.org', app_metadata: marcada ? { senha_provisoria: true } : {}, nome
+})).toString('base64url')}.assinatura`;
+
 // Login de uma conta marcada no banco como "senha provisória" (app_metadata).
-function loginProvisorio({ marcada = true, putStatus = 200 } = {}) {
+// `refreshMarcada`: o que a renovação devolve — depois da troca, a conta já
+// sem a marca. `inicial`: sessão guardada na aba, para o caminho da restauração.
+function loginProvisorio({ marcada = true, putStatus = 200, putPendente = null, refreshStatus = 200,
+  refreshMarcada = false, inicial = {} } = {}) {
   const chamadas = [];
+  let renovacoes = 0;
+  let substituto = null;
   const fetch = async (url, options) => {
     chamadas.push({ url, options, corpo: options.body ? JSON.parse(options.body) : null });
+    if (substituto) return substituto(url, options);
     if (/grant_type=password/.test(url)) {
-      return { ok: true, status: 200, json: async () => ({
-        access_token: 'token-da-troca', refresh_token: 'r',
-        user: { app_metadata: marcada ? { senha_provisoria: true } : { provider: 'email' } }
-      }) };
+      return { ok: true, status: 200, json: async () => sessaoDeAuth('token-da-troca', 'r', marcada) };
     }
-    if (/\/auth\/v1\/user$/.test(url)) return { ok: putStatus === 200, status: putStatus, json: async () => ({}) };
+    if (/grant_type=refresh_token/.test(url)) {
+      renovacoes++;
+      return { ok: refreshStatus === 200, status: refreshStatus, json: async () => refreshStatus === 200
+        ? sessaoDeAuth(tokenDaConta(`renovado-${renovacoes}`, refreshMarcada), `r${renovacoes + 1}`, refreshMarcada)
+        : { error_code: 'refresh_token_not_found' } };
+    }
+    if (/\/auth\/v1\/user$/.test(url)) {
+      await putPendente;
+      return { ok: putStatus === 200, status: putStatus, json: async () => ({}) };
+    }
     return { ok: true, status: 204, json: async () => ({}) };
   };
-  const app = supabaseApp(fetch);
+  const app = supabaseApp(fetch, inicial);
   ['loginScreen', 'loginErro', 'loginEmail', 'loginSenha'].forEach(id => app.document.add(id, 'div'));
   app.document.getElementById('loginEmail').value = 'ana@example.org';
   app.document.getElementById('loginSenha').value = 'provisoria-fake-1';
@@ -6364,6 +6429,7 @@ function loginProvisorio({ marcada = true, putStatus = 200 } = {}) {
   const achar = (tag, texto) => dialog().descendants().find(n =>
     n.tagName === tag && (!texto || n.textContent === texto));
   return { app, chamadas, entrou: () => entrou, dialog, achar,
+    definirFetch(novo) { substituto = novo; },
     async entrar() { form.dispatch('submit'); await wait(); await wait(); },
     async salvar(nova, confirmacao = nova) {
       dialog().descendants().find(n => n.id === 'novaSenhaLogin').value = nova;
@@ -6386,7 +6452,7 @@ test('conta marcada como provisória abre o popup e não entra antes da troca', 
   assert.equal(t.app.document.getElementById('loginScreen').hidden, false);
 });
 
-test('popup grava a nova senha com o token do login e então entra', async () => {
+test('popup grava a nova senha com o token do login e entra com um token já sem a marca', async () => {
   const t = loginProvisorio();
   await t.entrar();
   await t.salvar('nova-fake-4567');
@@ -6395,10 +6461,24 @@ test('popup grava a nova senha com o token do login e então entra', async () =>
   assert.equal(put.options.method, 'PUT');
   assert.deepEqual(put.corpo, { password: 'nova-fake-4567' });
   assert.equal(put.options.headers.Authorization, 'Bearer token-da-troca');
+  // O token do login ainda traz a marca: salvo, a próxima página pediria a troca
+  // de novo. A renovação depois da troca traz um sem ela.
+  const renovacao = t.chamadas.find(c => /grant_type=refresh_token/.test(c.url));
+  assert.deepEqual(renovacao.corpo, { refresh_token: 'r' });
+  assert.equal(t.chamadas.indexOf(renovacao) > t.chamadas.indexOf(put), true);
   assert.equal(t.entrou(), 1);
-  assert.equal(t.app.storage.get('sorteio-sei.access-token'), 'token-da-troca');
+  assert.equal(t.app.storage.get('sorteio-sei.access-token'), tokenDaConta('renovado-1', false));
   assert.equal(t.app.document.getElementById('loginScreen').hidden, true);
   assert.equal(t.dialog().open, false);
+});
+
+test('sem rede para renovar depois da troca, entra com o token do login', async () => {
+  const t = loginProvisorio({ refreshStatus: 503 });
+  await t.entrar();
+  await t.salvar('nova-fake-4567');
+
+  assert.equal(t.entrou(), 1);
+  assert.equal(t.app.storage.get('sorteio-sei.access-token'), 'token-da-troca');
 });
 
 test('popup valida no navegador e não envia nada enquanto a senha for inválida', async () => {
@@ -6408,15 +6488,22 @@ test('popup valida no navegador e não envia nada enquanto a senha for inválida
 
   for (const [nova, confirmacao, trecho] of [
     ['curta', 'curta', /8 caracteres/],
+    // O bcrypt só lê 72 bytes, e o GoTrue recusa acima disso com um erro genérico.
+    ['a'.repeat(73), 'a'.repeat(73), /até 72 caracteres/],
+    ['ã'.repeat(37), 'ã'.repeat(37), /até 72 caracteres/],
     ['provisoria-fake-1', 'provisoria-fake-1', /diferente da senha atual/],
     ['nova-fake-4567', 'outra-fake-999', /confirmação/]
   ]) {
     await t.salvar(nova, confirmacao);
-    assert.match(t.dialog().descendants().find(n => n.className === 'aviso-dialog-erro').textContent, trecho);
+    assert.match(t.dialog().descendants().find(n => n.className === 'aviso-dialog-erro').textContent, trecho, nova);
   }
   assert.equal(t.chamadas.length, chamadasAntes, 'nada vai à rede');
   assert.equal(t.entrou(), 0);
   assert.equal(t.dialog().open, true);
+
+  // 72 bytes exatos passam.
+  await t.salvar('a'.repeat(72));
+  assert.equal(t.entrou(), 1);
 });
 
 test('falha ao gravar mantém o popup aberto com a mensagem do erro', async () => {
@@ -6430,7 +6517,19 @@ test('falha ao gravar mantém o popup aberto com a mensagem do erro', async () =
   assert.equal(t.entrou(), 0);
 });
 
-test('desistir do popup revoga a sessão e fica no login com aviso', async () => {
+test('sem rede, o popup explica em português em qualquer navegador', async () => {
+  for (const mensagem of ['Failed to fetch', 'NetworkError when attempting to fetch resource.', 'Load failed']) {
+    const t = loginProvisorio();
+    await t.entrar();
+    // O login já passou: a gravação da senha é que fica sem rede.
+    t.definirFetch(async () => { throw new TypeError(mensagem); });
+    await t.salvar('nova-fake-4567');
+    assert.match(t.dialog().descendants().find(n => n.className === 'aviso-dialog-erro').textContent,
+      /Não foi possível conectar ao servidor/, mensagem);
+  }
+});
+
+test('desistir do popup revoga a sessão, fica no login com aviso e devolve o foco ao formulário', async () => {
   const t = loginProvisorio();
   await t.entrar();
   t.achar('BUTTON', 'Voltar ao login').dispatch('click');
@@ -6441,14 +6540,52 @@ test('desistir do popup revoga a sessão e fica no login com aviso', async () =>
   assert.match(t.erro(), /Troque a senha provisória para entrar/);
   assert.equal(t.entrou(), 0);
   assert.equal(t.tokens(), 0);
+  // O popup devolve o foco ao botão Entrar, desabilitado naquele instante; no
+  // navegador ele cairia no <body>.
+  assert.equal(t.app.document.activeElement, t.app.document.getElementById('loginSenha'));
 });
 
-test('Escape não dispensa o popup da senha provisória', async () => {
+test('"Voltar ao login" fica desabilitado enquanto a nova senha é gravada', async () => {
+  let liberar;
+  const t = loginProvisorio({ putPendente: new Promise(resolve => { liberar = resolve; }) });
+  await t.entrar();
+  const desistir = t.achar('BUTTON', 'Voltar ao login');
+  const salvando = t.salvar('nova-fake-4567');
+  await wait();
+  assert.equal(desistir.disabled, true, 'desistir no meio revogaria o token junto com a troca');
+  desistir.click();
+  assert.equal(t.chamadas.some(c => /\/auth\/v1\/logout/.test(c.url)), false);
+  liberar();
+  await salvando;
+  await wait(); await wait();
+  assert.equal(t.entrou(), 1);
+});
+
+test('Escape não dispensa o popup, nem quando o navegador o fecha mesmo assim', async () => {
   const t = loginProvisorio();
   await t.entrar();
+  const dialog = t.dialog();
+  assert.equal(dialog.closedby, 'none', 'o navegador é avisado de que o Escape não fecha');
   let cancelado = false;
-  t.dialog().dispatch('cancel', { preventDefault() { cancelado = true; } });
+  dialog.dispatch('cancel', { preventDefault() { cancelado = true; } });
   assert.equal(cancelado, true, 'o cancelamento nativo é barrado');
+
+  // O Chrome ignora o preventDefault sem ativação recente e fecha o popup.
+  dialog.isConnected = true;
+  dialog.close();
+  assert.equal(dialog.open, true, 'o popup reabre');
+  assert.equal(t.erro(), '', 'e não vira desistência');
+  await wait();
+  assert.equal(t.chamadas.some(c => /\/auth\/v1\/logout/.test(c.url)), false);
+
+  // Desistir e entrar de novo não deixa dois popups (nem ids repetidos).
+  t.achar('BUTTON', 'Voltar ao login').dispatch('click');
+  await wait(); await wait();
+  await new Promise(resolve => setTimeout(resolve, 450));
+  await t.entrar();
+  const popups = t.app.document.body.descendants().filter(n => n.tagName === 'DIALOG');
+  assert.equal(popups.length, 1);
+  assert.equal(popups[0].descendants().filter(n => n.id === 'novaSenhaLogin').length, 1);
 });
 
 test('conta sem a marca entra direto, sem popup', async () => {
@@ -6460,14 +6597,130 @@ test('conta sem a marca entra direto, sem popup', async () => {
   assert.equal(t.app.storage.get('sorteio-sei.access-token'), 'token-da-troca');
 });
 
-test('popup volta a ser modal se um script de fora reinserir o nó, sem contar como desistência', async () => {
+// ---- Sessão restaurada ou renovada de conta marcada ----
+
+test('sessão lembrada de conta marcada passa pela troca antes de abrir a página', async () => {
+  const guardado = tokenDaConta('guardado', true);
+  const t = loginProvisorio({ refreshMarcada: true, inicial: {
+    'sorteio-sei.access-token': guardado, 'sorteio-sei.refresh-token': 'r-guardado'
+  } });
+  await wait(); await wait();
+
+  // A renovação confirma a marca no servidor antes do popup.
+  assert.deepEqual(t.chamadas[0].corpo, { refresh_token: 'r-guardado' });
+  assert.equal(t.dialog().open, true);
+  assert.equal(t.entrou(), 0, 'a página não abre antes da troca');
+
+  await t.salvar('nova-fake-4567');
+  await wait(); await wait();
+  const put = t.chamadas.find(c => /\/auth\/v1\/user$/.test(c.url));
+  assert.equal(put.options.headers.Authorization, `Bearer ${tokenDaConta('renovado-1', true)}`);
+  assert.equal(t.entrou(), 1);
+});
+
+test('desistir da troca numa sessão lembrada encerra a sessão e mostra o login', async () => {
+  const t = loginProvisorio({ refreshMarcada: true, inicial: {
+    'sorteio-sei.access-token': tokenDaConta('guardado', true), 'sorteio-sei.refresh-token': 'r-guardado'
+  } });
+  await wait(); await wait();
+  t.achar('BUTTON', 'Voltar ao login').dispatch('click');
+  await wait(); await wait(); await wait();
+
+  assert.equal(t.chamadas.some(c => /\/auth\/v1\/logout/.test(c.url)), true);
+  assert.equal(t.tokens(), 0, 'nenhum token fica na aba');
+  assert.equal(t.entrou(), 0);
+  assert.equal(t.app.document.getElementById('loginScreen').hidden, false);
+  assert.match(t.erro(), /Troque a senha provisória para entrar/);
+});
+
+test('token guardado com a marca, mas a senha já trocada: a renovação libera sem popup', async () => {
+  const t = loginProvisorio({ refreshMarcada: false, inicial: {
+    'sorteio-sei.access-token': tokenDaConta('guardado', true), 'sorteio-sei.refresh-token': 'r-guardado'
+  } });
+  await wait(); await wait();
+
+  assert.equal(t.dialog(), undefined);
+  assert.equal(t.entrou(), 1);
+  assert.equal(t.app.storage.get('sorteio-sei.access-token'), tokenDaConta('renovado-1', false));
+});
+
+test('token guardado sem a marca abre a página sem ir ao servidor de auth', async () => {
+  const t = loginProvisorio({ inicial: {
+    'sorteio-sei.access-token': tokenDaConta('guardado', false), 'sorteio-sei.refresh-token': 'r-guardado'
+  } });
+  await wait(); await wait();
+
+  assert.equal(t.chamadas.length, 0);
+  assert.equal(t.entrou(), 1);
+});
+
+test('sessão guardada recusada pelo servidor volta ao login', async () => {
+  const t = loginProvisorio({ refreshStatus: 400, inicial: {
+    'sorteio-sei.access-token': tokenDaConta('guardado', true), 'sorteio-sei.refresh-token': 'r-morto'
+  } });
+  await wait(); await wait();
+
+  assert.equal(t.entrou(), 0);
+  assert.equal(t.tokens(), 0);
+  assert.equal(t.app.document.getElementById('loginScreen').hidden, false);
+  assert.match(t.erro(), /sessão expirou/);
+});
+
+test('renovação no meio do uso também pede a troca quando a conta está marcada', async () => {
+  const chamadas = [];
+  const app = supabaseApp(async (url, options) => {
+    chamadas.push({ url, options });
+    if (url.includes('grant_type=refresh_token')) {
+      const renovacoes = chamadas.filter(c => c.url.includes('grant_type=refresh_token')).length;
+      return { ok: true, status: 200, json: async () =>
+        sessaoDeAuth(`access-${renovacoes}`, `refresh-${renovacoes}`, renovacoes === 1) };
+    }
+    if (/\/auth\/v1\//.test(url)) return { ok: true, status: 200, json: async () => ({}) };
+    if (options.headers.Authorization === 'Bearer access-antigo') return { ok: false, status: 401 };
+    return { ok: true, status: 200, json: async () => ([{ id: 1 }]) };
+  });
+  app.salvarSessao({ access_token: 'access-antigo', refresh_token: 'refresh-antigo' });
+
+  const pedido = app.api('dados');
+  await wait(); await wait();
+  const dialog = app.document.body.descendants().find(n => n.tagName === 'DIALOG');
+  assert.equal(dialog.open, true, 'a chamada espera a troca');
+  dialog.descendants().find(n => n.id === 'novaSenhaLogin').value = 'nova-fake-4567';
+  dialog.descendants().find(n => n.id === 'confirmaSenhaLogin').value = 'nova-fake-4567';
+  dialog.descendants().find(n => n.tagName === 'FORM').dispatch('submit');
+
+  assert.deepEqual(await pedido, [{ id: 1 }]);
+  assert.equal(app.estadoSessao().accessToken, 'access-2', 'segue com o token emitido depois da troca');
+});
+
+test('desistir da troca no meio do uso encerra a sessão com 401', async () => {
+  const app = supabaseApp(async (url, options) => {
+    if (url.includes('grant_type=refresh_token')) {
+      return { ok: true, status: 200, json: async () => sessaoDeAuth('access-marcado', 'refresh-1', true) };
+    }
+    if (/\/auth\/v1\//.test(url)) return { ok: true, status: 204, json: async () => ({}) };
+    return { ok: false, status: 401 };
+  });
+  app.salvarSessao({ access_token: 'access-antigo', refresh_token: 'refresh-antigo' }, true);
+
+  const pedido = app.api('dados');
+  await wait(); await wait();
+  app.document.body.descendants().find(n => n.tagName === 'BUTTON' && n.textContent === 'Voltar ao login')
+    .dispatch('click');
+
+  await assert.rejects(pedido, err => err.status === 401 && /Troque a senha provisória/.test(err.message));
+  assert.deepEqual(app.estadoSessao(), { accessToken: '', refreshToken: '' });
+  assert.equal(app.local.size + app.storage.size, 0, 'e nenhum token fica guardado');
+});
+
+test('popup volta a ser modal se um script de fora tirar e devolver o nó, sem contar como desistência', async () => {
   // Reinserir um <dialog> aberto o tira da camada superior sem fechá-lo: ele fica
   // solto no topo da página, atrás da barra verde (visto com gerenciador de senhas).
   const vigias = [];
   globalThis.MutationObserver = class {
     constructor(callback) { this.callback = callback; vigias.push(this); }
-    observe() {}
-    disconnect() { this.desligado = true; }
+    observe() { this.ligado = true; }
+    disconnect() { this.ligado = false; }
   };
   try {
     const t = loginProvisorio();
@@ -6484,42 +6737,37 @@ test('popup volta a ser modal se um script de fora reinserir o nó, sem contar c
     vigias[0].callback();
     assert.equal(promovido, 0, 'modal e aberto: nada a fazer');
 
-    modal = false; // o nó foi reinserido: continua `open`, mas não é mais modal
+    // A extensão tira o nó num quadro e o devolve no seguinte.
+    modal = false;
+    dialog.isConnected = false;
+    vigias[0].callback();
+    assert.equal(vigias[0].ligado, true, 'fora do documento, o vigia continua esperando a volta');
+    dialog.isConnected = true;
     vigias[0].callback();
     assert.equal(promovido, 1, 'volta a ser modal');
-    assert.equal(modal, true);
     assert.equal(dialog.open, true);
     assert.equal(t.erro(), '', 'sem o evento close, não vira desistência');
     assert.equal(t.chamadas.some(c => /\/auth\/v1\/logout/.test(c.url)), false, 'e a sessão não é revogada');
 
-    dialog.isConnected = false; // removido de vez (troca concluída ou desistência)
-    vigias[0].callback();
-    assert.equal(vigias[0].desligado, true, 'o vigia se desliga quando o nó sai do documento');
+    t.achar('BUTTON', 'Voltar ao login').dispatch('click');
+    assert.equal(vigias[0].ligado, false, 'o popup fechou: o vigia se desliga');
   } finally {
     delete globalThis.MutationObserver;
   }
 });
 
-test('o erro do login não muda o tamanho do card: sai do fluxo nas duas colunas e vem depois dos links', () => {
-  const ler = arquivo => readFileSync(new URL(`../${arquivo}`, import.meta.url), 'utf8');
-  const css = ler('assets/css/index.css');
+test('o erro do login não muda o tamanho do card com até duas linhas, e uma terceira não é cortada', () => {
+  const css = readFileSync(new URL('../assets/css/index.css', import.meta.url), 'utf8');
 
   // O bloco verde centraliza o conteúdo na altura da linha: se o card crescesse
   // com a mensagem, ele desceria junto (medido: 15px com uma linha, 25px com duas).
-  const duasColunas = css.match(/@media screen and \(min-width: 761px\)\s*\{([^@]*?)\n\}/)?.[1] ?? '';
-  assert.match(duasColunas, /#loginScreen\.app-login #loginErro\s*\{[^}]*position:\s*absolute[^}]*top:\s*100%/s,
-    'nas duas colunas o erro fica fora do fluxo, no respiro inferior do card');
-  assert.match(duasColunas, /\.app-login-form-card\s*\{\s*padding-bottom:\s*\d+px/,
-    'e o respiro inferior tem espaço para duas linhas');
-  assert.match(duasColunas, /\.login-rodape\s*\{\s*position:\s*relative/);
+  // `width > 760px`: com `min-width: 761px`, larguras entre 760 e 761 ficavam sem regra.
+  const duasColunas = css.match(/@media screen and \(width > 760px\)\s*\{([^@]*?)\n\}/)?.[1] ?? '';
+  assert.match(duasColunas, /#loginScreen\.app-login #loginErro\s*\{[^}]*min-height:\s*calc\(2lh \+ 4px\)/s,
+    'nas duas colunas o erro reserva duas linhas no respiro inferior do card');
+  assert.doesNotMatch(duasColunas, /position:\s*absolute/, 'e fica no fluxo: a terceira linha cresce o card');
+  assert.match(css, /@media screen and \(max-width: 760px\)/, 'o par da regra do celular');
   assert.match(css, /\.login-rodape #loginErro\s*\{[^}]*text-align:\s*center/, 'o erro fica centralizado, como o link de ajuda');
-
-  // Ordem visual = ordem do DOM: o erro vem depois da ajuda, senão o layout
-  // empilhado (que o mantém no fluxo) o poria entre o botão e os links.
-  for (const pagina of ['index.html', 'admin.html']) {
-    const html = ler(pagina);
-    assert.ok(html.indexOf('class="login-ajuda"') < html.indexOf('id="loginErro"'), pagina);
-  }
 
   // Popup de senha: topo fixo, para os campos não se recentralizarem com o erro.
   assert.match(css, /\.aviso-dialog\s*\{[^}]*margin-block:\s*clamp\(1rem, 12vh, 6rem\) auto/s);
