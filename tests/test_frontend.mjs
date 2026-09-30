@@ -6459,3 +6459,43 @@ test('conta sem a marca entra direto, sem popup', async () => {
   assert.equal(t.entrou(), 1);
   assert.equal(t.app.storage.get('sorteio-sei.access-token'), 'token-da-troca');
 });
+
+test('popup volta a ser modal se um script de fora reinserir o nó, sem contar como desistência', async () => {
+  // Reinserir um <dialog> aberto o tira da camada superior sem fechá-lo: ele fica
+  // solto no topo da página, atrás da barra verde (visto com gerenciador de senhas).
+  const vigias = [];
+  globalThis.MutationObserver = class {
+    constructor(callback) { this.callback = callback; vigias.push(this); }
+    observe() {}
+    disconnect() { this.desligado = true; }
+  };
+  try {
+    const t = loginProvisorio();
+    await t.entrar();
+    const dialog = t.dialog();
+    assert.equal(vigias.length, 1, 'cada popup vigia o próprio nó');
+
+    let modal = true;
+    let promovido = 0;
+    dialog.isConnected = true;
+    dialog.matches = seletor => seletor === ':modal' && modal;
+    dialog.showModal = () => { promovido++; modal = true; dialog.open = true; };
+
+    vigias[0].callback();
+    assert.equal(promovido, 0, 'modal e aberto: nada a fazer');
+
+    modal = false; // o nó foi reinserido: continua `open`, mas não é mais modal
+    vigias[0].callback();
+    assert.equal(promovido, 1, 'volta a ser modal');
+    assert.equal(modal, true);
+    assert.equal(dialog.open, true);
+    assert.equal(t.erro(), '', 'sem o evento close, não vira desistência');
+    assert.equal(t.chamadas.some(c => /\/auth\/v1\/logout/.test(c.url)), false, 'e a sessão não é revogada');
+
+    dialog.isConnected = false; // removido de vez (troca concluída ou desistência)
+    vigias[0].callback();
+    assert.equal(vigias[0].desligado, true, 'o vigia se desliga quando o nó sai do documento');
+  } finally {
+    delete globalThis.MutationObserver;
+  }
+});
