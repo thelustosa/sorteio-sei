@@ -915,22 +915,25 @@ def autoria_da_distribuicao_vem_do_token_e_so_admin_a_le(cur):
     """O cliente não escolhe o autor; a lista usa o valor gravado, não o login atual."""
     casos = [('CJ', 'terezinha', 'relator', 'CJ3'),
              ('CREG', 'alberto', 'unidade', 'CREG2')]
+    # Perto de agora: o banco recusa sorteio gravado pela API com outro carimbo.
+    cur.execute("select date_trunc('second', now()), current_date")
+    agora, hoje = cur.fetchone()
+    cur.connection.rollback()
     for orgao, operador, destino_coluna, destino in casos:
         numero_sorteio = numero()
         autenticar(cur, operador)
         cur.execute(f"""insert into public.acervo_{orgao.lower()}
                         (num_processo, {destino_coluna}, data_distribuicao,
                          sorteado_em, origem, criado_por)
-                        values (%s, %s, '2026-09-25',
-                                timestamptz '2026-09-25 10:00-03', 'sorteio',
-                                'autor-falso@goias.gov.br')""", (numero_sorteio, destino))
+                        values (%s, %s, %s, %s, 'sorteio',
+                                'autor-falso@goias.gov.br')""", (numero_sorteio, destino, hoje, agora))
         cur.connection.commit()
 
         sql_quem = """select quem from public.admin_sorteios(%s)
-                       where data_distribuicao = date '2026-09-25' and origem = 'sorteio'
-                         and sorteado_em = timestamptz '2026-09-25 10:00-03'"""
+                       where data_distribuicao = %s and origem = 'sorteio'
+                         and sorteado_em = %s"""
         autenticar(cur, 'sec-agr')
-        cur.execute(sql_quem, (orgao,))
+        cur.execute(sql_quem, (orgao, hoje, agora))
         assert cur.fetchone() == ([f'{operador}@goias.gov.br'],), orgao
 
         # Outra pessoa no mesmo lote não some atrás de um traço: aparecem as duas.
@@ -938,12 +941,11 @@ def autoria_da_distribuicao_vem_do_token_e_so_admin_a_le(cur):
         cur.execute(f"""insert into public.acervo_{orgao.lower()}
                         (num_processo, {destino_coluna}, data_distribuicao,
                          sorteado_em, origem)
-                        values (%s, %s, '2026-09-25',
-                                timestamptz '2026-09-25 10:00-03', 'sorteio')""",
-                    (numero(), destino))
+                        values (%s, %s, %s, %s, 'sorteio')""",
+                    (numero(), destino, hoje, agora))
         cur.connection.commit()
         autenticar(cur, 'sec-agr')
-        cur.execute(sql_quem, (orgao,))
+        cur.execute(sql_quem, (orgao, hoje, agora))
         assert cur.fetchone() == (sorted(['lucas@goias.gov.br', f'{operador}@goias.gov.br']),), orgao
 
         cur.execute('reset role')
@@ -964,7 +966,7 @@ def sorteio_com_token_sem_email_grava_autor_do_cadastro(cur):
                 (json.dumps({'sub': USUARIOS['terezinha'], 'role': 'authenticated'}),))
     cur.execute("""insert into public.acervo_cj
                    (num_processo, relator, data_distribuicao, origem)
-                   values (%s, 'CJ3', '2026-09-25', 'sorteio')""", (num,))
+                   values (%s, 'CJ3', current_date, 'sorteio')""", (num,))
     cur.connection.commit()
     assert como_dono(cur, "select criado_por from public.acervo_cj where num_processo = %s",
                      (num,)) == 'terezinha.bueno@goias.gov.br'
