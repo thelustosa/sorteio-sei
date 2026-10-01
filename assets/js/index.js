@@ -233,7 +233,7 @@ function createRowElement(index) {
   const tdInt = document.createElement('td');
   tdInt.className = 'col-interessado';
   tdInt.dataset.label = 'Interessado';
-  const inpInt = document.createElement('input'); inpInt.type = 'text'; inpInt.placeholder = 'Digite o interessado'; inpInt.setAttribute('aria-label', `Interessado, linha ${index}`);
+  const inpInt = document.createElement('input'); inpInt.type = 'text'; inpInt.placeholder = 'Digite o interessado'; inpInt.maxLength = 300; inpInt.setAttribute('aria-label', `Interessado, linha ${index}`);
   tdInt.appendChild(inpInt);
   const tdAss = document.createElement('td');
   tdAss.className = 'col-assunto';
