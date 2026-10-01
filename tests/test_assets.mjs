@@ -4,6 +4,7 @@
 // clientes presos num asset antigo por uma versão reaproveitada.
 
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -351,4 +352,22 @@ for (const tela of ['index', 'julgados', 'acervo', 'historico', 'admin']) {
         `${tela}: ${arquivo}.min.js redeclara um nome global de outro script — ${erro.message}`);
     }
   }
+}
+
+// A CSP vai numa <meta>, porque o Pages não deixa configurar header (issue #77,
+// item 18). Script inline só roda com o hash dele em script-src: editar o
+// script sem trocar o hash desliga o script em silêncio, e a página perde o
+// `has-session` ou o prefetch sem erro nenhum além do console.
+for (const pagina of PAGINAS) {
+  const html = ler(pagina);
+  const csp = html.match(/<meta http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)?.[1];
+  assert.ok(csp, `${pagina}: sem Content-Security-Policy`);
+  assert.ok(!html.includes('<script') || html.indexOf('Content-Security-Policy') < html.indexOf('<script'),
+    `${pagina}: a CSP precisa vir antes do primeiro <script>`);
+  const scriptSrc = csp.split(';').map(d => d.trim()).find(d => d.startsWith('script-src ')).split(' ');
+  for (const [, corpo] of html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)) {
+    const hash = `'sha256-${createHash('sha256').update(corpo).digest('base64')}'`;
+    assert.ok(scriptSrc.includes(hash), `${pagina}: script inline sem o hash ${hash} na CSP`);
+  }
+  assert.ok(!/unsafe-inline|unsafe-eval/.test(csp), `${pagina}: CSP afrouxada`);
 }

@@ -68,6 +68,9 @@ VARIAVEL = 'DILIGENCIAS_CSV_URL'
 HOSTS_PERMITIDOS = frozenset({'docs.google.com'})
 SUFIXO_PERMITIDO = '.googleusercontent.com'
 TIMEOUT = 30
+# A planilha tem algumas dezenas de linhas; o teto barra a resposta que esgotaria
+# a memória do runner.
+LIMITE_DOWNLOAD = 5 * 1024 * 1024
 AGENTE = 'sorteio-sei/1.0 (+https://github.com/thelustosa/sorteio-sei)'
 
 # O cabeçalho é o contrato. Se a planilha for reestruturada, é aqui que a
@@ -143,13 +146,16 @@ def baixar(url=None):
     pedido = urllib.request.Request(url, headers={'User-Agent': AGENTE})
     try:
         with _abridor.open(pedido, timeout=TIMEOUT) as resposta:
-            return resposta.read().decode('utf-8', 'replace')
+            conteudo = resposta.read(LIMITE_DOWNLOAD + 1)
     except (urllib.error.URLError, OSError, TimeoutError) as e:
         # `url` é segredo, e a própria exceção de urllib também pode
         # reproduzi-la. O tipo preserva informação operacional sem publicar a
         # credencial no JSON, no log ou no resumo do job.
         raise ErroPlanilha(
             f'não foi possível baixar a planilha ({type(e).__name__})') from None
+    if len(conteudo) > LIMITE_DOWNLOAD:
+        raise ErroPlanilha(f'a planilha passa de {LIMITE_DOWNLOAD // 2**20} MB')
+    return conteudo.decode('utf-8', 'replace')
 
 
 def _data(texto):
