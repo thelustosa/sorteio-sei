@@ -27,6 +27,9 @@ LISTAGEM = 'https://goias.gov.br/agr/pautas-das-reunioes-{ano}/'
 LISTAGEM_CREG = 'https://goias.gov.br/agr/pautas-das-sessoes-do-conselho-regulador-{ano}/'
 HOSTS_PERMITIDOS = frozenset({'goias.gov.br', 'www.goias.gov.br'})
 TIMEOUT = 30
+# Uma pauta tem algumas centenas de KB. O teto barra o download que esgotaria a
+# memória do runner antes de o PDF chegar ao pypdf.
+LIMITE_DOWNLOAD = 20 * 1024 * 1024
 AGENTE = 'sorteio-sei/1.0 (+https://github.com/thelustosa/sorteio-sei)'
 
 # <a href="…Pauta-21a-RP-CJ-25.06.2026.pdf">Pauta da 021ª Reunião …</a> – 25/06/2026 às 09:00
@@ -93,9 +96,12 @@ def _baixar(url):
     pedido = urllib.request.Request(url, headers={'User-Agent': AGENTE})
     try:
         with _abridor.open(pedido, timeout=TIMEOUT) as resposta:
-            return resposta.read()
+            conteudo = resposta.read(LIMITE_DOWNLOAD + 1)
     except (urllib.error.URLError, OSError, TimeoutError) as e:
         raise ErroAGR(f'não foi possível baixar {url}: {e}') from e
+    if len(conteudo) > LIMITE_DOWNLOAD:
+        raise ErroAGR(f'{url} passa de {LIMITE_DOWNLOAD // 2**20} MB')
+    return conteudo
 
 
 def listar_pautas(ano, comissao: str | None = 'Câmara de Julgamento', listagem=LISTAGEM):

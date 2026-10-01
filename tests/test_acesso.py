@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import psycopg2
+import psycopg2.errors
 from psycopg2.errors import InsufficientPrivilege
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -160,6 +161,55 @@ def terezinha_so_opera_tabelas_cj(cur):
     autenticar(cur, 'terezinha')
     cur.execute("select num_processo from public.julgados_creg")
     assert cur.fetchall() == []
+
+
+@teste
+def sorteio_pela_api_so_grava_o_que_a_tela_mandaria(cur):
+    """Issue #77, item 03: o operador não forja rodada nem foge do formato."""
+    recusados = [
+        ('acervo_cj', "relator, data_distribuicao", "'QUALQUER', current_date"),
+        ('acervo_cj', "relator, data_distribuicao, sorteado_em",
+         "'CJ1', date '2020-01-01', timestamptz '2020-01-01 10:00'"),
+        ('acervo_cj', "relator, data_distribuicao", "'CJ1', current_date - 30"),
+        ('acervo_cj', "relator, data_distribuicao, ordem", "'CJ1', current_date, -5"),
+        ('acervo_cj', "relator, data_distribuicao, assunto", "'CJ1', current_date, 'Outros'"),
+        ('acervo_creg', "unidade, data_distribuicao, interessado",
+         "'CREG1', current_date, repeat('x', 301)"),
+        ('acervo_creg', "unidade, data_distribuicao, assunto",
+         "'CREG1', current_date, repeat('x', 101)"),
+    ]
+    for tabela, colunas, valores in recusados:
+        autenticar(cur, 'lucas')
+        try:
+            cur.execute(f"""insert into public.{tabela} (num_processo, {colunas}, origem)
+                            values ('202600029009920', {valores}, 'sorteio')""")
+        except psycopg2.errors.InvalidParameterValue:
+            cur.connection.rollback()
+        else:
+            raise AssertionError(f'{tabela} aceitou ({colunas}) = ({valores})')
+
+    # O carimbo de criação é do banco, não do cliente.
+    autenticar(cur, 'terezinha')
+    cur.execute("""insert into public.acervo_cj
+                   (num_processo, relator, data_distribuicao, origem, criado_em)
+                   values ('202600029009921', 'CJ1', current_date, 'sorteio',
+                           timestamptz '2020-01-01 10:00')""")
+    cur.execute('reset role')
+    cur.execute("""select criado_em > now() - interval '1 minute', sorteado_em is not null
+                     from public.acervo_cj where num_processo = '202600029009921'""")
+    assert cur.fetchone() == (True, True)
+    cur.connection.rollback()
+
+    # O motivo do painel tem o limite do campo da tela.
+    cur.execute('reset role')
+    try:
+        cur.execute("""insert into public.auditoria_admin
+                       (orgao, operacao, tabela, registro_id, antes, depois, motivo, feito_por)
+                       values ('CJ', 'teste', 'acervo_cj', 1, '{}', '{}', repeat('x', 201), 'x')""")
+    except psycopg2.errors.CheckViolation:
+        cur.connection.rollback()
+    else:
+        raise AssertionError('auditoria_admin aceitou motivo com 201 caracteres')
 
 
 @teste

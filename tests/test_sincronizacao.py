@@ -11,6 +11,7 @@ avisar quando o formato do portal mudar.
 Requisitos: docker, psycopg2 e pypdf.
 """
 
+import io
 import json
 import os
 import re
@@ -135,7 +136,9 @@ def pdf_falso(texto):
         b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] '
         b'/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
         b'<< /Length %d >>\nstream\n%s\nendstream' % (len(fluxo), fluxo),
-        b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        # WinAnsi declarada, como nas pautas de verdade: sem ela o pypdf 6 não
+        # lê o 'nº' do latin-1 (o 5 supunha a codificação).
+        b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
     ]
     pdf, deslocamentos = bytearray(b'%PDF-1.4\n'), []
     for i, obj in enumerate(objetos, 1):
@@ -281,6 +284,35 @@ def pdf_invalido_e_pdf_sem_texto():
         except pauta.ErroPauta:
             continue
         raise AssertionError(f'aceitou {lixo!r}')
+
+
+@teste
+def download_acima_do_teto_e_recusado():
+    """Issue #77, item 13: o teto barra a resposta antes de ela chegar ao pypdf."""
+    class Abridor:
+        def __init__(self, tamanho):
+            self.tamanho = tamanho
+
+        def open(self, pedido, timeout):
+            return io.BytesIO(b'x' * self.tamanho)
+
+    casos = [(agr, '_baixar', agr.ErroAGR, 'https://goias.gov.br/pauta.pdf'),
+             (diligencias, 'baixar', diligencias.ErroPlanilha,
+              'https://docs.google.com/spreadsheets/d/e/x/pub?output=csv')]
+    for modulo, funcao, erro, url in casos:
+        original = modulo._abridor
+        try:
+            modulo._abridor = Abridor(modulo.LIMITE_DOWNLOAD)
+            assert len(getattr(modulo, funcao)(url)) == modulo.LIMITE_DOWNLOAD
+            modulo._abridor = Abridor(modulo.LIMITE_DOWNLOAD + 1)
+            try:
+                getattr(modulo, funcao)(url)
+            except erro:
+                pass
+            else:
+                raise AssertionError(f'{modulo.__name__} aceitou download acima do teto')
+        finally:
+            modulo._abridor = original
 
 
 # ── Testes: listagem da AGR ──────────────────────────────────────────────────

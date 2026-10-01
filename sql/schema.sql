@@ -2274,6 +2274,11 @@ create table if not exists public.auditoria_admin (
   feito_em    timestamptz not null default now()
 );
 
+-- O campo do painel tem maxlength="200"; quem chama a RPC direto esbarra aqui.
+alter table public.auditoria_admin drop constraint if exists auditoria_admin_motivo_tamanho;
+alter table public.auditoria_admin add constraint auditoria_admin_motivo_tamanho
+  check (char_length(motivo) <= 200);
+
 create index if not exists idx_auditoria_admin_orgao
   on public.auditoria_admin (orgao, id desc);
 create index if not exists idx_auditoria_admin_registro
@@ -2531,6 +2536,13 @@ $$;
 -- para o id do usuário — perder a distribuição seria pior que um autor feio.
 -- A função roda como dono porque auth_email() e auth.users não são acessíveis
 -- ao navegador.
+--
+-- O sorteio gravado com sessão também é conferido aqui (issue #77, item 03): o
+-- INSERT vem da API REST, e quem tem papel de operador poderia mandar qualquer
+-- valor — cadeira inexistente, texto de 100 mil caracteres, uma rodada datada
+-- de 2020 que entraria no histórico como se tivesse acontecido. O carimbo de
+-- criação passa a ser do banco, e o do sorteio só vale perto de agora. Retorno
+-- de Vista/Retirado e importação rodam como dono e não passam por ela.
 alter table public.acervo_cj add column if not exists criado_por text;
 alter table public.acervo_creg add column if not exists criado_por text;
 
@@ -2542,12 +2554,54 @@ set search_path = ''
 as $$
 declare
   usuario uuid := (select auth.uid());
+  agora   timestamptz := now();
 begin
   new.criado_por := case when usuario is not null then
     coalesce(nullif(public.auth_email(), ''),
              nullif((select u.email from auth.users u where u.id = usuario), ''),
              usuario::text)
   end;
+
+  -- O papel, e não o token: a API REST sempre grava como `authenticated`, e é
+  -- dela que se desconfia. Função do banco e importação rodam como dono.
+  if current_setting('role', true) is distinct from 'authenticated'
+     or new.origem is distinct from 'sorteio' then
+    return new;
+  end if;
+
+  new.criado_em := agora;
+  new.sorteado_em := coalesce(new.sorteado_em, agora);
+  -- Uma hora para trás cobre a renovação do token e a rede lenta entre o
+  -- sorteio na tela e a gravação; cinco minutos para frente, o relógio da
+  -- máquina adiantado.
+  if new.sorteado_em not between agora - interval '1 hour' and agora + interval '5 minutes' then
+    raise exception 'horario do sorteio fora do permitido: %', new.sorteado_em
+      using errcode = '22023';
+  end if;
+  -- A data vem do relógio local da tela, que pode estar um dia à frente do UTC.
+  if abs(new.data_distribuicao - (new.sorteado_em at time zone 'America/Sao_Paulo')::date) > 1 then
+    raise exception 'data de distribuicao % nao e a do sorteio', new.data_distribuicao
+      using errcode = '22023';
+  end if;
+  if new.ordem is not null and new.ordem <= 0 then
+    raise exception 'ordem invalida: %', new.ordem using errcode = '22023';
+  end if;
+  if char_length(new.assunto) > 100 or char_length(new.recurso) > 100 then
+    raise exception 'assunto ou recurso longo demais' using errcode = '22023';
+  end if;
+
+  if tg_table_name = 'acervo_cj' then
+    if not exists (select 1 from public.cadeiras_cj c
+                    where c.cadeira = new.relator and c.ate is null) then
+      raise exception 'cadeira invalida: %', new.relator using errcode = '22023';
+    end if;
+    if new.assunto is distinct from 'Auto de Infração' then
+      raise exception 'na CJ o assunto e sempre Auto de Infracao' using errcode = '22023';
+    end if;
+  elsif char_length(new.interessado) > 300 then
+    raise exception 'interessado longo demais (maximo 300 caracteres)' using errcode = '22023';
+  end if;
+
   return new;
 end;
 $$;
@@ -4070,3 +4124,29 @@ create trigger limpar_marca_senha_provisoria
   for each row
   when (old.encrypted_password is distinct from new.encrypted_password)
   execute function public.limpar_marca_senha_provisoria();
+
+-- ── Sessões paradas ──────────────────────────────────────────────────────────
+-- O Supabase não expira sessão sozinho, e o plano Free não oferece o prazo no
+-- painel: um job diário apaga a sessão parada há mais de 30 dias (issue #77).
+-- O Postgres dos testes não tem pg_cron: lá o bloco só avisa e sai.
+do $$
+begin
+  if not exists (select 1 from pg_available_extensions where name = 'pg_cron')
+     or to_regclass('auth.sessions') is null then
+    raise notice 'pg_cron ou auth.sessions indisponível: limpeza de sessões não agendada';
+    return;
+  end if;
+
+  create extension if not exists pg_cron with schema pg_catalog;
+
+  -- Nome fixo: agendar de novo com o mesmo nome atualiza o job em vez de
+  -- duplicá-lo.
+  perform cron.schedule('limpar-sessoes-paradas', '17 6 * * *', $job$
+    delete from auth.sessions
+     where coalesce(updated_at, created_at) < now() - interval '30 days'
+  $job$);
+
+  -- As que já passaram do prazo não esperam a primeira rodada.
+  delete from auth.sessions
+   where coalesce(updated_at, created_at) < now() - interval '30 days';
+end $$;
