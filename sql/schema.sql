@@ -4124,3 +4124,29 @@ create trigger limpar_marca_senha_provisoria
   for each row
   when (old.encrypted_password is distinct from new.encrypted_password)
   execute function public.limpar_marca_senha_provisoria();
+
+-- ── Sessões paradas ──────────────────────────────────────────────────────────
+-- O Supabase não expira sessão sozinho, e o plano Free não oferece o prazo no
+-- painel: um job diário apaga a sessão parada há mais de 30 dias (issue #77).
+-- O Postgres dos testes não tem pg_cron: lá o bloco só avisa e sai.
+do $$
+begin
+  if not exists (select 1 from pg_available_extensions where name = 'pg_cron')
+     or to_regclass('auth.sessions') is null then
+    raise notice 'pg_cron ou auth.sessions indisponível: limpeza de sessões não agendada';
+    return;
+  end if;
+
+  create extension if not exists pg_cron with schema pg_catalog;
+
+  -- Nome fixo: agendar de novo com o mesmo nome atualiza o job em vez de
+  -- duplicá-lo.
+  perform cron.schedule('limpar-sessoes-paradas', '17 6 * * *', $job$
+    delete from auth.sessions
+     where coalesce(updated_at, created_at) < now() - interval '30 days'
+  $job$);
+
+  -- As que já passaram do prazo não esperam a primeira rodada.
+  delete from auth.sessions
+   where coalesce(updated_at, created_at) < now() - interval '30 days';
+end $$;
