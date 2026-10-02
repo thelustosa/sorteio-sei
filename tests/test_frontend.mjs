@@ -2645,8 +2645,8 @@ test('Excel do CREG se identifica e concorda com o nome do colegiado', async () 
     'o título precisa dizer de qual colegiado é a planilha');
   // 'à Câmara' e 'ao Conselho' não saem do mesmo molde: o subtítulo saía com a
   // preposição do CJ na planilha do CREG.
-  assert.match(texto, /distribuídos ao Conselho Regulador\./);
-  assert.doesNotMatch(texto, /distribuídos à Conselho/);
+  assert.match(texto, /distribuídos\/sorteados ao Conselho Regulador\./);
+  assert.doesNotMatch(texto, /sorteados à Conselho/);
   assert.match(texto, /<t>1 processo aguardando julgamento<\/t>/,
     'um processo só não vira "1 processos"');
 });
