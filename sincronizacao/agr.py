@@ -26,6 +26,13 @@ from datetime import date
 LISTAGEM = 'https://goias.gov.br/agr/pautas-das-reunioes-{ano}/'
 LISTAGEM_CREG = 'https://goias.gov.br/agr/pautas-das-sessoes-do-conselho-regulador-{ano}/'
 HOSTS_PERMITIDOS = frozenset({'goias.gov.br', 'www.goias.gov.br'})
+# A partir da 38ª reunião da CJ (08/10/2026) a AGR passou a linkar o PDF na
+# intranet dela, que só responde em http, e não vai mudar isso. Fica liberado
+# só esse host, só em http/https; o portal continua exigindo https. Sem TLS o
+# PDF pode ser adulterado no caminho: data e número da sessão vêm da listagem
+# (portal, em https), mas a lista de processos sai do PDF sem outra conferência.
+# ponytail: risco aceito; se a intranet ganhar https, tirar o http daqui.
+HOSTS_HTTP = frozenset({'intranet.agr.go.gov.br'})
 TIMEOUT = 30
 # Uma pauta tem algumas centenas de KB. O teto barra o download que esgotaria a
 # memória do runner antes de o PDF chegar ao pypdf.
@@ -75,7 +82,9 @@ def _sem_acento(texto):
 
 def _conferir_origem(url):
     partes = urllib.parse.urlsplit(url)
-    if partes.scheme != 'https' or partes.hostname not in HOSTS_PERMITIDOS:
+    oficial = partes.scheme == 'https' and partes.hostname in HOSTS_PERMITIDOS
+    intranet = partes.scheme in ('http', 'https') and partes.hostname in HOSTS_HTTP
+    if not (oficial or intranet):
         raise ErroAGR(f'endereço fora da fonte oficial: {url}')
     return url
 
