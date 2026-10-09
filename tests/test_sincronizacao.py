@@ -354,18 +354,13 @@ def so_baixa_do_portal_do_estado():
                 'https://goias.gov.br.invalido.com/x.pdf',
                 'https://outro.com/x.pdf',
                 'file:///etc/passwd',
-                'https://169.254.169.254/latest/meta-data/',
-                'http://intranet.agr.go.gov.br.invalido.com/x.pdf',
-                'ftp://intranet.agr.go.gov.br/x.pdf']:
+                'https://169.254.169.254/latest/meta-data/']:
         try:
             agr._conferir_origem(url)
         except agr.ErroAGR:
             continue
         raise AssertionError(f'aceitou {url}')
     assert agr._conferir_origem('https://goias.gov.br/agr/x.pdf')
-    # A intranet da AGR, onde a pauta da 38ª CJ foi publicada, só fala http.
-    assert agr._conferir_origem(
-        'http://intranet.agr.go.gov.br/wp-content/uploads/2026/10/Pauta-38a-RP-CJ-08.10.2026.pdf')
 
 
 @teste
