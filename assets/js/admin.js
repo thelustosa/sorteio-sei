@@ -194,6 +194,8 @@ const detalheUnidadesCard = document.getElementById('detalheUnidadesCard');
 const detalhePrazoCard = document.getElementById('detalhePrazoCard');
 const detalhePrazoTitulo = document.getElementById('detalhePrazoTitulo');
 const detalhePrazo = document.getElementById('detalhePrazo');
+const detalheAssuntosCard = document.getElementById('detalheAssuntosCard');
+const detalheAssuntos = document.getElementById('detalheAssuntos');
 const detalheLateral = document.getElementById('detalheLateral');
 const detalheCartao = document.getElementById('detalheCartao');
 const btnFecharDetalhe = document.getElementById('btnFecharDetalhe');
@@ -1079,6 +1081,7 @@ async function abrirDetalheDaMeta(indice, recorte, meses, ano) {
   // busca, e o da lista não muda de largura quando os dados chegam.
   detalheUnidadesCard.style.visibility = 'hidden';
   detalhePrazoCard.hidden = true;
+  detalheAssuntosCard.hidden = true;
   // O arranjo e a trava de altura são da abertura anterior: sem voltar ao
   // ponto de partida, o card carregava largo (lado a lado) e mudava de largura
   // quando os dados chegavam — ou ficava largo e vazio se a busca falhasse.
@@ -1086,6 +1089,7 @@ async function abrirDetalheDaMeta(indice, recorte, meses, ano) {
   detalheLateral.dataset.densidade = '';
   detalheCartao.style.minHeight = '';
   detalhePrazo.replaceChildren();
+  detalheAssuntos.replaceChildren();
   detalheErro.hidden = true;
   detalheCorpo.hidden = true;
   detalheLoading.replaceChildren(criarIndicadorCarregamento('Carregando julgados…'));
@@ -1137,7 +1141,7 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
   // Só a lista de todos os julgados mistura as três situações; nas outras a
   // coluna repetiria o título do card em cada linha.
   const comMeta = recorte === 'julgados';
-  const colunas = ['Nº do Processo', vocabulario.destino, 'Distribuição', 'Sessão', 'Dias',
+  const colunas = ['Nº do Processo', vocabulario.destino, 'Assunto', 'Distribuição', 'Sessão', 'Dias',
     ...(comMeta ? ['Meta'] : [])];
 
   const grupos = agruparPorDestino(processos, colegiado);
@@ -1167,13 +1171,14 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
       numero.scope = 'row';
       // Os dias que passaram de 45 levam a cor de Fora: a coluna se lê de
       // relance em todo recorte, mesmo sem a coluna Meta.
-      tr.append(numero, celula(ou(p.destino)), celula(dataBR(p.data_distribuicao)),
+      tr.append(numero, celula(ou(p.destino)), celula(ou(p.assunto)), celula(dataBR(p.data_distribuicao)),
         celula(dataBR(p.data_sessao)), celula(ou(p.dias), 'td', p.meta_45 === false ? 'admin-meta-dias-fora' : ''));
       if (comMeta) tr.append(celula(seloDaMeta(p.meta_45)));
       tbody.appendChild(tr);
     });
     detalheTabela.replaceChildren(cabecalho(colunas), tbody);
     equalizarColunas(detalheTabela);
+    desenharAssuntos(lista);
   };
 
   pintarLista(null);
@@ -1192,6 +1197,32 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
 // um com a altura inteira. Na janela estreita, que não comporta o lado a lado,
 // o último recurso é tirar também a dica "Clique para filtrar a lista.". Parte
 // sempre do mais folgado, para a janela que cresce devolver o respiro.
+// Quantos processos de cada assunto há na lista à vista: segue o filtro por
+// unidade, então a soma bate sempre com o resumo do topo. Os mais frequentes
+// primeiro; sem assunto fica por último.
+function desenharAssuntos(lista) {
+  const conta = new Map();
+  lista.forEach(p => {
+    const chave = ou(p.assunto);
+    conta.set(chave, (conta.get(chave) || 0) + 1);
+  });
+  detalheAssuntos.replaceChildren(...[...conta]
+    .sort(([a, x], [b, y]) => (a === '—') - (b === '—') || y - x || a.localeCompare(b, 'pt-BR'))
+    .map(([nome, quantidade]) => {
+      const item = document.createElement('li');
+      item.className = 'admin-meta-assuntos-item';
+      const rotulo = document.createElement('span');
+      rotulo.className = 'admin-meta-assuntos-nome';
+      rotulo.textContent = nome === '—' ? 'Sem assunto' : nome;
+      const numero = document.createElement('span');
+      numero.className = 'admin-meta-assuntos-total';
+      numero.textContent = contagem(quantidade);
+      item.append(rotulo, numero);
+      return item;
+    }));
+  detalheAssuntosCard.hidden = false;
+}
+
 const DEGRAUS_APERTANDO = [['coluna', ''], ['coluna', 'compacta'], ['coluna', 'minima']];
 const DEGRAUS_EM_COLUNA = [...DEGRAUS_APERTANDO, ['coluna', 'minima-sem-dica']];
 const DEGRAUS_COM_LADO = [...DEGRAUS_APERTANDO, ['lado', ''], ['lado', 'compacta'], ['lado', 'minima']];
@@ -1202,7 +1233,7 @@ const DEGRAUS_COM_LADO = [...DEGRAUS_APERTANDO, ['lado', ''], ['lado', 'compacta
 const LARGURA_LADO_A_LADO = '(min-width: 77.5rem)';
 
 function ajustarDensidade() {
-  const transborda = () => [detalheUnidades, detalhePrazo]
+  const transborda = () => [detalheUnidades, detalhePrazo, detalheAssuntos]
     .some(corpo => corpo.scrollHeight > corpo.clientHeight + 1);
   const larga = typeof window !== 'undefined' && window.matchMedia(LARGURA_LADO_A_LADO).matches;
   const degraus = larga ? DEGRAUS_COM_LADO : DEGRAUS_EM_COLUNA;

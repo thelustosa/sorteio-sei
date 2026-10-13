@@ -4132,6 +4132,8 @@ function adminPage({ api = async () => null, aviso = () => {}, botaoCarregando =
   document.add('detalhePrazoCard', 'aside');
   document.add('detalhePrazoTitulo', 'h3');
   document.add('detalhePrazo', 'ul');
+  document.add('detalheAssuntosCard', 'aside');
+  document.add('detalheAssuntos', 'ul');
   document.add('detalheLateral', 'div');
   document.add('detalheCartao', 'div');
   const cardDetalhe = document.add('detalheDialog', 'dialog');
@@ -4472,15 +4474,15 @@ test('cada contagem da meta abre o card so com os julgados dela', async () => {
   assert.deepEqual(linhas.map(tr => tr.children.at(-1).children[0].className),
     ['admin-badge admin-badge-fora', 'admin-badge admin-badge-sucesso', 'admin-meta-sem-prazo'],
     'sem prazo é ausência de dado: texto, e não selo');
-  assert.deepEqual(linhas.map(tr => tr.children[4].className), ['admin-meta-dias-fora', '', ''],
+  assert.deepEqual(linhas.map(tr => tr.children[5].className), ['admin-meta-dias-fora', '', ''],
     'só os dias acima de 45 levam a cor de Fora');
 });
 
 test('card da meta conta os julgados por destino e filtra a lista por eles', async () => {
-  const julgado = (num, destino, meta_45) => ({ num_processo: num, destino,
+  const julgado = (num, destino, meta_45, assunto = 'Auto de Infração') => ({ num_processo: num, destino, assunto,
     data_distribuicao: '2026-01-05', data_sessao: '2026-02-05', dias: 31, meta_45 });
-  const PERIODO = [julgado('1', 'CREG10', true), julgado('2', 'CREG2', true), julgado('3', 'CREG3', true),
-    julgado('4', 'CREG3', true), julgado('5', null, true), julgado('6', 'CREG1', false)];
+  const PERIODO = [julgado('1', 'CREG10', true, 'Requerimento'), julgado('2', 'CREG2', true), julgado('3', 'CREG3', true),
+    julgado('4', 'CREG3', true, null), julgado('5', null, true), julgado('6', 'CREG1', false)];
   const page = adminPage({ api: apiDoPainel([], { 'rpc/admin_meta_45_processos': PERIODO }) });
   await page.inicializarAdmin(new Set(['CREG']));
   page.botaoDeAba('meta').dispatch('click');
@@ -4494,8 +4496,13 @@ test('card da meta conta os julgados por destino e filtra a lista por eles', asy
   const apertadas = () => opcoes.filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.children[0].textContent);
   const processos = () => doc.getElementById('detalheTable').children[1].children.map(tr => tr.children[0].textContent);
   const resumo = () => doc.getElementById('detalheResumo').textContent;
+  const assuntos = () => doc.getElementById('detalheAssuntos').children.map(li => li.children.map(c => c.textContent));
 
   assert.equal(doc.getElementById('detalheUnidadesTitulo').textContent, 'Julgados por unidade');
+  assert.equal(doc.getElementById('detalheTable').children[1].children[0].children[2].textContent, 'Requerimento');
+  assert.equal(doc.getElementById('detalheAssuntosCard').hidden, false);
+  assert.deepEqual(assuntos(), [['Auto de Infração', '3'], ['Requerimento', '1'], ['Sem assunto', '1']],
+    'mais frequente primeiro; sem assunto por último');
   assert.deepEqual(opcoes.map(texto),
     [['Total', '5'], ['CREG2', '1'], ['CREG3', '2'], ['CREG10', '1'], ['Sem unidade', '1']],
     'Total primeiro; depois unidades em ordem numérica, inclusive CREG10; só o recorte aberto (Dentro)');
@@ -4505,6 +4512,7 @@ test('card da meta conta os julgados por destino e filtra a lista por eles', asy
   opcoes[2].dispatch('click');
   assert.deepEqual(processos(), ['3', '4']);
   assert.deepEqual(apertadas(), ['CREG3']);
+  assert.deepEqual(assuntos(), [['Auto de Infração', '1'], ['Sem assunto', '1']], 'os assuntos seguem o filtro');
   assert.equal(resumo(), 'Conselho Regulador · CREG3 · 2 de 5 julgados · sessões de 01/01/2026 a 30/04/2026');
 
   opcoes[4].dispatch('click');

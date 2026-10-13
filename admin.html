@@ -14,7 +14,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=b502a2e3ae" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=25e1607db9" />
   <script>
     (function () {
       try {
@@ -27,8 +27,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=b502a2e3ae"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=b502a2e3ae"></script>
+  <script defer src="assets/js/supabase.min.js?v=25e1607db9"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=25e1607db9"></script>
 </head>
 
 <body class="admin-page" data-page="admin">
@@ -367,8 +367,8 @@
           </div>
         </div>
 
-        <!-- A coluna da direita: o filtro por unidade e, só no recorte Julgados,
-             o prazo de cada unidade. -->
+        <!-- A coluna da direita: o filtro por unidade, só no recorte Julgados o
+             prazo de cada unidade, e os assuntos da lista à vista. -->
         <div id="detalheLateral" class="admin-meta-lateral">
           <aside id="detalheUnidadesCard" class="admin-meta-unidades" aria-labelledby="detalheUnidadesTitulo">
             <header class="admin-meta-lateral-header">
@@ -384,6 +384,14 @@
               <p>Sem prazo fica fora do percentual.</p>
             </header>
             <ul id="detalhePrazo" class="admin-meta-prazo-lista"></ul>
+          </aside>
+
+          <aside id="detalheAssuntosCard" class="admin-meta-assuntos" aria-labelledby="detalheAssuntosTitulo" hidden>
+            <header class="admin-meta-lateral-header">
+              <h3 id="detalheAssuntosTitulo">Assuntos</h3>
+              <p>Contados na lista ao lado.</p>
+            </header>
+            <ul id="detalheAssuntos" class="admin-meta-assuntos-lista"></ul>
           </aside>
         </div>
       </dialog>

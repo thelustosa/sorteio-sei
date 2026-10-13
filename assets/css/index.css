@@ -4282,7 +4282,8 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
 .admin-meta-dialog[open] { flex-direction: row; align-items: stretch; gap: 16px; }
 .detalhe-cartao,
 .admin-meta-unidades,
-.admin-meta-prazo {
+.admin-meta-prazo,
+.admin-meta-assuntos {
   position: relative;
   border-radius: var(--radius-card);
   background: var(--surface-raised);
@@ -4295,7 +4296,8 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
    que rola, embaixo. */
 .detalhe-cartao::before,
 .admin-meta-unidades::before,
-.admin-meta-prazo::before {
+.admin-meta-prazo::before,
+.admin-meta-assuntos::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -4309,7 +4311,8 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
 .admin-meta-dialog .detalhe-corpo,
 .admin-meta-dialog .detalhe-loading,
 .admin-meta-filtro,
-.admin-meta-prazo-lista { border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.admin-meta-prazo-lista,
+.admin-meta-assuntos-lista { border-radius: 0 0 var(--radius-card) var(--radius-card); }
 .detalhe-cartao {
   display: flex;
   flex: 1 1 0;
@@ -4344,12 +4347,18 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   max-height: min(60rem, calc(100vh - 4rem));
 }
 .admin-meta-unidades,
-.admin-meta-prazo { display: flex; flex-direction: column; min-height: 8.5rem; }
+.admin-meta-prazo,
+.admin-meta-assuntos { display: flex; flex-direction: column; min-height: 8.5rem; }
 .admin-meta-unidades { flex: 1 0 auto; }
 .admin-meta-prazo { flex: 1 1 auto; }
+/* Os assuntos ficam na própria altura, embaixo. Faltando altura, são os
+   primeiros a ceder (e rolar por dentro): o prazo só encolhe depois que eles
+   chegam ao piso, para não haver duas listas rolando ao mesmo tempo. */
+.admin-meta-assuntos { flex: 0 1000 auto; }
 .admin-meta-unidades:has(+ .admin-meta-prazo[hidden]) { flex-grow: 0; }
 .admin-meta-filtro,
-.admin-meta-prazo-lista {
+.admin-meta-prazo-lista,
+.admin-meta-assuntos-lista {
   flex: 1 1 auto;
   align-content: start;
   min-height: 0;
@@ -4459,6 +4468,20 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
 .admin-meta-prazo-quantidade { white-space: nowrap; }
 .admin-meta-prazo-quantidade { font-size: var(--text-xs); font-weight: 400; }
 
+/* Assuntos: nome à esquerda e quantos processos à direita, com o mesmo recuo
+   do card de prazo. */
+.admin-meta-assuntos-lista {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: calc(13px + var(--opcao-respiro)) 23px;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+.admin-meta-assuntos-item { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.admin-meta-assuntos-nome { overflow-wrap: anywhere; }
+.admin-meta-assuntos-total { font-size: var(--text-base); font-weight: 700; font-variant-numeric: tabular-nums; }
+
 /* Densidade da coluna, escolhida por ajustarDensidade() (admin.js) quando os
    cards não cabem na altura da lista: primeiro aperta os vãos; depois tira a
    linha de apoio da faixa de prazo e desce os números ao tamanho do texto. A barra
@@ -4483,6 +4506,10 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
 .admin-meta-lateral[data-densidade='minima-sem-dica'] .admin-meta-unidades .admin-meta-lateral-header p { display: none; }
 .admin-meta-lateral[data-densidade^='minima'] .admin-meta-prazo-lista { gap: 4px; padding-block: 12px; }
 .admin-meta-lateral[data-densidade^='minima'] .admin-meta-prazo-item { gap: 2px; }
+.admin-meta-lateral[data-densidade^='minima'] .admin-meta-assuntos .admin-meta-lateral-header { padding-block: 14px; }
+.admin-meta-lateral[data-densidade^='minima'] .admin-meta-assuntos .admin-meta-lateral-header p { display: none; }
+.admin-meta-lateral[data-densidade^='minima'] .admin-meta-assuntos-lista { gap: 4px; padding-block: 12px; }
+.admin-meta-lateral[data-densidade^='minima'] .admin-meta-assuntos-total { font-size: var(--text-sm); }
 
 /* Lado a lado: quando os dois cards empilhados não cabem na altura da lista
    nem no degrau mínimo (telas HD, 125% e 720p), cada um ganha a altura
@@ -4493,6 +4520,38 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
 .detalhe-dialog.admin-meta-dialog:has(.admin-meta-lateral[data-arranjo='lado']) { width: min(82rem, calc(100vw - 2rem)); }
 .admin-meta-lateral[data-arranjo='lado'] { flex-direction: row; flex-basis: calc(34rem + 16px); align-self: flex-start; }
 .admin-meta-lateral[data-arranjo='lado'] > * { flex: 1 1 0; min-width: 0; }
+/* Com o card dos assuntos, o lado a lado vira grade. Unidades e prazo, os
+   dois por unidade, ficam lado a lado na mesma linha e com a mesma altura; os
+   assuntos atravessam as duas colunas embaixo, com a lista em duas colunas.
+   Com o prazo ocupando as duas linhas ao lado de unidades + assuntos, sobravam
+   ~300px de branco no fundo dele. Sem o de prazo (recortes Dentro, Fora e Sem
+   prazo), unidades e assuntos dividem a linha. */
+.admin-meta-lateral[data-arranjo='lado']:has(> .admin-meta-assuntos:not([hidden])) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+}
+.admin-meta-lateral[data-arranjo='lado'] > .admin-meta-prazo:not([hidden]) ~ .admin-meta-assuntos { grid-column: 1 / -1; min-height: 0; }
+/* Na mesma linha do prazo, o card das unidades estica até a altura dele. A
+   sobra não fica num vão no fundo: cada unidade ganha uma faixa igual dela,
+   com o conteúdo no meio, e o Total segue colado ao fio que o separa. */
+.admin-meta-lateral[data-arranjo='lado'] > .admin-meta-unidades:has(~ .admin-meta-prazo:not([hidden])) .admin-meta-filtro {
+  grid-template-rows: auto;
+  grid-auto-rows: 1fr;
+  align-content: stretch;
+}
+.admin-meta-lateral[data-arranjo='lado'] > .admin-meta-unidades:has(~ .admin-meta-prazo:not([hidden])) .admin-meta-opcao:not(.is-total) { align-content: center; }
+/* Multicoluna, e não grade: o ranking desce a primeira coluna e continua na
+   segunda, em vez de alternar entre as duas. */
+.admin-meta-lateral[data-arranjo='lado'] > .admin-meta-prazo:not([hidden]) ~ .admin-meta-assuntos .admin-meta-assuntos-lista {
+  display: block;
+  columns: 2;
+  column-gap: 46px;
+}
+.admin-meta-lateral[data-arranjo='lado'] > .admin-meta-prazo:not([hidden]) ~ .admin-meta-assuntos .admin-meta-assuntos-item {
+  break-inside: avoid;
+  padding-block: 4px;
+}
 
 /* Abaixo de 960px a lista não cabe ao lado da coluna da direita sem espremer
    as colunas (a 901px as seis do recorte Julgados passavam 37px da borda): a
@@ -4513,16 +4572,20 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
      cima, o botão de fechar ficava a 600px do topo. */
   .admin-meta-lateral { display: contents; }
   .admin-meta-unidades { order: -1; }
-  .admin-meta-prazo { order: 1; }
+  .admin-meta-prazo,
+  .admin-meta-assuntos { order: 1; }
   /* Aqui quem rola é o diálogo: cada card volta à própria altura. */
   .admin-meta-unidades,
   .admin-meta-prazo,
+  .admin-meta-assuntos,
   .admin-meta-unidades:has(+ .admin-meta-prazo[hidden]) { flex: none; min-height: 0; max-height: none; }
   .admin-meta-filtro,
-  .admin-meta-prazo-lista { overflow: visible; }
+  .admin-meta-prazo-lista,
+  .admin-meta-assuntos-lista { overflow: visible; }
   .admin-meta-lateral-header { padding: 14px 16px; }
   .admin-meta-unidades .admin-meta-lateral-header p { display: none; }
   .admin-meta-prazo-lista { gap: 14px; padding: 14px 16px 16px; }
+  .admin-meta-assuntos-lista { padding: 14px 16px 16px; }
   .admin-meta-filtro { display: flex; flex-wrap: wrap; gap: 8px; }
   .admin-meta-opcao { width: auto; border-color: var(--border); border-radius: var(--radius-pill); padding: 8px 14px; }
   .admin-meta-opcao-barra { display: none; }
