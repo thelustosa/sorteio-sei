@@ -2232,6 +2232,11 @@ def preparar_upgrade_da_migracao():
         -- adiciona Quem novamente ao fim da sequência.
         drop function if exists public.admin_sorteios(text);
 
+        -- O mesmo com admin_meta_45_processos: o schema atual já devolve o
+        -- assunto, e 20260918122009 a recria sem ele (`create or replace` não
+        -- troca tipo de retorno). Quem devolve o assunto é 20261013120000.
+        drop function if exists public.admin_meta_45_processos(text, date, date);
+
         -- As tabelas da Câmara sem o check de 15 dígitos, como produção estava
         -- até 15/09/2026: quem tem de devolvê-lo é a migração, e
         -- cj_exige_numero_de_processo_com_15_digitos mede o resultado dela.
