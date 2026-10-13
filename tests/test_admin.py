@@ -258,6 +258,32 @@ def meta_45_conta_so_julgado_e_separa_o_prazo_nao_aferivel(cur):
 
 
 @teste
+def meta_45_processos_traz_o_assunto_e_os_mais_atrasados_primeiro(cur):
+    """O card da Meta 45 mostra o assunto de cada julgado: no Conselho, o do
+    próprio julgado; na Câmara, sempre Auto de Infração. As colunas saem na
+    ordem que o painel lê, e o mais atrasado vem primeiro."""
+    num_cj, _, _ = cenario_cj(cur, data_dist='2024-03-01', data_sessao='2024-03-20')
+    num_curto, _, _ = cenario_creg(cur, data_dist='2024-03-01', data_sessao='2024-03-20')
+    num_longo, _, julgado_longo = cenario_creg(cur, data_dist='2024-01-02', data_sessao='2024-03-21')
+    como_dono(cur, "update public.julgados_creg set assunto = 'Chamamento Público' where id = %s",
+              (julgado_longo,))
+    cur.connection.commit()
+
+    autenticar(cur, 'lucas')
+    consulta = """select num_processo, destino, assunto, data_distribuicao::text,
+                         data_sessao::text, dias, meta_45
+                    from public.admin_meta_45_processos(%s, date '2024-03-01', date '2024-03-31')
+                   where num_processo = any(%s)"""
+    cur.execute(consulta, ('CJ', [num_cj]))
+    assert cur.fetchall() == [(num_cj, 'CJ3', 'Auto de Infração', '2024-03-01', '2024-03-20', 19, True)]
+    cur.execute(consulta, ('CREG', [num_curto, num_longo]))
+    assert cur.fetchall() == [
+        (num_longo, 'CREG2', 'Chamamento Público', '2024-01-02', '2024-03-21', 79, False),
+        (num_curto, 'CREG2', 'Requerimento', '2024-03-01', '2024-03-20', 19, True),
+    ]
+
+
+@teste
 def escrita_administrativa_so_para_admin(cur):
     num_cj, acervo_cj, julgado_cj = cenario_cj(cur)
     num_creg, acervo_creg, julgado_creg = cenario_creg(cur)

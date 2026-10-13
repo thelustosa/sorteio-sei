@@ -2436,6 +2436,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
      mais e o texto volta a duas linhas. */
   [data-colegiado='creg'] .detalhe-table.historico-detalhe { min-width: 720px; }
   [data-colegiado='creg'] .detalhe-table.acervo-processos { min-width: 680px; }
+  .admin-meta-dialog[data-colegiado='CREG'] .detalhe-table.admin-meta-detalhe { min-width: 680px; }
 }
 
 .acervo-table tbody td.acervo-zero {
@@ -4280,6 +4281,11 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   overflow: visible;
 }
 .admin-meta-dialog[open] { flex-direction: row; align-items: stretch; gap: 16px; }
+/* O Conselho tem a coluna Assunto: sete colunas no recorte Julgados, e
+   assuntos como "Chamamento Público" numa linha só pedem ~52rem de lista. Com
+   64rem a lista ficava em 46rem e rolava de lado. A largura é do colegiado
+   (data-colegiado, marcado ao abrir), nunca dos dados. */
+.detalhe-dialog.admin-meta-dialog[data-colegiado='CREG'] { width: min(70rem, calc(100vw - 2rem)); }
 .detalhe-cartao,
 .admin-meta-unidades,
 .admin-meta-prazo,
@@ -4337,7 +4343,14 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
    inteiro enquanto couber em 62% da coluna — encolhendo os dois juntos, a
    Câmara (cinco relatores e "Sem relator") rolava nos dois cards até em
    1920 × 1080. A coluna não rola, e a sombra dos cards não é recortada. O piso
-   de cada card é a faixa mais uma linha. */
+   de cada card é a faixa mais uma linha.
+
+   No Conselho entra um terceiro card, o dos assuntos, embaixo e fora do bloco
+   unidades + prazo (.admin-meta-por-destino). A ordem de quem cede altura é:
+   primeiro os assuntos (até o piso, rolando por dentro), depois o prazo; as
+   unidades, nunca. A coluna é flex nos dois arranjos justamente para essa
+   ordem valer também no lado a lado: em grade, a altura era repartida por
+   igual e as unidades rolavam antes dos assuntos. */
 .admin-meta-lateral {
   display: flex;
   flex: 0 0 17rem;
@@ -4346,6 +4359,15 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   min-height: 0;
   max-height: min(60rem, calc(100vh - 4rem));
 }
+/* O bloco cresce até o fundo e reparte a sobra entre unidades e prazo; sem o
+   prazo, fica na própria altura, como o card das unidades. O min-height: 0 é
+   o que deixa o prazo chegar ao piso dele: sem ele, o piso automático do
+   bloco era o conteúdo inteiro dos dois cards, a coluna passava do fundo da
+   tela e o prazo nunca rolava — e ajustarDensidade() não via nada para
+   apertar. O encolhimento do bloco pesa 1 contra 1000 dos assuntos: ele só
+   cede depois que os assuntos chegam ao piso. */
+.admin-meta-por-destino { display: flex; flex: 1 1 auto; flex-direction: column; gap: 16px; min-height: 0; }
+.admin-meta-por-destino:has(> .admin-meta-prazo[hidden]) { flex-grow: 0; }
 .admin-meta-unidades,
 .admin-meta-prazo,
 .admin-meta-assuntos { display: flex; flex-direction: column; min-height: 8.5rem; }
@@ -4353,7 +4375,8 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
 .admin-meta-prazo { flex: 1 1 auto; }
 /* Os assuntos ficam na própria altura, embaixo. Faltando altura, são os
    primeiros a ceder (e rolar por dentro): o prazo só encolhe depois que eles
-   chegam ao piso, para não haver duas listas rolando ao mesmo tempo. */
+   chegam ao piso, para não haver duas listas rolando ao mesmo tempo. Por isso
+   ajustarDensidade() não os mede. */
 .admin-meta-assuntos { flex: 0 1000 auto; }
 .admin-meta-unidades:has(+ .admin-meta-prazo[hidden]) { flex-grow: 0; }
 .admin-meta-filtro,
@@ -4369,6 +4392,11 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
    barra de rolagem aparece só se faltar espaço, em vez de o overflow-x: hidden
    do corpo esconder a última coluna (o selo Meta) sem caminho até ela. */
 .detalhe-corpo:has(.admin-meta-detalhe) { overflow-x: auto; }
+/* O assunto é a única célula que quebra linha: há assunto de 63 caracteres
+   ("Fixação da Quota de Consumo mensal…"), e sem quebra ele empurrava a
+   tabela para a barra lateral em qualquer largura. O piso evita uma palavra
+   por linha quando a janela aperta. */
+.detalhe-table td.admin-meta-assunto { min-width: 9rem; white-space: normal; }
 
 /* A mesma faixa verde do card da lista, com a mesma altura: título no degrau
    do h2 de lá e uma linha de apoio no do resumo. */
@@ -4472,6 +4500,7 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
    do card de prazo. */
 .admin-meta-assuntos-lista {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   margin: 0;
   padding: calc(13px + var(--opcao-respiro)) 23px;
@@ -4518,39 +4547,32 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
    lista: esticados, sobrava branco de até 470px dentro deles. Só com a janela
    larga o bastante para a lista manter as seis colunas (LARGURA_LADO_A_LADO). */
 .detalhe-dialog.admin-meta-dialog:has(.admin-meta-lateral[data-arranjo='lado']) { width: min(82rem, calc(100vw - 2rem)); }
-.admin-meta-lateral[data-arranjo='lado'] { flex-direction: row; flex-basis: calc(34rem + 16px); align-self: flex-start; }
-.admin-meta-lateral[data-arranjo='lado'] > * { flex: 1 1 0; min-width: 0; }
-/* Com o card dos assuntos, o lado a lado vira grade. Unidades e prazo, os
-   dois por unidade, ficam lado a lado na mesma linha e com a mesma altura; os
-   assuntos atravessam as duas colunas embaixo, com a lista em duas colunas.
-   Com o prazo ocupando as duas linhas ao lado de unidades + assuntos, sobravam
-   ~300px de branco no fundo dele. Sem o de prazo (recortes Dentro, Fora e Sem
-   prazo), unidades e assuntos dividem a linha. */
-.admin-meta-lateral[data-arranjo='lado']:has(> .admin-meta-assuntos:not([hidden])) {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-content: start;
-}
-.admin-meta-lateral[data-arranjo='lado'] > .admin-meta-prazo:not([hidden]) ~ .admin-meta-assuntos { grid-column: 1 / -1; min-height: 0; }
-/* Na mesma linha do prazo, o card das unidades estica até a altura dele. A
-   sobra não fica num vão no fundo: cada unidade ganha uma faixa igual dela,
-   com o conteúdo no meio, e o Total segue colado ao fio que o separa. */
-.admin-meta-lateral[data-arranjo='lado'] > .admin-meta-unidades:has(~ .admin-meta-prazo:not([hidden])) .admin-meta-filtro {
+.detalhe-dialog.admin-meta-dialog[data-colegiado='CREG']:has(.admin-meta-lateral[data-arranjo='lado']) { width: min(88rem, calc(100vw - 2rem)); }
+/* A coluna continua uma pilha (bloco por destino em cima, assuntos embaixo) e
+   só o bloco vira linha: unidades e prazo lado a lado, na altura do mais alto.
+   Com o prazo ocupando a altura de unidades + assuntos, sobravam ~300px de
+   branco no fundo dele. */
+.admin-meta-lateral[data-arranjo='lado'] { flex-basis: calc(34rem + 16px); align-self: flex-start; }
+.admin-meta-lateral[data-arranjo='lado'] .admin-meta-por-destino { flex-direction: row; }
+.admin-meta-lateral[data-arranjo='lado'] .admin-meta-por-destino > * { flex: 1 1 0; min-width: 0; }
+/* Esticado até a altura do prazo, o card das unidades não guarda a sobra num
+   vão no fundo: cada unidade ganha uma faixa igual dela, com o conteúdo no
+   meio, e o Total segue colado ao fio que o separa. */
+.admin-meta-lateral[data-arranjo='lado'] .admin-meta-unidades:has(+ .admin-meta-prazo:not([hidden])) .admin-meta-filtro {
   grid-template-rows: auto;
   grid-auto-rows: 1fr;
   align-content: stretch;
 }
-.admin-meta-lateral[data-arranjo='lado'] > .admin-meta-unidades:has(~ .admin-meta-prazo:not([hidden])) .admin-meta-opcao:not(.is-total) { align-content: center; }
-/* Multicoluna, e não grade: o ranking desce a primeira coluna e continua na
-   segunda, em vez de alternar entre as duas. */
-.admin-meta-lateral[data-arranjo='lado'] > .admin-meta-prazo:not([hidden]) ~ .admin-meta-assuntos .admin-meta-assuntos-lista {
-  display: block;
-  columns: 2;
+.admin-meta-lateral[data-arranjo='lado'] .admin-meta-unidades:has(+ .admin-meta-prazo:not([hidden])) .admin-meta-opcao:not(.is-total) { align-content: center; }
+/* Os assuntos atravessam as duas colunas embaixo, com a lista em duas colunas
+   que se leem de cima para baixo. Em grade com as linhas fixadas por admin.js
+   (metade dos itens), e não em multicoluna: com a altura apertada, a
+   multicoluna abria colunas novas à direita, escondidas, e a sobra nunca
+   aparecia como rolagem para baixo. */
+.admin-meta-lateral[data-arranjo='lado'] .admin-meta-assuntos-lista {
+  grid-auto-flow: column;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: 46px;
-}
-.admin-meta-lateral[data-arranjo='lado'] > .admin-meta-prazo:not([hidden]) ~ .admin-meta-assuntos .admin-meta-assuntos-item {
-  break-inside: avoid;
-  padding-block: 4px;
 }
 
 /* Abaixo de 960px a lista não cabe ao lado da coluna da direita sem espremer
@@ -4570,7 +4592,8 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   /* A coluna se desfaz e cada card entra na fila do diálogo: o filtro, compacto,
      sobe para cima da lista; o prazo desce para depois dela. Com os dois em
      cima, o botão de fechar ficava a 600px do topo. */
-  .admin-meta-lateral { display: contents; }
+  .admin-meta-lateral,
+  .admin-meta-por-destino { display: contents; }
   .admin-meta-unidades { order: -1; }
   .admin-meta-prazo,
   .admin-meta-assuntos { order: 1; }

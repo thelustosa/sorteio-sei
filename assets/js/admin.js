@@ -1074,6 +1074,10 @@ async function abrirDetalheDaMeta(indice, recorte, meses, ano) {
   const ate = `${ano}-${doisDigitos(inicio + meses)}-${doisDigitos(ultimoDia)}`;
 
   detalheTitulo.textContent = `${rotulo} · ${nomeDoPeriodo(indice, meses)} de ${ano}`;
+  // A largura do diálogo é do colegiado, e não dos dados: o do Conselho é mais
+  // largo pela coluna Assunto. Marcada antes da busca, o card não muda de
+  // largura quando a lista chega.
+  detalheDialog.dataset.colegiado = colegiado;
   detalheResumo.textContent = 'Carregando…';
   detalheTabela.replaceChildren();
   detalheUnidades.replaceChildren();
@@ -1141,8 +1145,11 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
   // Só a lista de todos os julgados mistura as três situações; nas outras a
   // coluna repetiria o título do card em cada linha.
   const comMeta = recorte === 'julgados';
-  const colunas = ['Nº do Processo', vocabulario.destino, 'Assunto', 'Distribuição', 'Sessão', 'Dias',
-    ...(comMeta ? ['Meta'] : [])];
+  // Na Câmara todo processo é Auto de Infração: a coluna repetiria o mesmo
+  // valor em cada linha, e o card dos assuntos teria uma linha só.
+  const comAssunto = colegiado === 'CREG';
+  const colunas = ['Nº do Processo', vocabulario.destino, ...(comAssunto ? ['Assunto'] : []),
+    'Distribuição', 'Sessão', 'Dias', ...(comMeta ? ['Meta'] : [])];
 
   const grupos = agruparPorDestino(processos, colegiado);
   // `destino` null é a lista inteira. Filtrado, o resumo diz de quem é o
@@ -1171,14 +1178,18 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
       numero.scope = 'row';
       // Os dias que passaram de 45 levam a cor de Fora: a coluna se lê de
       // relance em todo recorte, mesmo sem a coluna Meta.
-      tr.append(numero, celula(ou(p.destino)), celula(ou(p.assunto)), celula(dataBR(p.data_distribuicao)),
-        celula(dataBR(p.data_sessao)), celula(ou(p.dias), 'td', p.meta_45 === false ? 'admin-meta-dias-fora' : ''));
+      // O assunto é a única célula que quebra linha: há assunto de 63
+      // caracteres, e sem quebra ele empurrava a tabela para a barra lateral.
+      tr.append(numero, celula(ou(p.destino)));
+      if (comAssunto) tr.append(celula(ou(p.assunto), 'td', 'admin-meta-assunto'));
+      tr.append(celula(dataBR(p.data_distribuicao)), celula(dataBR(p.data_sessao)),
+        celula(ou(p.dias), 'td', p.meta_45 === false ? 'admin-meta-dias-fora' : ''));
       if (comMeta) tr.append(celula(seloDaMeta(p.meta_45)));
       tbody.appendChild(tr);
     });
     detalheTabela.replaceChildren(cabecalho(colunas), tbody);
     equalizarColunas(detalheTabela);
-    desenharAssuntos(lista);
+    if (comAssunto) desenharAssuntos(lista);
   };
 
   pintarLista(null);
@@ -1187,55 +1198,62 @@ function desenharDetalheDaMeta(processos, recorte, colegiado, de, ate) {
   ajustarDensidade();
 }
 
-// A coluna da direita não rola: quando os cards não cabem na altura da lista
-// — a Câmara, com cinco relatores, rolava até em tela cheia —, eles descem os
-// degraus abaixo até caber (ver .admin-meta-lateral[data-densidade] e
-// [data-arranjo] no CSS). Só CSS não resolve: o que decide é quantas unidades
-// há junto com a altura da janela. Primeiro aperta o espaçamento, até o
-// degrau mínimo (números menores, sem a linha de apoio do card de prazo); se
-// nem assim couber e a janela for larga, põe os dois cards lado a lado, cada
-// um com a altura inteira. Na janela estreita, que não comporta o lado a lado,
-// o último recurso é tirar também a dica "Clique para filtrar a lista.". Parte
-// sempre do mais folgado, para a janela que cresce devolver o respiro.
 // Quantos processos de cada assunto há na lista à vista: segue o filtro por
 // unidade, então a soma bate sempre com o resumo do topo. Os mais frequentes
-// primeiro; sem assunto fica por último.
+// primeiro; sem assunto fica por último. Lado a lado, a lista vira duas
+// colunas que se leem de cima para baixo: as linhas são fixadas aqui, e o que
+// não couber rola para baixo, onde a barra de rolagem o mostra.
 function desenharAssuntos(lista) {
-  const conta = new Map();
-  lista.forEach(p => {
-    const chave = ou(p.assunto);
-    conta.set(chave, (conta.get(chave) || 0) + 1);
-  });
-  detalheAssuntos.replaceChildren(...[...conta]
-    .sort(([a, x], [b, y]) => (a === '—') - (b === '—') || y - x || a.localeCompare(b, 'pt-BR'))
-    .map(([nome, quantidade]) => {
-      const item = document.createElement('li');
-      item.className = 'admin-meta-assuntos-item';
-      const rotulo = document.createElement('span');
-      rotulo.className = 'admin-meta-assuntos-nome';
-      rotulo.textContent = nome === '—' ? 'Sem assunto' : nome;
-      const numero = document.createElement('span');
-      numero.className = 'admin-meta-assuntos-total';
-      numero.textContent = contagem(quantidade);
-      item.append(rotulo, numero);
-      return item;
-    }));
+  const grupos = [...agrupar(lista, p => p.assunto, true)];
+  detalheAssuntos.style.gridTemplateRows = `repeat(${Math.max(1, Math.ceil(grupos.length / 2))}, auto)`;
+  detalheAssuntos.replaceChildren(...grupos.map(([nome, processos]) => {
+    const item = document.createElement('li');
+    item.className = 'admin-meta-assuntos-item';
+    const rotulo = document.createElement('span');
+    rotulo.className = 'admin-meta-assuntos-nome';
+    rotulo.textContent = nome === '—' ? 'Sem assunto' : nome;
+    const numero = document.createElement('span');
+    numero.className = 'admin-meta-assuntos-total';
+    numero.textContent = contagem(processos.length);
+    item.append(rotulo, numero);
+    return item;
+  }));
   detalheAssuntosCard.hidden = false;
 }
 
+// A coluna da direita não rola: quando os cards de unidades e de prazo não
+// cabem na altura da lista — a Câmara, com cinco relatores, rolava até em tela
+// cheia —, eles descem os degraus abaixo até caber (ver
+// .admin-meta-lateral[data-densidade] e [data-arranjo] no CSS). Só CSS não
+// resolve: o que decide é quantas unidades há junto com a altura da janela.
+// Primeiro aperta o espaçamento, até o degrau mínimo (números menores, sem a
+// linha de apoio do card de prazo); se nem assim couber e a janela for larga,
+// põe unidades e prazo lado a lado, cada um com a altura inteira. Na janela
+// estreita, que não comporta o lado a lado, o último recurso é tirar também a
+// dica "Clique para filtrar a lista.". Parte sempre do mais folgado, para a
+// janela que cresce devolver o respiro.
+//
+// O card dos assuntos fica fora da medida: ele é o primeiro a ceder altura e
+// rola por dentro de propósito (ver .admin-meta-assuntos no CSS). Contado
+// aqui, um período com muitos assuntos empurrava a coluna até o lado a lado
+// mesmo com unidades e prazo cabendo folgados. Por isso também filtrar por
+// unidade não pede nova medida: o filtro só muda os assuntos.
 const DEGRAUS_APERTANDO = [['coluna', ''], ['coluna', 'compacta'], ['coluna', 'minima']];
 const DEGRAUS_EM_COLUNA = [...DEGRAUS_APERTANDO, ['coluna', 'minima-sem-dica']];
 const DEGRAUS_COM_LADO = [...DEGRAUS_APERTANDO, ['lado', ''], ['lado', 'compacta'], ['lado', 'minima']];
-// A lista precisa de ~620px para as seis colunas do recorte Julgados; somados
-// os dois cards de 17rem, os vãos e a margem da janela, dá 1240px na fonte
-// padrão. Em rem, como as larguras que o limite protege: com a fonte do
-// navegador maior, os cards crescem e o limite cresce junto.
-const LARGURA_LADO_A_LADO = '(min-width: 77.5rem)';
+// A lista precisa de ~620px para as seis colunas do recorte Julgados da
+// Câmara; somados os dois cards de 17rem, os vãos e a margem da janela, dá
+// 1240px na fonte padrão. No Conselho a coluna Assunto (quebrando linha) pede
+// ~760px, e o limite sobe para 1360px — ainda cabe numa tela de 1366px. Em rem,
+// como as larguras que o limite protege: com a fonte do navegador maior, os
+// cards crescem e o limite cresce junto.
+const LARGURA_LADO_A_LADO = { CJ: '(min-width: 77.5rem)', CREG: '(min-width: 85rem)' };
 
 function ajustarDensidade() {
-  const transborda = () => [detalheUnidades, detalhePrazo, detalheAssuntos]
+  const transborda = () => [detalheUnidades, detalhePrazo]
     .some(corpo => corpo.scrollHeight > corpo.clientHeight + 1);
-  const larga = typeof window !== 'undefined' && window.matchMedia(LARGURA_LADO_A_LADO).matches;
+  const larga = typeof window !== 'undefined'
+    && window.matchMedia(LARGURA_LADO_A_LADO[detalheDialog.dataset.colegiado]).matches;
   const degraus = larga ? DEGRAUS_COM_LADO : DEGRAUS_EM_COLUNA;
   for (const [arranjo, densidade] of degraus) {
     detalheLateral.dataset.arranjo = arranjo;
@@ -1248,20 +1266,27 @@ function ajustarDensidade() {
 // célula: "Sem unidade" diz o que o travessão da lista só sugere.
 const rotuloDoDestino = (nome, destino) => (nome === '—' ? `Sem ${destino.toLowerCase()}` : nome);
 
-// Nos dois cards, as unidades CREG seguem o número; as cadeiras da CJ seguem
-// a quantidade de julgados. Destino ausente fica por último em ambos.
-function agruparPorDestino(processos, colegiado) {
+// Agrupa a lista pelo valor que `chave` dá a cada processo; o valor ausente
+// (o travessão de ou()) é um grupo como os outros e fica sempre por último. O
+// resto segue a quantidade, se pedido, e depois o nome — com numeric, para
+// CREG10 vir depois de CREG2.
+function agrupar(processos, chave, porQuantidade) {
   const grupos = new Map();
   processos.forEach(p => {
-    const chave = ou(p.destino);
-    if (!grupos.has(chave)) grupos.set(chave, []);
-    grupos.get(chave).push(p);
+    const valor = ou(chave(p));
+    if (!grupos.has(valor)) grupos.set(valor, []);
+    grupos.get(valor).push(p);
   });
   return new Map([...grupos].sort(([a, x], [b, y]) =>
     (a === '—') - (b === '—')
-      || (colegiado === 'CREG' ? 0 : y.length - x.length)
+      || (porQuantidade ? y.length - x.length : 0)
       || a.localeCompare(b, 'pt-BR', { numeric: true })));
 }
+
+// Nos dois cards, as unidades CREG seguem o número; as cadeiras da CJ seguem
+// a quantidade de julgados.
+const agruparPorDestino = (processos, colegiado) =>
+  agrupar(processos, p => p.destino, colegiado !== 'CREG');
 
 // O card solto no canto superior direito, fora do card da lista: quantos
 // julgados do recorte couberam a cada unidade (ou relator), e cada uma filtra a

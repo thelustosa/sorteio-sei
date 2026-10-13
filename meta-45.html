@@ -14,7 +14,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=25e1607db9" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=db420f199f" />
   <script>
     (function () {
       try {
@@ -27,8 +27,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./index.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=25e1607db9"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=25e1607db9"></script>
+  <script defer src="assets/js/supabase.min.js?v=db420f199f"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=db420f199f"></script>
 </head>
 
 <body data-page="meta-45">
@@ -277,23 +277,27 @@
         </div>
 
         <!-- A coluna da direita: o filtro por unidade, só no recorte Julgados o
-             prazo de cada unidade, e os assuntos da lista à vista. -->
+             prazo de cada unidade, e (no Conselho) os assuntos da lista à vista.
+             Unidades e prazo vão juntos num bloco: lado a lado, os dois dividem
+             a linha de cima e os assuntos atravessam embaixo. -->
         <div id="detalheLateral" class="admin-meta-lateral">
-          <aside id="detalheUnidadesCard" class="admin-meta-unidades" aria-labelledby="detalheUnidadesTitulo">
-            <header class="admin-meta-lateral-header">
-              <h3 id="detalheUnidadesTitulo">Julgados por unidade</h3>
-              <p>Clique para filtrar a lista.</p>
-            </header>
-            <div id="detalheUnidades" class="admin-meta-filtro" role="group" aria-labelledby="detalheUnidadesTitulo"></div>
-          </aside>
+          <div class="admin-meta-por-destino">
+            <aside id="detalheUnidadesCard" class="admin-meta-unidades" aria-labelledby="detalheUnidadesTitulo">
+              <header class="admin-meta-lateral-header">
+                <h3 id="detalheUnidadesTitulo">Julgados por unidade</h3>
+                <p>Clique para filtrar a lista.</p>
+              </header>
+              <div id="detalheUnidades" class="admin-meta-filtro" role="group" aria-labelledby="detalheUnidadesTitulo"></div>
+            </aside>
 
-          <aside id="detalhePrazoCard" class="admin-meta-prazo" aria-labelledby="detalhePrazoTitulo" hidden>
-            <header class="admin-meta-lateral-header">
-              <h3 id="detalhePrazoTitulo">Prazo por unidade</h3>
-              <p>Sem prazo fica fora do percentual.</p>
-            </header>
-            <ul id="detalhePrazo" class="admin-meta-prazo-lista"></ul>
-          </aside>
+            <aside id="detalhePrazoCard" class="admin-meta-prazo" aria-labelledby="detalhePrazoTitulo" hidden>
+              <header class="admin-meta-lateral-header">
+                <h3 id="detalhePrazoTitulo">Prazo por unidade</h3>
+                <p>Sem prazo fica fora do percentual.</p>
+              </header>
+              <ul id="detalhePrazo" class="admin-meta-prazo-lista"></ul>
+            </aside>
+          </div>
 
           <aside id="detalheAssuntosCard" class="admin-meta-assuntos" aria-labelledby="detalheAssuntosTitulo" hidden>
             <header class="admin-meta-lateral-header">

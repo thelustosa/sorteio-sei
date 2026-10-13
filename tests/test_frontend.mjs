@@ -4474,8 +4474,14 @@ test('cada contagem da meta abre o card so com os julgados dela', async () => {
   assert.deepEqual(linhas.map(tr => tr.children.at(-1).children[0].className),
     ['admin-badge admin-badge-fora', 'admin-badge admin-badge-sucesso', 'admin-meta-sem-prazo'],
     'sem prazo é ausência de dado: texto, e não selo');
-  assert.deepEqual(linhas.map(tr => tr.children[5].className), ['admin-meta-dias-fora', '', ''],
+  assert.deepEqual(linhas.map(tr => tr.children[4].className), ['admin-meta-dias-fora', '', ''],
     'só os dias acima de 45 levam a cor de Fora');
+  // Na Câmara todo processo é Auto de Infração: sem coluna nem card de assuntos.
+  assert.deepEqual(doc.getElementById('detalheTable').children[0].descendants()
+    .filter(el => el.tagName === 'TH').map(th => th.textContent),
+  ['Nº do Processo', 'Relator', 'Distribuição', 'Sessão', 'Dias', 'Meta']);
+  assert.equal(doc.getElementById('detalheAssuntosCard').hidden, true);
+  assert.equal(doc.getElementById('detalheDialog').dataset.colegiado, 'CJ', 'a largura do diálogo é do colegiado');
 });
 
 test('card da meta conta os julgados por destino e filtra a lista por eles', async () => {
@@ -4499,7 +4505,11 @@ test('card da meta conta os julgados por destino e filtra a lista por eles', asy
   const assuntos = () => doc.getElementById('detalheAssuntos').children.map(li => li.children.map(c => c.textContent));
 
   assert.equal(doc.getElementById('detalheUnidadesTitulo').textContent, 'Julgados por unidade');
-  assert.equal(doc.getElementById('detalheTable').children[1].children[0].children[2].textContent, 'Requerimento');
+  const assuntoDaPrimeira = doc.getElementById('detalheTable').children[1].children[0].children[2];
+  assert.equal(assuntoDaPrimeira.textContent, 'Requerimento');
+  assert.equal(assuntoDaPrimeira.className, 'admin-meta-assunto', 'o assunto quebra linha em vez de empurrar a tabela');
+  assert.equal(doc.getElementById('detalheAssuntos').style.gridTemplateRows, 'repeat(2, auto)',
+    'lado a lado, três assuntos ocupam duas linhas em duas colunas');
   assert.equal(doc.getElementById('detalheAssuntosCard').hidden, false);
   assert.deepEqual(assuntos(), [['Auto de Infração', '3'], ['Requerimento', '1'], ['Sem assunto', '1']],
     'mais frequente primeiro; sem assunto por último');
