@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self'; script-src 'self' 'sha256-FtUGMEEhNarlmIhaFmI5m6jJc9+j0zlqa4UlY4OZa7E=' 'sha256-kuoDqr2o6ptnGl7zlLNZOukkd0nAz+5n8fr/K9EpOCg='; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self' https://giipnmpfclfudkzflwsv.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#00534b" />
+  <meta name="theme-color" content="#0B4F9C" />
   <meta name="description"
     content="Distribuição de processos SEI por sorteio eletrônico da AGR, com repartição igualitária por assunto e registro auditável." />
   <title>Sorteio de Processos SEI e Acervo</title>
@@ -14,7 +14,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=db420f199f" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=f4c6096da3" />
   <script>
     (function () {
       try {
@@ -37,8 +37,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./acervo-cj.html", "./acervo-creg.html", "./historico-cj.html", "./historico-creg.html", "./julgados-cj.html", "./julgados-creg.html", "./meta-45.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=db420f199f"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=db420f199f"></script>
+  <script defer src="assets/js/supabase.min.js?v=f4c6096da3"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=f4c6096da3"></script>
 </head>
 
 <body data-page="sorteio">
@@ -112,32 +112,55 @@
     <div class="card login-host">
       <section id="loginScreen" class="app-login" data-login-art="sorteio" aria-labelledby="loginTitulo">
         <div class="app-login-intro">
-          <span class="app-login-eyebrow">Colegiados da AGR</span>
+          <span class="app-login-eyebrow">AGR · GOVERNO DE GOIÁS</span>
           <div class="app-login-symbol" aria-hidden="true">
             <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="16" cy="6" r="3"></circle><circle cx="7" cy="24" r="3"></circle><circle cx="25" cy="24" r="3"></circle>
               <path d="M14 8.5 8.5 21M18 8.5 23.5 21M10 24h12"></path>
             </svg>
           </div>
-          <h2 id="loginTitulo">Sorteio, acervo e registro de julgamentos</h2>
-          <p>Distribuição equilibrada de processos, acompanhamento do acervo, histórico de rodadas e registro de decisões dos colegiados da AGR.</p>
+          <h2 id="loginTitulo">Tecnologia a serviço da regulação e do cidadão</h2>
+          <p>Distribuição eletrônica e igualitária de processos do SEI, gestão de acervo e registro de decisões da AGR.</p>
           <ul class="app-login-assurances">
-            <li><span aria-hidden="true">✓</span>Sorteio eletrônico balanceado e auditável</li>
-            <li><span aria-hidden="true">✓</span>Consulta de acervo, histórico e julgamentos</li>
+            <li><span aria-hidden="true">•</span>Regulação</li>
+            <li><span aria-hidden="true">•</span>Controle</li>
+            <li><span aria-hidden="true">•</span>Fiscalização</li>
           </ul>
         </div>
 
         <div class="app-login-form-card">
-          <span class="app-login-eyebrow">Identificação institucional</span>
-          <h2>Acessar o sistema</h2>
-          <p>Use suas credenciais institucionais para continuar.</p>
+          <div class="login-brand-header">
+            <img class="login-brand-logo" src="assets/img/logo-GLPI-250.png" alt="Estado de Goiás" width="220" height="106" />
+            <p class="login-agency-name">Agência Goiana de Regulação, Controle e<br>Fiscalização de Serviços Públicos</p>
+            <div class="login-brand-divider" aria-hidden="true"></div>
+            <h3 class="login-unit-name">Sorteio e Gestão de Processos SEI</h3>
+          </div>
+          <span class="app-login-eyebrow sr-only">Identificação institucional</span>
           <form id="loginForm">
-            <label for="loginEmail">E-mail</label>
-            <input id="loginEmail" type="email" placeholder="nome@goias.gov.br" autocomplete="username" required>
-            <label for="loginSenha">Senha</label>
-            <input id="loginSenha" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
-            <label class="login-lembrar"><input id="loginLembrar" type="checkbox"> Lembrar-me neste computador</label>
-            <button id="btnEntrar" type="submit">Acessar sistema</button>
+            <div class="input-icon-group">
+              <label for="loginEmail">E-mail</label>
+              <div class="input-with-icon">
+                <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <input id="loginEmail" type="email" placeholder="Seu e-mail institucional" autocomplete="username" required>
+              </div>
+            </div>
+
+            <div class="input-icon-group">
+              <label for="loginSenha">Senha</label>
+              <div class="input-with-icon">
+                <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                <input id="loginSenha" type="password" placeholder="Sua senha" autocomplete="current-password" required>
+              </div>
+            </div>
+
+            <label class="login-lembrar"><input id="loginLembrar" type="checkbox"> Lembrar de mim</label>
+            <button id="btnEntrar" type="submit">Entrar</button>
             <div class="login-rodape">
               <div class="login-ajuda">
                 <button id="btnEsqueci" type="button" class="link-acao">Esqueci minha senha</button>

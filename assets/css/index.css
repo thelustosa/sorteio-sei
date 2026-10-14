@@ -35,8 +35,8 @@
   --text: #112720;
   --muted: #556b63;
   --muted-strong: #60746b;
-  --accent: #00534b;
-  --accent-hover: #003e38;
+  --accent: #0B4F9C;
+  --accent-hover: #083B75;
   --on-accent: #ffffff;
   --danger: #b42318;
   --danger-hover: #8f1d14;
@@ -44,11 +44,11 @@
   --danger-panel-hover: #eccfca;
   --danger-panel-text: #7f241c;
   --danger-panel-border: rgba(127, 36, 28, 0.3);
-  --border: rgba(0, 83, 75, 0.16);
-  --border-subtle: rgba(0, 83, 75, 0.1);
-  --border-strong: rgba(0, 83, 75, 0.22);
-  --accent-soft: rgba(0, 83, 75, 0.08);
-  --accent-soft-strong: rgba(0, 83, 75, 0.14);
+  --border: rgba(11, 79, 156, 0.16);
+  --border-subtle: rgba(11, 79, 156, 0.1);
+  --border-strong: rgba(11, 79, 156, 0.22);
+  --accent-soft: rgba(11, 79, 156, 0.08);
+  --accent-soft-strong: rgba(11, 79, 156, 0.14);
   --danger-soft: rgba(180, 35, 24, 0.1);
   --danger-border: rgba(180, 35, 24, 0.3);
   --on-accent-border: rgba(255, 255, 255, 0.62);
@@ -56,10 +56,10 @@
   --on-accent-muted: rgba(255, 255, 255, 0.9);
   --on-accent-divider: rgba(255, 255, 255, 0.25);
   --on-accent-spinner: rgba(255, 255, 255, 0.42);
-  --accent-hover-soft: rgba(0, 83, 75, 0.2);
-  --table-heading: rgba(0, 83, 75, 0.04);
-  --table-rule: rgba(0, 83, 75, 0.08);
-  --table-row-hover: rgba(0, 83, 75, 0.025);
+  --accent-hover-soft: rgba(11, 79, 156, 0.2);
+  --table-heading: rgba(11, 79, 156, 0.04);
+  --table-rule: rgba(11, 79, 156, 0.08);
+  --table-row-hover: rgba(11, 79, 156, 0.025);
   --shadow-panel: 0 12px 32px rgba(17, 39, 32, 0.09);
   --shadow-badge: 0 2px 6px rgba(17, 39, 32, 0.22);
   --shadow-dialog: 0 24px 60px rgba(17, 39, 32, 0.28);
@@ -1375,8 +1375,239 @@ body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
   }
 }
 
-/* Sorteio: a rede triangular remete ao balanceamento entre destinos. */
-.app-login[data-login-art='sorteio'] .app-login-symbol { border-radius: 50%; }
+/* Sorteio: modelo corporativo com foto de fundo e card institucional */
+.app-login[data-login-art='sorteio'] .app-login-symbol { display: none; }
+
+/* Em tela cheia antes do login: o cabeçalho e rodapé do portal ficam ocultos
+   e o login expande para a viewport inteira como na tela oficial da referência */
+html:not(.has-session) body[data-page='sorteio'] .page-header-wrapper,
+html:not(.has-session) body[data-page='sorteio'] .green-bar,
+html:not(.has-session) body[data-page='sorteio'] .page-footer {
+  display: none !important;
+}
+
+html:not(.has-session) body[data-page='sorteio'] {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+html:not(.has-session) body[data-page='sorteio'] #conteudo-principal {
+  max-width: 100% !important;
+  width: 100% !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  align-items: stretch !important;
+  flex: 1 1 auto;
+}
+
+html:not(.has-session) body[data-page='sorteio'] .login-host {
+  flex: 1 1 auto;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+#loginScreen.app-login[data-login-art='sorteio']:not([hidden]) {
+  width: 100%;
+  max-width: 100%;
+  height: 100vh;
+  min-height: 100vh;
+  box-sizing: border-box;
+  display: flex !important;
+  justify-content: flex-start;
+  align-items: center;
+  background: url('../img/login_bg.jpg') center center / cover no-repeat;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  padding-left: clamp(40px, 8vw, 110px);
+  padding-right: clamp(24px, 5vw, 64px);
+  padding-block: 24px;
+}
+
+#loginScreen.app-login[data-login-art='sorteio'] .app-login-form-card {
+  width: 100%;
+  max-width: 375px;
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px 22px 20px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16), 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  display: flex;
+  flex-direction: column;
+  margin-block: auto;
+}
+
+#loginScreen.app-login[data-login-art='sorteio'] .app-login-intro {
+  display: none !important;
+}
+
+/* Identidade visual interna do card de login */
+.login-brand-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.login-brand-logo {
+  height: auto;
+  max-height: 84px;
+  width: auto;
+  max-width: 185px;
+  object-fit: contain;
+  margin-bottom: 6px;
+  image-rendering: auto;
+}
+
+.login-agency-name {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #52667a;
+  line-height: 1.3;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+}
+
+.login-brand-divider {
+  width: 90%;
+  height: 1px;
+  background-color: #e2e8f0;
+  margin: 0 auto 12px;
+}
+
+.login-unit-name {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0B4F9C;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+/* Campos de entrada com ícones embutidos */
+.input-icon-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+}
+
+.input-icon-group label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #102a43;
+}
+
+.input-with-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.input-with-icon .field-icon {
+  position: absolute;
+  left: 12px;
+  width: 17px;
+  height: 17px;
+  color: #627d98;
+  pointer-events: none;
+  transition: color 150ms ease;
+}
+
+.input-with-icon input {
+  width: 100%;
+  height: 40px;
+  padding-left: 38px !important;
+  padding-right: 12px !important;
+  border: 1.5px solid #cbd2d9 !important;
+  border-radius: 9px !important;
+  background: #ffffff !important;
+  font-size: 0.90rem !important;
+  color: #102a43 !important;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.input-with-icon input:focus {
+  border-color: #0B4F9C !important;
+  box-shadow: 0 0 0 3px rgba(11, 79, 156, 0.15) !important;
+  outline: none !important;
+}
+
+.input-with-icon input:focus + .field-icon,
+.input-with-icon:focus-within .field-icon {
+  color: #0B4F9C;
+}
+
+#loginScreen.app-login[data-login-art='sorteio'] #btnEntrar {
+  height: 42px;
+  border-radius: 9px;
+  background-color: #0B4F9C;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border: none;
+  cursor: pointer;
+  transition: background-color 150ms ease, transform 100ms ease, box-shadow 150ms ease;
+  box-shadow: 0 4px 12px rgba(11, 79, 156, 0.25);
+  margin-top: 4px;
+}
+
+#loginScreen.app-login[data-login-art='sorteio'] #btnEntrar:hover {
+  background-color: #083B75;
+  box-shadow: 0 6px 16px rgba(11, 79, 156, 0.35);
+}
+
+#loginScreen.app-login[data-login-art='sorteio'] #btnEntrar:active {
+  transform: translateY(1px);
+}
+
+#loginScreen.app-login[data-login-art='sorteio'] .login-lembrar {
+  min-height: 28px !important;
+  margin: 2px 0 0 !important;
+  font-size: 0.85rem !important;
+  color: #52667a !important;
+}
+
+#loginScreen.app-login[data-login-art='sorteio'] .login-ajuda {
+  margin-top: 10px;
+}
+
+#loginScreen.app-login[data-login-art='sorteio'] .link-acao {
+  min-height: 24px !important;
+  font-size: 0.84rem !important;
+  color: #0B4F9C !important;
+  font-weight: 600 !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* Acervo CJ: a consulta abre a composição e deixa o painel da Câmara à direita. */
 #loginScreen.app-login[data-login-art='acervo-cj'] {
@@ -3319,7 +3550,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .acervo-recorte { display: none !important; }
 
   .acervo-header-title-group h2 {
-    color: #00534b !important;
+    color: #0B4F9C !important;
     font-size: 16pt !important;
     font-weight: 700 !important;
     letter-spacing: -0.02em !important;
@@ -3355,7 +3586,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     border: none !important;
     border-radius: 0 !important;
     padding: 0 !important;
-    color: #00534b !important;
+    color: #0B4F9C !important;
     font-size: 9.5pt !important;
     font-weight: 700 !important;
     letter-spacing: 0 !important;
@@ -3385,7 +3616,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     border-collapse: separate !important;
     border-spacing: 0 !important;
     table-layout: auto !important;
-    border: 2px solid #00534b !important;
+    border: 2px solid #0B4F9C !important;
     margin: 0 !important;
     page-break-inside: avoid;
     break-inside: avoid;
@@ -3394,8 +3625,8 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .acervo-table th,
   .acervo-table td {
     border: 0 !important;
-    border-left: 1.5px solid #00534b !important;
-    border-bottom: 1.5px solid #00534b !important;
+    border-left: 1.5px solid #0B4F9C !important;
+    border-bottom: 1.5px solid #0B4F9C !important;
     box-sizing: border-box !important;
   }
 
@@ -3404,7 +3635,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .acervo-table tbody tr:last-child > * { border-bottom: 0 !important; }
 
   /* Divisor forte entre a coluna de período e os relatores. */
-  .acervo-table tr > td:first-of-type { border-left: 2px solid #00534b !important; }
+  .acervo-table tr > td:first-of-type { border-left: 2px solid #0B4F9C !important; }
 
   .acervo-table thead {
     display: table-header-group;
@@ -3414,7 +3645,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .acervo-table thead th {
     height: auto !important;
     padding: 8px 6px !important;
-    background-color: #00534b !important;
+    background-color: #0B4F9C !important;
     color: #ffffff !important;
     font-size: 8.5pt !important;
     font-weight: 700 !important;
@@ -3423,7 +3654,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     text-align: center !important;
     vertical-align: middle !important;
     border-left-color: rgba(255, 255, 255, 0.7) !important;
-    border-bottom: 2px solid #00534b !important;
+    border-bottom: 2px solid #0B4F9C !important;
     break-inside: avoid;
   }
 
@@ -3435,7 +3666,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
   .acervo-table thead th:last-child {
     text-align: center !important;
-    background-color: #003831 !important;
+    background-color: #083B75 !important;
     width: 10%;
   }
 
@@ -3486,8 +3717,8 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .acervo-table tbody td.acervo-total-col {
     background-color: #dcefe6 !important;
     font-weight: 700 !important;
-    color: #00534b !important;
-    border-left: 2px solid #00534b !important;
+    color: #0B4F9C !important;
+    border-left: 2px solid #0B4F9C !important;
     font-size: 9.5pt !important;
   }
 
@@ -3497,7 +3728,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     background-color: var(--danger-panel, #fee2e2) !important;
     color: var(--danger-panel-text, #991b1b) !important;
     font-weight: 700 !important;
-    border-left: 2px solid #00534b !important;
+    border-left: 2px solid #0B4F9C !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -3515,7 +3746,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 
   .acervo-table tfoot tr {
     background-color: #d5ebe0 !important;
-    color: #00534b !important;
+    color: #0B4F9C !important;
   }
 
   .acervo-table tfoot th {
@@ -3526,10 +3757,10 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     text-transform: uppercase !important;
     letter-spacing: 0.04em !important;
     text-align: left !important;
-    border-top: 2px solid #00534b !important;
+    border-top: 2px solid #0B4F9C !important;
     border-bottom: 0 !important;
     background-color: #d5ebe0 !important;
-    color: #00534b !important;
+    color: #0B4F9C !important;
     break-inside: avoid;
   }
 
@@ -3540,10 +3771,10 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     font-weight: 700 !important;
     font-variant-numeric: tabular-nums !important;
     text-align: center !important;
-    border-top: 2px solid #00534b !important;
+    border-top: 2px solid #0B4F9C !important;
     border-bottom: 0 !important;
     background-color: #d5ebe0 !important;
-    color: #00534b !important;
+    color: #0B4F9C !important;
     break-inside: avoid;
   }
 
@@ -3554,7 +3785,7 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     color: #00332d !important;
     font-size: 10pt !important;
     font-weight: 900 !important;
-    border-left: 2px solid #00534b !important;
+    border-left: 2px solid #0B4F9C !important;
   }
 
   /* Rodapé do painel. No papel é uma linha de texto e nada mais: o flex existe
