@@ -14,7 +14,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=f4c6096da3" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=43bf8122ea" />
   <script>
     (function () {
       try {
@@ -37,8 +37,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./acervo-cj.html", "./acervo-creg.html", "./historico-cj.html", "./historico-creg.html", "./julgados-cj.html", "./julgados-creg.html", "./meta-45.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=f4c6096da3"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=f4c6096da3"></script>
+  <script defer src="assets/js/supabase.min.js?v=43bf8122ea"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=43bf8122ea"></script>
 </head>
 
 <body data-page="sorteio">
@@ -60,6 +60,18 @@
 
   <nav class="green-bar" aria-label="Navegação do sistema">
     <div class="container">
+      <a class="green-bar-brand" href="./index.html" aria-label="Ir para a página inicial">
+        <img class="green-bar-brand-img" src="assets/img/logo-G-100.png" alt="Estado de Goiás" width="102" height="50" />
+      </a>
+      <div class="green-bar-nav" data-sessao hidden>
+        <a class="green-bar-link active" href="./index.html">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m3 9 7-6 7 6v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"></path>
+            <path d="M7 18V10h6v8"></path>
+          </svg>
+          <span>Home</span>
+        </a>
+      </div>
       <span id="txtModo">Sorteio de processos e Acervo</span>
       <div class="nav-actions">
         <button id="btnVoltar" class="nav-action" type="button" hidden>
@@ -69,7 +81,16 @@
           </svg>
           <span>Voltar</span>
         </button>
-        <button id="btnSair" class="nav-action" type="button" hidden>
+        <div class="nav-user-profile" data-sessao hidden>
+          <div class="nav-user-meta">
+            <span class="nav-user-title">Sorteio SEI</span>
+            <span class="nav-user-sub">Entidade raiz &gt; AGR</span>
+          </div>
+          <div class="nav-user-badge" aria-label="Usuário logado" title="Usuário logado">
+            <span>AGR</span>
+          </div>
+        </div>
+        <button id="btnSair" class="nav-action nav-action-sair" type="button" hidden>
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M8 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"></path>
             <path d="m11 7 3 3-3 3"></path>

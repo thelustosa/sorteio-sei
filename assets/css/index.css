@@ -243,105 +243,176 @@ h1, h2, h3, h4, p { overflow-wrap: anywhere; }
 main.container { flex: 1 0 auto; padding-top: 24px; }
 .pb-36 { padding-bottom: 40px; }
 
-/* Cabeçalho e navegação institucional */
-.page-header-wrapper { width: 100%; padding-block: 14px; background: var(--surface-raised); }
-
-.page-header-wrapper header {
-  display: flex;
-  min-height: 55px;
-  align-items: stretch;
-  gap: 24px;
+/* Cabeçalho e navegação institucional unificada (Estilo Print 2) */
+.page-header-wrapper {
+  display: none !important;
 }
 
-.logo {
-  display: flex;
-  width: 120px;
-  height: 55px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
+.green-bar {
+  width: 100%;
+  min-height: 68px;
+  background: #0B4F9C;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 3px 10px rgba(11, 79, 156, 0.22);
 }
-
-.logo img { width: 100%; height: 100%; object-fit: contain; }
-
-.header-copy {
-  display: flex;
-  min-width: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
-  justify-content: center;
-  padding-inline-start: 24px;
-  border-inline-start: 1px solid var(--border-strong);
-}
-
-.institution-name {
-  margin: 0;
-  color: var(--text);
-  font-size: var(--text-base);
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.3;
-}
-
-.page-header-wrapper h1 {
-  margin: 3px 0 0;
-  color: var(--accent);
-  font-family: 'Montserrat', ui-sans-serif, sans-serif;
-  font-size: var(--text-lg);
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  line-height: 1.25;
-}
-
-p.lead { max-width: 72ch; margin: 4px 0 0; color: var(--muted); font-size: var(--text-base); line-height: 1.45; }
-
-.green-bar { width: 100%; min-height: 48px; background: var(--accent); }
 
 .green-bar .container {
-  display: grid;
-  min-height: 48px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  min-height: 68px;
   align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding-block: 6px;
+}
+
+.green-bar-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-decoration: none;
+  flex: 0 0 auto;
+}
+
+.green-bar-brand-img {
+  height: 48px;
+  width: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+}
+
+.green-bar-brand-title {
+  display: flex;
+  flex-direction: column;
+}
+
+.green-bar-brand-gov {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.green-bar-brand-app {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.green-bar-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  margin-left: 24px;
+}
+
+.green-bar-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 7px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.90rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.green-bar-link:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.green-bar-link.active {
+  background-color: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.green-bar-link svg {
+  width: 17px;
+  height: 17px;
+  opacity: 0.9;
 }
 
 #txtModo {
-  min-width: 0;
-  grid-column: 1;
-  overflow: hidden;
-  color: var(--on-accent);
-  font-family: 'Montserrat', ui-sans-serif, sans-serif;
-  font-size: var(--text-base);
-  font-weight: 700;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: none;
 }
 
 .nav-actions {
   display: flex;
-  grid-column: 2;
-  justify-self: end;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
+  flex: 0 0 auto;
+}
+
+.nav-user-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.nav-user-meta {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+  line-height: 1.25;
+}
+
+.nav-user-title {
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.nav-user-sub {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.72rem;
+}
+
+.nav-user-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  background-color: #E28456;
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  border-radius: 7px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.18);
+  user-select: none;
 }
 
 .nav-action {
   display: inline-flex;
-  min-height: 34px;
+  min-height: 36px;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 6px 11px;
-  border: 1px solid var(--on-accent-border);
-  border-radius: var(--radius-control);
-  background: transparent;
+  padding: 6px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
   color: var(--on-accent);
   cursor: pointer;
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
   text-decoration: none;
   transition: background-color 160ms ease, border-color 160ms ease, transform 120ms ease;
+}
+
+.nav-action:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* No toque o alvo volta para 44px, mínimo confortável. */
@@ -1587,14 +1658,36 @@ html:not(.has-session) body[data-page='sorteio'] .login-host {
 }
 
 #loginScreen.app-login[data-login-art='sorteio'] .login-ajuda {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 #loginScreen.app-login[data-login-art='sorteio'] .link-acao {
-  min-height: 24px !important;
+  min-height: 20px !important;
   font-size: 0.84rem !important;
   color: #0B4F9C !important;
   font-weight: 600 !important;
+}
+
+#loginScreen.app-login[data-login-art='sorteio'] #loginErro {
+  min-height: 0 !important;
+  padding: 0 !important;
+}
+
+#loginScreen.app-login[data-login-art='sorteio'] #loginErro:empty {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+}
+
+#loginScreen.app-login[data-login-art='sorteio'] #loginErro:not(:empty) {
+  display: block;
+  padding: 6px 0 2px !important;
+  min-height: auto !important;
+}
+
+#loginScreen.app-login[data-login-art='sorteio'] .app-login-form-card {
+  padding-bottom: 12px !important;
 }
 
 .sr-only {
