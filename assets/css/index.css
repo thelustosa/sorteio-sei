@@ -4046,10 +4046,8 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
    contar a linha inteira como largura mínima da coluna e a reserva sozinho. */
 .admin-table[data-visao='auditoria'] tbody td:nth-child(1),
 .admin-table[data-visao='auditoria'] tbody td:nth-child(3) { white-space: nowrap; }
-/* Quando e Operação identificam a linha, como a Data das outras listas. */
-.admin-table[data-visao='auditoria'] tbody td:nth-child(1),
-.admin-table[data-visao='auditoria'] tbody td:nth-child(2) { font-weight: 700; }
-.admin-table[data-visao='auditoria'] tbody td:nth-child(1) { font-variant-numeric: tabular-nums; }
+/* Quando identifica a linha, como a Data das outras listas: é o único negrito. */
+.admin-table[data-visao='auditoria'] tbody td:nth-child(1) { font-weight: 700; font-variant-numeric: tabular-nums; }
 /* Quem é autoria, não assunto: um degrau abaixo, como o "Atualizado por" do
    detalhe da sessão. */
 .admin-table[data-visao='auditoria'] tbody td:nth-child(6) {
@@ -4736,10 +4734,23 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
 }
 .admin-table tbody tr:last-child td { border-bottom: 0; }
 .admin-table tbody tr:hover td { background: var(--table-row-hover); }
-.admin-table .historico-data,
-.admin-table .historico-numero { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
-.admin-table td.historico-numero:first-child,
-.admin-table td:nth-child(2).historico-numero { font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace; letter-spacing: .015em; }
+/* Negrito marca a linha, não o número: em cada lista só o identificador — a
+   data da sessão ou da distribuição, o número do processo nos detalhes, o
+   instante na auditoria — sai em 700, e o selo de estado, que é rótulo. Pauta,
+   contagem, hora e ordem ficam no peso do corpo. Com tudo em negrito (data,
+   pauta, processos, hora, ordem, julgados), nada se destacava na linha. */
+.admin-table .historico-data { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.admin-table .historico-numero,
+.admin-table .historico-hora { color: var(--text); font-weight: 400; font-variant-numeric: tabular-nums; }
+/* O número do processo é o identificador do detalhe, e o único dado em
+   monoespaçada (The Numeral Exception Rule). A regra antiga ia pela posição da
+   classe e pegava também a Ordem, primeira coluna do detalhe da distribuição. */
+.admin-table[data-visao='processos-sessao'] tbody td:nth-child(1),
+.admin-table[data-visao='processos-sorteio'] tbody td:nth-child(2) {
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-weight: 700;
+  letter-spacing: .015em;
+}
 .admin-table .small { color: var(--muted); }
 /* Ausência de registro é ausência, não estado: um travessão dentro de um selo
    parece campo quebrado, e no selo de status herdava ainda a cor de alerta. */
