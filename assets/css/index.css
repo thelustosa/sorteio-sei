@@ -3864,40 +3864,37 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
 
 /* O nome do colegiado escolhido já está à esquerda, na mesma linha. O seletor
    por extenso repetia essa informação a poucos centímetros dela, então aqui
-   ficam só os códigos — o nome completo de cada um vive no aria-label. */
+   ficam só os códigos — o nome completo de cada um vive no aria-label.
+   Sem moldura própria: a barra já é o card, e uma caixa cinza dentro dela era
+   card dentro de card. O escolhido veste o verde cheio, o mesmo "selecionado"
+   da aba ativa logo abaixo e da opção apertada da Meta 45 — antes eram dois
+   idiomas de seleção lado a lado (verde cheio na aba, branco com borda aqui). */
 .admin-org-switcher { min-width: 0; }
-.admin-org-switcher > div {
-  display: flex;
-  min-width: 0;
-  gap: 5px;
-  padding: 4px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  background: var(--surface-control);
-}
+.admin-org-switcher > div { display: flex; min-width: 0; gap: 8px; }
 .admin-org-button {
   display: inline-flex;
-  min-height: 38px;
+  min-height: 42px;
+  min-width: 72px;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 7px 14px;
-  border: 1px solid transparent;
+  padding: 9px 16px;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  font-weight: 700;
-  letter-spacing: .04em;
-}
-.admin-org-button:hover { background: var(--surface-raised); color: var(--accent); }
-.admin-org-button.is-selected {
-  border-color: var(--border-strong);
   background: var(--surface-raised);
   color: var(--accent);
+  cursor: pointer;
+  font: 700 var(--text-sm) / 1.2 'Montserrat', ui-sans-serif, sans-serif;
+  letter-spacing: .04em;
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
 }
-.admin-org-code { font-size: var(--text-sm); letter-spacing: .05em; }
+.admin-org-button:hover { border-color: var(--accent); background: var(--accent-soft); }
+.admin-org-button.is-selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.admin-org-button.is-selected:hover { border-color: var(--accent-hover); background: var(--accent-hover); }
+.admin-org-button.is-selected:focus-visible { outline-color: var(--accent-hover); }
 
 /* Abas em uma barra segmentada: o estado ativo usa forma e cor, não apenas a
    linha inferior que antes se perdia entre o seletor e a tabela. */
@@ -3909,7 +3906,7 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
   padding: 5px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
-  background: rgba(255,255,255,.72);
+  background: var(--surface-raised);
 }
 .admin-aba {
   display: inline-flex;
@@ -4003,7 +4000,16 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
    simples as colunas têm a mesma largura; nos detalhes ela recebe o espaço dos
    três botões sem empurrar os dados para posições imprevisíveis. */
 .admin-table[data-visao='sessoes'] thead th { width: 20%; }
-.admin-table[data-visao='sorteios'] thead th { width: calc(100% / 7); }
+/* Trilhos por conteúdo, não sete partes iguais: Hora e Processos cabem em
+   pouco, e com 1/7 a origem "Retorno de Vista/Retirado" quebrava em duas
+   linhas dentro da pílula a 1366px. */
+.admin-table[data-visao='sorteios'] thead th:nth-child(1) { width: 12%; }
+.admin-table[data-visao='sorteios'] thead th:nth-child(2) { width: 16%; }
+.admin-table[data-visao='sorteios'] thead th:nth-child(3) { width: 9%; }
+.admin-table[data-visao='sorteios'] thead th:nth-child(4) { width: 19%; }
+.admin-table[data-visao='sorteios'] thead th:nth-child(5) { width: 10%; }
+.admin-table[data-visao='sorteios'] thead th:nth-child(6) { width: 16%; }
+.admin-table[data-visao='sorteios'] thead th:nth-child(7) { width: 18%; }
 
 /* Os dois detalhes (processos de uma sessão e de uma distribuição) não têm
    largura por coluna: como nos cards de detalhe, cada coluna é o próprio
@@ -4011,16 +4017,28 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
    proporções fixas davam 36% a Ações e 6% a Relator, e o vão entre colunas ia
    de 38px a 168px, com Voto invadindo Status. */
 
-.admin-table[data-visao='auditoria'] thead th:nth-child(1) { width: 15%; }
-.admin-table[data-visao='auditoria'] thead th:nth-child(2) { width: 14%; }
-.admin-table[data-visao='auditoria'] thead th:nth-child(3) { width: 16%; }
-.admin-table[data-visao='auditoria'] thead th:nth-child(4) { width: 21%; }
-.admin-table[data-visao='auditoria'] thead th:nth-child(5) { width: 18%; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(1) { width: 14%; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(2) { width: 15%; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(3) { width: 17%; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(4) { width: 22%; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(5) { width: 16%; }
 .admin-table[data-visao='auditoria'] thead th:nth-child(6) { width: 16%; }
 
 /* Os pisos restantes pertencem à auditoria, que continua com rolagem horizontal. */
 .admin-table[data-visao='auditoria'] thead th:nth-child(4) { min-width: 22ch; }
 .admin-table[data-visao='auditoria'] thead th:last-child { min-width: 20ch; }
+
+/* Um eixo só, como nas outras listas do painel: cabeçalho e dado centrados.
+   Alinhada à esquerda e quase toda em texto secundário, a auditoria era a única
+   tabela do painel que lia como rascunho ao lado das outras. */
+.admin-table[data-visao='auditoria'] thead th,
+.admin-table[data-visao='auditoria'] tbody td { text-align: center; }
+.admin-table[data-visao='auditoria'] tbody td {
+  height: auto;
+  padding-block: 16px;
+  color: var(--text);
+  font-size: var(--text-sm);
+}
 
 /* Carimbo de data e hora e identificador de registro são unidades: "08/09/2026
    10:22" partido em duas linhas deixa de se ler como um instante. Proibir a
@@ -4028,14 +4046,27 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
    contar a linha inteira como largura mínima da coluna e a reserva sozinho. */
 .admin-table[data-visao='auditoria'] tbody td:nth-child(1),
 .admin-table[data-visao='auditoria'] tbody td:nth-child(3) { white-space: nowrap; }
+/* Quando identifica a linha, como a Data das outras listas: é o único negrito. */
+.admin-table[data-visao='auditoria'] tbody td:nth-child(1) { font-weight: 700; font-variant-numeric: tabular-nums; }
+/* Quem é autoria, não assunto: um degrau abaixo, como o "Atualizado por" do
+   detalhe da sessão. */
+.admin-table[data-visao='auditoria'] tbody td:nth-child(6) {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
 /* A coluna Registro diz agora duas coisas: qual registro, e de qual processo.
    A segunda é a que permite cruzar o rastro com um processo, e fica em segundo
    plano porque é a referência, não o assunto da linha. */
 .admin-registro-processo {
   display: block;
+  margin-top: 2px;
   color: var(--muted);
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
+/* Cada campo alterado numa linha, centrada no mesmo eixo da coluna. */
+.admin-table[data-visao='auditoria'] .admin-delta-compacta { justify-items: center; }
 .admin-table[data-visao='sessoes'] { min-width: 660px; }
 .admin-table[data-visao='sorteios'] { min-width: 0; }
 .admin-table[data-visao='auditoria'] { min-width: 1080px; }
@@ -4703,10 +4734,23 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
 }
 .admin-table tbody tr:last-child td { border-bottom: 0; }
 .admin-table tbody tr:hover td { background: var(--table-row-hover); }
-.admin-table .historico-data,
-.admin-table .historico-numero { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
-.admin-table td.historico-numero:first-child,
-.admin-table td:nth-child(2).historico-numero { font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace; letter-spacing: .015em; }
+/* Negrito marca a linha, não o número: em cada lista só o identificador — a
+   data da sessão ou da distribuição, o número do processo nos detalhes, o
+   instante na auditoria — sai em 700, e o selo de estado, que é rótulo. Pauta,
+   contagem, hora e ordem ficam no peso do corpo. Com tudo em negrito (data,
+   pauta, processos, hora, ordem, julgados), nada se destacava na linha. */
+.admin-table .historico-data { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.admin-table .historico-numero,
+.admin-table .historico-hora { color: var(--text); font-weight: 400; font-variant-numeric: tabular-nums; }
+/* O número do processo é o identificador do detalhe, e o único dado em
+   monoespaçada (The Numeral Exception Rule). A regra antiga ia pela posição da
+   classe e pegava também a Ordem, primeira coluna do detalhe da distribuição. */
+.admin-table[data-visao='processos-sessao'] tbody td:nth-child(1),
+.admin-table[data-visao='processos-sorteio'] tbody td:nth-child(2) {
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-weight: 700;
+  letter-spacing: .015em;
+}
 .admin-table .small { color: var(--muted); }
 /* Ausência de registro é ausência, não estado: um travessão dentro de um selo
    parece campo quebrado, e no selo de status herdava ainda a cor de alerta. */
@@ -4769,9 +4813,9 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   align-items: center;
   justify-content: center;
   padding: 6px 10px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid transparent;
   border-radius: var(--radius-control);
-  background: var(--surface-raised);
+  background: var(--accent-soft);
   color: var(--accent);
   cursor: pointer;
   font-size: var(--text-sm);
@@ -4780,7 +4824,11 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   white-space: nowrap;
   transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
-.admin-acao:hover { border-color: var(--accent); background: var(--accent-soft); }
+/* Três degraus, sem moldura nos dois de baixo: sólido para a ação principal
+   da linha, tonal (o verde a 8%) para as secundárias, neutro para Excluir.
+   Com quatro botões emoldurados por linha, o detalhe da sessão virava uma
+   grade de caixas que competia com o dado. */
+.admin-acao:hover { background: var(--accent-soft-strong); }
 .admin-acao-primario { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
 .admin-acao-primario:hover { border-color: var(--accent-hover); background: var(--accent-hover); }
 /* Excluir fica neutro em repouso: vermelho em toda linha da tabela seria um
@@ -4788,9 +4836,9 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
    destrutiva está de fato sob o ponteiro ou o foco — o mesmo acordo do
    .btn-excluir do sorteador. O anel de foco continua o verde de todo o sistema.
    O afastamento extra separa o erro de mira mais caro da linha. */
-.admin-acao-perigo { margin-left: 6px; border-color: var(--border-subtle); color: var(--muted); }
+.admin-acao-perigo { margin-left: 6px; background: var(--surface-control); color: var(--muted); }
 .admin-acao-perigo:hover,
-.admin-acao-perigo:focus-visible { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+.admin-acao-perigo:focus-visible { border-color: var(--danger-border); background: var(--danger-soft); color: var(--danger); }
 
 .admin-badge {
   display: inline-flex;
@@ -4881,42 +4929,54 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
 
 /* Diálogo: campos respiram em duas colunas e as ações ficam sempre no mesmo
    lugar, mesmo quando a lista de impacto exige rolagem. */
+/* Centrado na tela, na altura do próprio conteúdo. Uma altura mínima de 340px
+   no corpo evitava que o diálogo se recentrasse ao mudar de etapa, mas deixava
+   Religar, Excluir e o número do processo com uma faixa branca vazia entre o
+   motivo e os botões; ancorado no topo ele ficava alto demais na tela. O
+   recentrar entre as etapas é o preço, e é pequeno. */
 .admin-dialog { width: min(50rem, calc(100vw - 32px)); }
 .admin-dialog .detalhe-header { padding: 20px 24px; }
 .admin-dialog .detalhe-header h2 { margin-top: 4px; font-size: var(--text-xl); }
-.admin-dialog .admin-dialog-step { color: #b8dbd1; }
-/* A altura mínima mantém as duas etapas próximas em tamanho: sem ela o diálogo
-   encolhia 189px ao avançar e se recentrava, deslizando o título e o botão de
-   fechar para baixo do cursor de quem acabou de clicar. */
-.admin-dialog .detalhe-corpo { min-height: 340px; padding: 24px 24px 0; }
+.admin-dialog .admin-dialog-step { color: var(--on-accent-muted); }
+.admin-dialog .detalhe-corpo { padding: 24px 24px 0; }
 .admin-dialog form { display: flex; min-height: 0; flex-direction: column; }
+/* Seis trilhos para os campos caberem em duas ou três colunas sem campo órfão.
+   Cinco campos (a correção do julgado e a distribuição da Câmara) viravam duas
+   linhas de dois e um campo sozinho numa meia linha; agora são três em cima e
+   dois embaixo — e no julgado isso agrupa a decisão (voto, status, destino da
+   vista) acima da sessão (data, pauta). Um campo só ocupa a largura toda: o
+   alcance da exclusão cortava a própria opção numa meia coluna. */
 .admin-campos {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 16px;
 }
+.admin-campos > .admin-campo { grid-column: span 3; }
+.admin-campos:has(> :nth-child(5):last-child) > .admin-campo:nth-child(-n+3) { grid-column: span 2; }
+.admin-campos > .admin-campo:only-child { grid-column: 1 / -1; }
+.admin-campos:empty { display: none; }
 .admin-campo { display: grid; min-width: 0; align-content: start; gap: 7px; }
 .admin-campo label { margin: 0; color: var(--text); font-size: var(--text-base); font-weight: 700; }
-.admin-campo label .small { color: var(--muted); font-weight: 500; }
-.admin-campo input,
-.admin-campo select { background: var(--surface-subtle); }
-.admin-campo input:focus,
-.admin-campo select:focus { background: var(--surface-raised); }
+/* Campo em Superfície Branca, como em todo o sistema (Inputs no DESIGN.md): o
+   cinza de repouso só existia aqui e na busca do painel. */
+.admin-campo label .small { color: var(--muted); font-weight: 400; }
 .admin-campo .form-hint { margin: 0; }
 .admin-campo-largo { grid-column: 1 / -1; }
 /* Vive fora da grade dos campos, porque acompanha as duas etapas — e é ele que
-   carrega o respiro, já que o bloco acima dele muda de uma etapa para a outra. */
-.admin-campo-motivo { margin-top: 18px; }
+   carrega o respiro, já que o bloco acima dele muda de uma etapa para a outra.
+   O mesmo vão da grade: é mais um campo. Sem campo nenhum acima (Religar, a
+   exclusão sem escolha de alcance), ele abre o corpo e dispensa o respiro, que
+   somado ao padding fazia o topo do corpo o dobro dos outros. */
+.admin-campo-motivo { margin-top: 16px; }
+.admin-dialog form:has(#edicaoEtapaConfirmacao[hidden]):has(.admin-campos:empty) .admin-campo-motivo { margin-top: 0; }
 #edicaoEtapaConfirmacao:focus { outline: none; }
 
+/* Cabeçalho da revisão, não um card: com a caixa em volta, a etapa 2 empilhava
+   três caixas (aviso, cada mudança, impacto) dentro do próprio diálogo. */
 .admin-review-intro {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 15px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  background: var(--surface-subtle);
 }
 .admin-review-icon {
   display: grid;
@@ -4934,30 +4994,33 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
 
 /* Sem a borda lateral de 3px: além de ser o traço que o detector do projeto
    sinaliza como tique de interface gerada, ela gastava o Teal dos Pendentes
-   como enfeite num item que não é pendência nenhuma. */
+   como enfeite num item que não é pendência nenhuma.
+   As mudanças são uma lista só, com fio entre os itens — cada uma na própria
+   caixa, separadas por vão, liam como cartões soltos. */
 .admin-delta {
   display: grid;
-  gap: 8px;
-  margin: 14px 0 0;
+  margin: 16px 0 0;
   padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
   list-style: none;
 }
 .admin-delta li {
-  padding: 11px 13px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
+  padding: 12px 16px;
   background: var(--surface-raised);
   font-size: var(--text-base);
   line-height: 1.45;
 }
-.admin-delta-compacta { margin: 0; gap: 5px; }
-.admin-delta-compacta li {
-  width: fit-content;
-  max-width: 100%;
-  padding: 4px 9px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface-subtle);
+.admin-delta li + li { border-top: 1px solid var(--border-subtle); }
+/* Na auditoria, cada mudança é uma linha de texto: a caixinha em volta de
+   cada item punha um card dentro da célula da tabela. */
+.admin-delta-compacta { gap: 4px; margin: 0; overflow: visible; border: 0; border-radius: 0; }
+.admin-delta-compacta li,
+.admin-delta-compacta li + li {
+  padding: 0;
+  border: 0;
+  background: none;
   font-size: var(--text-sm);
 }
 
@@ -4988,12 +5051,11 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   bottom: 0;
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin: 22px -24px 0;
-  padding: 15px 24px;
+  gap: 12px;
+  margin: 24px -24px 0;
+  padding: 16px 24px;
   border-top: 1px solid var(--border-subtle);
-  background: rgba(255,255,255,.96);
-  backdrop-filter: blur(8px);
+  background: var(--surface-raised);
 }
 
 @media screen and (max-width: 960px) {
@@ -5075,6 +5137,9 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
     box-shadow: none;
     text-align: left;
   }
+  /* O botão já diz a ação ("Abrir sessão", "Corrigir dados"): o rótulo
+     "Ações" em cima dele não informava nada. */
+  .admin-table[data-visao]:not([data-visao='auditoria']) tbody td.col-acoes::before { content: none; }
   .admin-table[data-visao]:not([data-visao='auditoria']) tbody tr:hover td,
   .admin-table[data-visao]:not([data-visao='auditoria']) tbody tr:hover td.col-acoes {
     background: var(--surface-raised);
@@ -5110,7 +5175,9 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   .admin-panel-footer { padding-inline: 18px; }
   .admin-dialog .detalhe-header { padding: 17px 18px; }
   .admin-dialog .detalhe-corpo { padding: 20px 18px 0; }
-  .admin-campos { grid-template-columns: 1fr; gap: 13px; }
+  .admin-campos { grid-template-columns: minmax(0, 1fr); }
+  .admin-campos > .admin-campo,
+  .admin-campos:has(> :nth-child(5):last-child) > .admin-campo:nth-child(-n+3) { grid-column: 1 / -1; }
   .admin-dialog-actions { margin-inline: -18px; padding: 13px 18px; }
   .admin-meta-quadro:has(> .admin-meta-tendencia:not([hidden])) { grid-template-columns: minmax(0, 1fr); }
   .admin-meta-resumo { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; padding: 20px 18px; }
@@ -5158,11 +5225,17 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   .admin-table[data-visao]:not([data-visao='auditoria']) tbody td .admin-badge {
     justify-self: start;
   }
+  /* Na ficha de uma coluna, as ações fecham o cartão, depois dos dados que a
+     pessoa confere antes de agir — no topo, quatro botões de largura total
+     empurravam o voto e o status para fora da tela. Só a ordem visual muda:
+     as células de dado não recebem foco, então o Tab segue igual. */
   .admin-table[data-visao]:not([data-visao='auditoria']) tbody td.col-acoes {
+    order: 1;
     width: 100%;
     min-width: 0;
     grid-column: 1;
     grid-row: auto;
+    margin-top: 6px;
     border-top: 1px solid var(--border-subtle);
     border-left: 0;
   }
@@ -5176,8 +5249,63 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   .admin-panel .admin-table[data-visao='meta'] .admin-meta-periodo { justify-items: start; text-align: left; }
 }
 
+/* No celular a auditoria também vira ficha: são seis colunas de 1080px, e a
+   rolagem lateral mostrava Quando e Operação com o que mudou escondido à
+   direita — justamente o que a linha existe para contar. Rótulo ao lado do
+   valor, lido da esquerda, como as fichas das outras listas a 390px. */
+@media screen and (max-width: 600px) {
+  .admin-table[data-visao='auditoria'] {
+    display: block;
+    min-width: 0;
+    padding: 12px;
+    background: var(--surface-control);
+  }
+  .admin-table[data-visao='auditoria'] thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  .admin-table[data-visao='auditoria'] tbody { display: grid; gap: 12px; }
+  .admin-table[data-visao='auditoria'] tbody tr {
+    display: grid;
+    overflow: hidden;
+    padding-block: 6px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-card);
+    background: var(--surface-raised);
+  }
+  .admin-table[data-visao='auditoria'] tbody td,
+  .admin-table[data-visao='auditoria'] tbody td:first-child,
+  .admin-table[data-visao='auditoria'] tbody td:last-child {
+    display: grid;
+    grid-template-columns: 104px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+    height: auto;
+    padding: 7px 14px;
+    border: 0;
+    white-space: normal;
+    text-align: left;
+  }
+  .admin-table[data-visao='auditoria'] tbody td::before {
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: .055em;
+    line-height: 1.5;
+    text-transform: uppercase;
+  }
+  .admin-table[data-visao='auditoria'] .admin-delta-compacta { justify-items: start; }
+  .admin-table[data-visao='auditoria'] tbody tr:hover td { background: var(--surface-raised); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .admin-aba,
+  .admin-org-button,
   .admin-acao,
   .admin-meta-contagem,
   .admin-meta-opcao,

@@ -5918,7 +5918,7 @@ test('a defesa editada vem da coluna armazenada, nao do texto legado', async () 
   page.form.dispatch('submit');
   await wait();
   assert.match(page.document.getElementById('edicaoDelta').children[0].textContent,
-    /Defesa: \(vazio\) → Não/);
+    /Defesa: em branco → Não/);
   page.form.dispatch('submit');
   await wait();
   assert.deepEqual(chamadas.find(c => c.caminho === 'rpc/admin_corrigir_acervo_cj').corpo.p_campos,
