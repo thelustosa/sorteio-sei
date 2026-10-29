@@ -104,7 +104,7 @@ O Termo de Entrega oficial do projeto para a Agência Goiana de Regulação (AGR
 
 O visual foi desenvolvido com base na identidade visual institucional do portal do **Estado de Goiás**:
 - **Paleta de Cores**: Uso do verde institucional (`#00534b`) como cor principal de realce e botões, fundo de tela branco, painel interno em tom de verde menta claro (`#E9F5EC`) e tokens de cores temáticas para cada card de serviço.
-- **Rodapé Institucional**: Banner verde com logotipo oficial do Estado de Goiás, versão atual da aplicação (Versão 3.11.1), créditos aos desenvolvedores (**Lucas Lustosa Coelho e Leonardo Ferreira Amichi**) e informações de integridade e auditoria do sorteio.
+- **Rodapé Institucional**: Banner verde com logotipo oficial do Estado de Goiás, versão atual da aplicação (Versão 3.11.2), créditos aos desenvolvedores (**Lucas Lustosa Coelho e Leonardo Ferreira Amichi**) e informações de integridade e auditoria do sorteio.
 - **Tipografia**: Títulos e elementos de destaque em **Montserrat**, complementados pela tipografia nativa do sistema operacional para o corpo de texto.
 - **Acessibilidade e Usabilidade**: Gestão de foco nativo, semântica ARIA completa, alto contraste, suporte a `prefers-reduced-motion` e atalhos por teclado (Escape para fechar modais, setas para navegar abas).
 
@@ -562,6 +562,16 @@ node tests/test_assets.mjs
 Não necessitam de Docker nem de banco de dados: exercitam a aleatoriedade uniforme do sorteio (Fisher-Yates sem viés), a navegação e interface do usuário (cards dinâmicos, modais, exportações em `.docx`, `.xlsx` e `.pdf`, autenticação contextual), além da integridade de minificação, lazy loading e versão de cache por hash.
 
 O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) repete essas verificações em todo push e pull request, validando sintaxe JavaScript (`node --check`), suítes Node.js, testes PostgreSQL/Python e garantindo que os arquivos `.min.*` estejam devidamente regenerados e alinhados ao versionador.
+
+### Atualização 3.11.2
+
+- Resultado do sorteio: botão "Baixar ata (.doc)" para a segunda via. A ata
+  continua descendo sozinha ao fim do sorteio; o botão cobre o download
+  bloqueado pelo navegador ou o arquivo perdido, sem ir ao histórico.
+- Card do acervo: só Dias passados ordena. Distribuição era a mesma chave ao
+  contrário e Tempo o mesmo prazo por extenso — três botões para duas ordens.
+  O cabeçalho mostra sempre a ordem atual: aceso em decrescente no padrão (mais
+  parado primeiro), e o clique alterna para o mais recente primeiro.
 
 ### Atualização 3.11.1
 

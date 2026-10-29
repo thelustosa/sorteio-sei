@@ -267,8 +267,9 @@ function indexPage({ api = async () => null, aviso = () => {},
     'modeSelector', 'sorteadorContent', 'thRecurso', 'thInteressado', 'pillsContainer', 'txtModo',
     'processEntry', 'processSetupHint', 'processFormMessage', 'resultadoSorteio',
     'sortControls', 'resumoContagem', 'resultadoStatus', 'thUnidadeResult',
-    'modeSelectorTitle', 'resultadoSorteioTitle', 'baixarBackup',
-    'cardRegistrarPendencias', 'pendenciasBadge'].forEach(id => add(id, id.includes('Btn') || id.startsWith('btn') || id === 'createRows' || id === 'sortear' || id === 'baixarBackup' ? 'button' : 'div'));
+    'modeSelectorTitle', 'resultadoSorteioTitle', 'baixarBackup', 'baixarAta',
+    'cardRegistrarPendencias', 'pendenciasBadge'].forEach(id => add(id, id.includes('Btn') || id.startsWith('btn') || id === 'createRows' || id === 'sortear' || id.startsWith('baixar') ? 'button' : 'div'));
+  document.getElementById('baixarAta').hidden = true;
   document.getElementById('sorteadorContent').hidden = true;
   document.getElementById('processEntry').hidden = true;
   document.getElementById('sortear').hidden = true;
@@ -410,6 +411,28 @@ test('Tab numa linha seguinte não deixa o prefixo selecionado, e colar o númer
   evitado = false;
   tbody.dispatch('paste', { target: processo, clipboardData: { getData: () => '0084' }, preventDefault() { evitado = true; } });
   assert.equal(evitado, false);
+});
+
+// A ata desce sozinha; se o navegador barrou o download ou o arquivo se perdeu,
+// a segunda via está na própria tela, sem ir ao histórico.
+test('a ata baixa sozinha e o botão dá a segunda via', async () => {
+  const page = indexPage({ api: async () => null });
+  const { document } = page;
+  const botao = document.getElementById('baixarAta');
+  assert.equal(botao.hidden, true, 'antes do sorteio não há ata');
+
+  await preencherCreg(page, '000000000000405');
+  document.getElementById('sortear').dispatch('click');
+  await wait();
+  assert.equal(document.downloads.length, 1);
+  assert.equal(botao.hidden, false);
+
+  botao.click();
+  assert.equal(document.downloads.length, 2);
+  assert.equal(document.downloads[1], document.downloads[0], 'a mesma ata, com o mesmo nome');
+
+  document.getElementById('btnVoltar').dispatch('click');
+  assert.equal(botao.hidden, true, 'voltar ao início leva a ata junto');
 });
 
 test('oferece backup após falha sem baixá-lo automaticamente', async () => {
@@ -3056,7 +3079,7 @@ test('sem a consulta dos retornos, o card abre igual e sem destaque', async () =
   assert.equal(linhas[0].children[0].classList.contains('processo-vista'), false);
 });
 
-test('Distribuição, Dias passados e Tempo ordenam: crescente, decrescente, padrão', async () => {
+test('só Dias passados ordena: o padrão aceso em decrescente, o clique alterna', async () => {
   // Fora de ordem de propósito: o padrão é a ordem que o banco devolveu.
   const lista = [
     { num_processo: '000000000003333', relator: 'CJ1', data_distribuicao: '2026-07-25', dias: 30 },
@@ -3069,35 +3092,33 @@ test('Distribuição, Dias passados e Tempo ordenam: crescente, decrescente, pad
   const ordem = () => tabela().children[1].children.map(tr => tr.children[0].textContent.slice(-4));
   const th = rotulo => tabela().children[0].children[0].children
     .find(c => textoDaCelula(c) === rotulo);
-  const clicar = rotulo => th(rotulo).children[0].click();
+  const dias = () => th('Dias passados');
+  const clicar = () => dias().children[0].click();
 
+  for (const rotulo of ['Nº do Processo', 'Distribuição', 'Tempo']) {
+    assert.equal(th(rotulo).children.length, 0, `${rotulo} não ordena: é a mesma chave de Dias passados`);
+  }
   assert.deepEqual(ordem(), ['3333', '1111', '2222']);
-  assert.equal(th('Nº do Processo').children.length, 0, 'só as três colunas de prazo ordenam');
-  assert.equal(th('Distribuição').getAttribute('aria-sort'), null);
+  assert.equal(dias().getAttribute('aria-sort'), 'descending',
+    'o padrão já é decrescente em Dias passados, e o cabeçalho diz isso');
+  assert.match(dias().children[0].title, /^Mais parado primeiro/);
 
-  clicar('Distribuição');
-  assert.deepEqual(ordem(), ['1111', '3333', '2222']);
-  assert.equal(th('Distribuição').getAttribute('aria-sort'), 'ascending');
-  assert.equal(page.document.activeElement, th('Distribuição').children[0],
+  clicar();
+  assert.deepEqual(ordem(), ['2222', '3333', '1111']);
+  assert.equal(dias().getAttribute('aria-sort'), 'ascending');
+  assert.match(dias().children[0].title, /^Mais recente primeiro/);
+  assert.equal(page.document.activeElement, dias().children[0],
     'o foco volta ao cabeçalho redesenhado');
 
-  clicar('Distribuição');
-  assert.deepEqual(ordem(), ['2222', '3333', '1111']);
-  assert.equal(th('Distribuição').getAttribute('aria-sort'), 'descending');
-
-  clicar('Distribuição');
-  assert.deepEqual(ordem(), ['3333', '1111', '2222']);
-  assert.equal(th('Distribuição').getAttribute('aria-sort'), null);
-
-  // Outra coluna assume a ordem, e a anterior volta ao neutro.
-  clicar('Tempo');
-  assert.deepEqual(ordem(), ['2222', '3333', '1111']);
-  assert.equal(th('Tempo').getAttribute('aria-sort'), 'ascending');
-  assert.equal(th('Distribuição').getAttribute('aria-sort'), null);
+  clicar();
+  assert.deepEqual(ordem(), ['3333', '1111', '2222'], 'volta à ordem do banco, sem estado neutro');
+  assert.equal(dias().getAttribute('aria-sort'), 'descending');
 
   // Abrir outro card começa do padrão.
+  clicar();
   await page.abrirDetalhe(celulaDe(page, 0, 1));
   assert.deepEqual(ordem(), ['3333', '1111', '2222']);
+  assert.equal(dias().getAttribute('aria-sort'), 'descending');
 });
 
 // ── Tempo por extenso ────────────────────────────────────────────────────────

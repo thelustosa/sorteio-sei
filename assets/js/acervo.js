@@ -109,7 +109,7 @@ let detalheAtual = null;
 // painel e reusados por todo card aberto depois dele (retornos_de_vista).
 let retornosDeVista = null;
 // Ordenação do card: null é a ordem do banco (mais parado primeiro). O clique
-// no cabeçalho cicla crescente → decrescente → de volta ao padrão.
+// em Dias passados alterna entre ela e a inversa.
 let ordemDetalhe = null;
 // Cada abertura invalida a anterior. Sem isso, fechar no Escape durante uma
 // busca lenta e clicar noutro bloco deixava a resposta atrasada chegar por
@@ -919,14 +919,14 @@ function colunasDoDetalhe(processos) {
       titulo: p => p.conselheiro && p.conselheiro !== p[COL.campo] ? p.conselheiro : '' },
     { rotulo: COL.segundaColuna.rotulo, largura: 34, naTela: COL.segundaColuna.naTela,
       valor: p => p[COL.segundaColuna.campo] || '' },
-    // `ordenar` devolve a chave comparável: a data ISO ordena como texto, e
-    // Tempo é o mesmo prazo de Dias passados escrito por extenso.
+    // Só Dias passados ordena: Distribuição é a mesma chave ao contrário e
+    // Tempo é o mesmo prazo por extenso — três botões para duas ordens só.
     { rotulo: 'Distribuição', largura: 16, naTela: true,
-      valor: p => dataBR(p.data_distribuicao), ordenar: p => p.data_distribuicao || '' },
+      valor: p => dataBR(p.data_distribuicao) },
     { rotulo: 'Dias passados', largura: 14, naTela: true, numero: true,
       valor: p => Number(p.dias) || 0, ordenar: p => Number(p.dias) || 0 },
     { rotulo: 'Tempo', largura: 26, naTela: true,
-      valor: p => tempoPorExtenso(p.data_distribuicao, p.dias), ordenar: p => Number(p.dias) || 0 }
+      valor: p => tempoPorExtenso(p.data_distribuicao, p.dias) }
   ];
 
   if (processos.some(p => p.diligencia_desde)) {
@@ -950,8 +950,14 @@ function processosOrdenados(processos) {
   });
 }
 
-const PROXIMA_ORDEM = { nenhuma: 'asc', asc: 'desc', desc: 'nenhuma' };
 const ARIA_SORT = { asc: 'ascending', desc: 'descending' };
+// O padrão do banco (data de distribuição, a mais antiga primeiro) já é Dias
+// passados em ordem decrescente: o cabeçalho o mostra aceso, e não neutro, para
+// a tela dizer em que ordem está. O clique só alterna entre as duas.
+const DICA_DA_ORDEM = {
+  desc: 'Mais parado primeiro. Clique para ver o mais recente primeiro.',
+  asc: 'Mais recente primeiro. Clique para ver o mais parado primeiro.'
+};
 
 // O par de setas fica sempre desenhado; o estado só muda qual delas acende. Assim
 // o cabeçalho não muda de largura a cada clique.
@@ -972,8 +978,8 @@ function setasDeOrdem() {
 
 function cabecalhoOrdenavel(coluna) {
   const th = celula('', 'th');
-  const sentido = ordemDetalhe?.rotulo === coluna.rotulo ? ordemDetalhe.sentido : 'nenhuma';
-  if (ARIA_SORT[sentido]) th.setAttribute('aria-sort', ARIA_SORT[sentido]);
+  const sentido = ordemDetalhe?.rotulo === coluna.rotulo ? ordemDetalhe.sentido : 'desc';
+  th.setAttribute('aria-sort', ARIA_SORT[sentido]);
   th.classList.add('ordenavel');
   th.dataset.ordem = sentido;
 
@@ -981,12 +987,12 @@ function cabecalhoOrdenavel(coluna) {
   botao.type = 'button';
   botao.className = 'ordenar-coluna';
   botao.dataset.coluna = coluna.rotulo;
+  botao.title = DICA_DA_ORDEM[sentido];
   const texto = document.createElement('span');
   texto.textContent = coluna.rotulo;
   botao.append(texto, setasDeOrdem());
   botao.addEventListener('click', () => {
-    const proxima = PROXIMA_ORDEM[sentido];
-    ordemDetalhe = proxima === 'nenhuma' ? null : { rotulo: coluna.rotulo, sentido: proxima };
+    ordemDetalhe = sentido === 'desc' ? { rotulo: coluna.rotulo, sentido: 'asc' } : null;
     desenharDetalhe(detalheAtual.processos);
     // A tabela é redesenhada inteira: o foco volta ao mesmo cabeçalho, senão
     // quem ordena pelo teclado cai no começo da página.

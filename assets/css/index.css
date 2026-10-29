@@ -1036,7 +1036,8 @@ body[data-colegiado="creg"] #julgadosTable th:nth-child(5) { width: 23%; }
   margin-bottom: 12px;
 }
 .resultado-header h2 { margin: 0; }
-.resultado-header #baixarBackup { flex: 0 0 auto; }
+.resultado-acoes { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; }
+#baixarAta { gap: 6px; }
 #resultadoStatus { margin: 0 0 14px; }
 #resumoContagem { margin-bottom: 18px; }
 
@@ -2261,9 +2262,9 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
 .detalhe-table tbody tr:last-child td { border-bottom: none; }
 
 /* Cabeçalho ordenável: o botão veste o próprio cabeçalho (mesma caixa alta, mesma
-   cor), e o par de setas diz o estado. Padrão: as duas apagadas, só dizem que dá
-   para ordenar. Crescente/decrescente: a seta do sentido acende em verde e o
-   rótulo acompanha; a outra quase some. */
+   cor), e o par de setas diz o estado. A seta do sentido acende em verde e o
+   rótulo acompanha; a outra quase some. Dias passados nunca fica neutro: o
+   padrão do banco já é a ordem decrescente dele. */
 .detalhe-table th.ordenavel { padding-block: 0; }
 .ordenar-coluna {
   display: inline-flex;
@@ -3157,7 +3158,9 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .controls button,
   #addRowBtn,
   #baixarBackup,
+  #baixarAta,
   #btnSalvar { width: 100%; }
+  .resultado-acoes { flex-direction: column; }
 
   .preenchimento-rapido { justify-content: stretch; }
   .preenchimento-rapido button { flex: 1; }

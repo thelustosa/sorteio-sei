@@ -66,6 +66,10 @@ const modeSelectorTitle = document.getElementById('modeSelectorTitle');
 const resultadoSorteioTitle = document.getElementById('resultadoSorteioTitle');
 const baixarBackupBtn = document.getElementById('baixarBackup');
 let backupPendente;
+// O sorteio na tela: a ata desce sozinha ao fim dele, e este botão dá a segunda
+// via — o download bloqueado ou o arquivo perdido não mandam mais ao histórico.
+const baixarAtaBtn = document.getElementById('baixarAta');
+let sorteioNaTela;
 
 // ── Autenticação ─────────────────────────────────────────────────────────────
 // Login, token e chamadas ao Supabase ficam em supabase.js, compartilhados com
@@ -145,6 +149,8 @@ btnVoltar.addEventListener('click', () => {
   resumoContagem.replaceChildren();
   backupPendente = undefined;
   baixarBackupBtn.hidden = true;
+  sorteioNaTela = undefined;
+  baixarAtaBtn.hidden = true;
   modeSelectorTitle.focus();
 });
 
@@ -186,6 +192,8 @@ function iniciarSorteador(modo, unidades) {
   resultadoSorteio.hidden = true;
   backupPendente = undefined;
   baixarBackupBtn.hidden = true;
+  sorteioNaTela = undefined;
+  baixarAtaBtn.hidden = true;
 
   modeSelector.hidden = true;
   sorteadorContent.hidden = false;
@@ -570,6 +578,8 @@ function sortearProcessos() {
   };
 
   exportarWord(sorteio);
+  sorteioNaTela = sorteio;
+  baixarAtaBtn.hidden = false;
 
   if (resultadoStatus) {
     resultadoStatus.replaceChildren(criarIndicadorCarregamento('Registrando o sorteio…'));
@@ -794,6 +804,10 @@ baixarBackupBtn.addEventListener('click', () => {
   baixarBackupBtn.hidden = true;
   btnVoltar.focus();
   aviso('Backup .json baixado.');
+});
+
+baixarAtaBtn.addEventListener('click', () => {
+  if (sorteioNaTela) exportarWord(sorteioNaTela);
 });
 
 createBtn.addEventListener('click', async () => {

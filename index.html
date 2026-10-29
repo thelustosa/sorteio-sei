@@ -14,7 +14,7 @@
   <link rel="dns-prefetch" href="//giipnmpfclfudkzflwsv.supabase.co" />
   <link rel="preload" href="assets/fonts/Montserrat-Bold-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="icon" href="assets/img/favicon.png" />
-  <link rel="stylesheet" href="assets/css/index.min.css?v=28c2ff2a46" />
+  <link rel="stylesheet" href="assets/css/index.min.css?v=bfc4b4d888" />
   <script>
     (function () {
       try {
@@ -37,8 +37,8 @@
   <script type="speculationrules">
     {"prefetch": [{"urls": ["./acervo-cj.html", "./acervo-creg.html", "./historico-cj.html", "./historico-creg.html", "./julgados-cj.html", "./julgados-creg.html", "./meta-45.html"], "eagerness": "moderate"}]}
   </script>
-  <script defer src="assets/js/supabase.min.js?v=28c2ff2a46"></script>
-  <script defer src="assets/js/bootstrap.min.js?v=28c2ff2a46"></script>
+  <script defer src="assets/js/supabase.min.js?v=bfc4b4d888"></script>
+  <script defer src="assets/js/bootstrap.min.js?v=bfc4b4d888"></script>
 </head>
 
 <body data-page="sorteio">
@@ -255,7 +255,16 @@
         <div id="resultadoSorteio" hidden>
           <div class="resultado-header">
             <h2 id="resultadoSorteioTitle" tabindex="-1">Resultado do Sorteio</h2>
-            <button id="baixarBackup" class="button-secondary" type="button" hidden>Baixar backup .json</button>
+            <div class="resultado-acoes">
+              <button id="baixarBackup" class="button-secondary" type="button" hidden>Baixar backup .json</button>
+              <!-- A ata desce sozinha ao fim do sorteio; o botão é a segunda via. -->
+              <button id="baixarAta" class="button-secondary" type="button" hidden>
+                <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M10 2.5v10"></path><path d="m6.5 9 3.5 3.5L13.5 9"></path><path d="M4 13.5v3h12v-3"></path>
+                </svg>
+                <span>Baixar ata (.doc)</span>
+              </button>
+            </div>
           </div>
           <div id="resultadoStatus" hidden></div>
 
@@ -291,7 +300,7 @@
         Todos os sorteios são auditáveis para garantir transparência.
       </p>
       <div class="footer-meta">
-        <div class="footer-version">Versão 3.11.1</div>
+        <div class="footer-version">Versão 3.11.2</div>
         <p class="footer-credit">Desenvolvido por <strong>Lucas Lustosa Coelho e Leonardo Ferreira Amichi</strong>.</p>
       </div>
     </div>
