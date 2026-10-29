@@ -1,34 +1,64 @@
 // Carrega apenas o código necessário ao login no primeiro acesso. A lógica da
 // página autenticada entra depois que a sessão existe, reduzindo parse e
 // execução no caminho crítico sem mudar o fluxo do sistema.
+//
+// `antecipar`: o primeiro pedido que a tela faz ao abrir, idêntico ao dela
+// (caminho, opções e corpo), para sair junto com a consulta de permissões — ver
+// anteciparPedido em supabase.js. Divergiu, a tela só pede de novo; o teste
+// "o pedido antecipado é o mesmo que a tela faz" acusa.
+//
+// `anteciparComPermissao`: o mesmo, para a tela cujo primeiro pedido depende da
+// permissão — o colegiado do painel, o card de pendências da inicial. Recebe os
+// órgãos que a tela vai receber e devolve a lista de pedidos, que saem assim que
+// a permissão volta. Antes saíam só depois de a tela montar, e a tela só monta
+// depois dos 0,6s do indicador (aguardarIndicador abaixo): na Meta 45 eram
+// ~0,4s parados entre a permissão e o primeiro dado.
+const PENDENTES = '&or=(voto.is.null,status.is.null)&order=data_sessao.desc,num_processo.asc,id.asc';
+// O colegiado com que o painel abre — o mesmo critério de inicializarAdmin.
+const pedidoDoPainel = rpc => orgaos => [[rpc, { paginar: true, method: 'POST',
+  body: JSON.stringify({ p_colegiado: orgaos.has('CREG') ? 'CREG' : 'CJ' }) }]];
 const PAGINAS = {
-  sorteio: { arquivo: 'index.min.js', iniciar: 'inicializarSorteio', texto: 'Preparando o sorteio…' },
-  'julgados-cj': { orgao: 'CJ', familia: 'julgados', arquivo: 'julgados.min.js', iniciar: 'inicializarJulgados', texto: 'Preparando as pautas…' },
+  // As pendências só são pedidas com o card de registro na tela — a mesma
+  // condição de inicializarSorteio.
+  sorteio: { arquivo: 'index.min.js', iniciar: 'inicializarSorteio', texto: 'Preparando o sorteio…',
+    anteciparComPermissao: () => (document.getElementById('cardRegistrarPendencias')?.hidden !== false ? []
+      : ['julgados_cj', 'julgados_creg'].map(tabela => [`${tabela}?select=id&or=(voto.is.null,status.is.null)&order=id.asc`])) },
+  'julgados-cj': { orgao: 'CJ', familia: 'julgados', arquivo: 'julgados.min.js', iniciar: 'inicializarJulgados', texto: 'Preparando as pautas…',
+    antecipar: ['julgados_cj?select=id,num_processo,relator,cadeira_vista,data_sessao,pauta,voto,status'
+      + PENDENTES] },
   // Mesmo script para os dois colegiados: quem escolhe a tabela, a função do
   // banco e o vocabulário é o data-colegiado do <body> (ver COLEGIADOS em julgados.js).
-  'julgados-creg': { orgao: 'CREG', familia: 'julgados', arquivo: 'julgados.min.js', iniciar: 'inicializarJulgados', texto: 'Preparando as sessões…' },
+  'julgados-creg': { orgao: 'CREG', familia: 'julgados', arquivo: 'julgados.min.js', iniciar: 'inicializarJulgados', texto: 'Preparando as sessões…',
+    antecipar: ['julgados_creg?select=id,num_processo,unidade,assunto,unidade_vista,data_sessao,pauta,voto,status'
+      + PENDENTES] },
   // `moldura`: a tela é um painel cuja moldura é HTML estático. O andamento
   // nasce dentro dela, no lugar da tabela, e não num card à parte — ver
   // mostrarAndamento abaixo.
-  'acervo-cj': { orgao: 'CJ', familia: 'acervo', arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Carregando o acervo…', moldura: 'acervoPanel' },
+  'acervo-cj': { orgao: 'CJ', familia: 'acervo', arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Carregando o acervo…', moldura: 'acervoPanel',
+    antecipar: ['rpc/resumo_acervo_cj', { paginar: true, method: 'POST', body: '{}' }] },
   // Mesmo script para os dois colegiados: quem escolhe o par de funções do
   // banco é o data-colegiado do <body> (ver COLEGIADOS em acervo.js).
-  'acervo-creg': { orgao: 'CREG', familia: 'acervo', arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Carregando o acervo…', moldura: 'acervoPanel' },
-  'historico-cj': { orgao: 'CJ', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Carregando o histórico…', moldura: 'historicoPanel' },
+  'acervo-creg': { orgao: 'CREG', familia: 'acervo', arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Carregando o acervo…', moldura: 'acervoPanel',
+    antecipar: ['rpc/resumo_acervo_creg', { paginar: true, method: 'POST', body: '{"p_diligencia":null}' }] },
+  'historico-cj': { orgao: 'CJ', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Carregando o histórico…', moldura: 'historicoPanel',
+    antecipar: ['rpc/historico_sorteios', { paginar: true, method: 'POST', body: '{"p_colegiado":"CJ"}' }] },
   // Mesmo script para os dois colegiados, como o painel do acervo: quem escolhe
   // o vocabulário e a sigla que vai ao banco é o data-colegiado do <body>
   // (ver COLEGIADOS em historico.js).
-  'historico-creg': { orgao: 'CREG', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Carregando o histórico…', moldura: 'historicoPanel' },
+  'historico-creg': { orgao: 'CREG', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Carregando o histórico…', moldura: 'historicoPanel',
+    antecipar: ['rpc/historico_sorteios', { paginar: true, method: 'POST', body: '{"p_colegiado":"CREG"}' }] },
   // A primeira página sem órgão fixo: o painel administrativo atende os dois
   // colegiados e traz o seletor dentro dele. Por isso não entra por `orgao`,
   // que é o que redireciona quem abre a URL do colegiado errado, e sim por
   // `exigeAdmin` — quem decide se ela abre é o papel, não a página.
-  admin: { exigeAdmin: true, arquivo: 'admin.min.js', iniciar: 'inicializarAdmin', texto: 'Preparando o painel…' },
+  admin: { exigeAdmin: true, arquivo: 'admin.min.js', iniciar: 'inicializarAdmin', texto: 'Preparando o painel…',
+    anteciparComPermissao: pedidoDoPainel('rpc/admin_sessoes') },
   // A Meta 45 do papel de consulta: o mesmo módulo do painel, numa página que
   // só traz aquela aba. Quem decide se ela abre é o papel — consulta ou
   // administrador, os dois que meta_45_exigir() aceita; o administrador chega
   // à Meta pelo painel, mas um link para cá também abre para ele.
-  'meta-45': { exigeConsulta: true, arquivo: 'admin.min.js', iniciar: 'inicializarAdmin', texto: 'Preparando o painel…' }
+  'meta-45': { exigeConsulta: true, arquivo: 'admin.min.js', iniciar: 'inicializarAdmin', texto: 'Preparando o painel…',
+    anteciparComPermissao: pedidoDoPainel('rpc/admin_meta_45') }
 };
 
 const DESTINOS = {
@@ -116,6 +146,7 @@ async function carregarPaginaAutenticada() {
   const inicioDoAndamento = Date.now();
   const src = `assets/js/${paginaAtual.arquivo}?v=${ASSET_VERSION}`;
   anteciparScript(src);
+  if (paginaAtual.antecipar) anteciparPedido(...paginaAtual.antecipar);
 
   try {
     // Uma consulta só traz órgão e papel: o porteiro de toda página, o atalho
@@ -164,6 +195,9 @@ async function carregarPaginaAutenticada() {
     aplicarVisibilidadeAdmin(administrados);
     aplicarVisibilidadeConsulta(consultados, plenos);
     aplicarVisibilidadeHistorico(historicos);
+
+    // Depois das visibilidades: a da inicial lê o card que elas acabaram de decidir.
+    paginaAtual.anteciparComPermissao?.(orgaosDaPagina).forEach(pedido => anteciparPedido(...pedido));
 
     await carregarScript(src);
     // O card "Preparando…" segue a regra de todo indicador: ou não aparece,
@@ -236,6 +270,10 @@ async function carregarPaginaAutenticada() {
 
     estado.append(texto, detalhe, tentarNovamente);
     sessionLoading.replaceChildren(estado);
+  } finally {
+    // A tela já fez o primeiro pedido (ou não vai fazer). Sobra só o que ela
+    // não pediu, e servi-lo depois a um "Atualizar" seria dado velho.
+    descartarPedidosAntecipados();
   }
 }
 

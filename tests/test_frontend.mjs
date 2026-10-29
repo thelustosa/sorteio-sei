@@ -201,6 +201,7 @@ function supabaseApp(fetch, itensIniciais = {}, apiSubstituta = null, local = ne
       erroSemPermissao: typeof erroSemPermissao === 'function' ? erroSemPermissao : undefined,
       CADEIRAS_CJ, rotularCadeira, criarIndicadorCarregamento, aguardarIndicador,
       alternarBotaoCarregando, redirecionarSemTransicao, mostrarErro, equalizarColunas, mostrarIndicador,
+      anteciparPedido, descartarPedidosAntecipados,
       estadoSessao: () => ({ accessToken, refreshToken })
     };`)(document, window, navigator, location, sessionStorage, localStorage, fetch, apiSubstituta);
   return { ...app, document, navegacoes, storage, local,
@@ -1788,7 +1789,9 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
   aplicarVisibilidadeConsulta = () => {},
   aplicarVisibilidadeHistorico = () => {},
   // A moldura estática do painel (acervo, histórico), como está no HTML.
-  comMoldura = false
+  comMoldura = false,
+  anteciparPedido = () => {},
+  descartarPedidosAntecipados = () => {}
 } = {}) {
   const document = new Document();
   document.body.dataset.page = pagina;
@@ -1830,9 +1833,10 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
     'criarIndicadorCarregamento', 'ligarLogin', 'buscarPapeis',
     'aplicarVisibilidadePorOrgao', 'erroSemPermissao', 'sair', 'redirecionarSemTransicao',
     'aplicarVisibilidadeAdmin', 'mostrarIndicador', 'aguardarIndicador', 'aplicarVisibilidadeConsulta', 'aplicarVisibilidadeHistorico',
+    'anteciparPedido', 'descartarPedidosAntecipados',
     `${source('bootstrap.js')}\nreturn {
       resolverDestinoPermitido: typeof resolverDestinoPermitido === 'function' ? resolverDestinoPermitido : undefined,
-      carregarPaginaAutenticada
+      carregarPaginaAutenticada, PAGINAS
     };`)(
     document, { [inicializadores[pagina]]: inicializar }, location, 'teste', carregar,
     texto => { const estado = document.createElement('div'); estado.textContent = texto; return estado; },
@@ -1843,7 +1847,7 @@ function bootstrapPage(inicializar, pagina = 'acervo-cj', {
     aplicarVisibilidade, erroPermissao,
     encerrarSessaoNoServidor, destino => location.replace(destino),
     aplicarVisibilidadeAdmin, mostrarIndicador, aguardarIndicador, aplicarVisibilidadeConsulta,
-    aplicarVisibilidadeHistorico);
+    aplicarVisibilidadeHistorico, anteciparPedido, descartarPedidosAntecipados);
 
   return { ...app, document, sessionLoading, moldura, loginScreen, loginErro, btnSair, iniciar: () => aoEntrar() };
 }
@@ -1939,6 +1943,129 @@ test('o módulo da página começa a descer junto com a consulta de permissões'
   await repeticao;
   assert.equal(page.document.head.children.filter(el => el.rel === 'preload').length, 1,
     '"Tentar novamente" não duplica o preload');
+});
+
+// A consulta de permissões e o primeiro pedido de dados também eram duas idas
+// ao banco em fila. O pedido sai antes de a permissão voltar, e o que a tela
+// não consumiu é descartado quando ela termina de abrir.
+test('o primeiro pedido da tela sai junto com a consulta de permissões', async () => {
+  let responder;
+  const antecipados = [];
+  let descartes = 0;
+  const page = bootstrapPage(async () => {}, 'acervo-creg', {
+    buscarOrgaos: () => new Promise(resolve => { responder = resolve; }),
+    anteciparPedido: (...pedido) => antecipados.push(pedido),
+    descartarPedidosAntecipados: () => { descartes++; }
+  });
+
+  const pendente = page.iniciar();
+  assert.deepEqual(antecipados, [page.PAGINAS['acervo-creg'].antecipar],
+    'o pedido sai antes de a permissão voltar');
+  assert.equal(descartes, 0, 'a tela ainda não teve chance de consumi-lo');
+
+  responder(new Set(['CREG']));
+  await pendente;
+  assert.equal(descartes, 1, 'o que sobrou não fica para um "Atualizar"');
+});
+
+// Divergiu, a tela pede de novo e nada quebra — mas o ganho some sem aviso.
+// Este teste é o aviso: o pedido de PAGINAS tem de ser o primeiro que a tela faz.
+test('o pedido antecipado é o mesmo que a tela faz', async () => {
+  const { PAGINAS } = bootstrapPage(async () => {});
+  const telas = {
+    'julgados-cj': api => julgadosPage(api, 'cj').inicializarJulgados(),
+    'julgados-creg': api => julgadosPage(api, 'creg').inicializarJulgados(),
+    'acervo-cj': api => acervoPage(api, { colegiado: 'cj' }).inicializarAcervo(),
+    'acervo-creg': api => acervoPage(api, { colegiado: 'creg' }).inicializarAcervo(),
+    'historico-cj': api => historicoPage(api, 'cj').inicializarHistorico(),
+    'historico-creg': api => historicoPage(api, 'creg').inicializarHistorico()
+  };
+  assert.deepEqual(Object.keys(PAGINAS).filter(id => PAGINAS[id].antecipar).sort(), Object.keys(telas).sort());
+
+  for (const [pagina, abrir] of Object.entries(telas)) {
+    const pedidos = [];
+    await abrir(async (...pedido) => { pedidos.push(pedido); return []; });
+    const [caminho, opcoes] = PAGINAS[pagina].antecipar;
+    assert.deepEqual(pedidos[0], opcoes ? [caminho, opcoes] : [caminho], pagina);
+  }
+});
+
+// O mesmo contrato para quem depende da permissão: o colegiado com que o painel
+// abre, e o card de pendências da inicial.
+test('o pedido antecipado com a permissão é o mesmo que a tela faz', async () => {
+  const page = bootstrapPage(async () => {});
+  const { PAGINAS } = page;
+  const semPar = pedido => pedido.length === 2 && pedido[1] === undefined ? [pedido[0]] : pedido;
+  const casos = [
+    ['admin', new Set(['CJ', 'CREG']), api => adminPage({ api }).inicializarAdmin(new Set(['CJ', 'CREG']))],
+    ['admin', new Set(['CJ']), api => adminPage({ api }).inicializarAdmin(new Set(['CJ']))],
+    ['meta-45', new Set(['CREG']), api => adminPage({ api, meta45: true }).inicializarAdmin(new Set(['CREG']))],
+    ['meta-45', new Set(['CJ']), api => adminPage({ api, meta45: true }).inicializarAdmin(new Set(['CJ']))]
+  ];
+  for (const [pagina, orgaos, abrir] of casos) {
+    const pedidos = [];
+    await abrir(async (...pedido) => { pedidos.push(pedido); return []; });
+    const antecipados = PAGINAS[pagina].anteciparComPermissao(orgaos);
+    assert.deepEqual(pedidos.slice(0, antecipados.length), antecipados.map(semPar), `${pagina} ${[...orgaos]}`);
+  }
+
+  // A inicial: com o card de registro na tela, as duas contagens; sem ele, nada.
+  const pedidos = [];
+  const inicial = indexPage({ api: async (...pedido) => { pedidos.push(pedido); return []; } });
+  inicial.inicializarSorteio();
+  await wait();
+  page.document.add('cardRegistrarPendencias', 'div').hidden = false;
+  assert.deepEqual(pedidos, PAGINAS.sorteio.anteciparComPermissao(null));
+  page.document.getElementById('cardRegistrarPendencias').hidden = true;
+  assert.deepEqual(PAGINAS.sorteio.anteciparComPermissao(null), []);
+});
+
+test('o pedido que depende da permissão sai antes da espera do indicador', async () => {
+  const eventos = [];
+  const page = bootstrapPage(async () => { eventos.push('tela'); }, 'meta-45', {
+    consulta: new Set(['CJ']),
+    anteciparPedido: caminho => eventos.push(caminho),
+    carregar: async () => { eventos.push('módulo'); }
+  });
+  await page.iniciar();
+  assert.deepEqual(eventos, ['rpc/admin_meta_45', 'módulo', 'tela'],
+    'o dado desce enquanto o módulo baixa e o indicador cumpre o tempo');
+});
+
+test('a tela recebe a resposta antecipada uma vez só', async () => {
+  let chamadas = 0;
+  const app = supabaseApp(async () => {
+    chamadas++;
+    return { ok: true, status: 200, json: async () => [{ id: chamadas }], headers: { get: () => '0-0/1' } };
+  });
+  const opcoes = { paginar: true, method: 'POST', body: '{"p_colegiado":"CJ"}' };
+
+  app.anteciparPedido('rpc/historico_sorteios', opcoes);
+  assert.equal(chamadas, 1);
+  assert.deepEqual(await app.api('rpc/historico_sorteios', { ...opcoes }), [{ id: 1 }],
+    'a tela recebe o que já estava a caminho');
+  assert.equal(chamadas, 1, 'sem segunda ida à rede');
+  assert.deepEqual(await app.api('rpc/historico_sorteios', opcoes), [{ id: 2 }],
+    '"Atualizar" vai à rede');
+
+  app.anteciparPedido('rpc/historico_sorteios', { ...opcoes, body: '{"p_colegiado":"CREG"}' });
+  await app.api('rpc/historico_sorteios', opcoes);
+  assert.equal(chamadas, 4, 'corpo diferente é outro pedido');
+
+  app.descartarPedidosAntecipados();
+  await app.api('rpc/historico_sorteios', { ...opcoes, body: '{"p_colegiado":"CREG"}' });
+  assert.equal(chamadas, 5, 'o descartado não é servido depois');
+});
+
+test('falha do pedido antecipado que ninguém consome não escapa', async () => {
+  const app = supabaseApp(async () => { throw new Error('rede'); });
+  let soltas = 0;
+  const contar = () => { soltas++; };
+  process.on('unhandledRejection', contar);
+  app.anteciparPedido('rpc/resumo_acervo_cj', { paginar: true, method: 'POST', body: '{}' });
+  await new Promise(resolve => setTimeout(resolve, 10));
+  process.off('unhandledRejection', contar);
+  assert.equal(soltas, 0);
 });
 
 test('o painel administrativo não antecipa o módulo de quem pode não entrar', async () => {
@@ -2239,9 +2366,10 @@ test('acervo e histórico mostram um indicador só, já no lugar da tabela', asy
   for (const pagina of ['acervo-cj', 'historico-creg']) {
     let responder;
     let indicadorQuandoATelaMontou = null;
+    let relogioDaTela = null;
     const page = bootstrapPage(() => {
       indicadorQuandoATelaMontou = page.document.getElementById('painelCarregando').children[0];
-      mostrarIndicador(page.document.getElementById('painelCarregando'), 'texto da tela');
+      relogioDaTela = mostrarIndicador(page.document.getElementById('painelCarregando'), 'texto da tela');
       return Promise.resolve();
     }, pagina, {
       comMoldura: true,
@@ -2251,6 +2379,8 @@ test('acervo e histórico mostram um indicador só, já no lugar da tabela', asy
     await wait();
 
     const indicador = page.document.getElementById('painelCarregando');
+    const acesoEm = indicador.children[0].montadoEm;
+    await new Promise(resolve => setTimeout(resolve, 5));
     assert.equal(page.sessionLoading.hidden, true, `${pagina}: nada de card de carregamento à parte`);
     assert.equal(page.moldura.hidden, false, `${pagina}: a moldura aparece já na consulta de permissão`);
     assert.equal(indicador.hidden, false);
@@ -2263,6 +2393,9 @@ test('acervo e histórico mostram um indicador só, já no lugar da tabela', asy
     assert.equal(indicador.children[0], indicadorQuandoATelaMontou,
       `${pagina}: a tela assume o mesmo nó; recriá-lo reiniciava a entrada e o indicador piscava`);
     assert.equal(indicador.children[0].children[1].textContent, 'texto da tela');
+    assert.equal(typeof acesoEm, 'number');
+    assert.equal(relogioDaTela, acesoEm,
+      `${pagina}: os 0,6s contam de quando o indicador apareceu, não de quando a tela o assumiu`);
   }
 });
 

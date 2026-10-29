@@ -8,7 +8,7 @@
 // RLS (ver schema.sql). A chave "service_role"/"secret" NUNCA deve vir para cá.
 const SUPABASE_URL = 'https://giipnmpfclfudkzflwsv.supabase.co/rest/v1/';
 const SUPABASE_KEY = 'sb_publishable_WYv2jjJhPscl7FlUljaRrQ_EFZ5xXpw';
-const ASSET_VERSION = 'db420f199f';
+const ASSET_VERSION = '28c2ff2a46';
 const TEMPO_LIMITE_REDE = 20000;
 // "Esqueci minha senha": não há recuperação por e-mail, e a resposta é a mesma
 // para qualquer endereço digitado — a tela nunca confirma se ele existe.
@@ -301,6 +301,9 @@ function renovarSessao() {
 function criarIndicadorCarregamento(texto) {
   const estado = document.createElement('div');
   estado.className = 'loading-state';
+  // O relógio de aguardarIndicador mora no nó: quem assume um indicador que já
+  // está na tela conta o tempo dele desde que apareceu, não desde que o assumiu.
+  estado.montadoEm = Date.now();
   estado.setAttribute('role', 'status');
   estado.setAttribute('aria-live', 'polite');
 
@@ -330,12 +333,16 @@ function criarIndicadorCarregamento(texto) {
 // Criar outro reiniciava a entrada (150ms de atraso e o fade): trocar o recorte
 // do acervo duas vezes seguidas fazia o indicador sumir e voltar no meio de uma
 // espera que continuava a mesma, e a passagem do bootstrap para a tela piscava
-// do mesmo jeito. Continuidade é o mesmo nó na tela.
+// do mesmo jeito. Continuidade é o mesmo nó na tela — e o mesmo relógio:
+// devolve o instante em que o indicador apareceu, para aguardarIndicador. Sem
+// isso, o indicador que o bootstrap acende no painel ficava ~0,8s na tela, os
+// 0,6s contados a partir de a tela montar e não de ele aparecer.
 function mostrarIndicador(conteiner, texto) {
   const atual = conteiner.hidden ? null : conteiner.querySelector('.loading-state');
   if (atual) atual.children[1].textContent = texto;
   else conteiner.replaceChildren(criarIndicadorCarregamento(texto));
   conteiner.hidden = false;
+  return (atual || conteiner.querySelector('.loading-state')).montadoEm;
 }
 
 const ATRASO_DO_INDICADOR = 150;
@@ -378,9 +385,35 @@ function alternarBotaoCarregando(botao, carregando, texto) {
   delete botao.dataset.rotuloOriginal;
 }
 
+// O bootstrap dispara o primeiro pedido de algumas telas junto com a consulta
+// de permissões, e não depois dela: eram duas idas ao banco em fila antes de a
+// tabela aparecer, ~170ms cada de Goiânia ao Canadá. A tela, ao fazer o mesmo
+// pedido, recebe a resposta que já está a caminho. Uso único: um "Atualizar"
+// depois disso vai à rede, e o bootstrap descarta o que a tela não pediu.
+const pedidosAntecipados = new Map();
+const chaveDoPedido = (caminho, opcoes = {}) => `${opcoes.method || 'GET'} ${caminho} ${opcoes.body || ''}`;
+
+function anteciparPedido(caminho, opcoes) {
+  const pedido = api(caminho, opcoes);
+  // Quem não passa no porteiro nunca consome a resposta; a falha dela não é
+  // erro de ninguém. Quem consome recebe a mesma promessa e vê a falha.
+  pedido.catch(() => {});
+  pedidosAntecipados.set(chaveDoPedido(caminho, opcoes), pedido);
+}
+
+function descartarPedidosAntecipados() {
+  pedidosAntecipados.clear();
+}
+
 // Chamada REST autenticada. Devolve o JSON da resposta (ou null quando vazia).
 // O erro carrega o status HTTP para quem precisa distinguir um caso específico.
 async function api(caminho, opcoes = {}) {
+  const chave = chaveDoPedido(caminho, opcoes);
+  const antecipado = pedidosAntecipados.get(chave);
+  if (antecipado) {
+    pedidosAntecipados.delete(chave);
+    return antecipado;
+  }
   // Só consultas podem ser repetidas. RPCs de leitura optam explicitamente;
   // um POST que grava dados nunca é paginado por causa do formato da resposta.
   const { paginar = !opcoes.method || opcoes.method === 'GET', ...pedido } = opcoes;

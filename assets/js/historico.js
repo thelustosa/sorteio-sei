@@ -153,7 +153,7 @@ function mostrarMolduraDoPainel() {
 // tempo da resposta, enquanto o acervo, ao lado, mostrava o andamento.
 function mostrarCarregamentoDaTabela(texto) {
   if (tabelaScroll) tabelaScroll.hidden = true;
-  mostrarIndicador(painelCarregando, texto);
+  return mostrarIndicador(painelCarregando, texto);
 }
 
 // O erro do carregamento inicial quem mostra é o bootstrap, dentro do card de
@@ -383,8 +383,7 @@ function desenhar(sorteios) {
 
 async function carregarHistorico({ carregamentoInicial = false } = {}) {
   const pedido = ++historicoPedido;
-  const indicadorIniciadoEm = Date.now();
-  mostrarCarregamentoDaTabela(carregamentoInicial ? 'Carregando o histórico…' : 'Atualizando o histórico…');
+  const indicadorIniciadoEm = mostrarCarregamentoDaTabela(carregamentoInicial ? 'Carregando o histórico…' : 'Atualizando o histórico…');
   historicoErro.hidden = true;
   historicoVazio.hidden = true;
   historicoAtualizado.textContent = 'Carregando…';

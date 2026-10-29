@@ -155,7 +155,7 @@ function mostrarMolduraDoPainel() {
 
 function mostrarCarregamentoDaTabela(texto) {
   if (tabelaScroll) tabelaScroll.hidden = true;
-  mostrarIndicador(painelCarregando, texto);
+  return mostrarIndicador(painelCarregando, texto);
 }
 
 // O erro do carregamento inicial quem mostra é o bootstrap, dentro do card de
@@ -739,8 +739,7 @@ async function carregarAcervo({ carregamentoInicial = false } = {}) {
   const pedido = ++acervoPedido;
   // O painel vai ser refeito: o destaque de Vista acompanha a nova consulta.
   retornosDeVista = null;
-  const indicadorIniciadoEm = Date.now();
-  mostrarCarregamentoDaTabela(carregamentoInicial ? 'Carregando o acervo…' : 'Atualizando o acervo…');
+  const indicadorIniciadoEm = mostrarCarregamentoDaTabela(carregamentoInicial ? 'Carregando o acervo…' : 'Atualizando o acervo…');
   acervoErro.hidden = true;
   acervoVazio.hidden = true;
   acervoAtualizado.textContent = 'Carregando…';
