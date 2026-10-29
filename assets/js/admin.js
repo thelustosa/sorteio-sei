@@ -217,11 +217,15 @@ const ROTULOS_DO_DIALOGO = {
   correcao: {
     revisar: 'Revisar alteração', confirmar: 'Confirmar e gravar', gravando: 'Gravando…',
     gravado: 'Alteração gravada.', motivo: 'Motivo da alteração',
+    exemploMotivo: 'Ex.: ata da sessão confirma a alteração',
     revisaoTitulo: 'Revise antes de gravar', revisaoTexto: 'Nada foi alterado até você confirmar.'
   },
   exclusao: {
     revisar: 'Revisar exclusão', confirmar: 'Excluir definitivamente', gravando: 'Excluindo…',
     gravado: 'Exclusão gravada.', motivo: 'Motivo da exclusão',
+    // O exemplo da correção ("a ata confirma a alteração") não descreve uma
+    // exclusão, e era o que aparecia no campo obrigatório dela.
+    exemploMotivo: 'Ex.: registro duplicado',
     revisaoTitulo: 'Revise antes de excluir',
     // Não repete a garantia de auditoria: a dica do motivo já a dá, e o
     // DESIGN.md pede uma vez por tela. O que falta dizer é que não há volta.
@@ -300,9 +304,10 @@ const vazio = valor => valor === null || valor === undefined || valor === '';
 const ou = valor => vazio(valor) ? '—' : String(valor);
 
 // O valor como a pessoa o vê na confirmação e na auditoria: null é ausência de
-// decisão, e "vazio" diz isso melhor que uma célula em branco que parece bug.
+// decisão, e "em branco" diz isso melhor que uma célula vazia que parece bug —
+// e se lê na frase ("Voto: em branco → Manter"), o que "(vazio)" não fazia.
 function legivel(valor) {
-  if (vazio(valor)) return '(vazio)';
+  if (vazio(valor)) return 'em branco';
   if (valor === true) return 'Sim';
   if (valor === false) return 'Não';
   if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return dataBR(valor);
@@ -1708,7 +1713,9 @@ function campoTexto({ nome, rotulo, valor, tipo = 'text', dica = '', atributos =
   return bloco;
 }
 
-function campoSelecao({ nome, rotulo, valor, opcoes, rotuloVazio = '— em branco —' }) {
+// `rotuloVazio` é a opção sem valor, e diz o que ela grava ("Sem voto"), não
+// uma moldura de travessões em volta de "em branco".
+function campoSelecao({ nome, rotulo, valor, opcoes, rotuloVazio = 'Sem registro' }) {
   const bloco = document.createElement('div');
   bloco.className = 'admin-campo';
 
@@ -1770,6 +1777,7 @@ function abrirDialogo({ titulo, resumo, campos, montarDelta, impacto, gravar, me
   edicaoRevisaoTitulo.textContent = rotulos.revisaoTitulo;
   edicaoRevisaoTexto.textContent = rotulos.revisaoTexto;
   edicaoMotivoRotulo.textContent = rotulos.motivo;
+  edicaoMotivo.placeholder = rotulos.exemploMotivo;
   edicaoMotivoOpcional.hidden = perigo;
   edicaoMotivo.required = perigo;
 
@@ -1970,10 +1978,12 @@ async function abrirCorrecaoDeJulgado(linha) {
     }
   }
   const campos = [
-    campoSelecao({ nome: 'voto', rotulo: 'Voto', valor: linha.voto, opcoes: v.votos }),
-    campoSelecao({ nome: 'status', rotulo: 'Status', valor: linha.status, opcoes: v.status }),
+    campoSelecao({ nome: 'voto', rotulo: 'Voto', valor: linha.voto, opcoes: v.votos,
+      rotuloVazio: 'Sem voto' }),
+    campoSelecao({ nome: 'status', rotulo: 'Status', valor: linha.status, opcoes: v.status,
+      rotuloVazio: 'Sem status' }),
     campoSelecao({ nome: campoVista, rotulo: 'Destino da vista', valor: unidadeVista,
-      opcoes: destinos, rotuloVazio: '— só com voto Vista —' }),
+      opcoes: destinos, rotuloVazio: 'Sem destino' }),
     campoTexto({
       nome: 'data_sessao', rotulo: 'Data da sessão', tipo: 'date', valor: detalhe.data,
       // O `max` é a mesma regra que admin_corrigir_julgado_* aplica no banco.
@@ -2103,7 +2113,7 @@ function abrirAlteracaoDeAcervo(linha, modo) {
   // vazio para Não — divergindo da auditoria, que registra a verdade.
   if (orgao === 'CJ') {
     campos.splice(2, 0, campoSelecao({
-      nome: 'defesa', rotulo: 'Defesa', opcoes: ['Sim', 'Não'],
+      nome: 'defesa', rotulo: 'Defesa', opcoes: ['Sim', 'Não'], rotuloVazio: 'Não informada',
       valor: linha.defesa === true ? 'Sim' : linha.defesa === false ? 'Não' : null
     }));
   } else {
@@ -2215,7 +2225,7 @@ function abrirCorrecaoDeNumero(numAtual) {
       dica: 'Processo SEI da AGR: 15 dígitos, só dígitos.'
     }),
     campoSelecao({
-      nome: 'escopo', rotulo: 'Onde corrigir', valor: 'tudo', rotuloVazio: '— selecione —',
+      nome: 'escopo', rotulo: 'Onde corrigir', valor: 'tudo', rotuloVazio: 'Escolha uma opção',
       opcoes: ESCOPOS
     })
   ];
@@ -2440,7 +2450,7 @@ function abrirExclusaoDeJulgado(linha) {
     // Uma opção só não é escolha: sem vínculo, o alcance é o próprio julgado.
     campos: vinculado
       ? [campoSelecao({ nome: 'alcance', rotulo: 'O que excluir', valor: 'julgado',
-                        opcoes: alcances, rotuloVazio: '— selecione —' })]
+                        opcoes: alcances, rotuloVazio: 'Escolha uma opção' })]
       : [],
     montarDelta() {
       this.alcance = vinculado ? valorDoCampo('alcance') : 'julgado';
@@ -2492,7 +2502,7 @@ function abrirExclusaoDeDistribuicao(linha) {
     resumo: `Processo ${linha.num_processo} · distribuição de ${dataBR(detalhe.data)} · ${ou(linha.destino)}`,
     campos: quantos
       ? [campoSelecao({ nome: 'alcance', rotulo: 'O que excluir', valor: 'distribuicao',
-                        opcoes: alcances, rotuloVazio: '— selecione —' })]
+                        opcoes: alcances, rotuloVazio: 'Escolha uma opção' })]
       : [],
     montarDelta() {
       this.alcance = quantos ? valorDoCampo('alcance') : 'distribuicao';

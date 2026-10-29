@@ -4918,20 +4918,35 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
 
 /* Diálogo: campos respiram em duas colunas e as ações ficam sempre no mesmo
    lugar, mesmo quando a lista de impacto exige rolagem. */
-.admin-dialog { width: min(50rem, calc(100vw - 32px)); }
+/* Ancorado no topo, e não centrado na vertical: avançar de etapa muda a altura
+   do diálogo, e centrado ele se recentrava, deslizando o título e o botão de
+   fechar para baixo do cursor de quem acabou de clicar. Antes isso se resolvia
+   com 340px de altura mínima no corpo, que deixava Religar, Excluir e o número
+   do processo com uma faixa branca vazia entre o motivo e os botões. */
+.admin-dialog {
+  width: min(50rem, calc(100vw - 32px));
+  margin: max(4vh, 16px) auto auto;
+}
 .admin-dialog .detalhe-header { padding: 20px 24px; }
 .admin-dialog .detalhe-header h2 { margin-top: 4px; font-size: var(--text-xl); }
 .admin-dialog .admin-dialog-step { color: var(--on-accent-muted); }
-/* A altura mínima mantém as duas etapas próximas em tamanho: sem ela o diálogo
-   encolhia 189px ao avançar e se recentrava, deslizando o título e o botão de
-   fechar para baixo do cursor de quem acabou de clicar. */
-.admin-dialog .detalhe-corpo { min-height: 340px; padding: 24px 24px 0; }
+.admin-dialog .detalhe-corpo { padding: 24px 24px 0; }
 .admin-dialog form { display: flex; min-height: 0; flex-direction: column; }
+/* Seis trilhos para os campos caberem em duas ou três colunas sem campo órfão.
+   Cinco campos (a correção do julgado e a distribuição da Câmara) viravam duas
+   linhas de dois e um campo sozinho numa meia linha; agora são três em cima e
+   dois embaixo — e no julgado isso agrupa a decisão (voto, status, destino da
+   vista) acima da sessão (data, pauta). Um campo só ocupa a largura toda: o
+   alcance da exclusão cortava a própria opção numa meia coluna. */
 .admin-campos {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 16px;
 }
+.admin-campos > .admin-campo { grid-column: span 3; }
+.admin-campos:has(> :nth-child(5):last-child) > .admin-campo:nth-child(-n+3) { grid-column: span 2; }
+.admin-campos > .admin-campo:only-child { grid-column: 1 / -1; }
+.admin-campos:empty { display: none; }
 .admin-campo { display: grid; min-width: 0; align-content: start; gap: 7px; }
 .admin-campo label { margin: 0; color: var(--text); font-size: var(--text-base); font-weight: 700; }
 /* Campo em Superfície Branca, como em todo o sistema (Inputs no DESIGN.md): o
@@ -4940,18 +4955,20 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
 .admin-campo .form-hint { margin: 0; }
 .admin-campo-largo { grid-column: 1 / -1; }
 /* Vive fora da grade dos campos, porque acompanha as duas etapas — e é ele que
-   carrega o respiro, já que o bloco acima dele muda de uma etapa para a outra. */
-.admin-campo-motivo { margin-top: 18px; }
+   carrega o respiro, já que o bloco acima dele muda de uma etapa para a outra.
+   O mesmo vão da grade: é mais um campo. Sem campo nenhum acima (Religar, a
+   exclusão sem escolha de alcance), ele abre o corpo e dispensa o respiro, que
+   somado ao padding fazia o topo do corpo o dobro dos outros. */
+.admin-campo-motivo { margin-top: 16px; }
+.admin-dialog form:has(#edicaoEtapaConfirmacao[hidden]):has(.admin-campos:empty) .admin-campo-motivo { margin-top: 0; }
 #edicaoEtapaConfirmacao:focus { outline: none; }
 
+/* Cabeçalho da revisão, não um card: com a caixa em volta, a etapa 2 empilhava
+   três caixas (aviso, cada mudança, impacto) dentro do próprio diálogo. */
 .admin-review-intro {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 15px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  background: var(--surface-subtle);
 }
 .admin-review-icon {
   display: grid;
@@ -4969,26 +4986,30 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
 
 /* Sem a borda lateral de 3px: além de ser o traço que o detector do projeto
    sinaliza como tique de interface gerada, ela gastava o Teal dos Pendentes
-   como enfeite num item que não é pendência nenhuma. */
+   como enfeite num item que não é pendência nenhuma.
+   As mudanças são uma lista só, com fio entre os itens — cada uma na própria
+   caixa, separadas por vão, liam como cartões soltos. */
 .admin-delta {
   display: grid;
-  gap: 8px;
-  margin: 14px 0 0;
+  margin: 16px 0 0;
   padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
   list-style: none;
 }
 .admin-delta li {
-  padding: 11px 13px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
+  padding: 12px 16px;
   background: var(--surface-raised);
   font-size: var(--text-base);
   line-height: 1.45;
 }
+.admin-delta li + li { border-top: 1px solid var(--border-subtle); }
 /* Na auditoria, cada mudança é uma linha de texto: a caixinha em volta de
    cada item punha um card dentro da célula da tabela. */
-.admin-delta-compacta { margin: 0; gap: 4px; }
-.admin-delta-compacta li {
+.admin-delta-compacta { gap: 4px; margin: 0; overflow: visible; border: 0; border-radius: 0; }
+.admin-delta-compacta li,
+.admin-delta-compacta li + li {
   padding: 0;
   border: 0;
   background: none;
@@ -5022,9 +5043,9 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   bottom: 0;
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin: 22px -24px 0;
-  padding: 15px 24px;
+  gap: 12px;
+  margin: 24px -24px 0;
+  padding: 16px 24px;
   border-top: 1px solid var(--border-subtle);
   background: var(--surface-raised);
 }
@@ -5146,7 +5167,9 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   .admin-panel-footer { padding-inline: 18px; }
   .admin-dialog .detalhe-header { padding: 17px 18px; }
   .admin-dialog .detalhe-corpo { padding: 20px 18px 0; }
-  .admin-campos { grid-template-columns: 1fr; gap: 13px; }
+  .admin-campos { grid-template-columns: minmax(0, 1fr); }
+  .admin-campos > .admin-campo,
+  .admin-campos:has(> :nth-child(5):last-child) > .admin-campo:nth-child(-n+3) { grid-column: 1 / -1; }
   .admin-dialog-actions { margin-inline: -18px; padding: 13px 18px; }
   .admin-meta-quadro:has(> .admin-meta-tendencia:not([hidden])) { grid-template-columns: minmax(0, 1fr); }
   .admin-meta-resumo { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; padding: 20px 18px; }
@@ -5170,7 +5193,7 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   .admin-panel-header { padding: 18px 16px; }
   .admin-panel-heading p { font-size: var(--text-sm); }
   .admin-panel-footer { padding-inline: 16px; }
-  .admin-dialog { width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
+  .admin-dialog { width: calc(100vw - 16px); max-height: calc(100vh - 16px); margin-top: 8px; }
   .admin-dialog .detalhe-header { align-items: center; flex-direction: row; gap: 12px; }
   .admin-dialog .detalhe-acoes { width: auto; }
   .admin-dialog .detalhe-resumo { font-size: var(--text-xs); line-height: 1.4; }
