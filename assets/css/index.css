@@ -4017,16 +4017,28 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
    proporções fixas davam 36% a Ações e 6% a Relator, e o vão entre colunas ia
    de 38px a 168px, com Voto invadindo Status. */
 
-.admin-table[data-visao='auditoria'] thead th:nth-child(1) { width: 15%; }
-.admin-table[data-visao='auditoria'] thead th:nth-child(2) { width: 14%; }
-.admin-table[data-visao='auditoria'] thead th:nth-child(3) { width: 16%; }
-.admin-table[data-visao='auditoria'] thead th:nth-child(4) { width: 21%; }
-.admin-table[data-visao='auditoria'] thead th:nth-child(5) { width: 18%; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(1) { width: 14%; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(2) { width: 15%; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(3) { width: 17%; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(4) { width: 22%; }
+.admin-table[data-visao='auditoria'] thead th:nth-child(5) { width: 16%; }
 .admin-table[data-visao='auditoria'] thead th:nth-child(6) { width: 16%; }
 
 /* Os pisos restantes pertencem à auditoria, que continua com rolagem horizontal. */
 .admin-table[data-visao='auditoria'] thead th:nth-child(4) { min-width: 22ch; }
 .admin-table[data-visao='auditoria'] thead th:last-child { min-width: 20ch; }
+
+/* Um eixo só, como nas outras listas do painel: cabeçalho e dado centrados.
+   Alinhada à esquerda e quase toda em texto secundário, a auditoria era a única
+   tabela do painel que lia como rascunho ao lado das outras. */
+.admin-table[data-visao='auditoria'] thead th,
+.admin-table[data-visao='auditoria'] tbody td { text-align: center; }
+.admin-table[data-visao='auditoria'] tbody td {
+  height: auto;
+  padding-block: 16px;
+  color: var(--text);
+  font-size: var(--text-sm);
+}
 
 /* Carimbo de data e hora e identificador de registro são unidades: "08/09/2026
    10:22" partido em duas linhas deixa de se ler como um instante. Proibir a
@@ -4034,14 +4046,29 @@ html:not(.has-session) .admin-page > .green-bar { display: none; }
    contar a linha inteira como largura mínima da coluna e a reserva sozinho. */
 .admin-table[data-visao='auditoria'] tbody td:nth-child(1),
 .admin-table[data-visao='auditoria'] tbody td:nth-child(3) { white-space: nowrap; }
+/* Quando e Operação identificam a linha, como a Data das outras listas. */
+.admin-table[data-visao='auditoria'] tbody td:nth-child(1),
+.admin-table[data-visao='auditoria'] tbody td:nth-child(2) { font-weight: 700; }
+.admin-table[data-visao='auditoria'] tbody td:nth-child(1) { font-variant-numeric: tabular-nums; }
+/* Quem é autoria, não assunto: um degrau abaixo, como o "Atualizado por" do
+   detalhe da sessão. */
+.admin-table[data-visao='auditoria'] tbody td:nth-child(6) {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
 /* A coluna Registro diz agora duas coisas: qual registro, e de qual processo.
    A segunda é a que permite cruzar o rastro com um processo, e fica em segundo
    plano porque é a referência, não o assunto da linha. */
 .admin-registro-processo {
   display: block;
+  margin-top: 2px;
   color: var(--muted);
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
+/* Cada campo alterado numa linha, centrada no mesmo eixo da coluna. */
+.admin-table[data-visao='auditoria'] .admin-delta-compacta { justify-items: center; }
 .admin-table[data-visao='sessoes'] { min-width: 660px; }
 .admin-table[data-visao='sorteios'] { min-width: 0; }
 .admin-table[data-visao='auditoria'] { min-width: 1080px; }
@@ -5189,6 +5216,60 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   .admin-panel .admin-table[data-visao='meta'] tbody td:not(.col-acoes)::before { margin-bottom: 2px; }
   .admin-panel .admin-table[data-visao='meta'] tbody td:first-child::before { display: none; }
   .admin-panel .admin-table[data-visao='meta'] .admin-meta-periodo { justify-items: start; text-align: left; }
+}
+
+/* No celular a auditoria também vira ficha: são seis colunas de 1080px, e a
+   rolagem lateral mostrava Quando e Operação com o que mudou escondido à
+   direita — justamente o que a linha existe para contar. Rótulo ao lado do
+   valor, lido da esquerda, como as fichas das outras listas a 390px. */
+@media screen and (max-width: 600px) {
+  .admin-table[data-visao='auditoria'] {
+    display: block;
+    min-width: 0;
+    padding: 12px;
+    background: var(--surface-control);
+  }
+  .admin-table[data-visao='auditoria'] thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  .admin-table[data-visao='auditoria'] tbody { display: grid; gap: 12px; }
+  .admin-table[data-visao='auditoria'] tbody tr {
+    display: grid;
+    overflow: hidden;
+    padding-block: 6px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-card);
+    background: var(--surface-raised);
+  }
+  .admin-table[data-visao='auditoria'] tbody td,
+  .admin-table[data-visao='auditoria'] tbody td:first-child,
+  .admin-table[data-visao='auditoria'] tbody td:last-child {
+    display: grid;
+    grid-template-columns: 104px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+    height: auto;
+    padding: 7px 14px;
+    border: 0;
+    white-space: normal;
+    text-align: left;
+  }
+  .admin-table[data-visao='auditoria'] tbody td::before {
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: .055em;
+    line-height: 1.5;
+    text-transform: uppercase;
+  }
+  .admin-table[data-visao='auditoria'] .admin-delta-compacta { justify-items: start; }
+  .admin-table[data-visao='auditoria'] tbody tr:hover td { background: var(--surface-raised); }
 }
 
 @media (prefers-reduced-motion: reduce) {
