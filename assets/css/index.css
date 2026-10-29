@@ -4918,15 +4918,12 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
 
 /* Diálogo: campos respiram em duas colunas e as ações ficam sempre no mesmo
    lugar, mesmo quando a lista de impacto exige rolagem. */
-/* Ancorado no topo, e não centrado na vertical: avançar de etapa muda a altura
-   do diálogo, e centrado ele se recentrava, deslizando o título e o botão de
-   fechar para baixo do cursor de quem acabou de clicar. Antes isso se resolvia
-   com 340px de altura mínima no corpo, que deixava Religar, Excluir e o número
-   do processo com uma faixa branca vazia entre o motivo e os botões. */
-.admin-dialog {
-  width: min(50rem, calc(100vw - 32px));
-  margin: max(4vh, 16px) auto auto;
-}
+/* Centrado na tela, na altura do próprio conteúdo. Uma altura mínima de 340px
+   no corpo evitava que o diálogo se recentrasse ao mudar de etapa, mas deixava
+   Religar, Excluir e o número do processo com uma faixa branca vazia entre o
+   motivo e os botões; ancorado no topo ele ficava alto demais na tela. O
+   recentrar entre as etapas é o preço, e é pequeno. */
+.admin-dialog { width: min(50rem, calc(100vw - 32px)); }
 .admin-dialog .detalhe-header { padding: 20px 24px; }
 .admin-dialog .detalhe-header h2 { margin-top: 4px; font-size: var(--text-xl); }
 .admin-dialog .admin-dialog-step { color: var(--on-accent-muted); }
@@ -5193,7 +5190,7 @@ body[data-page='meta-45'] .admin-panel-heading h2 { margin-top: 0; }
   .admin-panel-header { padding: 18px 16px; }
   .admin-panel-heading p { font-size: var(--text-sm); }
   .admin-panel-footer { padding-inline: 16px; }
-  .admin-dialog { width: calc(100vw - 16px); max-height: calc(100vh - 16px); margin-top: 8px; }
+  .admin-dialog { width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
   .admin-dialog .detalhe-header { align-items: center; flex-direction: row; gap: 12px; }
   .admin-dialog .detalhe-acoes { width: auto; }
   .admin-dialog .detalhe-resumo { font-size: var(--text-xs); line-height: 1.4; }
