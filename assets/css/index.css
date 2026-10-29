@@ -3397,14 +3397,25 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
   .acervo-table th,
   .acervo-table td {
     border: 0 !important;
-    border-left: 1.5px solid #00534b !important;
-    border-bottom: 1.5px solid #00534b !important;
+    /* Cada linha da grade é desenhada pela célula que vem DEPOIS dela — a de
+       baixo pelo topo, a da direita pela esquerda —, e todas pintam na ordem do
+       documento. Assim nenhum fundo é pintado depois, encostado numa linha já
+       desenhada. Era o que apagava ou afinava linhas no PDF do Chrome: com
+       border-bottom, o fundo da linha seguinte vinha por cima, e as células com
+       número (position: relative, para o clique) iam para uma camada pintada
+       por último. No papel não há clique: a célula volta ao fluxo. */
+    border-left: 1px solid #00534b !important;
+    border-top: 1px solid #00534b !important;
+    position: static !important;
     box-sizing: border-box !important;
   }
+  .acervo-celula-btn::after { content: none !important; }
 
-  /* A moldura de 2px da tabela já fecha a esquerda e a base da grade. */
+  /* A moldura de 2px da tabela já fecha a esquerda e o topo da grade; sob o
+     cabeçalho, a primeira faixa traz o divisor forte. */
   .acervo-table tr > :first-child { border-left: 0 !important; }
-  .acervo-table tbody tr:last-child > * { border-bottom: 0 !important; }
+  .acervo-table thead th { border-top: 0 !important; }
+  .acervo-table tbody tr:first-child > * { border-top: 2px solid #00534b !important; }
 
   /* Divisor forte entre a coluna de período e os relatores. */
   .acervo-table tr > td:first-of-type { border-left: 2px solid #00534b !important; }
@@ -3426,7 +3437,6 @@ button.is-loading { display: inline-flex; align-items: center; justify-content: 
     text-align: center !important;
     vertical-align: middle !important;
     border-left-color: rgba(255, 255, 255, 0.7) !important;
-    border-bottom: 2px solid #00534b !important;
     break-inside: avoid;
   }
 

@@ -205,6 +205,19 @@ const inicioImpressao = css.search(/^@media print \{/m);
 assert.ok(inicioImpressao >= 0, 'bloco @media print não encontrado');
 const blocoImpressao = css.slice(inicioImpressao);
 
+// A grade do PDF do acervo: cada linha é desenhada pela célula que vem depois
+// dela (topo e esquerda), e todas pintam na ordem do documento. Com
+// border-bottom, o fundo da linha seguinte era pintado por cima, e as células
+// com número (position: relative) iam para uma camada posterior — o Chrome e o
+// Firefox apagavam ou afinavam linhas ao rasterizar o PDF.
+const gradeImpressa = blocoImpressao.match(/\.acervo-table th,\s*\.acervo-table td\s*\{([^}]*)\}/)?.[1] || '';
+assert.match(gradeImpressa, /border-top:\s*1px solid/, 'a linha horizontal da grade impressa vem do topo da célula');
+assert.match(gradeImpressa, /border-left:\s*1px solid/, 'a linha vertical da grade impressa vem da esquerda da célula');
+assert.doesNotMatch(gradeImpressa, /border-bottom:\s*[1-9]/, 'border-bottom na grade impressa fica sob o fundo da linha seguinte');
+assert.match(gradeImpressa, /position:\s*static\s*!important/, 'célula posicionada pinta fora de ordem e cobre a linha vizinha');
+assert.match(blocoImpressao, /\.acervo-celula-btn::after\s*\{\s*content:\s*none\s*!important/,
+  'com o <td> estático, o ::after do clique não pode sobrar no papel');
+
 const alertaImpresso = blocoImpressao.match(
   /\.acervo-table tbody td\.acervo-alerta[^{]*\{([^}]*)\}/)?.[1] || '';
 assert.match(alertaImpresso, /background-color:\s*var\(--danger-panel[^)]*\)\s*!important/,
