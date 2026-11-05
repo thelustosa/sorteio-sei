@@ -22,12 +22,12 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(RAIZ / 'sincronizacao'))
-import banco                              # noqa: E402
-from banco import uma                     # noqa: E402
-import agr                                # noqa: E402
-import pauta                              # noqa: E402
-import sincronizar                        # noqa: E402
-import diligencias                       # noqa: E402
+import agr
+import banco
+import diligencias
+import pauta
+import sincronizar
+from banco import uma
 
 FIXTURES = Path(__file__).resolve().parent / 'fixtures'
 PG = banco.Postgres('sorteio_sei_sinc_test')
@@ -133,8 +133,8 @@ def pdf_falso(texto):
     objetos = [
         b'<< /Type /Catalog /Pages 2 0 R >>',
         b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-        b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] '
-        b'/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+        (b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] '
+         b'/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>'),
         b'<< /Length %d >>\nstream\n%s\nendstream' % (len(fluxo), fluxo),
         # WinAnsi declarada, como nas pautas de verdade: sem ela o pypdf 6 não
         # lê o 'nº' do latin-1 (o 5 supunha a codificação).
@@ -1230,7 +1230,7 @@ def main(argv):
                     fn(cur) if precisa_cur else fn()
                     conn.commit()
                     print(f'ok    {fn.__name__}')
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 — qualquer falha vira linha FALHA, não para a suíte
                     conn.rollback()
                     falhas += 1
                     print(f'FALHA {fn.__name__}: {type(e).__name__}: {e}')

@@ -29,8 +29,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'sincronizacao'))
-from importar_creg import gerar_sql  # noqa: E402
-import pauta  # noqa: E402
+import pauta
+from importar_creg import gerar_sql
 
 # O corpo da ata é a tabela `Ordem | Nº Processo | Interessado | Unidade`, e o
 # pypdf entrega uma célula por linha. Daí a leitura ser uma máquina de estados de

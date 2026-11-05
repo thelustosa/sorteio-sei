@@ -8,12 +8,11 @@ gatilho da migração, ao trocar a senha por qualquer caminho.
 import sys
 from pathlib import Path
 
-import psycopg2
 from psycopg2.errors import InsufficientPrivilege
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import banco  # noqa: E402
+import banco
 
 PG = banco.Postgres('sorteio_sei_senha_provisoria_test')
 ANA = '00000000-0000-0000-0000-000000000001'
@@ -152,7 +151,7 @@ def main():
                         fn(cur)
                         conn.commit()
                         print(f'ok    {fn.__name__}')
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001 — qualquer falha vira linha FALHA, não para a suíte
                         conn.rollback()
                         falhas += 1
                         print(f'FALHA {fn.__name__}: {type(e).__name__}: {e}')

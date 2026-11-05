@@ -23,8 +23,9 @@ import psycopg2.extras
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import banco            # noqa: E402
-from banco import uma  # noqa: E402
+import banco
+from banco import uma
+
 sys.path.insert(0, str(RAIZ / 'dados'))  # importar_planilha, carregado sob demanda
 
 PLANILHA_PADRAO = Path.home() / 'Downloads' / 'Câmara de Julgamento - REG.xlsx'
@@ -63,7 +64,7 @@ def comando_da_migracao(tabela):
     em vez de uma cópia que continuaria verde depois de a migração quebrar.
     """
     fonte = MIGRACAO_CADEIRAS.read_text(encoding='utf-8')
-    achado = re.search(rf'update public\.{tabela}\b.*?;', fonte, re.S)
+    achado = re.search(rf'update public\.{tabela}\b.*?;', fonte, re.DOTALL)
     assert achado, f'UPDATE de {tabela} não encontrado em {MIGRACAO_CADEIRAS.name}'
     return achado.group(0)
 
@@ -93,8 +94,8 @@ class Planilha:
         # Ambos só existem por causa da planilha, e importar_planilha carrega
         # openpyxl no topo. Importar aqui é o que mantém a suíte de pé numa
         # máquina sem openpyxl instalado, que é o caso de quem não tem a planilha.
-        import openpyxl
         import importar_planilha as imp
+        import openpyxl
         wb = openpyxl.load_workbook(caminho, data_only=True)
         self.acervo, _ = imp.deduplicar(
             imp.ler_acervo(wb['Acervo']), ('num_processo', 'data_distribuicao', 'relator'))
@@ -885,7 +886,7 @@ def registrar(cur, itens, email='secretaria@goias.gov.br'):
 @teste
 def julgado_novo_nasce_sem_voto_e_sem_status(cur):
     """É o estado que a página de registro procura."""
-    ident, voto, status = julgado_pendente(cur)
+    _ident, voto, status = julgado_pendente(cur)
     assert (voto, status) == (None, None)
     cur.connection.rollback()
 
@@ -1593,12 +1594,12 @@ def rotulos_da_pagina_batem_com_os_do_banco(cur):
     # trazem as mesmas palavras. O recorte pelo corpo da função é o que garante
     # que a página da Câmara está sendo medida contra a lista da Câmara.
     corpo = re.search(r'function public\.registrar_votos\(itens jsonb\).*?\n\$\$;',
-                      schema, re.S)
+                      schema, re.DOTALL)
     assert corpo, 'registrar_votos não encontrada no schema'
     corpo = corpo.group(0)
 
     def rotulos(fonte, padrao):
-        achado = re.search(padrao, fonte, re.S)
+        achado = re.search(padrao, fonte, re.DOTALL)
         assert achado, padrao
         return re.findall(r"'([^']+)'", achado.group(1))
 
@@ -2463,7 +2464,7 @@ def main(argv):
                         fn(cur)
                         conn.commit()
                         print(f'ok    {fn.__name__}')
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001 — qualquer falha vira linha FALHA, não para a suíte
                         conn.rollback()
                         falhas += 1
                         print(f'FALHA {fn.__name__}: {type(e).__name__}: {e}')

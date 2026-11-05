@@ -1,4 +1,5 @@
 {
   "extraPaths": ["sincronizacao", "dados", "tests"],
-  "pythonVersion": "3.11"
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "standard"
 }

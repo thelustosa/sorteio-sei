@@ -41,7 +41,7 @@ from pathlib import Path
 import openpyxl
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from importar_planilha import LOTE, deduplicar, dia, inteiro, literal, texto  # noqa: E402
+from importar_planilha import LOTE, deduplicar, dia, inteiro, literal, texto
 
 # As abas de julgados e onde cada uma guarda o cabeçalho e a primeira coluna.
 # Em 2023 e 2024 a planilha tem duas colunas em branco à esquerda e um título
@@ -235,7 +235,7 @@ def ler_julgados(pasta):
         wb = openpyxl.load_workbook(pasta / arquivo, data_only=True)
         ws = wb[aba]
         desloca = primeira - 1
-        col = lambda r, c: ws.cell(r, desloca + c).value  # noqa: E731
+        col = lambda r, c, ws=ws, desloca=desloca: ws.cell(r, desloca + c).value
         for r in range(cabecalho + 1, ws.max_row + 1):
             bruto = col(r, 1)
             num = processo(bruto)

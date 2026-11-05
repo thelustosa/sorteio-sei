@@ -28,9 +28,9 @@ import psycopg2
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(RAIZ / 'sincronizacao'))
-import banco           # noqa: E402
-from banco import uma  # noqa: E402
-import sincronizar     # noqa: E402
+import banco
+import sincronizar
+from banco import uma
 
 PG = banco.Postgres('sorteio_sei_creg_test')
 
@@ -305,12 +305,12 @@ def em_relacao_a_cj_fica_vazio_onde_a_formula_excluia(cur):
     """Retirado e decisões que não são sobre o mérito do auto não comparam."""
     limpar(cur)
     casos = [
-        dict(voto='Retirado', status='Retirado', voto_cj='Manter'),
-        dict(voto='Manter',   status='Retirado', voto_cj='Anular'),
-        dict(voto='Aprovação', status='Julgado', voto_cj='Manter'),
-        dict(voto='Indeferimento', status='Julgado', voto_cj='Manter'),
-        dict(voto='Manter',   status='Julgado', voto_cj=None),
-        dict(voto=None,       status='Julgado', voto_cj='Anular'),
+        {'voto': 'Retirado', 'status': 'Retirado', 'voto_cj': 'Manter'},
+        {'voto': 'Manter', 'status': 'Retirado', 'voto_cj': 'Anular'},
+        {'voto': 'Aprovação', 'status': 'Julgado', 'voto_cj': 'Manter'},
+        {'voto': 'Indeferimento', 'status': 'Julgado', 'voto_cj': 'Manter'},
+        {'voto': 'Manter', 'status': 'Julgado', 'voto_cj': None},
+        {'voto': None, 'status': 'Julgado', 'voto_cj': 'Anular'},
     ]
     for i, caso in enumerate(casos):
         jid = julgar(cur, f'20240002900004{i}', date(2026, 4, 1), **caso)
@@ -1602,8 +1602,9 @@ def assuntos_do_sorteio_e_da_importacao_sao_a_mesma_lista(cur):
     até alguém agrupar por assunto e ver a categoria repetida.
     """
     sys.path.insert(0, str(RAIZ / 'dados'))
-    import importar_creg as imp
     import re
+
+    import importar_creg as imp
 
     fonte = (RAIZ / 'assets' / 'js' / 'index.js').read_text(encoding='utf-8')
     achado = re.search(r'const assuntosCreg = \[([^\]]+)\]', fonte)
@@ -1627,12 +1628,12 @@ def rotulos_da_pagina_batem_com_os_do_banco(cur):
     pagina = (RAIZ / 'assets' / 'js' / 'julgados.js').read_text(encoding='utf-8')
     schema = (RAIZ / 'sql' / 'schema.sql').read_text(encoding='utf-8')
 
-    corpo = re.search(FUNCAO_CREG, schema, re.S)
+    corpo = re.search(FUNCAO_CREG, schema, re.DOTALL)
     assert corpo, 'registrar_votos_creg não encontrada no schema'
     corpo = corpo.group(0)
 
     def rotulos(fonte, padrao):
-        achado = re.search(padrao, fonte, re.S)
+        achado = re.search(padrao, fonte, re.DOTALL)
         assert achado, padrao
         return re.findall(r"'([^']+)'", achado.group(1))
 
@@ -1651,7 +1652,7 @@ def a_pagina_do_creg_le_a_tabela_do_creg(cur):
     js = (RAIZ / 'assets' / 'js' / 'julgados.js').read_text(encoding='utf-8')
     bloco = {}
     for sigla in ('cj', 'creg'):
-        achado = re.search(rf'\b{sigla}: \{{(.*?)\n  \}}', js, re.S)
+        achado = re.search(rf'\b{sigla}: \{{(.*?)\n  \}}', js, re.DOTALL)
         assert achado, f'bloco {sigla} não encontrado em COLEGIADOS'
         bloco[sigla] = achado.group(1)
 
@@ -1799,7 +1800,7 @@ def main(argv):
                         fn(cur)
                         conn.commit()
                         print(f'ok    {fn.__name__}')
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001 — qualquer falha vira linha FALHA, não para a suíte
                         conn.rollback()
                         falhas += 1
                         print(f'FALHA {fn.__name__}: {type(e).__name__}: {e}')

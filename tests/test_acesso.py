@@ -11,7 +11,7 @@ from psycopg2.errors import InsufficientPrivilege
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import banco  # noqa: E402
+import banco
 
 PG = banco.Postgres('sorteio_sei_acesso_test')
 
@@ -110,12 +110,12 @@ def usuario_le_o_proprio_papel(cur):
 def usuario_nao_altera_permissoes(cur):
     autenticar(cur, 'alberto')
     comandos = [
-        "insert into public.permissoes_usuario (user_id, orgao) values "
-        "('00000000-0000-0000-0000-000000000011', 'CJ')",
-        "update public.permissoes_usuario set orgao = 'CJ' "
-        "where user_id = '00000000-0000-0000-0000-000000000011'",
-        "delete from public.permissoes_usuario "
-        "where user_id = '00000000-0000-0000-0000-000000000011'",
+        ("insert into public.permissoes_usuario (user_id, orgao) values "
+         "('00000000-0000-0000-0000-000000000011', 'CJ')"),
+        ("update public.permissoes_usuario set orgao = 'CJ' "
+         "where user_id = '00000000-0000-0000-0000-000000000011'"),
+        ("delete from public.permissoes_usuario "
+         "where user_id = '00000000-0000-0000-0000-000000000011'"),
     ]
     for comando in comandos:
         try:
@@ -503,7 +503,7 @@ def main():
                         fn(cur)
                         conn.commit()
                         print(f'ok    {fn.__name__}')
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001 — qualquer falha vira linha FALHA, não para a suíte
                         conn.rollback()
                         falhas += 1
                         print(f'FALHA {fn.__name__}: {type(e).__name__}: {e}')

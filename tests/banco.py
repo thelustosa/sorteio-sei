@@ -15,7 +15,7 @@ IMAGEM = 'postgres:15-alpine'
 
 
 def docker(*args):
-    return subprocess.run(['docker', *args], capture_output=True, text=True)
+    return subprocess.run(['docker', *args], capture_output=True, text=True, check=False)
 
 
 def uma(cur, sql, args=None) -> Any:

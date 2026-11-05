@@ -43,8 +43,8 @@ import psycopg2
 import psycopg2.extras
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import agr      # noqa: E402
-import pauta    # noqa: E402
+import agr
+import pauta
 
 log = logging.getLogger('sincronizar')
 
@@ -276,7 +276,7 @@ def sincronizar(conn, colegiado='CJ', ano=None, desde=None, hoje=None, simular=F
             resumo['processos_importados'] += doc['processos_importados']
             resumo['processos_duplicados'] += doc['processos_duplicados']
             resumo['processos_sem_acervo'] += doc['processos_sem_acervo']
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — um documento com problema não pode parar os outros
             conn.rollback()
             log.error('%s: %s: %s', p.url, type(e).__name__, e)
             resumo['erros'].append({

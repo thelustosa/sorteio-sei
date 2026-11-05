@@ -263,7 +263,7 @@ def sincronizar(conn, texto=None, simular=False):
         with conn.cursor() as cur:
             resumo['gravadas'] = gravar(cur, diligencias)
         conn.rollback() if simular else conn.commit()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — qualquer falha desfaz a gravação e vai para o resumo
         conn.rollback()
         log.error('%s: %s', type(e).__name__, e)
         resumo['gravadas'] = 0

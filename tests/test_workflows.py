@@ -162,7 +162,7 @@ def main():
         try:
             fn()
             print(f'ok    {fn.__name__}')
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — qualquer falha vira linha FALHA, não para a suíte
             falhas += 1
             print(f'FALHA {fn.__name__}: {type(e).__name__}: {e}')
     print(f'\n{len(testes) - falhas}/{len(testes)} testes passaram.')

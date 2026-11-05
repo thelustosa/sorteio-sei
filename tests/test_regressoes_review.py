@@ -6,8 +6,8 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
-import psycopg2
 import banco
+import psycopg2
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ / 'sincronizacao'))
@@ -104,7 +104,7 @@ def transacoes_concorrentes_nao_validam_o_mesmo_valor_antigo(conn):
         with conn.cursor() as cur:
             gravar(cur, rpc, [{'id': ident, 'voto': 'Anular', 'anterior': {'voto': None}}])
 
-        def outra_transacao():
+        def outra_transacao(rpc=rpc, ident=ident):
             with PG.conectar() as outra, outra.cursor() as cur:
                 try:
                     gravar(cur, rpc, [{'id': ident, 'voto': 'Manter', 'anterior': {'voto': None}}])

@@ -18,7 +18,7 @@ from psycopg2.errors import InsufficientPrivilege
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import banco  # noqa: E402
+import banco
 
 PG = banco.Postgres('sorteio_sei_admin_test')
 
@@ -224,7 +224,7 @@ RPCS_LEITURA = {
 
 @teste
 def leitura_administrativa_so_para_admin(cur):
-    for orgao, rpcs in RPCS_LEITURA.items():
+    for rpcs in RPCS_LEITURA.values():
         for rpc in rpcs:
             for nome in ADMINS:
                 autenticar(cur, nome)
@@ -526,7 +526,7 @@ def corrigir_julgado_recusa_sessao_no_futuro(cur):
 def corrigir_julgado_recusa_colisao_de_sessao(cur):
     """julgados_cj_sessao_unica: o mesmo processo não é julgado duas vezes na
     mesma sessão, e mudar a data pode esbarrar nisso."""
-    num, _, primeiro = cenario_cj(cur, data_sessao='2026-07-09')
+    num, _, _primeiro = cenario_cj(cur, data_sessao='2026-07-09')
     segundo = como_dono(cur, """
         insert into public.julgados_cj (num_processo, data_sessao, pauta)
         values (%s, date '2026-07-16', 25) returning id""", (num,))
@@ -580,7 +580,7 @@ def corrigir_data_da_sessao_reporta_o_vinculo_que_o_gatilho_cria(cur):
 @teste
 def religar_julgado_rederiva_do_acervo(cur):
     """Cura o AVISO 'Relator divergente do acervo vinculado' de verificacao_cj.sql."""
-    num, acervo_id, julgado_id = cenario_cj(cur, relator='CJ3')
+    _num, acervo_id, julgado_id = cenario_cj(cur, relator='CJ3')
     como_dono(cur, "update public.acervo_cj set relator = 'CJ5' where id = %s", (acervo_id,))
     cur.connection.commit()
 
@@ -598,7 +598,7 @@ def religar_julgado_rederiva_do_acervo(cur):
 
 @teste
 def corrigir_acervo_propaga_para_os_julgados(cur):
-    num, acervo_id, julgado_id = cenario_cj(cur, relator='CJ3', defesa=True)
+    _num, acervo_id, julgado_id = cenario_cj(cur, relator='CJ3', defesa=True)
     cur.connection.commit()
     autenticar(cur, 'lucas')
     cur.execute("""select public.admin_corrigir_acervo_cj(
@@ -615,7 +615,7 @@ def corrigir_acervo_propaga_para_os_julgados(cur):
 def redistribuir_nao_toca_nos_julgados(cur):
     """O julgado registra quem de fato levou o processo à mesa: redistribuição
     posterior não reescreve o passado."""
-    num, acervo_id, julgado_id = cenario_cj(cur, relator='CJ3')
+    _num, acervo_id, julgado_id = cenario_cj(cur, relator='CJ3')
     cur.connection.commit()
     autenticar(cur, 'lucas')
     cur.execute("""select public.admin_redistribuir_cj(
@@ -648,7 +648,7 @@ def a_intencao_declarada_fica_no_rastro(cur):
 @teste
 def corrigir_acervo_recusa_colisao_de_distribuicao(cur):
     """acervo_cj_distribuicao_unica: mesmo processo, mesma data, mesmo relator."""
-    num, primeiro, _ = cenario_cj(cur, relator='CJ3', data_dist='2026-06-18')
+    num, _primeiro, _ = cenario_cj(cur, relator='CJ3', data_dist='2026-06-18')
     segundo = como_dono(cur, """
         insert into public.acervo_cj (num_processo, relator, data_distribuicao, origem)
         values (%s, 'CJ4', date '2026-06-18', 'sorteio') returning id""", (num,))
@@ -660,7 +660,7 @@ def corrigir_acervo_recusa_colisao_de_distribuicao(cur):
 
 @teste
 def corrigir_acervo_creg_aceita_o_vocabulario_do_conselho(cur):
-    num, acervo_id, julgado_id = cenario_creg(cur, unidade='CREG2', recurso='Com recurso')
+    _num, acervo_id, julgado_id = cenario_creg(cur, unidade='CREG2', recurso='Com recurso')
     cur.connection.commit()
     autenticar(cur, 'sec-agr')
     cur.execute("""select public.admin_corrigir_acervo_creg(
@@ -863,7 +863,7 @@ def auditoria_lista_do_mais_recente_para_o_mais_antigo(cur):
 
 @teste
 def sessoes_listam_pendencias_por_data(cur):
-    num, _, julgado_id = cenario_cj(cur, data_sessao='2026-09-03', pauta=31,
+    _num, _, _julgado_id = cenario_cj(cur, data_sessao='2026-09-03', pauta=31,
                                     voto=None, status=None)
     cur.connection.commit()
     autenticar(cur, 'lucas')
@@ -1503,7 +1503,7 @@ def main():
                         fn(cur)
                         conn.commit()
                         print(f'ok    {fn.__name__}')
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001 — qualquer falha vira linha FALHA, não para a suíte
                         conn.rollback()
                         falhas += 1
                         print(f'FALHA {fn.__name__}: {type(e).__name__}: {e}')
