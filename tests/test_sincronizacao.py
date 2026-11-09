@@ -528,6 +528,22 @@ def um_pdf_com_problema_nao_para_os_demais(cur):
 
 
 @teste
+def pauta_em_urls_ignoradas_nao_e_baixada_nem_vira_erro(cur):
+    """O PDF quebrado na AGR fica de fora até ser importado à mão."""
+    preparar(cur)
+    original = sincronizar.URLS_IGNORADAS
+    sincronizar.URLS_IGNORADAS = frozenset({url_da(21)})
+    try:
+        with fonte_com([21, 22, 23]) as fonte:
+            r = sincronizar.sincronizar(cur.connection, ano=2026, hoje=date(2026, 7, 5))
+    finally:
+        sincronizar.URLS_IGNORADAS = original
+
+    assert r['documentos_processados'] == 2 and not r['erros']
+    assert url_da(21) not in fonte.baixados
+
+
+@teste
 def pauta_falha_e_retentada_depois_de_sessao_posterior(cur):
     """Uma falha não pode fazer uma pauta antiga sumir nas rodadas seguintes."""
     preparar(cur)

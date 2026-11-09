@@ -70,6 +70,15 @@ COLEGIADOS = {
     },
 }
 
+# Pautas que a sincronização automática pula, por URL exata. Uso: o link da AGR
+# está quebrado (404 ou intranet) e o documento será importado à mão, via SQL.
+# Quando o PDF voltar e entrar no banco, a URL fica registrada em pautas_* e esta
+# entrada pode ser removida.
+URLS_IGNORADAS = frozenset({
+    # 39ª CJ (15/10/2026): publicada com link da intranet, fora do ar.
+    'http://intranet.agr.go.gov.br/wp-content/uploads/2026/10/Pauta-39a-RP-CJ-15.10.2026.pdf',
+})
+
 
 # ── Banco ────────────────────────────────────────────────────────────────────
 
@@ -168,7 +177,8 @@ def pautas_pendentes(cur, col, ano=None, desde=None, hoje=None):
             falhas.append({'url': fonte, 'ano': a, 'erro': f'{type(e).__name__}: {e}'})
 
     pendentes = [p for p in todas
-                 if (desde is not None or p.url not in ja_vistas)
+                 if p.url not in URLS_IGNORADAS
+                 and (desde is not None or p.url not in ja_vistas)
                  and corte < p.data_sessao <= hoje]
     return (todas, sorted(pendentes, key=lambda p: (p.data_sessao, p.numero)),
             corte, anos, falhas)
