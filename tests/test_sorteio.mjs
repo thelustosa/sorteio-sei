@@ -58,17 +58,22 @@ for (const [perm, vezes] of contagem) {
 
 console.log('sorteio: aleatoriedade uniforme ✓');
 
-// A ata do resultado sai na ordem do sorteio (CJ) ou por unidade e, dentro
-// dela, na ordem do sorteio (CREG) — o mesmo critério da ata do histórico.
+// A ordem das linhas na ata (ata.js, a mesma do resultado e do histórico):
+// CJ na ordem do sorteio com a CJ1 por último, e a Ordem renumerada 1, 2, 3…;
+// CREG por unidade e, dentro dela, na ordem do sorteio, com a Ordem gravada.
 {
-  const ini = fonte.indexOf('function linhasDaAta');
-  assert.ok(ini > 0, 'linhasDaAta não encontrada em index.js');
-  const linhasDaAta = new Function(`${fonte.slice(ini, fonte.indexOf('\n}\n', ini) + 2)} return linhasDaAta;`)();
+  const ata = readFileSync(join(raiz, 'assets', 'js', 'ata.js'), 'utf8');
+  const { linhasDaAta } = new Function(`${ata} return { linhasDaAta };`)();
   const processos = [
-    { ordem: 2, unidade: 'CJ2' }, { ordem: 1, unidade: 'CJ3' }, { ordem: 3, unidade: 'CJ1' }, { ordem: 4, unidade: 'CJ2' }
+    { ordem: 1, num_processo: 'P1', destino: 'CJ3' }, { ordem: 2, num_processo: 'P2', destino: 'CJ1' },
+    { ordem: 3, num_processo: 'P3', destino: 'CJ4' }, { ordem: 4, num_processo: 'P4', destino: 'CJ2' },
+    { ordem: 5, num_processo: 'P5', destino: 'CJ1' }, { ordem: null, num_processo: 'P9', destino: 'CJ5' }
   ];
-  assert.deepEqual(linhasDaAta({ modo: 'CJ', processos }).map(p => p.ordem), [1, 2, 3, 4]);
-  const creg = processos.map(p => ({ ...p, unidade: p.unidade.replace('CJ', 'CREG') }));
-  assert.deepEqual(linhasDaAta({ modo: 'CREG', processos: creg }).map(p => p.ordem), [3, 2, 4, 1]);
+  const cj = linhasDaAta('CJ', processos);
+  assert.deepEqual(cj.map(p => p.num_processo), ['P1', 'P3', 'P4', 'P9', 'P2', 'P5']);
+  assert.deepEqual(cj.map(p => p.ordem), [1, 2, 3, 4, 5, 6]);
+  assert.equal(processos[1].ordem, 2, 'renumerar a ata não altera os dados recebidos');
+  const creg = processos.map(p => ({ ...p, destino: p.destino.replace('CJ', 'CREG') }));
+  assert.deepEqual(linhasDaAta('CREG', creg).map(p => p.ordem), [2, 5, 4, 1, 3, null]);
   console.log('sorteio: ordem da ata ✓');
 }

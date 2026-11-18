@@ -20,7 +20,9 @@ const pedidoDoPainel = rpc => orgaos => [[rpc, { paginar: true, method: 'POST',
 const PAGINAS = {
   // As pendências só são pedidas com o card de registro na tela — a mesma
   // condição de inicializarSorteio.
-  sorteio: { arquivo: 'index.min.js', iniciar: 'inicializarSorteio', texto: 'Preparando o sorteio…',
+  // `ata`: a tela baixa a ata do sorteio, cujo template mora em ata.js — o
+  // mesmo arquivo para o resultado do sorteio e para o histórico.
+  sorteio: { ata: true, arquivo: 'index.min.js', iniciar: 'inicializarSorteio', texto: 'Preparando o sorteio…',
     anteciparComPermissao: () => (document.getElementById('cardRegistrarPendencias')?.hidden !== false ? []
       : ['julgados_cj', 'julgados_creg'].map(tabela => [`${tabela}?select=id&or=(voto.is.null,status.is.null)&order=id.asc`])) },
   'julgados-cj': { orgao: 'CJ', familia: 'julgados', arquivo: 'julgados.min.js', iniciar: 'inicializarJulgados', texto: 'Preparando as pautas…',
@@ -40,12 +42,12 @@ const PAGINAS = {
   // banco é o data-colegiado do <body> (ver COLEGIADOS em acervo.js).
   'acervo-creg': { orgao: 'CREG', familia: 'acervo', arquivo: 'acervo.min.js', iniciar: 'inicializarAcervo', texto: 'Carregando o acervo…', moldura: 'acervoPanel',
     antecipar: ['rpc/resumo_acervo_creg', { paginar: true, method: 'POST', body: '{"p_diligencia":null}' }] },
-  'historico-cj': { orgao: 'CJ', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Carregando o histórico…', moldura: 'historicoPanel',
+  'historico-cj': { ata: true, orgao: 'CJ', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Carregando o histórico…', moldura: 'historicoPanel',
     antecipar: ['rpc/historico_sorteios', { paginar: true, method: 'POST', body: '{"p_colegiado":"CJ"}' }] },
   // Mesmo script para os dois colegiados, como o painel do acervo: quem escolhe
   // o vocabulário e a sigla que vai ao banco é o data-colegiado do <body>
   // (ver COLEGIADOS em historico.js).
-  'historico-creg': { orgao: 'CREG', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Carregando o histórico…', moldura: 'historicoPanel',
+  'historico-creg': { ata: true, orgao: 'CREG', familia: 'historico', arquivo: 'historico.min.js', iniciar: 'inicializarHistorico', texto: 'Carregando o histórico…', moldura: 'historicoPanel',
     antecipar: ['rpc/historico_sorteios', { paginar: true, method: 'POST', body: '{"p_colegiado":"CREG"}' }] },
   // A primeira página sem órgão fixo: o painel administrativo atende os dois
   // colegiados e traz o seletor dentro dele. Por isso não entra por `orgao`,
@@ -199,7 +201,10 @@ async function carregarPaginaAutenticada() {
     // Depois das visibilidades: a da inicial lê o card que elas acabaram de decidir.
     paginaAtual.anteciparComPermissao?.(orgaosDaPagina).forEach(pedido => anteciparPedido(...pedido));
 
+    // Os dois descem juntos; a tela só monta com a ata também pronta.
+    const ata = paginaAtual.ata && carregarScript(`assets/js/ata.min.js?v=${ASSET_VERSION}`);
     await carregarScript(src);
+    await ata;
     // O card "Preparando…" segue a regra de todo indicador: ou não aparece,
     // ou fica tempo de ser lido. Sem isto, voltar do acervo à tela inicial com
     // a permissão em ~400ms mostrava o indicador pleno por ~80ms e o tirava —

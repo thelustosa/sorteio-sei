@@ -390,11 +390,6 @@ function renderizarDestino(elemento, modo, unidade, rotuloPrincipal = unidade) {
   elemento.setAttribute('aria-label', `${rotuloPrincipal} — ${nome}`);
 }
 
-function destinoPorExtenso(modo, unidade) {
-  const nome = modo === 'CJ' ? CADEIRAS_CJ[unidade] : '';
-  return nome ? `${unidade} — ${nome}` : unidade;
-}
-
 function sortearProcessos() {
   const rows = Array.from(tbody.querySelectorAll('tr'));
   if (rows.length === 0) {
@@ -666,55 +661,21 @@ function nomeArquivo(sorteio, ext) {
   return `Sorteio_${sorteio.modo}_${dia}.${mes}.${d.getFullYear()}.${ext}`;
 }
 
-// ── Word (.doc) ──────────────────────────────────────────────────────────────
-// Mesmo critério da ata baixada do histórico (processosParaDocx): a do CJ sai
-// na ordem do sorteio; a do CREG agrupa por unidade, com a ordem do sorteio
-// dentro de cada grupo. Só por unidade, a coluna Ordem saía embaralhada.
-function linhasDaAta(sorteio) {
-  return [...sorteio.processos].sort((a, b) =>
-    (sorteio.modo === 'CREG' ? a.unidade.localeCompare(b.unidade, 'pt-BR', { numeric: true }) : 0)
-    || a.ordem - b.ordem);
-}
-
+// ── Ata (.docx) ──────────────────────────────────────────────────────────────
+// O mesmo template da ata que o histórico baixa (ata.js): o sorteio entra no
+// formato da RPC processos_sorteio, com o relator da cadeira de hoje — que é
+// quem vai relatar. A data é a local, como em nomeArquivo.
 function exportarWord(sorteio) {
-  const hoje = new Date(sorteio.dataHora);
-  const dia = hoje.getDate().toString().padStart(2, '0');
-  const mesExtenso = hoje.toLocaleString('pt-BR', { month: 'long' });
-  const ano = hoje.getFullYear();
-
-  const cabecalho = `Aos ${dia} dias do mês de ${mesExtenso} de ${ano} na sede da Agência Goiana de Regulação, Controle e Fiscalização de Serviços Públicos, realizou-se a distribuição de processos por sorteio eletrônico.`;
-  const colunaNome = sorteio.modo === 'CREG' ? 'Unidade Conselho Regulador' : 'Unidade Câmara de Julgamento';
-  // A 6ª coluna muda de pergunta conforme o colegiado, como na tela.
-  const colunaDecisao = sorteio.modo === 'CJ' ? 'Defesa' : 'Recurso';
-
-  const dados = linhasDaAta(sorteio);
-
-  // A ata repete as mesmas colunas que a secretaria preencheu: sem o assunto e a
-  // decisão, quem lê o documento não consegue conferir a repartição por assunto
-  // que o rodapé do sistema promete.
-  const colunas = sorteio.modo === 'CREG'
-    ? ['Ordem', 'Nº Processo', 'Interessado', 'Assunto', colunaDecisao, colunaNome]
-    : ['Ordem', 'Nº Processo', 'Assunto', colunaDecisao, colunaNome];
-
-  let tableHtml = '<table border="1" style="border-collapse:collapse;width:100%"><tr>'
-    + colunas.map(c => `<th>${escaparHtml(c)}</th>`).join('')
-    + '</tr>';
-  dados.forEach(d => {
-    const celulas = sorteio.modo === 'CREG'
-      ? [d.ordem, d.numProcesso, d.interessado, d.assunto, decisaoDe(d), d.unidade]
-      : [d.ordem, d.numProcesso, d.assunto, decisaoDe(d), destinoPorExtenso(sorteio.modo, d.unidade)];
-    tableHtml += '<tr>' + celulas.map(c => `<td>${escaparHtml(c ?? '')}</td>`).join('') + '</tr>';
-  });
-  tableHtml += '</table>';
-
-  const wordConteudo = '﻿' + `<meta charset="UTF-8"><p>${escaparHtml(cabecalho)}</p>${tableHtml}`;
-  baixarArquivo(new Blob([wordConteudo], { type: 'application/msword' }), nomeArquivo(sorteio, 'doc'));
-}
-
-function escaparHtml(valor) {
-  return String(valor).replace(/[&<>"']/g, caractere => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  })[caractere]);
+  const d = new Date(sorteio.dataHora);
+  const data = [d.getFullYear(), d.getMonth() + 1, d.getDate()].map(n => String(n).padStart(2, '0')).join('-');
+  const processos = sorteio.processos.map(p => ({
+    ordem: p.ordem,
+    num_processo: p.numProcesso,
+    destino: p.unidade,
+    responsavel: CADEIRAS_CJ[p.unidade] || p.unidade,
+    interessado: p.interessado
+  }));
+  baixarArquivo(criarAtaDocx(sorteio.modo, processos, data), nomeArquivo(sorteio, 'docx'));
 }
 
 function baixarArquivo(blob, nome) {

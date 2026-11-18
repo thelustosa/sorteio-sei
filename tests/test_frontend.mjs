@@ -280,7 +280,7 @@ function indexPage({ api = async () => null, aviso = () => {},
   const app = new Function('document', 'window', 'crypto', 'URL', 'Blob', 'setTimeout', 'requestAnimationFrame',
     'SUPABASE_URL', 'SUPABASE_KEY', 'accessToken', 'api', 'criarIndicadorCarregamento', 'alternarBotaoCarregando', 'aviso',
     'CADEIRAS_CJ', 'rotularCadeira',
-    `${source('index.js')}\nreturn { inicializarSorteio, avisarPendenciasDeJulgamento };`)(
+    `${source('ata.js')}\n${source('index.js')}\nreturn { inicializarSorteio, avisarPendenciasDeJulgamento };`)(
     document, { matchMedia: () => ({ matches: true }) }, { getRandomValues: values => values.fill(0) },
     { createObjectURL: blob => { blobs.push(blob); return 'blob:test'; }, revokeObjectURL() {} }, Blob, () => 0,
     callback => callback(), supabaseUrl, supabaseKey, token, api,
@@ -447,12 +447,12 @@ test('oferece backup após falha sem baixá-lo automaticamente', async () => {
   await wait();
 
   assert.equal(document.downloads.length, 1);
-  assert.match(document.downloads[0], /^Sorteio_CREG_\d{2}\.\d{2}\.\d{4}\.doc$/);
+  assert.match(document.downloads[0], /^Sorteio_CREG_\d{2}\.\d{2}\.\d{4}\.docx$/);
   assert.equal(document.getElementById('baixarBackup').hidden, false);
   assert.doesNotMatch(avisos.at(-1)[0], /foi baixado/i);
 
   document.getElementById('baixarBackup').click();
-  assert.equal(document.downloads[1], document.downloads[0].replace(/\.doc$/, '.json'));
+  assert.equal(document.downloads[1], document.downloads[0].replace(/\.docx$/, '.json'));
   assert.equal(document.activeElement, document.getElementById('btnVoltar'));
 });
 
@@ -468,7 +468,7 @@ test('sem banco configurado também exige clique para baixar o backup', async ()
   await wait();
 
   assert.equal(document.downloads.length, 1);
-  assert.match(document.downloads[0], /^Sorteio_CREG_\d{2}\.\d{2}\.\d{4}\.doc$/);
+  assert.match(document.downloads[0], /^Sorteio_CREG_\d{2}\.\d{2}\.\d{4}\.docx$/);
   assert.equal(document.getElementById('baixarBackup').hidden, false);
   assert.match(avisos.at(-1)[0], /pronto para baixar/i);
 });
@@ -489,7 +489,7 @@ test('erro 401 não desmonta o sorteio nem força logout', async () => {
   assert.equal(document.getElementById('baixarBackup').hidden, false);
   assert.equal(document.getElementById('btnVoltar').hidden, false);
   document.getElementById('baixarBackup').click();
-  assert.equal(document.downloads[1], document.downloads[0].replace(/\.doc$/, '.json'));
+  assert.equal(document.downloads[1], document.downloads[0].replace(/\.docx$/, '.json'));
 });
 
 test('bloqueia Voltar enquanto a persistência ainda pode responder', async () => {
@@ -2887,20 +2887,20 @@ test('resultado da CJ mostra o conselheiro abaixo de cada cadeira', async () => 
   });
 });
 
-test('ata do sorteio da CJ identifica cadeira e conselheiro', async () => {
+test('ata do sorteio da CJ é a mesma do histórico, com o relator de cada processo', async () => {
   const page = indexPage();
   await preencherCj(page);
   page.document.getElementById('sortear').dispatch('click');
   await wait();
 
   const ata = await page.blobs[0].text();
-  for (const destino of [
-    `CJ1 — ${CADEIRAS_CJ.CJ1}`,
-    `CJ2 — ${CADEIRAS_CJ.CJ2}`,
-    `CJ3 — ${CADEIRAS_CJ.CJ3}`,
-    `CJ4 — ${CADEIRAS_CJ.CJ4}`,
-    `CJ5 — ${CADEIRAS_CJ.CJ5}`
-  ]) assert.match(ata, new RegExp(destino));
+  assert.equal(page.blobs[0].type, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  assert.match(ata, /<w:t[^>]*>Relator<\/w:t>/);
+  assert.doesNotMatch(ata, /<w:t[^>]*>Assunto<\/w:t>/, 'a ata oficial não tem essa coluna');
+  for (const nome of Object.values(CADEIRAS_CJ)) assert.match(ata, new RegExp(nome));
+  // CJ1 por último: o nome dele aparece depois de todos os outros.
+  const posicoes = Object.values(CADEIRAS_CJ).map(nome => ata.indexOf(nome));
+  assert.equal(Math.max(...posicoes), posicoes[0], 'as linhas da CJ1 vão para o fim da tabela');
 });
 
 test('resultado do CREG continua exibindo somente o código da unidade', async () => {
@@ -3616,8 +3616,8 @@ function historicoPage(api, colegiado = 'creg') {
   document.getElementById('btnAtualizar').hidden = true;  // como nas páginas
 
   const app = new Function('document', 'api', 'criarIndicadorCarregamento', 'aguardarIndicador', 'mostrarErro', 'equalizarColunas', 'mostrarIndicador',
-    `${source('historico.js')}\nreturn { inicializarHistorico, carregarHistorico, abrirDetalhe,
-      criarDocxDetalhe, exportarDetalheDocx };`)(
+    `${source('ata.js')}\n${source('historico.js')}\nreturn { inicializarHistorico, carregarHistorico, abrirDetalhe,
+      criarDocxDetalhe: (processos, data) => criarAtaDocx(COL.sigla, processos, data), exportarDetalheDocx };`)(
     document, api, criarIndicadorCarregamento, aguardarIndicador, mostrarErro, equalizarColunas, mostrarIndicador);
   return { document, loginOnlyCard, dialog, painelCarregando, tabelaScroll, ...app };
 }
@@ -4078,7 +4078,7 @@ test('card sem processos ou com falha mantém a exportação desabilitada', asyn
     'não há o que exportar quando a lista não chegou');
 });
 
-test('a ata em .docx é um pacote válido, sem número de ata, com o cabeçalho do colegiado', async () => {
+test('a ata em .docx é um pacote válido, sem número de ata nem cabeçalho institucional', async () => {
   const page = historicoPage(async caminho =>
     caminho === 'rpc/historico_sorteios' ? sorteiosCj : processosCj, 'cj');
   await page.inicializarHistorico();
@@ -4090,8 +4090,9 @@ test('a ata em .docx é um pacote válido, sem número de ata, com o cabeçalho 
 
   const texto = new TextDecoder().decode(bytes);
   assert.match(texto, /word\/document\.xml/);
-  assert.match(texto, /AGÊNCIA GOIANA DE REGULAÇÃO, CONTROLE E FISCALIZAÇÃO DE SERVIÇOS PÚBLICOS/);
-  assert.match(texto, /CÂMARA DE JULGAMENTO/);
+  // O cabeçalho "ESTADO DE GOIÁS / AGÊNCIA… / CÂMARA DE JULGAMENTO" saiu a
+  // pedido da secretaria: a ata começa no parágrafo de abertura.
+  assert.doesNotMatch(texto, /ESTADO DE GOIÁS|AGÊNCIA GOIANA|CÂMARA DE JULGAMENTO/);
   assert.doesNotMatch(texto, /ATA N/i, 'a ata exportada não numera a sessão, diferente da ata oficial');
   assert.match(texto, /Aos 28 dias do mês de setembro de 2026/,
     'a data do parágrafo de abertura é a da própria rodada, não a de hoje');
@@ -4193,7 +4194,7 @@ test('ata do CREG põe a linha sem ordem no fim do grupo, como a tela e a RPC', 
     'sem ordem vai para o fim, com o número do processo como desempate');
 });
 
-test('ata do CJ mantém a ordem de sorteio, sem agrupar por relator', async () => {
+test('ata do CJ mantém a ordem de sorteio, com a CJ1 por último', async () => {
   const page = historicoPage(async () => [], 'cj');
   const processos = [
     { ordem: 1, num_processo: 'P1', destino: 'CJ3', responsavel: CADEIRAS_CJ.CJ3 },
@@ -4204,8 +4205,10 @@ test('ata do CJ mantém a ordem de sorteio, sem agrupar por relator', async () =
     await page.criarDocxDetalhe(processos, '2026-09-28').arrayBuffer()));
 
   const ordemEncontrada = [...texto.matchAll(/P\d/g)].map(m => m[0]);
-  assert.deepEqual(ordemEncontrada, ['P1', 'P2', 'P3'],
-    'a ata do CJ segue a ordem pura do sorteio, igual à tela');
+  assert.deepEqual(ordemEncontrada, ['P1', 'P3', 'P2'],
+    'a ata do CJ segue a ordem do sorteio, com as linhas da CJ1 no fim');
+  const ordens = [...texto.matchAll(/<w:t[^>]*>(\d+)<\/w:t>/g)].map(m => m[1]);
+  assert.deepEqual(ordens, ['1', '2', '3'], 'a coluna Ordem segue 1, 2, 3 na posição da linha');
 });
 
 test('exportar baixa o .docx com o nome da rodada e, quando filtrado, do destino', async () => {

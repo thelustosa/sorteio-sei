@@ -357,7 +357,9 @@ console.log('assets: minificação, lazy load e versão por hash coerentes ✓')
 // por isso não importa que falte DOM: os outros erros são esperados e ignorados.
 for (const tela of ['index', 'julgados', 'acervo', 'historico', 'admin']) {
   const contexto = vm.createContext({});
-  for (const arquivo of ['supabase', 'bootstrap', tela]) {
+  const scripts = ['index', 'historico'].includes(tela) ? ['supabase', 'bootstrap', 'ata', tela]
+    : ['supabase', 'bootstrap', tela];
+  for (const arquivo of scripts) {
     try {
       vm.runInContext(ler(`assets/js/${arquivo}.min.js`), contexto);
     } catch (erro) {

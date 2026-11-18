@@ -137,6 +137,7 @@ endereço não existe. Todo o resto está agrupado por natureza.
 │   │   ├── julgados.js     fonte do registro de julgamentos (os dois colegiados)
 │   │   ├── acervo.js       fonte do painel do acervo dos dois colegiados
 │   │   ├── historico.js    fonte do histórico de sorteios dos dois colegiados
+│   │   ├── ata.js          template da ata .docx, do sorteio e do histórico
 │   │   ├── admin.js        fonte do painel administrativo dos dois colegiados
 │   │   ├── supabase.js     cliente Supabase, autenticação, permissões por órgão e chamadas de API
 │   │   └── *.min.js        versões otimizadas servidas pelo site
@@ -238,6 +239,7 @@ npx --yes esbuild@0.28.2 assets/js/index.js --minify-syntax --minify-whitespace 
 npx --yes esbuild@0.28.2 assets/js/julgados.js --minify-syntax --minify-whitespace --outfile=assets/js/julgados.min.js
 npx --yes esbuild@0.28.2 assets/js/acervo.js --minify-syntax --minify-whitespace --outfile=assets/js/acervo.min.js
 npx --yes esbuild@0.28.2 assets/js/historico.js --minify-syntax --minify-whitespace --outfile=assets/js/historico.min.js
+npx --yes esbuild@0.28.2 assets/js/ata.js --minify-syntax --minify-whitespace --outfile=assets/js/ata.min.js
 npx --yes esbuild@0.28.2 assets/js/admin.js --minify-syntax --minify-whitespace --outfile=assets/js/admin.min.js
 node tools/versionar.mjs
 ```

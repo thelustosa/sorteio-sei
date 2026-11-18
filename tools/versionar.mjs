@@ -18,6 +18,7 @@ export const FONTES = [
   'assets/js/julgados.js',
   'assets/js/acervo.js',
   'assets/js/historico.js',
+  'assets/js/ata.js',
   'assets/js/admin.js'
 ];
 export const PAGINAS = ['index.html', 'julgados-cj.html', 'julgados-creg.html',
