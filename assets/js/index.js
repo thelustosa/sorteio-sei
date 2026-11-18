@@ -667,6 +667,15 @@ function nomeArquivo(sorteio, ext) {
 }
 
 // ── Word (.doc) ──────────────────────────────────────────────────────────────
+// Mesmo critério da ata baixada do histórico (processosParaDocx): a do CJ sai
+// na ordem do sorteio; a do CREG agrupa por unidade, com a ordem do sorteio
+// dentro de cada grupo. Só por unidade, a coluna Ordem saía embaralhada.
+function linhasDaAta(sorteio) {
+  return [...sorteio.processos].sort((a, b) =>
+    (sorteio.modo === 'CREG' ? a.unidade.localeCompare(b.unidade, 'pt-BR', { numeric: true }) : 0)
+    || a.ordem - b.ordem);
+}
+
 function exportarWord(sorteio) {
   const hoje = new Date(sorteio.dataHora);
   const dia = hoje.getDate().toString().padStart(2, '0');
@@ -678,7 +687,7 @@ function exportarWord(sorteio) {
   // A 6ª coluna muda de pergunta conforme o colegiado, como na tela.
   const colunaDecisao = sorteio.modo === 'CJ' ? 'Defesa' : 'Recurso';
 
-  const dados = [...sorteio.processos].sort((a, b) => a.unidade.localeCompare(b.unidade, 'pt-BR', { numeric: true }));
+  const dados = linhasDaAta(sorteio);
 
   // A ata repete as mesmas colunas que a secretaria preencheu: sem o assunto e a
   // decisão, quem lê o documento não consegue conferir a repartição por assunto

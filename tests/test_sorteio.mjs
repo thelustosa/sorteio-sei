@@ -57,3 +57,18 @@ for (const [perm, vezes] of contagem) {
 }
 
 console.log('sorteio: aleatoriedade uniforme ✓');
+
+// A ata do resultado sai na ordem do sorteio (CJ) ou por unidade e, dentro
+// dela, na ordem do sorteio (CREG) — o mesmo critério da ata do histórico.
+{
+  const ini = fonte.indexOf('function linhasDaAta');
+  assert.ok(ini > 0, 'linhasDaAta não encontrada em index.js');
+  const linhasDaAta = new Function(`${fonte.slice(ini, fonte.indexOf('\n}\n', ini) + 2)} return linhasDaAta;`)();
+  const processos = [
+    { ordem: 2, unidade: 'CJ2' }, { ordem: 1, unidade: 'CJ3' }, { ordem: 3, unidade: 'CJ1' }, { ordem: 4, unidade: 'CJ2' }
+  ];
+  assert.deepEqual(linhasDaAta({ modo: 'CJ', processos }).map(p => p.ordem), [1, 2, 3, 4]);
+  const creg = processos.map(p => ({ ...p, unidade: p.unidade.replace('CJ', 'CREG') }));
+  assert.deepEqual(linhasDaAta({ modo: 'CREG', processos: creg }).map(p => p.ordem), [3, 2, 4, 1]);
+  console.log('sorteio: ordem da ata ✓');
+}
